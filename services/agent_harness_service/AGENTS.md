@@ -277,13 +277,17 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   through the runner's loopback forwarder for users with the PostHog flag
   `enable-code-execution-egress-proxy` (`code_mode::EgressRollout`); with no
   flag client, the flag off or the flags unreadable, they go directly. A
-  run under a default-deny scope (one with an allowlist, such as `job`)
-  always goes through the forwarder, whatever the flag
+  run under a default-deny scope (`job` or `channel_mention`)
+  always goes through an enforcing forwarder, whatever either flag
   (`EgressRollout::egress_for`); a forwarder that can't start fails it
   (`FailureCode::Egress`). Every scoped run (a scoped session or public-MCP
   run, a routine dry run) gets no unfurl host (`run_endpoints`). The
   answer is cached per user for 60 s (10 s after a failed read), so a run
-  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`).
+  doesn't wait on PostHog (span `code_execution.egress_flag`, `cache`). The
+  forwarder refuses what it would refuse only where
+  `enable-code-execution-egress-enforce` is on too (fail-closed off); a run
+  whose scope is held to an allowlist (`SessionScope::enforces_egress`)
+  always enforces, flags or no flags (`EgressRollout::egress_for`).
   Routine code steps run through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with a token for the owner's access (`mint_for_routine`):

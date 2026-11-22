@@ -42,6 +42,11 @@ pub struct RunEnvironment {
     /// sees only the hosts it may reach.
     #[serde(skip)]
     pub egress: Egress,
+    /// Whether the run's credential is held to a narrower scope than its
+    /// person's (a hidden session's): an enforcing forwarder then refuses the
+    /// routes anyone may call, which no signed scope can hold.
+    #[serde(skip)]
+    pub scoped: bool,
 }
 
 /// The handles an attended program's `main` receives besides the SDK, which
@@ -72,8 +77,11 @@ pub enum Egress {
     #[default]
     Direct,
     /// Through a loopback forwarder the host runs for the run, the only
-    /// address `--allow-net` names; it marks every request.
+    /// address `--allow-net` names; it marks every request and records what
+    /// it would refuse.
     Proxied,
+    /// Through the forwarder, which also refuses what it would refuse.
+    Enforced,
 }
 
 /// The deployment's Macro SDK targets, so a program's requests and links stay

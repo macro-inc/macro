@@ -265,11 +265,20 @@ impl DenoRunner {
         // A proxied run reaches only its forwarder, which reaches the hosts.
         let egress = match job.environment.egress {
             Egress::Direct => None,
-            Egress::Proxied => Some(
+            mode @ (Egress::Proxied | Egress::Enforced) => Some(
                 egress::RunEgress::start(
                     self.egress.clone(),
                     &job.environment.endpoints.hosts,
                     &job.environment.trace_headers,
+                    egress::RunPolicy {
+                        enforce: mode == Egress::Enforced,
+                        dry_run: job
+                            .environment
+                            .unattended
+                            .as_ref()
+                            .is_some_and(|unattended| unattended.dry_run),
+                        scoped: job.environment.scoped,
+                    },
                 )
                 .await
                 .map_err(|error| {

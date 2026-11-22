@@ -639,6 +639,13 @@ impl SessionScope {
         }
     }
 
+    /// Whether the run's forwarder always refuses what it would refuse,
+    /// whether or not the egress rollout flags are on. Only a scope held to
+    /// an allowlist qualifies; the others follow the rollout.
+    pub fn enforces_egress(self) -> bool {
+        self.allowlist().is_some()
+    }
+
     /// Whether the scope may change who an item is shared with. Neither
     /// does: a share reaches someone else. Routes that change sharing among
     /// other fields check their body with

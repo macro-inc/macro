@@ -89,6 +89,7 @@ impl MentionExecutionCredentials for Spy {
             endpoints: Default::default(),
             unattended: None,
             egress: Default::default(),
+            scoped: true,
         })
     }
 }

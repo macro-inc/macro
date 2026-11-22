@@ -1118,3 +1118,24 @@ fn audit_no_send_refuses_persistence_that_later_runs_can_execute() {
 }
 
 mod mention;
+/// Generation and no-send runs, and a dry run, follow the egress rollout
+/// flags: none of them enforces on its own.
+#[test]
+fn the_scopes_today_follow_the_egress_rollout() {
+    for scope in [
+        SessionScope::Generation,
+        SessionScope::NoSend,
+        SessionScope::DryRun,
+    ] {
+        assert!(!scope.enforces_egress(), "{scope:?}");
+    }
+}
+
+/// Allowlisted scopes enforce even before the per-user rollout is enabled.
+#[test]
+fn allowlisted_scopes_always_enforce_egress() {
+    for scope in [SessionScope::Job, SessionScope::ChannelMention] {
+        assert!(scope.allowlist().is_some());
+        assert!(scope.enforces_egress(), "{scope:?}");
+    }
+}

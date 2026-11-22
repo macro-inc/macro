@@ -23,10 +23,9 @@ async fn mention_environment(pool: sqlx::PgPool, endpoints: SdkEndpoints) -> Run
     let rollout = EgressRollout::new(Some(flags));
     rollout.cached.lock().unwrap().insert(
         owner.as_ref().to_owned(),
-        (
-            tokio::time::Instant::now() + EGRESS_FLAG_TTL,
-            Egress::Direct,
-        ),
+        tokio::time::Instant::now() + EGRESS_FLAG_TTL,
+        Egress::Direct,
+        tokio::time::Instant::now(),
     );
     assert_eq!(rollout.egress(&owner).await, Egress::Direct);
     MentionRunCredentials {
@@ -53,7 +52,8 @@ async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sql
         .hosts
         .insert("storage".into(), "https://storage.example.test".into());
     let credentials = mention_environment(pool, endpoints).await;
-    assert_eq!(credentials.egress, Egress::Proxied);
+    assert_eq!(credentials.egress, Egress::Enforced);
+    assert!(credentials.scoped);
     assert!(!credentials.endpoints.hosts.contains_key("unfurl"));
     assert_eq!(
         credentials
@@ -82,11 +82,17 @@ async fn a_mention_uses_the_forwarder_even_when_the_egress_flag_is_off(pool: sql
 }
 
 /// Uses the actual mention issuer and Deno runner. The gateway is a local
-/// stand-in whose anonymous unfurl route records every attempted dispatch.
+/// stand-in whose unfurl and public booking routes record every dispatch.
+/// Anonymous booking writes must be 403 before the gateway handler; an
+/// authenticated catalog read remains available under the same flag-OFF mint.
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
 #[ignore = "requires pinned Deno runtime; selected by the CI Deno lane"]
-async fn a_mention_program_cannot_fetch_the_unfurl_proxy(pool: sqlx::PgPool) {
-    use axum::{Router, http::StatusCode, routing::get};
+async fn a_mention_program_cannot_fetch_unfurl_or_send_anonymous_bookings(pool: sqlx::PgPool) {
+    use axum::{
+        Router,
+        http::StatusCode,
+        routing::{get, post},
+    };
     use code_execution::domain::{EventKind, ExecuteRequest, ExecutionService, Limits, Outcome};
     use code_execution::outbound::deno::{DenoRunner, check::DenoChecker};
     use std::collections::BTreeMap;
@@ -95,8 +101,42 @@ async fn a_mention_program_cannot_fetch_the_unfurl_proxy(pool: sqlx::PgPool) {
     let gateway = format!("http://{}", listener.local_addr().unwrap());
     let leaked = Arc::new(AtomicUsize::new(0));
     let calls = leaked.clone();
+    let bookings = Arc::new(AtomicUsize::new(0));
+    let booking_calls = bookings.clone();
+    let booking_routes = Router::new()
+        .route(
+            "/scheduling/public/{profile}/{event}/book",
+            post(move || {
+                booking_calls.fetch_add(1, Ordering::SeqCst);
+                async { StatusCode::OK }
+            }),
+        )
+        .route(
+            "/scheduling/public/bookings/{id}/cancel",
+            post({
+                let bookings = bookings.clone();
+                move || {
+                    bookings.fetch_add(1, Ordering::SeqCst);
+                    async { StatusCode::OK }
+                }
+            }),
+        )
+        .route(
+            "/scheduling/public/bookings/{id}/reschedule",
+            post({
+                let bookings = bookings.clone();
+                move || {
+                    bookings.fetch_add(1, Ordering::SeqCst);
+                    async { StatusCode::OK }
+                }
+            }),
+        );
     let app = Router::new()
-        .route("/storage/ok", get(|| async { StatusCode::OK }))
+        .route(
+            "/storage/documents/{id}/markdown",
+            get(|| async { StatusCode::OK }),
+        )
+        .nest("/calendar", booking_routes)
         .route(
             "/unfurl/proxy",
             get(move || {
@@ -110,6 +150,7 @@ async fn a_mention_program_cannot_fetch_the_unfurl_proxy(pool: sqlx::PgPool) {
         SdkEndpoints {
             hosts: BTreeMap::from([
                 ("storage".into(), format!("{gateway}/storage")),
+                ("calendar".into(), format!("{gateway}/calendar")),
                 ("unfurl".into(), format!("{gateway}/unfurl")),
             ]),
             ..SdkEndpoints::default()
@@ -134,8 +175,8 @@ async fn a_mention_program_cannot_fetch_the_unfurl_proxy(pool: sqlx::PgPool) {
     let service =
         ExecutionService::new(Arc::new(runner), Arc::new(checker), Limits::default()).unwrap();
     let source = r#"
-export async function main(context) {
-  async function refused(url) {
+export async function main(context: CodeContext) {
+  async function refused(url: string) {
     try { return (await fetch(url)).status >= 400; }
     catch { return true; }
   }
@@ -146,8 +187,20 @@ export async function main(context) {
   const forwarderRefused = proxy?.storage
     ? await refused(new URL(`../${target.slice(1)}`, `${proxy.storage}/`).href)
     : false;
-  const storage = await fetch(`${context.hosts.storage}/ok`);
-  return {data: {directRefused, forwarderRefused, storageStatus: storage.status}};
+  const id = "0192f1a0-0000-7000-8000-000000000001";
+  const bookingStatuses = [];
+  for (const path of [
+    "/scheduling/public/profile/event/book",
+    `/scheduling/public/bookings/${id}/cancel`,
+    `/scheduling/public/bookings/${id}/reschedule`,
+  ]) {
+    const response = await fetch(`${context.hosts.calendar}${path}`, {method: "POST"});
+    bookingStatuses.push(response.status);
+  }
+  const storage = await fetch(`${context.hosts.storage}/documents/${id}/markdown`, {
+    headers: {authorization: `Bearer ${context.token}`},
+  });
+  return {data: {directRefused, forwarderRefused, bookingStatuses, storageStatus: storage.status}};
 }
 "#
     .replace("GATEWAY", &serde_json::to_string(&gateway).unwrap());
@@ -173,6 +226,11 @@ export async function main(context) {
     };
     assert_eq!(value["data"]["directRefused"], true);
     assert_eq!(value["data"]["forwarderRefused"], true);
+    assert_eq!(
+        value["data"]["bookingStatuses"],
+        serde_json::json!([403, 403, 403])
+    );
+    assert_eq!(bookings.load(Ordering::SeqCst), 0);
     assert_eq!(value["data"]["storageStatus"], 200);
     assert_eq!(leaked.load(Ordering::SeqCst), 0);
 }

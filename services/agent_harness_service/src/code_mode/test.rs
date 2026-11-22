@@ -751,28 +751,29 @@ async fn the_egress_flag_fails_closed_to_direct() {
         flags.set(user.clone(), result);
         EgressRollout::new(Some(flags))
     };
-    let flag =
-        |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
-    assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
-    // A default-deny scope is proxied whatever the flag; another scope and
-    // an unscoped run follow it.
+    let flags_on = |proxy: bool, enforce: bool| {
+        FlagSnapshot::new([
+            (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(proxy)),
+            (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(enforce)),
+        ])
+    };
     assert_eq!(
-        flags(Ok(flag(false)))
-            .egress_for(&user, Some(SessionScope::Job))
-            .await,
+        flags(Ok(flags_on(true, false))).egress(&user).await,
         Egress::Proxied
     );
     assert_eq!(
-        flags(Ok(flag(false)))
-            .egress_for(&user, Some(SessionScope::NoSend))
-            .await,
+        flags(Ok(flags_on(true, true))).egress(&user).await,
+        Egress::Enforced
+    );
+    // Enforcing needs the forwarder: alone it changes nothing.
+    assert_eq!(
+        flags(Ok(flags_on(false, true))).egress(&user).await,
         Egress::Direct
     );
     assert_eq!(
-        flags(Ok(flag(false))).egress_for(&user, None).await,
+        flags(Ok(flags_on(false, false))).egress(&user).await,
         Egress::Direct
     );
-    assert_eq!(flags(Ok(flag(false))).egress(&user).await, Egress::Direct);
     assert_eq!(
         flags(Err("PostHog is down".into())).egress(&user).await,
         Egress::Direct
@@ -780,6 +781,58 @@ async fn the_egress_flag_fails_closed_to_direct() {
     assert_eq!(
         EgressRollout::<FakeFeatureFlags>::new(None)
             .egress(&user)
+            .await,
+        Egress::Direct
+    );
+}
+
+/// A run whose scope holds it to an allowlist enforces whatever the flags
+/// say, even with no flag client, so a scoped run can't reach an
+/// anonymous route that goes outward; any other run follows the flags.
+#[tokio::test]
+async fn an_enforced_scope_enforces_with_the_flags_off() {
+    use code_execution::domain::Egress;
+    use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+    let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let off = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(false)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let proxy_only = FlagSnapshot::new([
+        (EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(true)),
+        (EGRESS_ENFORCE_FLAG.to_owned(), FlagValue::Boolean(false)),
+    ]);
+    let rollout = |snapshot: Result<FlagSnapshot, String>| {
+        let mut flags = FakeFeatureFlags::default();
+        flags.set(user.clone(), snapshot);
+        EgressRollout::new(Some(flags))
+    };
+    for snapshot in [Ok(off.clone()), Ok(proxy_only.clone()), Err("down".into())] {
+        assert_eq!(
+            rollout(snapshot)
+                .egress_for(&user, Some(SessionScope::Job))
+                .await,
+            Egress::Enforced
+        );
+    }
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, Some(SessionScope::Job))
+            .await,
+        Egress::Enforced
+    );
+    // Not an allowlist scope: the flags decide, as before.
+    assert_eq!(
+        rollout(Ok(proxy_only)).egress_for(&user, None).await,
+        Egress::Proxied
+    );
+    assert_eq!(
+        rollout(Ok(off)).egress_for(&user, None).await,
+        Egress::Direct
+    );
+    assert_eq!(
+        EgressRollout::<FakeFeatureFlags>::new(None)
+            .egress_for(&user, None)
             .await,
         Egress::Direct
     );
@@ -891,6 +944,33 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     failing.store(false, Ordering::SeqCst);
     assert_eq!(rollout.egress(&user).await, Egress::Proxied);
     assert_eq!(loads.load(Ordering::SeqCst), 4);
+}
+
+/// The egress cache drops expired users at most once a minute as it fills,
+/// and never holds more than its bound.
+#[tokio::test(start_paused = true)]
+async fn the_egress_cache_sweeps_expired_users_and_stays_bounded() {
+    use code_execution::domain::Egress;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    let rollout = EgressRollout::new(Some(FakeFeatureFlags::default()));
+    for index in 0..3 {
+        let id = format!("macro|user{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 3);
+    // Past their life, the next read drops them.
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    let late = MacroUserIdStr::parse_from_str("macro|late@example.com").unwrap();
+    assert_eq!(rollout.egress(&late).await, Egress::Direct);
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 1);
+    // However many users read it, it holds at most its bound.
+    for index in 0..=EGRESS_FLAG_USERS {
+        let id = format!("macro|many{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert!(rollout.cached.lock().unwrap().entries.len() <= EGRESS_FLAG_USERS);
 }
 
 /// Answers every run with success, so a check is all that stands between a

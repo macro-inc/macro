@@ -442,7 +442,7 @@ async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs(
         if allowed {
             assert!(
                 result.is_ok(),
-                "skill={skill} mention={mention} no_send={no_send}: {result:?}"
+                "skill={skill} mention={mention} scope={scope:?}: {result:?}"
             );
             assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 1);
         } else {
@@ -451,7 +451,7 @@ async fn audit_skill_instructions_are_not_rewritten_by_mentions_or_no_send_runs(
                     result,
                     Err(DocumentAiEditError::Document(DocumentError::Forbidden(_)))
                 ),
-                "skill={skill} mention={mention} no_send={no_send}: {result:?}"
+                "skill={skill} mention={mention} scope={scope:?}: {result:?}"
             );
             assert_eq!(writes.load(std::sync::atomic::Ordering::SeqCst), 0);
         }

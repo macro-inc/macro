@@ -15,9 +15,13 @@ use tracing::Instrument;
 
 /// The flag that sends a user's runs through the host's forwarder.
 pub const EGRESS_PROXY_FLAG: &str = "enable-code-execution-egress-proxy";
+/// The flag that has the forwarder refuse what it would refuse, for runs
+/// the proxy flag already sends through it.
+pub const EGRESS_ENFORCE_FLAG: &str = "enable-code-execution-egress-enforce";
 
 /// How a user's runs reach the SDK hosts: through the host's forwarder when
-/// [`EGRESS_PROXY_FLAG`] is on for them, else directly. Fail-closed: with no
+/// [`EGRESS_PROXY_FLAG`] is on for them, which also enforces when
+/// [`EGRESS_ENFORCE_FLAG`] is on too, else directly. Fail-closed: with no
 /// flag client, or when their flags can't be read, runs go directly, as
 /// before.
 #[derive(Clone)]
@@ -26,8 +30,39 @@ pub struct EgressRollout<Flags = feature_flags::outbound::posthog::PostHogFeatur
     /// Each user's answer for a while, so a run doesn't wait on PostHog: a
     /// read for [`EGRESS_FLAG_TTL`], a failed one (direct) for
     /// [`EGRESS_FLAG_FAILURE_TTL`].
-    cached:
-        Arc<std::sync::Mutex<std::collections::HashMap<String, (tokio::time::Instant, Egress)>>>,
+    cached: Arc<std::sync::Mutex<EgressCache>>,
+}
+
+/// Each user's egress until a time, and when expired entries were last
+/// dropped.
+#[derive(Default)]
+struct EgressCache {
+    entries: std::collections::HashMap<String, (tokio::time::Instant, Egress)>,
+    swept: Option<tokio::time::Instant>,
+}
+
+impl EgressCache {
+    /// Keep `egress` for `key` until `until`: drop expired entries at most
+    /// once per [`EGRESS_FLAG_TTL`], and everything if still full.
+    fn insert(
+        &mut self,
+        key: String,
+        until: tokio::time::Instant,
+        egress: Egress,
+        now: tokio::time::Instant,
+    ) {
+        let sweep_due = self
+            .swept
+            .is_none_or(|swept| now.duration_since(swept) >= EGRESS_FLAG_TTL);
+        if sweep_due || self.entries.len() >= EGRESS_FLAG_USERS {
+            self.entries.retain(|_, (until, _)| *until > now);
+            self.swept = Some(now);
+        }
+        if self.entries.len() >= EGRESS_FLAG_USERS {
+            self.entries.clear();
+        }
+        self.entries.insert(key, (until, egress));
+    }
 }
 
 /// How long a user's egress flags are reused.
@@ -49,20 +84,16 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
-    /// The egress for a run acting as `user` under `scope`. A run under a
-    /// default-deny scope (one with an allowlist: a background job, a
-    /// channel mention) always goes through the egress proxy, whatever the
-    /// flag: the forwarder carries only the hosts the run was given, so its
-    /// refusals hold outside the sandbox too. The forwarder is then a hard
-    /// dependency: if it can't start, the run fails (`FailureCode::Egress`)
-    /// and never goes direct. Other runs follow the flag until it rolls out.
+    /// The egress for a run acting as `user` under `scope`. An allowlisted
+    /// scope always enforces, regardless of either rollout flag; other
+    /// scopes follow the flags (see `SessionScope::enforces_egress`).
     pub async fn egress_for(
         &self,
         user: &MacroUserIdStr<'_>,
         scope: Option<SessionScope>,
     ) -> Egress {
-        if scope.is_some_and(|scope| scope.allowlist().is_some()) {
-            return Egress::Proxied;
+        if scope.is_some_and(SessionScope::enforces_egress) {
+            return Egress::Enforced;
         }
         self.egress(user).await
     }
@@ -83,7 +114,7 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
             .cached
             .lock()
             .ok()
-            .and_then(|cached| cached.get(&key).copied())
+            .and_then(|cached| cached.entries.get(&key).copied())
             .filter(|(until, _)| *until > now)
             .map(|(_, egress)| egress);
         if let Some(egress) = hit {
@@ -94,7 +125,11 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
         span.record("cache", "miss");
         let (egress, ttl) = match flags.load(user).instrument(span.clone()).await {
             Ok(snapshot) if snapshot.is_enabled(EGRESS_PROXY_FLAG) => {
-                (Egress::Proxied, EGRESS_FLAG_TTL)
+                if snapshot.is_enabled(EGRESS_ENFORCE_FLAG) {
+                    (Egress::Enforced, EGRESS_FLAG_TTL)
+                } else {
+                    (Egress::Proxied, EGRESS_FLAG_TTL)
+                }
             }
             Ok(_) => (Egress::Direct, EGRESS_FLAG_TTL),
             Err(error) => {
@@ -104,13 +139,7 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
         };
         span.record("egress", tracing::field::debug(egress));
         if let Ok(mut cached) = self.cached.lock() {
-            if cached.len() >= EGRESS_FLAG_USERS {
-                cached.retain(|_, (until, _)| *until > now);
-                if cached.len() >= EGRESS_FLAG_USERS {
-                    cached.clear();
-                }
-            }
-            cached.insert(key, (now + ttl, egress));
+            cached.insert(key, now + ttl, egress, now);
         }
         egress
     }
@@ -296,6 +325,7 @@ impl ExecutionCredentials for RunCredentials {
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
                 egress: self.egress.egress_for(&actor, scope).await,
+                scoped: scope.is_some(),
             },
             acting_user: actor,
         })
@@ -345,6 +375,10 @@ impl UserExecutionCredentials for UserRunCredentials {
             }
             None => None,
         };
+        let correlation_scope = correlation
+            .as_ref()
+            .and_then(|correlation| correlation.scope);
+        let scoped = correlation_scope.is_some();
         // Same lifetime as session runs: the 30-second deadline plus clock margin.
         let token = self
             .signer
@@ -364,19 +398,12 @@ impl UserExecutionCredentials for UserRunCredentials {
         Ok(RunEnvironment {
             token,
             trace_headers: trace_headers(),
-            endpoints: run_endpoints(
-                &self.endpoints,
-                correlation
-                    .as_ref()
-                    .is_some_and(|signed| signed.scope.is_some()),
-            ),
+            endpoints: run_endpoints(&self.endpoints, scoped),
             session_id: None,
             execution_id: None,
             unattended: None,
-            egress: self
-                .egress
-                .egress_for(user, correlation.as_ref().and_then(|signed| signed.scope))
-                .await,
+            egress: self.egress.egress_for(user, correlation_scope).await,
+            scoped,
         })
     }
 }
@@ -415,6 +442,7 @@ impl agent_code_mode::domain::MentionExecutionCredentials for MentionRunCredenti
                 .egress
                 .egress_for(user, Some(SessionScope::ChannelMention))
                 .await,
+            scoped: true,
         })
     }
 }

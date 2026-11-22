@@ -153,7 +153,9 @@ code, not in its prompt. The harness also signs the scope into the credential
   only listed workspace reads, no program writes or memory reads. A verified
   mention claim adds this restriction even to old tokens and secondary
   credentials; the original signed and stored scopes are still checked.
-  Mention attribution never grants access. Document grants cap at View;
+  Mention attribution never grants access. Like Job, ChannelMention forces
+  enforcing egress with either rollout flag off (`enforces_egress`).
+  Document grants cap at View;
   background NoSend runs retain ordinary own-document edits.
 
 ## Checks

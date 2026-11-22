@@ -56,7 +56,8 @@ credential, so the header is what refuses a program there.
 
 A program reads Macro's own sign-in emails redacted (email and storage-service responses, `models_email::sign_in_email`), and GraphQL refuses it.
 
-A run whose `RunEnvironment::egress` is `Egress::Proxied` reaches the hosts
+A run whose `RunEnvironment::egress` is `Egress::Proxied` or `Egress::Enforced`
+reaches the hosts
 only through a loopback forwarder the runner starts for it
 (`src/outbound/deno/egress.rs`): `--allow-net` names only that listener.
 The child keeps the real hosts, which the links it builds need, and its
@@ -64,7 +65,17 @@ fetch sends a request to a host's base to that service under the forwarder
 (`forwarder` in the child's context, `http://127.0.0.1:<port>/<service>`).
 The forwarder sets the mark and trace context itself, outside the realm, drops
 the ones the program set, follows no redirects and records a
-`code_execution.egress` span per request. It stops when the run ends, is
+`code_execution.egress` span per request. Each span also records what the
+forwarder would refuse once it enforces (`would_refuse`: `outside_service`,
+`unknown_operation`, `dry_run_write`, `no_credential`, `unparseable_url`;
+`egress/decision.rs`, matched on the SDK catalog). With `Egress::Enforced` it
+also refuses them, answering 403 with what the program should do instead; a
+scoped (`RunEnvironment::scoped`) or dry run is also refused the routes anyone
+may call that reach someone else or an outside site (`anonymous_outward`:
+public booking, unfurl's proxy and bulk unfurl, the read-receipt pixel).
+The harness enforces only where `enable-code-execution-egress-enforce` is
+on as well as the proxy flag, except for a run whose scope is held to an
+allowlist, which always enforces. It stops when the run ends, is
 cancelled or times out. The agent harness picks it per user with the
 fail-closed `enable-code-execution-egress-proxy` flag, and always proxies a
 run under a default-deny scope. A forwarder that can't start fails the run

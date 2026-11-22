@@ -343,6 +343,8 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                         .then_some(agent_correlation::scope::SessionScope::DryRun),
                 )
                 .await,
+            // A routine dry run is also restricted by unattended.dry_run.
+            scoped: run.dry_run,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();
