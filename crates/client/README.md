@@ -75,17 +75,18 @@ projections keep their unframed postcard encoding, so a format upgrade never
 re-encodes them.
 
 Only the immediately prior cache format version is migratable
-(`MIGRATABLE_CACHE_FORMAT_VERSIONS`), and only while the storage schema still
-matches. A storage-schema mismatch instead follows physical reset. Opening a
-migratable format drops records, search
+(`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A file at an older storage schema version
+is first upgraded by its registered steps (Storage upgrades, below), and resets
+when none are registered. Opening a migratable format drops records, search
 projections, index facts, and calendar ranges — all refetchable — and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
 the next open. Native owners then `VACUUM INTO` a fresh file and swap it in, so an
 upgrade also releases the space the dropped records occupied instead of leaving
 free pages in the old file. The browser's physical database name embeds the format
-version, so a browser upgrade starts a new file instead of migrating; the previous
-file is left for any tab still running the older bundle.
+version, and a carry-forward (below) looks only at older storage versions of the
+current format, so a format change starts a new browser file instead of migrating;
+the previous file is left for any tab still running the older bundle.
 
 ## Storage upgrades
 
