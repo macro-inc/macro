@@ -169,7 +169,10 @@ async fn serve(
         match dialed {
             Ok(Ok(channel)) => {
                 connected.send_replace(true);
-                harness::credentials_accepted(teammates.as_ref());
+                harness::credentials_accepted(
+                    teammates.as_ref(),
+                    harness::CredentialPath::RuntimeDial,
+                );
                 tracing::info!(adopted = adopted.is_some(), "harness bridge starting");
                 let started = Instant::now();
                 match harness::bridge(
@@ -204,7 +207,10 @@ async fn serve(
                 // Unpaired, or the auth service failing for a while: dialed
                 // again slowly, for good, so an outage ends by itself and
                 // the agents it stopped run again on the next accept.
-                harness::credentials_refused(teammates.as_ref());
+                harness::credentials_refused(
+                    teammates.as_ref(),
+                    harness::CredentialPath::RuntimeDial,
+                );
                 refused = true;
                 tracing::warn!(error = ?error, "the runtime gateway refused this machine's credentials; redialing slowly (re-pair if it was removed)");
             }
@@ -343,7 +349,9 @@ const LONG_REFUSED_REDIAL: Duration = Duration::from_secs(10 * 60);
 /// The wait before the next redial of a machine refused for `refused_for`.
 fn refused_redial_delay(refused_for: Duration, backoff: &mut RetryDelays) -> Duration {
     if refused_for >= REFUSED_FOR_LONG {
-        return LONG_REFUSED_REDIAL;
+        // Spread 20% either way, so machines unpaired together don't
+        // redial together.
+        return LONG_REFUSED_REDIAL.mul_f64(0.8 + rand::random::<f64>() * 0.4);
     }
     backoff.next_delay()
 }

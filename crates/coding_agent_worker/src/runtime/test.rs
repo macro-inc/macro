@@ -195,11 +195,19 @@ fn a_machine_refused_for_long_redials_rarely() {
             refused_redial_delay(Duration::from_secs(60), &mut backoff) <= Duration::from_secs(75)
         );
     }
-    // Refused that long, the agents are stopped long since: ten minutes.
-    assert_eq!(
-        refused_redial_delay(REFUSED_FOR_LONG, &mut backoff),
-        LONG_REFUSED_REDIAL
-    );
+    // Refused that long, the agents are stopped long since: about ten
+    // minutes, spread 20% either way so machines unpaired together don't
+    // redial together.
+    let waits: Vec<Duration> = (0..20)
+        .map(|_| refused_redial_delay(REFUSED_FOR_LONG, &mut backoff))
+        .collect();
+    for wait in &waits {
+        assert!(
+            LONG_REFUSED_REDIAL.mul_f64(0.8) <= *wait && *wait <= LONG_REFUSED_REDIAL.mul_f64(1.2),
+            "{wait:?}"
+        );
+    }
+    assert!(waits.iter().any(|wait| *wait != waits[0]), "{waits:?}");
 }
 
 #[tokio::test(start_paused = true)]

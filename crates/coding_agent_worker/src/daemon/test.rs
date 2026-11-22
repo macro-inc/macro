@@ -507,6 +507,121 @@ async fn an_accepted_bound_agent_read_runs_agents_stopped_for_refused_credential
     assert_eq!(engine.runs(), 1);
 }
 
+#[tokio::test(start_paused = true)]
+async fn a_busy_stream_still_refreshes_the_bound_agents_every_ten_seconds() {
+    // A heartbeat every second must not keep pushing the refresh back: it
+    // is how a removed machine learns its credentials are refused.
+    let storage = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let mut api: Config = toml::from_str(include_str!("../../config.example.toml")).unwrap();
+    api.macro_api.storage_url = format!("http://{}", storage.local_addr().unwrap());
+    let (seen, mut requests) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(serve_storage_with_busy_stream(storage, seen));
+    let client = EventStreamClient::new(
+        &api.macro_api,
+        &HarnessCredentials {
+            harness_id: harness_id::HarnessId::TEST_A,
+            token: "mhns_test".to_owned(),
+            pairing_id: None,
+        },
+    );
+    let cancel = CancellationToken::new();
+    let agents_changed = Notify::new();
+    let mut position = StreamPosition::new(std::time::SystemTime::now());
+    let (health, _) = watch::channel(TriggerStreamHealth::Connecting);
+    let serving = serve_once(
+        &client,
+        &NoWork,
+        &cancel,
+        &agents_changed,
+        &mut position,
+        &health,
+        None,
+    );
+    tokio::pin!(serving);
+
+    let started = tokio::time::Instant::now();
+    let mut refreshes = 0;
+    while refreshes < 4 {
+        tokio::select! {
+            _ = &mut serving => panic!("serving ended"),
+            () = tokio::time::sleep(Duration::from_secs(60)) => panic!("only {refreshes} bound-agent reads in a minute"),
+            path = requests.recv() => {
+                if path.unwrap() == "/harnesses/me/agents" {
+                    refreshes += 1;
+                }
+            }
+        }
+    }
+    // The first read, then three refreshes ten seconds apart.
+    assert!(
+        started.elapsed() <= Duration::from_secs(31),
+        "{:?}",
+        started.elapsed()
+    );
+    cancel.cancel();
+}
+
+/// Storage for one bound agent whose event stream sends a heartbeat every
+/// second; each request's path goes to `seen`.
+async fn serve_storage_with_busy_stream(
+    storage: tokio::net::TcpListener,
+    seen: tokio::sync::mpsc::UnboundedSender<String>,
+) {
+    use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
+
+    const AGENTS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         [{\"bot_id\":\"00000000-0000-0000-0000-000000000001\",\"name\":\"a\",\"handle\":\"a\"}]";
+    const HARNESS: &str = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n\
+         {\"allow_permission_bypass\":false,\"id\":\"00000000-0000-0000-0000-00000000000a\",\
+          \"kind\":\"macrod\",\"name\":\"desk\",\
+          \"owner\":{\"type\":\"user\",\"user_id\":\"macro|owner@example.com\"},\
+          \"shared_team_ids\":[],\"created_by\":\"macro|owner@example.com\",\"created_at\":\"2026-11-01T00:00:00Z\",\
+          \"updated_at\":\"2026-11-01T00:00:00Z\",\"connected\":true,\"last_connected_at\":null}";
+    const STREAM: &str =
+        "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+
+    loop {
+        let Ok((mut socket, _)) = storage.accept().await else {
+            return;
+        };
+        let mut request = [0; 4096];
+        let read = socket.read(&mut request).await.unwrap_or(0);
+        let path = String::from_utf8_lossy(&request[..read])
+            .split_whitespace()
+            .nth(1)
+            .and_then(|target| target.split('?').next())
+            .unwrap_or_default()
+            .to_owned();
+        let _ = seen.send(path.clone());
+        match path.as_str() {
+            "/harnesses/me/agents" | "/harnesses/me" => {
+                let answer = if path == "/harnesses/me" {
+                    HARNESS
+                } else {
+                    AGENTS
+                };
+                let _ = socket.write_all(answer.as_bytes()).await;
+                let _ = socket.shutdown().await;
+            }
+            _ => {
+                tokio::spawn(async move {
+                    let _ = socket.write_all(STREAM.as_bytes()).await;
+                    loop {
+                        if socket
+                            .write_all(b"event: heartbeat\ndata: \n\n")
+                            .await
+                            .is_err()
+                        {
+                            return;
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                });
+            }
+        }
+    }
+}
+
 /// Never runs: no event reaches it.
 struct NoWork;
 

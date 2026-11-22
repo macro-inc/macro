@@ -120,10 +120,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `REFUSAL_PERSISTS` to `REFUSAL_WINDOW` (10 to 60 s) apart, from any path
   (runtime dial 401/403, stream 401), with no call accepted between, stop
   every teammate and its holder, keeping volumes and the kept install,
-  stopped for `credentialsRefused` (`Teammates::credentials_refused`); any
-  accepted call (runtime dial, bound-agent read) runs those again
-  (`credentials_accepted`). A refused runtime dial is redialed 1 s to 60 s
-  apart, every 10 min once refused for 10 min. `[teammates] engine` (`auto` probes, falling through to the next
+  stopped for `credentialsRefused` (`Teammates::credentials_refused`). Each
+  `CredentialPath` is tracked apart: an accepted call clears only its own
+  path, and the agents run again (`credentials_accepted`) once none is
+  refused. A refused runtime dial is redialed 1 s to 60 s apart, every
+  10 min (±20%) once refused for 10 min. The bound-agent refresh is a
+  `tokio` interval, so a busy stream can't starve it. `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's
   network and allows just the service host:port pairs in the agent's

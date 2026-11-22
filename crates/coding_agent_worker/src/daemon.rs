@@ -223,7 +223,10 @@ impl Daemon {
                             .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
                             .is_some_and(crate::outbound::stream::CredentialsRefused::revoked)
                         {
-                            crate::harness::credentials_refused(teammates.as_ref());
+                            crate::harness::credentials_refused(
+                                teammates.as_ref(),
+                                crate::harness::CredentialPath::Stream,
+                            );
                         }
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
                         let delay = reconnect_delay(lasted, &mut delays, &mut attempt);
@@ -467,7 +470,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         Ok(agents) => {
             // Any accepted harness call ends a refusal and runs again what
             // it stopped, whether or not the runtime connection redials.
-            crate::harness::credentials_accepted(teammates);
+            crate::harness::credentials_accepted(teammates, crate::harness::CredentialPath::Stream);
             position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
             agents.bot_ids
         }
@@ -520,6 +523,14 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         "connected to the agent-trigger event stream"
     );
 
+    // An interval, not a sleep made afresh each turn: a busy stream would
+    // otherwise push the refresh back forever, and it is how a removed
+    // machine learns its credentials are refused.
+    let mut refresh = tokio::time::interval_at(
+        tokio::time::Instant::now() + BOUND_AGENT_REFRESH,
+        BOUND_AGENT_REFRESH,
+    );
+    refresh.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
@@ -530,7 +541,7 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
                     Err(error) => return ended(error),
                 }
             }
-            () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
+            _ = refresh.tick() => {
                 match bound_agents_changed(client, &bots, position, teammates).await {
                     Ok(false) => {}
                     Ok(true) => return ServeOutcome::Idle,
@@ -574,7 +585,7 @@ async fn bound_agents_changed(
     let read_at = std::time::SystemTime::now();
     let latest = client.bound_agents().await;
     if latest.is_ok() {
-        crate::harness::credentials_accepted(teammates);
+        crate::harness::credentials_accepted(teammates, crate::harness::CredentialPath::Stream);
     }
     match latest {
         Ok(latest) if latest.bot_ids == bots => {

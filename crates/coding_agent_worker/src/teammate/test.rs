@@ -18,6 +18,7 @@ use super::engine::{
 use super::host::{Platform, can_host, host_report};
 use super::store::{Lifecycle, Store, StoredInstall};
 use super::{Egress, Status, TeammateRequest, Teammates};
+use crate::harness::CredentialPath;
 use teammate_lifecycle::exit::PreviousExit;
 
 const SECCOMP: &str = "/home/ada/.macrod/teammates/teammate-seccomp.json";
@@ -2065,9 +2066,62 @@ async fn a_stop_whose_deletion_failed_is_not_started_by_a_restarted_macrod() {
 /// Refuse the credentials twice, the persistence apart, as an unpaired
 /// machine's checks do.
 async fn refuse_for_good(teammates: &Teammates<FakeEngine>) {
-    teammates.credentials_refused();
+    teammates.credentials_refused(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_PERSISTS).await;
-    teammates.credentials_refused();
+    teammates.credentials_refused(CredentialPath::Stream);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_runtime_only_refusal_stops_once_and_stays_stopped_until_the_dial_is_accepted() {
+    // An edge answers the runtime dial 403 for good while the stream's
+    // calls go through: the agents stop once and stay stopped, with no
+    // churn on each accepted stream call; an accepted dial brings them back.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::RuntimeDial);
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
+    tokio::time::sleep(super::REFUSAL_PERSISTS).await;
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::RuntimeDial);
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+    for _ in 0..5 {
+        tokio::time::sleep(Duration::from_secs(30)).await;
+        fixture
+            .teammates
+            .credentials_accepted(CredentialPath::Stream);
+        fixture
+            .teammates
+            .credentials_refused(CredentialPath::RuntimeDial);
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert!(fixture.statuses.try_recv().is_err());
+    assert_eq!(fixture.engine.runs(), 1);
+
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::RuntimeDial);
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 2);
 }
 
 #[tokio::test(start_paused = true)]
@@ -2078,9 +2132,13 @@ async fn refusals_further_apart_than_the_window_stop_nothing() {
     fixture.teammates.handle(run_request(1));
     next_states(&mut fixture.statuses, 3).await;
 
-    fixture.teammates.credentials_refused();
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_WINDOW + Duration::from_secs(1)).await;
-    fixture.teammates.credentials_refused();
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
 
     assert!(fixture.statuses.try_recv().is_err());
@@ -2100,13 +2158,21 @@ async fn a_refusal_that_doesnt_persist_stops_nothing() {
     fixture.teammates.handle(run_request(1));
     next_states(&mut fixture.statuses, 3).await;
 
-    fixture.teammates.credentials_refused();
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
-    fixture.teammates.credentials_refused();
-    fixture.teammates.credentials_accepted();
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::Stream);
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_PERSISTS).await;
     // Accepted in between: the next refusal starts the wait over.
-    fixture.teammates.credentials_refused();
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::Stream);
     tokio::time::sleep(super::REFUSAL_PERSISTS / 2).await;
 
     assert!(fixture.statuses.try_recv().is_err());
@@ -2186,7 +2252,9 @@ async fn refused_then_accepted_credentials_run_the_agents_again() {
         [TeammateRunState::Stopped]
     );
 
-    fixture.teammates.credentials_accepted();
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
 
     assert_eq!(
         next_states(&mut fixture.statuses, 3).await,
@@ -2223,7 +2291,7 @@ async fn agents_stopped_for_refused_credentials_come_back_after_a_restart_once_a
     );
     assert_eq!(fixture.engine.runs(), 1);
 
-    restarted_macrod.credentials_accepted();
+    restarted_macrod.credentials_accepted(CredentialPath::Stream);
 
     assert_eq!(
         next_states(&mut statuses, 3).await,
@@ -2249,7 +2317,9 @@ async fn an_operator_stop_is_never_resumed_by_accepted_credentials() {
         [TeammateRunState::Stopped]
     );
 
-    fixture.teammates.credentials_accepted();
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
     tokio::time::sleep(Duration::from_secs(60)).await;
 
     assert!(fixture.statuses.try_recv().is_err());

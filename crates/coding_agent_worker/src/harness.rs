@@ -56,26 +56,46 @@ pub type HostTeammates = crate::teammate::HostTeammates;
 #[cfg(not(unix))]
 pub enum HostTeammates {}
 
-/// The service refused this machine's harness credentials (it was unpaired
-/// or removed): stop the teammates it runs, whose keys went with them.
-pub fn credentials_refused(teammates: Option<&std::sync::Arc<HostTeammates>>) {
+/// Which call carried the harness credentials the service answered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CredentialPath {
+    /// The runtime gateway's WebSocket dial.
+    RuntimeDial,
+    /// The trigger stream's calls (its bound-agent reads).
+    Stream,
+}
+
+/// The service refused this machine's harness credentials on `path` (it
+/// was unpaired or removed, or that path is failing): stop the teammates it
+/// runs once the refusal persists.
+pub fn credentials_refused(
+    teammates: Option<&std::sync::Arc<HostTeammates>>,
+    path: CredentialPath,
+) {
     let Some(teammates) = teammates else {
         return;
     };
     #[cfg(unix)]
-    teammates.credentials_refused();
+    teammates.credentials_refused(path);
+    #[cfg(not(unix))]
+    let _ = path;
     #[cfg(not(unix))]
     match **teammates {}
 }
 
-/// The service accepted this machine's harness credentials: run again the
-/// teammates a refusal stopped.
-pub fn credentials_accepted(teammates: Option<&std::sync::Arc<HostTeammates>>) {
+/// The service accepted this machine's harness credentials on `path`: run
+/// again the teammates a refusal stopped, once no path is refused.
+pub fn credentials_accepted(
+    teammates: Option<&std::sync::Arc<HostTeammates>>,
+    path: CredentialPath,
+) {
     let Some(teammates) = teammates else {
         return;
     };
     #[cfg(unix)]
-    teammates.credentials_accepted();
+    teammates.credentials_accepted(path);
+    #[cfg(not(unix))]
+    let _ = path;
     #[cfg(not(unix))]
     match **teammates {}
 }

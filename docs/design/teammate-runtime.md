@@ -422,15 +422,19 @@ addresses, as it gives a local Macro computer. Production never sets it.
   macrod stops every teammate it runs and its holder, with 10 seconds'
   grace (the agent's key went with the machine's). It keeps the volumes
   and the kept install, records why, and reports `stopped`. Any accepted
-  call, on either path, ends the refusal and runs those agents again (the
-  service stops any it no longer wants there), so an auth outage ends by
-  itself within about 10 seconds of its end (the next bound-agent check),
-  without a restart; a refusal later than 60 seconds starts the window
+  call ends that path's refusal; once no path is refused, the agents run
+  again (the service stops any it no longer wants there). A dial an edge
+  keeps refusing isn't cleared by the stream's calls, so the agents stop
+  once and stay down until a dial is accepted. An auth outage ends by
+  itself, without a restart: within about 10 seconds of its end (the next
+  bound-agent check) when only the stream was refused, and at the next
+  runtime redial when the dial was too (within a minute, or 8 to 12 once
+  it had been refused for 10); a refusal later than 60 seconds starts the window
   over, so blips far apart never add up. From the unpair the stop takes up
   to about 40 seconds: up to 10 to notice, a second refusal 10 to 20 later
   (the stream's reopen backoff), then the grace. A refused runtime dial is
-  redialed 1 second doubling to a minute apart, and every 10 minutes once
-  the refusal has lasted 10; an unpaired machine is never accepted, so its
+  redialed 1 second doubling to a minute apart, and every 8 to 12 minutes
+  once the refusal has lasted 10; an unpaired machine is never accepted, so its
   agents stay down. A stop the service asked for is never undone.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up

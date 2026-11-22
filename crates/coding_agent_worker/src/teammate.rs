@@ -38,6 +38,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio_util::task::AbortOnDropHandle;
 use tracing::Instrument as _;
 
+use crate::harness::CredentialPath;
 use engine::{
     Delivery, Engine, EngineUnavailable, container_name, network_name, provider_volume_name,
     volume_name,
@@ -248,8 +249,8 @@ struct Shared<EngineImpl> {
 enum Work {
     Request(TeammateRequest),
     Resume,
-    CredentialsRefused,
-    CredentialsAccepted,
+    CredentialsRefused(CredentialPath),
+    CredentialsAccepted(CredentialPath),
 }
 
 impl<EngineImpl: Engine> Teammates<EngineImpl> {
@@ -467,14 +468,14 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 
     /// The service refused this machine's harness credentials (it was
     /// unpaired or removed): stop every teammate it runs.
-    pub fn credentials_refused(&self) {
-        let _ = self.requests.send(Work::CredentialsRefused);
+    pub fn credentials_refused(&self, path: CredentialPath) {
+        let _ = self.requests.send(Work::CredentialsRefused(path));
     }
 
     /// The service accepted this machine's harness credentials (a runtime
     /// dial went through): run again what a refusal stopped.
-    pub fn credentials_accepted(&self) {
-        let _ = self.requests.send(Work::CredentialsAccepted);
+    pub fn credentials_accepted(&self, path: CredentialPath) {
+        let _ = self.requests.send(Work::CredentialsAccepted(path));
     }
 
     /// State changes from now on.
@@ -568,21 +569,23 @@ async fn manage<EngineImpl: Engine>(
 ) {
     // Dropped with the manager: dropping [`Teammates`] stops supervising.
     let mut supervisors: HashMap<TeammateInstallId, AbortOnDropHandle<()>> = HashMap::new();
-    // The first refusal since the credentials were last accepted.
-    let mut refused_since: Option<tokio::time::Instant> = None;
+    // Each path still refused, and the first refusal of its window. An
+    // accept clears only its own path: a dial an edge keeps refusing isn't
+    // cleared by the stream's calls, so the agents don't churn.
+    let mut refused: HashMap<CredentialPath, tokio::time::Instant> = HashMap::new();
     while let Some(work) = queue.recv().await {
         match work {
             Work::Resume => resume(&shared, &mut supervisors),
-            Work::CredentialsRefused => {
+            Work::CredentialsRefused(path) => {
                 let now = tokio::time::Instant::now();
                 // A refusal past the window starts it over: blips far apart
                 // never add up.
-                let first = match refused_since {
-                    Some(first) if now.duration_since(first) <= REFUSAL_WINDOW => first,
-                    _ => *refused_since.insert(now),
-                };
-                let persists = now.duration_since(first) >= REFUSAL_PERSISTS;
-                let span = tracing::info_span!("teammate.credentials_refused", persists);
+                let first = refused.entry(path).or_insert(now);
+                if now.duration_since(*first) > REFUSAL_WINDOW {
+                    *first = now;
+                }
+                let persists = now.duration_since(*first) >= REFUSAL_PERSISTS;
+                let span = tracing::info_span!("teammate.credentials_refused", ?path, persists);
                 if persists {
                     stop_all(&shared, &mut supervisors).instrument(span).await;
                 } else {
@@ -591,11 +594,13 @@ async fn manage<EngineImpl: Engine>(
                     });
                 }
             }
-            Work::CredentialsAccepted => {
-                refused_since = None;
-                let span = tracing::info_span!("teammate.credentials_accepted");
-                let _entered = span.enter();
-                start_refused(&shared, &mut supervisors);
+            Work::CredentialsAccepted(path) => {
+                refused.remove(&path);
+                if refused.is_empty() {
+                    let span = tracing::info_span!("teammate.credentials_accepted", ?path);
+                    let _entered = span.enter();
+                    start_refused(&shared, &mut supervisors);
+                }
             }
             Work::Request(TeammateRequest::Run {
                 install,
