@@ -10,6 +10,8 @@ import type { JSX } from 'solid-js';
  */
 export function DraftOriginBar(props: {
   children?: JSX.Element;
+  /** Rating the draft, before Rewrite. */
+  feedback?: JSX.Element;
   onRewrite(): void;
 }) {
   return (
@@ -30,6 +32,7 @@ export function DraftOriginBar(props: {
       <div class="flex min-w-0 flex-1 items-center gap-3 text-ink-muted">
         {props.children}
       </div>
+      {props.feedback}
       <Button
         variant="ghost"
         size="sm"

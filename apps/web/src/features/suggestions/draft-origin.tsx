@@ -5,6 +5,7 @@ import { For, Show } from 'solid-js';
 import { DraftOriginBar } from './components/draft-origin-bar';
 import { useDraftOrigin } from './queries/draft-origin';
 import { createItemOpener } from './suggestion-actions';
+import { SuggestionFeedback } from './suggestion-feedback';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
 
 /** What Rewrite types into the agent composer after the thread, for the person to finish. */
@@ -34,7 +35,15 @@ export function SuggestionDraftOrigin(props: {
   return (
     <Show when={origin()}>
       {(found) => (
-        <DraftOriginBar onRewrite={rewrite}>
+        <DraftOriginBar
+          onRewrite={rewrite}
+          feedback={
+            <SuggestionFeedback
+              suggestionId={found().suggestionId}
+              surface="suggestion_draft"
+            />
+          }
+        >
           <For each={found().sources}>
             {(source) => (
               <SUGGESTION_ITEM_PARTS.Source

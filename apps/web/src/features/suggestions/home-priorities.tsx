@@ -10,6 +10,7 @@ import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { layoutDay } from './core/day';
 import type { Suggestion } from './core/suggestion';
 import { useTopSuggestions } from './queries/top-suggestions';
+import { SuggestionFeedback } from './suggestion-feedback';
 import { HomePrioritiesView } from './views/home-priorities-view';
 
 const PRIORITIES_SHOWN = 5;
@@ -80,6 +81,12 @@ function HomePrioritiesContent() {
     <HomePrioritiesView
       today={today()}
       priorities={priorities()}
+      feedback={(suggestionId) => (
+        <SuggestionFeedback
+          suggestionId={suggestionId}
+          surface="suggestion_tile"
+        />
+      )}
       onOpenEvent={(chip) => {
         const event = today()?.events.find((event) => event.id === chip.id);
         if (!event) return;

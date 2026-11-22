@@ -133,7 +133,13 @@ only, behind `enable-suggestions`.
   or focusing in it shows its buttons, and dismiss takes the age's place at
   the row's end. The buttons keep their room while hidden, so nothing in the
   row moves; don't size or show them conditionally. Done today rows show
-  their time and nothing else, and a dismissed row keeps Undo in view.
+  their time, and a dismissed row keeps Undo in view.
+- Behind `enable-agent-response-feedback`, a row (For you), a Home priority
+  and the draft origin bar rate their suggestion with thumbs
+  (`suggestion-feedback.tsx`, from `features/agent-feedback`): on rows with
+  the row's buttons when pointed at, always on the draft bar. The views take them as a `feedback` render
+  prop from the production compositions, so fixtures render without them;
+  the client batches the ratings read for a list into one request.
 - Nothing on a row is loud: actions are `secondary` or `ghost` buttons (no
   `primary`), and colour is left to the kind's mark and a failed run.
 - The API has no due times; a to-do's "2 days" is the feed's `waitingSince`,
