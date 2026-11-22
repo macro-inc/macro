@@ -78,41 +78,126 @@ function blockMarkdown(blocks: SerializedLexicalNode[]): string[] {
   });
 }
 
-/** The most removed plus inserted blocks the block diff looks for. */
+/**
+ * The most cells the LCS table may hold (16 MiB of Uint32), well inside a
+ * Worker's memory. A larger changed middle goes to `largeMiddleSteps`.
+ */
+const MAX_LCS_CELLS = 4 * 1024 * 1024;
+
+/**
+ * Keep/remove/insert steps in document order. Blocks shared at the start and
+ * end are kept; the changed middle keeps its longest common subsequence.
+ */
+function blockSteps(current: string[], requested: string[]): BlockStep[] {
+  let prefix = 0;
+  while (
+    prefix < current.length &&
+    prefix < requested.length &&
+    current[prefix] === requested[prefix]
+  )
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < current.length - prefix &&
+    suffix < requested.length - prefix &&
+    current[current.length - 1 - suffix] ===
+      requested[requested.length - 1 - suffix]
+  )
+    suffix++;
+
+  const steps: BlockStep[] = [];
+  for (let i = 0; i < prefix; i++) steps.push({ kind: 'keep', current: i });
+  steps.push(
+    ...middleSteps(
+      current.slice(prefix, current.length - suffix),
+      requested.slice(prefix, requested.length - suffix),
+      prefix
+    )
+  );
+  for (let i = current.length - suffix; i < current.length; i++)
+    steps.push({ kind: 'keep', current: i });
+  return steps;
+}
+
+/** LCS steps for the changed middle, whose blocks start at `offset` in both lists. */
+function middleSteps(
+  current: string[],
+  requested: string[],
+  offset: number
+): BlockStep[] {
+  const width = requested.length + 1;
+  const cells = (current.length + 1) * width;
+  if (cells > MAX_LCS_CELLS)
+    return largeMiddleSteps(current, requested, offset);
+
+  const common = new Uint32Array(cells);
+  for (let i = current.length - 1; i >= 0; i--)
+    for (let j = requested.length - 1; j >= 0; j--)
+      common[i * width + j] =
+        current[i] === requested[j]
+          ? common[(i + 1) * width + j + 1] + 1
+          : Math.max(common[(i + 1) * width + j], common[i * width + j + 1]);
+
+  const steps: BlockStep[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < current.length || j < requested.length) {
+    if (
+      i < current.length &&
+      j < requested.length &&
+      current[i] === requested[j]
+    ) {
+      steps.push({ kind: 'keep', current: offset + i });
+      i++;
+      j++;
+    } else if (
+      j < requested.length &&
+      (i === current.length ||
+        common[i * width + j + 1] >= common[(i + 1) * width + j])
+    ) {
+      steps.push({ kind: 'insert', requested: offset + j });
+      j++;
+    } else {
+      steps.push({ kind: 'remove', current: offset + i });
+      i++;
+    }
+  }
+  return steps;
+}
+
+/** The most removed plus inserted blocks the diff of a large middle looks for. */
 const MAX_CHANGED_BLOCKS = 2000;
 
 /**
- * Keep/remove/insert steps in document order: a shortest edit script between
- * the block lists (Myers), whose cost grows with how much changed rather than
- * with the document's length, so two edits far apart in a long document keep
- * every block between them.
+ * Steps for a middle too long for the LCS table, such as two edits far apart
+ * in a long document: a shortest edit script (Myers), whose cost grows with
+ * the document's length times the number of changed blocks. Past
+ * `MAX_CHANGED_BLOCKS` the middle is replaced whole.
  */
-function blockSteps(current: string[], requested: string[]): BlockStep[] {
-  // The diff's time grows with the document's length times the number of
-  // changed blocks. Past this many, the body is replaced whole: a change that
-  // large is past sync-service's update bound for all but the shortest blocks.
+function largeMiddleSteps(
+  current: string[],
+  requested: string[],
+  offset: number
+): BlockStep[] {
   const changes = diffArrays(current, requested, {
     maxEditLength: MAX_CHANGED_BLOCKS,
   }) ?? [
-    { value: current, count: current.length, added: false, removed: true },
-    { value: requested, count: requested.length, added: true, removed: false },
+    { count: current.length, added: false, removed: true },
+    { count: requested.length, added: true, removed: false },
   ];
-
   const steps: BlockStep[] = [];
-  let currentIndex = 0;
-  let requestedIndex = 0;
-  for (const change of changes) {
+  let i = 0;
+  let j = 0;
+  for (const change of changes)
     for (let step = 0; step < change.count; step++) {
-      if (change.added) {
-        steps.push({ kind: 'insert', requested: requestedIndex++ });
-      } else if (change.removed) {
-        steps.push({ kind: 'remove', current: currentIndex++ });
-      } else {
-        steps.push({ kind: 'keep', current: currentIndex++ });
-        requestedIndex++;
+      if (change.added) steps.push({ kind: 'insert', requested: offset + j++ });
+      else if (change.removed)
+        steps.push({ kind: 'remove', current: offset + i++ });
+      else {
+        steps.push({ kind: 'keep', current: offset + i++ });
+        j++;
       }
     }
-  }
   return steps;
 }
 
