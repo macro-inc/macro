@@ -90,8 +90,8 @@ wasm-bindgen shell exposing `cache-core` + `cache-turso` + `turso-opfs` as a
   `UNCOUNTED_RECOVERY_MS` (10 minutes) passed since the adoption began (by the
   marker's time, read alone when the files beside it do not read), except
   after a version probe that met a file another context holds open (a wipe
-  would meet it too) or failed in connect or close (which gave the owner up):
-  only the count bounds those; one that
+  would meet it too) or gave the owner up (an open whose cleanup was uncertain,
+  or a failed connect, close or reset): only the count bounds those; one that
   could not read the adoption reads it again first (`unreadable_adoption`), and
   with neither marker nor count readable it keeps them. Either open that keeps
   moved files marks its error `cacheRecoveryDeferred` (`recovery_deferred`),

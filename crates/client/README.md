@@ -178,13 +178,14 @@ the time, and decides as above if it now reads, so a read that fails once is dec
 any uncounted attempt is, never discarded for not reading. When it still does not read but the marker
 does (the files beside it cannot be looked up), the time comes from the marker.
 When neither the marker nor the count reads, nothing bounds the attempt or says
-how old the adoption is, so it keeps everything. A version probe that fails
-before it opens anything gives the files back undecided, as any attempt that
-keeps them, except that files another context holds open are never discarded
-for their age: a wipe would meet the same handle. One that fails after opening
-them (a failed connect or close) loses its hold on them before any of them
-changes, so it cannot discard them. In both cases only the count bounds the
-attempts; uncounted, they keep everything too. A read
+how old the adoption is, so it keeps everything. A version probe whose open
+fails and hands the files back undecided is bounded by the age as any attempt
+that keeps them, unless another context holds a file open: a wipe would meet
+the same handle, so that one is never discarded for its age. A probe that loses
+its hold on the files (an open whose cleanup was uncertain, or a failed
+connect, close or reset) cannot discard them, since it no longer holds them,
+though a failed reset may already have removed one file. Only the count bounds
+those last two; uncounted, they discard nothing. A read
 that returns fewer bytes than the file holds is an error, never a shorter
 marker or WAL header.
 
@@ -273,9 +274,9 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   build through all three, or recoveries lost after counting their attempt. The
   next one discards the files unread, though the older build might still have
   opened them. Recoveries whose attempts cannot be counted do the same once ten
-  minutes passed since the adoption began by the browser's clock (except while
-  another context holds a file open, or after a failed connect or close, which
-  only the count bounds), so a clock
+  minutes passed since the adoption began by the browser's clock (except after
+  a version probe that met a file another context holds open or lost its hold
+  on the files, which only the count bounds), so a clock
   jump either way can bring that early, and then one count write that fails
   while a tab of the older build briefly holds its lock is enough. An uncounted
   recovery whose two reads of the adoption both fail takes the time from the
