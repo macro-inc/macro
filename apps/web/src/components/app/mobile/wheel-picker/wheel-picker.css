@@ -1,0 +1,75 @@
+.wheel-picker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  height: calc(var(--wheel-row-height) * var(--wheel-visible-rows));
+  isolation: isolate;
+  font-family: var(--font-sans);
+  letter-spacing: normal;
+}
+
+.wheel-picker-band {
+  position: absolute;
+  z-index: -1;
+  inset-inline: 0;
+  top: calc(var(--wheel-row-height) * 2);
+  height: var(--wheel-row-height);
+  border-radius: 20px;
+  background: var(--color-accent);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+.wheel-picker-column {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: none;
+}
+
+.wheel-picker-column::-webkit-scrollbar {
+  display: none;
+}
+
+.wheel-picker-column:focus-visible {
+  outline: 1.5px solid var(--color-accent);
+  outline-offset: -2px;
+  border-radius: 20px;
+}
+
+.wheel-picker-column[aria-disabled="true"] {
+  overflow-y: hidden;
+  opacity: 0.5;
+}
+
+.wheel-picker-row {
+  display: flex;
+  align-items: center;
+  height: var(--wheel-row-height);
+  scroll-snap-align: center;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.wheel-picker-with-label {
+  padding-right: 64px;
+}
+
+.wheel-picker-label {
+  position: absolute;
+  right: 16px;
+  top: 100px;
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 400;
+  color: var(--color-ink-muted);
+  pointer-events: none;
+}
