@@ -7,8 +7,15 @@ impl Gen<'_> {
         let mut items: Vec<ItemSpec> = Vec::new();
         let count = self.rng.range(1, 6);
         for _ in 0..count {
-            if self.rng.chance(0.7) && !self.pools.core.is_empty() {
-                let mut spec = pick(&mut self.rng, &self.pools.core).clone();
+            // A known email thread a third of the time: a copy at another revision
+            // can move it in or out of the Inbox while it is pending.
+            let known = if !self.pools.threads.is_empty() && self.rng.chance(0.3) {
+                &self.pools.threads
+            } else {
+                &self.pools.core
+            };
+            if self.rng.chance(0.7) && !known.is_empty() {
+                let mut spec = pick(&mut self.rng, known).clone();
                 // An optimistic copy: what the client expects the server to say.
                 spec.revision += 1000 + self.rng.below(3);
                 if self.rng.chance(0.3) {
