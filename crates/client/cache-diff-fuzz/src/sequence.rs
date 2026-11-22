@@ -135,6 +135,12 @@ pub enum Op {
         request: Value,
         pages: u8,
     },
+    /// Resolve names to contacts, as the agent and property inference do: every
+    /// cached contact is visited, and at most two witnesses kept per label.
+    PeopleReferences {
+        identity: String,
+        request: Value,
+    },
     Clear,
     /// The host's idle point (the WAL checkpoint, in builds that have one).
     Idle,
@@ -558,6 +564,7 @@ impl<'a> Gen<'a> {
             ("contact-reconcile", 1),
             ("people-context", 1),
             ("people-search", 3),
+            ("people-references", 3),
             ("enqueue", 7),
             ("claim", 3),
             ("commit", 4),
@@ -616,6 +623,7 @@ impl<'a> Gen<'a> {
             }
             "people-context" => self.people_context(),
             "people-search" => self.people_search(),
+            "people-references" => self.people_references(),
             "enqueue" => self.enqueue(),
             "claim" => {
                 let owner = pick(&mut self.rng, &["runner-a", "runner-b"]).to_string();

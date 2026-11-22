@@ -1,4 +1,5 @@
-//! The people ops: contact reconciliation, people context and people search.
+//! The people ops: contact reconciliation, people context, people search and
+//! reference resolution.
 
 use super::{Exec, Outcome};
 use cache_core::people::{ContextAction, ContextUpdate};
@@ -104,5 +105,22 @@ impl Exec<'_> {
             request["cursor"] = next;
         }
         Ok(Value::Array(out))
+    }
+
+    pub(super) async fn people_references(&mut self, request: &Value) -> Outcome {
+        let scope = self.scope(false).await?;
+        let mut request = request.clone();
+        request["scope"] = serde_json::to_value(&scope).map_err(|error| error.to_string())?;
+        let parsed: cache_core::people::PeopleReferenceRequest =
+            serde_json::from_value(request).map_err(|error| format!("request: {error}"))?;
+        match self.handle().people_resolve_references(parsed).await {
+            Ok(result) => {
+                let value = serde_json::to_value(result).map_err(|error| error.to_string())?;
+                let kind = value["kind"].as_str().unwrap_or("?").to_owned();
+                self.count(format!("people-references.{kind}"));
+                Ok(value)
+            }
+            Err(error) => Ok(json!({ "error": error })),
+        }
     }
 }

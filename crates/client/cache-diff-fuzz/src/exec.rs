@@ -675,6 +675,11 @@ impl<'a> Exec<'a> {
                 let outcome = self.people_search(request, *pages).await;
                 self.record(index, "people-search", outcome);
             }
+            Op::PeopleReferences { identity, request } => {
+                self.identity.clone_from(identity);
+                let outcome = self.people_references(request).await;
+                self.record(index, "people-references", outcome);
+            }
             Op::Clear => {
                 let outcome = self
                     .handle()

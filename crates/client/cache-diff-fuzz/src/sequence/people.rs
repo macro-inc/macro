@@ -1,4 +1,5 @@
-//! Contacts and people: contact pages, people context, search and people search.
+//! Contacts and people: contact pages, people context, search, people search
+//! and reference resolution.
 
 use super::*;
 
@@ -171,6 +172,61 @@ impl Gen<'_> {
             identity: self.viewer.clone(),
             request,
             pages,
+        });
+    }
+
+    /// Labels to resolve: whole names, first names (often shared, so the two
+    /// witnesses kept depend on the order contacts are visited), addresses and
+    /// words no contact has.
+    pub(super) fn people_references(&mut self) {
+        let count = self.rng.range(1, 5) as usize;
+        let mut labels = Vec::with_capacity(count);
+        for _ in 0..count {
+            let label = if self.pools.contacts.is_empty() || self.rng.chance(0.15) {
+                words(&mut self.rng, 1)
+            } else {
+                let contact = pick(&mut self.rng, &self.pools.contacts).clone();
+                let name = contact.name.unwrap_or_default();
+                let first = name
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned();
+                let local = contact
+                    .email
+                    .split('@')
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned();
+                let label = match self.rng.below(4) {
+                    0 => name,
+                    1 => first,
+                    2 => contact.email,
+                    _ => local,
+                };
+                if self.rng.chance(0.2) {
+                    label.to_uppercase()
+                } else {
+                    label
+                }
+            };
+            // A blank label fails the whole request, so it gets a word instead.
+            let label = if label.trim().is_empty() {
+                words(&mut self.rng, 1)
+            } else {
+                label
+            };
+            labels.push(label);
+        }
+        let matching = *pick(&mut self.rng, &["exact", "preferFullName", "anyName"]);
+        let exclude = self.rng.chance(0.3);
+        self.push(Op::PeopleReferences {
+            identity: self.viewer.clone(),
+            request: json!({
+                "labels": labels,
+                "matching": matching,
+                "excludeSecondaryInboxes": exclude,
+            }),
         });
     }
 }
