@@ -284,9 +284,8 @@ export function createSoupLiveQuery(
       pages.set(cursor, pageEmailUpdatedAt(page));
       // Keep every loaded cursor's capture and the newest few others.
       const loaded = new Set(untrack(loadedCursors));
-      let spare = [...pages.keys()].filter(
-        (old) => old !== cursor && !loaded.has(old)
-      ).length;
+      // The incoming cursor counts while it is not mounted, but stays.
+      let spare = [...pages.keys()].filter((old) => !loaded.has(old)).length;
       for (const old of pages.keys()) {
         if (spare <= SPARE_EMAIL_TIME_PAGES) break;
         if (old === cursor || loaded.has(old)) continue;
