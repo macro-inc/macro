@@ -77,6 +77,9 @@ pub struct Exec<'a> {
     reader: Option<EngineHandle>,
     /// Where `broad_hits` go when the run finishes.
     pub broad_out: Option<PathBuf>,
+    /// The share of ops run with the next record write armed to fail, and the seed
+    /// that picks them (see `arm_write_fault`).
+    pub fail_writes: (f64, u64),
 }
 
 type Outcome = Result<Value, String>;
@@ -149,6 +152,7 @@ impl<'a> Exec<'a> {
             broad_hits: Vec::new(),
             reader: None,
             broad_out: None,
+            fail_writes: (0.0, 0),
         };
         exec.open(0)?;
         Ok(exec)
@@ -320,6 +324,9 @@ impl<'a> Exec<'a> {
         if self.stage_hydrates && cfg!(not(staged_hydrate)) {
             return Err("this build was made without STAGED_HYDRATE=1".into());
         }
+        if self.fail_writes.0 > 0.0 && cfg!(not(storage_faults)) {
+            return Err("this build was made without STORAGE_FAULTS=1".into());
+        }
         for (index, op) in ops.iter().enumerate() {
             #[cfg(staged_hydrate)]
             if self.stage_hydrates
@@ -327,9 +334,42 @@ impl<'a> Exec<'a> {
             {
                 self.stage_ahead(index + 1, next).await;
             }
-            self.step(index, op).await?;
+            let armed = self.arm_write_fault(index);
+            let stepped = self.step(index, op).await;
+            if armed {
+                self.disarm_write_fault();
+            }
+            stepped?;
         }
         Ok(())
+    }
+
+    /// With `--fail-writes SHARE`, arms the next record write to fail for that share of
+    /// ops. The pick hashes the seed and the op index, drawing nothing from the case.
+    fn arm_write_fault(&mut self, index: usize) -> bool {
+        let (share, seed) = self.fail_writes;
+        if share <= 0.0 {
+            return false;
+        }
+        let mut mixed = seed ^ (index as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+        mixed = (mixed ^ (mixed >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        mixed = (mixed ^ (mixed >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        mixed ^= mixed >> 31;
+        if (mixed % 1_000) as f64 >= share * 1_000.0 {
+            return false;
+        }
+        #[cfg(storage_faults)]
+        cache_turso::FUZZ_FAIL_NEXT_PUT.store(true, std::sync::atomic::Ordering::SeqCst);
+        self.count("fault.armed");
+        true
+    }
+
+    /// Disarms what `arm_write_fault` armed, counting whether a write took it.
+    fn disarm_write_fault(&mut self) {
+        #[cfg(storage_faults)]
+        if !cache_turso::FUZZ_FAIL_NEXT_PUT.swap(false, std::sync::atomic::Ordering::SeqCst) {
+            self.count("fault.fired");
+        }
     }
 
     pub async fn step(&mut self, index: usize, op: &Op) -> Result<(), String> {

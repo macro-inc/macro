@@ -79,6 +79,13 @@ fn main() {
     if std::env::var_os("CACHE_DIFF_FUZZ_MIGRATION_HOOKS").is_some_and(|value| value == "1") {
         println!("cargo::rustc-cfg=migration_hooks");
     }
+    // A side built with STORAGE_FAULTS=1 has `cache_turso::FUZZ_FAIL_NEXT_PUT` (patched in by
+    // build-side.sh), so `--fail-writes` can fail a storage write.
+    println!("cargo::rustc-check-cfg=cfg(storage_faults)");
+    println!("cargo:rerun-if-env-changed=CACHE_DIFF_FUZZ_STORAGE_FAULTS");
+    if std::env::var_os("CACHE_DIFF_FUZZ_STORAGE_FAULTS").is_some_and(|value| value == "1") {
+        println!("cargo::rustc-cfg=storage_faults");
+    }
 }
 
 fn read(path: &Path) -> String {

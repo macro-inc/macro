@@ -7,6 +7,7 @@
 # have TursoStorage::checkpoint_if_due). STAGED_HYDRATE=1 builds it with the hooks that stage
 # hydrates as the browser host does (the side must have Engine::stage_hydrate). MIGRATION_HOOKS=1
 # builds it with cache-turso's migration-test-hooks feature, for --interrupt-migration-after.
+# STORAGE_FAULTS=1 builds it with a flag that fails the next record write, for --fail-writes.
 # TARGET=x builds in target-x instead of
 # target-NAME, so sides that differ little share one; builds that share a target
 # take turns. The binary lands in $CACHE_DIFF_FUZZ_HOME/bin/NAME, and
@@ -77,6 +78,20 @@ if [ -n "${MUTATE_FILE:-}" ]; then
   fi
 fi
 
+# STORAGE_FAULTS=1 lets `--fail-writes` fail a record write: cache-turso gets a flag that its
+# test fault point (`fault_after`, called after each record a write transaction puts) takes,
+# failing that transaction as a database error does. The same patch on every side.
+if [ "${STORAGE_FAULTS:-0}" = 1 ]; then
+  storage=$tree/crates/client/cache-turso/src/storage.rs
+  before=$(sha256sum "$storage")
+  perl -0pi -e 's/(    fn fault_after\(&self, site: TestFaultSite, index: usize\) -> Result<\(\), TursoStorageError> \{\n)/$1        if matches!(site, TestFaultSite::Put)\n            && crate::FUZZ_FAIL_NEXT_PUT.swap(false, std::sync::atomic::Ordering::SeqCst)\n        {\n            return Err(TursoStorageError::Database);\n        }\n/' "$storage"
+  if [ "$(sha256sum "$storage")" = "$before" ]; then
+    echo "STORAGE_FAULTS: no fault_after in cache-turso's storage.rs" >&2
+    exit 1
+  fi
+  printf '\n/// Set by the differential fuzzer: the next record write fails.\n#[doc(hidden)]\npub static FUZZ_FAIL_NEXT_PUT: std::sync::atomic::AtomicBool =\n    std::sync::atomic::AtomicBool::new(false);\n' >> "$tree/crates/client/cache-turso/src/lib.rs"
+fi
+
 # The fuzzer itself is the same on every side: this checkout's copy, hashed as copied.
 rm -rf "${tree:?}/crates/client/cache-diff-fuzz"
 cp -r "$crate" "$tree/crates/client/cache-diff-fuzz"
@@ -90,7 +105,7 @@ fi
 # the lock out of long-lived children such as an sccache server.
 (
   cd "$tree"
-  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CACHE_DIFF_FUZZ_STAGED_HYDRATE=${STAGED_HYDRATE:-0} CACHE_DIFF_FUZZ_MIGRATION_HOOKS=${MIGRATION_HOOKS:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
+  export CACHE_DIFF_FUZZ_IDLE_CHECKPOINT=${IDLE_CHECKPOINT:-0} CACHE_DIFF_FUZZ_STAGED_HYDRATE=${STAGED_HYDRATE:-0} CACHE_DIFF_FUZZ_MIGRATION_HOOKS=${MIGRATION_HOOKS:-0} CACHE_DIFF_FUZZ_STORAGE_FAULTS=${STORAGE_FAULTS:-0} CARGO_TARGET_DIR=$target out=$home/bin/$name.tmp
   features=
   [ "${MIGRATION_HOOKS:-0}" = 1 ] && features=cache-turso/migration-test-hooks
   export features
@@ -102,6 +117,7 @@ fi
   echo "idle-checkpoint ${IDLE_CHECKPOINT:-0}"
   echo "migration-hooks ${MIGRATION_HOOKS:-0}"
   echo "staged-hydrate ${STAGED_HYDRATE:-0}"
+  echo "storage-faults ${STORAGE_FAULTS:-0}"
   if [ -n "${MUTATE_FILE:-}" ]; then echo "mutate $MUTATE_FILE $MUTATE_PERL"; fi
   echo "fuzzer $fuzzer_commit $fuzzer_hash"
 } > "$home/bin/$name.side"

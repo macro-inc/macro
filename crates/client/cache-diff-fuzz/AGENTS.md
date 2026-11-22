@@ -102,6 +102,14 @@ purpose (it says what).
   so a copy at another revision (which can move it in or out of the Inbox, or change its
   account or read state) never changes its property attributes. It changes the cases
   generated; without it no extra draw is made.
+- When a change touches what happens when a storage write fails (records taken out of the hot
+  tier until the write commits, say), build both sides with `STORAGE_FAULTS=1` and give both
+  `--fail-writes SHARE`: that share of ops runs with the next record write armed to fail as a
+  database error does (build-side.sh patches a flag into cache-turso's test fault point, after
+  the first record a write transaction puts). The ops are picked from the seed apart from the
+  case, so the cases don't change. A side that skips a write the other makes can fail where
+  the other doesn't; check that before calling it a regression. Stats count `fault.armed` and
+  `fault.fired`.
 - `FUZZ_ARGS` goes to both sides; `FUZZ_ARGS_A` and `FUZZ_ARGS_B` to one each, for
   one build under two settings (e.g. `FUZZ_ARGS_B="--hot-capacity 16"` against
   itself: the hot tier is a cache, so its size must change nothing).

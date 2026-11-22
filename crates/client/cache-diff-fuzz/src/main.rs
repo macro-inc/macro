@@ -133,6 +133,12 @@ struct Args {
     /// that the other side reported each of them too (not in `CHAIN_*` runs).
     #[arg(long, default_value_t = 0.0, value_parser = share)]
     abandon_reads: f64,
+    /// The share of ops (0 to 1) run with the next record write armed to fail, as a
+    /// database error would (a side built with STORAGE_FAULTS=1). Which ops is drawn from
+    /// the seed apart from the case, so both sides arm the same ones and the case is
+    /// unchanged. Stats count `fault.armed` and `fault.fired` (ops whose write failed).
+    #[arg(long, default_value_t = 0.0, value_parser = share)]
+    fail_writes: f64,
 }
 
 fn main() -> Result<(), rootcause::Report> {
@@ -247,6 +253,7 @@ fn run(
     exec.stage_hydrates = args.stage_hydrates;
     exec.concurrent_reads = args.concurrent_reads;
     exec.abandon_reads = args.abandon_reads;
+    exec.fail_writes = (args.fail_writes, seed);
     if args.abandon_reads > 0.0 {
         exec.broad_out = Some(args.out.join(format!("{seed}.broad")));
     }
