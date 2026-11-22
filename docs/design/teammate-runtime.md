@@ -435,7 +435,9 @@ addresses, as it gives a local Macro computer. Production never sets it.
   (the stream's reopen backoff), then the grace. A refused runtime dial is
   redialed 1 second doubling to a minute apart, and every 8 to 12 minutes
   once the refusal has lasted 10; an unpaired machine is never accepted, so its
-  agents stay down. A stop the service asked for is never undone.
+  agents stay down. A runtime supervisor that ends (a client error it
+  doesn't redial) takes its dial's refusal with it, so the stream's next
+  accepted call runs the agents. A stop the service asked for is never undone.
 - **Crash loop.** Failed exits (not 0, not 75) restart with a backoff from
   2 to 60 seconds, for as long as they keep failing; macrod never gives up
   on a generation by itself. `crashLoop` is only the reason an image update
@@ -668,6 +670,11 @@ macrod (always running; systemd only keeps macrod alive)
 ### Eligibility and the engine check
 
 macrod checks for an engine when it starts, and again when it reconnects.
+While a connection's check finds the engine unreachable (Docker Desktop
+not started yet, say), macrod checks again every 30 seconds and sends each
+result as a fresh `TeammateHost` report. Once the engine answers and
+nothing is wrong, it redials, so the dial lists `teammate-container`;
+with a turn running it waits for the turn to end.
 For Docker it runs `docker version` (it needs Engine 24 or later, for
 `--security-opt` seccomp files and `--mount` volumes). For Podman it runs
 `podman info` (4.4 or later, for pasta). It never installs an engine. It

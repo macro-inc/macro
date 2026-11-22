@@ -145,6 +145,9 @@ async fn serve(
     computer: Option<Arc<Computer>>,
     teammates: Option<Arc<HostTeammates>>,
 ) {
+    // However the supervisor ends (a client error it doesn't redial, a
+    // handoff, or dropped), its dial's refusal must not hold the agents.
+    let _dial_refusal = ForgetDialRefusal(teammates.clone());
     let mut backoff = reconnect_strategy();
     let mut refused_backoff = refused_strategy();
     // When the gateway began refusing, while it still does.
@@ -237,6 +240,15 @@ async fn serve(
                 return;
             }
         }
+    }
+}
+
+/// Forgets the runtime dial's refusal when dropped: nothing dials then.
+struct ForgetDialRefusal(Option<Arc<HostTeammates>>);
+
+impl Drop for ForgetDialRefusal {
+    fn drop(&mut self) {
+        harness::stopped_calling(self.0.as_ref(), harness::CredentialPath::RuntimeDial);
     }
 }
 

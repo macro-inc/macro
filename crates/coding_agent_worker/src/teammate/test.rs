@@ -17,8 +17,8 @@ use super::engine::{
 };
 use super::host::{Platform, can_host, host_report};
 use super::store::{Lifecycle, Store, StoredInstall};
-use super::{Egress, Status, TeammateRequest, Teammates};
-use crate::harness::CredentialPath;
+use super::{Egress, Link, Status, TeammateRequest, Teammates};
+use crate::harness::{CredentialPath, TeammateEvent};
 use teammate_lifecycle::exit::PreviousExit;
 
 const SECCOMP: &str = "/home/ada/.macrod/teammates/teammate-seccomp.json";
@@ -1187,6 +1187,53 @@ async fn a_run_on_a_machine_that_cant_host_fails_without_keeping_anything() {
     assert!(engine.calls().is_empty());
 }
 
+#[tokio::test(start_paused = true)]
+async fn an_unreachable_engine_is_checked_again_every_thirty_seconds() {
+    // Docker isn't up when the runtime dials: the web shows it can't reach
+    // Docker and polls. Each check's result is reported on the live
+    // connection, and once the engine answers the runtime redials, so the
+    // dial lists the teammate capability.
+    let directory = tempfile::tempdir().unwrap();
+    let (engine, _exit) = FakeEngine::new(Err(EngineUnavailable::Unreachable));
+    let teammates = Arc::new(Teammates::new(
+        engine.clone(),
+        Store::new(directory.path().to_owned()),
+        LINUX,
+        SECCOMP.into(),
+        Egress::default(),
+    ));
+    let report = teammates.detect().await;
+    assert_eq!(report.problem, Some(TeammateHostProblem::EngineUnreachable));
+    let (to_service, mut sent) = mpsc::unbounded_channel();
+    let mut link = Link::open(Arc::clone(&teammates), report, &to_service);
+    assert!(matches!(
+        sent.try_recv(),
+        Ok(agent_runtime_protocol::domain::schema::v0::ToServerMessage::TeammateHost { .. })
+    ));
+
+    assert!(
+        tokio::time::timeout(Duration::from_secs(29), link.next())
+            .await
+            .is_err()
+    );
+    let checked = tokio::time::timeout(Duration::from_secs(2), link.next())
+        .await
+        .expect("the engine is checked again at 30 s");
+    let TeammateEvent::Send(
+        agent_runtime_protocol::domain::schema::v0::ToServerMessage::TeammateHost { report },
+    ) = checked
+    else {
+        panic!("expected a host report, got {checked:?}");
+    };
+    assert_eq!(report.problem, Some(TeammateHostProblem::EngineUnreachable));
+
+    engine.state().info = Ok(docker_info());
+    let checked = tokio::time::timeout(Duration::from_secs(31), link.next())
+        .await
+        .expect("checked again 30 s later");
+    assert!(matches!(checked, TeammateEvent::Redial), "{checked:?}");
+}
+
 #[test]
 fn engine_versions_are_compared_by_major_and_minor() {
     assert!(version_at_least("29.5.1", (24, 0)));
@@ -2113,6 +2160,44 @@ async fn a_runtime_only_refusal_stops_once_and_stays_stopped_until_the_dial_is_a
     fixture
         .teammates
         .credentials_accepted(CredentialPath::RuntimeDial);
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running
+        ]
+    );
+    assert_eq!(fixture.engine.runs(), 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_dial_that_stopped_calling_no_longer_holds_the_agents() {
+    // The runtime dial was refused for good, then its supervisor ended (a
+    // client error it doesn't redial): nothing will accept on that path
+    // again, so the stream's next accepted call runs the agents.
+    let mut fixture = fixture().await;
+    fixture.teammates.handle(run_request(1));
+    next_states(&mut fixture.statuses, 3).await;
+
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::RuntimeDial);
+    tokio::time::sleep(super::REFUSAL_PERSISTS).await;
+    fixture
+        .teammates
+        .credentials_refused(CredentialPath::RuntimeDial);
+    assert_eq!(
+        next_states(&mut fixture.statuses, 1).await,
+        [TeammateRunState::Stopped]
+    );
+
+    fixture
+        .teammates
+        .stopped_calling(CredentialPath::RuntimeDial);
+    fixture
+        .teammates
+        .credentials_accepted(CredentialPath::Stream);
     assert_eq!(
         next_states(&mut fixture.statuses, 3).await,
         [

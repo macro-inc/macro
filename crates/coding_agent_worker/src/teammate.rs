@@ -30,15 +30,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::schema::v0::{
-    AgentEnvironment, EngineIsolation, InstalledEngine, IsolationProblem, TeammateHostReport,
-    TeammateImage, TeammateInstall, TeammateInstallId, TeammateRunFailure, TeammateRunState,
-    ToRuntimeMessage, ToServerMessage,
+    AgentEnvironment, EngineIsolation, InstalledEngine, IsolationProblem, TeammateHostProblem,
+    TeammateHostReport, TeammateImage, TeammateInstall, TeammateInstallId, TeammateRunFailure,
+    TeammateRunState, ToRuntimeMessage, ToServerMessage,
 };
 use tokio::sync::{broadcast, mpsc};
 use tokio_util::task::AbortOnDropHandle;
 use tracing::Instrument as _;
 
-use crate::harness::CredentialPath;
+use crate::harness::{CredentialPath, TeammateEvent};
 use engine::{
     Delivery, Engine, EngineUnavailable, container_name, network_name, provider_volume_name,
     volume_name,
@@ -56,6 +56,11 @@ const SECCOMP_PROFILE: &str = include_str!("../../../nix/macro-box/files/teammat
 /// How long the engine may take to say what it is before macrod reports it
 /// unreachable: a hung engine must not hold up the runtime connection.
 const ENGINE_CHECK_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// How often an unreachable engine is checked again on a live connection:
+/// the web polls the machine's report every 15 s and says it can't reach
+/// the engine right now.
+const ENGINE_RECHECK: Duration = Duration::from_secs(30);
 
 /// The install id the isolation probe runs under.
 const PROBE_INSTALL: &str = "isolation-probe";
@@ -251,6 +256,7 @@ enum Work {
     Resume,
     CredentialsRefused(CredentialPath),
     CredentialsAccepted(CredentialPath),
+    StoppedCalling(CredentialPath),
 }
 
 impl<EngineImpl: Engine> Teammates<EngineImpl> {
@@ -478,6 +484,13 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         let _ = self.requests.send(Work::CredentialsAccepted(path));
     }
 
+    /// Nothing calls the service on `path` any more (its runtime
+    /// supervisor ended): forget its refusal, so it no longer holds the
+    /// agents stopped. They run again on the next accepted call.
+    pub fn stopped_calling(&self, path: CredentialPath) {
+        let _ = self.requests.send(Work::StoppedCalling(path));
+    }
+
     /// State changes from now on.
     pub fn subscribe(&self) -> broadcast::Receiver<Status> {
         self.shared.statuses.subscribe()
@@ -494,6 +507,12 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
 pub struct Link {
     teammates: Arc<HostTeammates>,
     statuses: broadcast::Receiver<Status>,
+    /// The engine checks made while the engine is unreachable: their own
+    /// task, so a relay busy with other traffic can't cancel one midway.
+    rechecks: Option<(
+        mpsc::UnboundedReceiver<TeammateEvent>,
+        AbortOnDropHandle<()>,
+    )>,
 }
 
 impl Link {
@@ -508,35 +527,90 @@ impl Link {
         // Subscribed first: a change between the two is sent twice, never
         // lost.
         let statuses = teammates.subscribe();
+        let unreachable = report.problem == Some(TeammateHostProblem::EngineUnreachable);
         let _ = to_service.send(ToServerMessage::TeammateHost { report });
         for status in teammates.latest() {
             let _ = to_service.send(status.into());
         }
+        let rechecks = unreachable.then(|| {
+            let (events, rechecks) = mpsc::unbounded_channel();
+            let task = tokio::spawn(recheck_engine(Arc::clone(&teammates), events));
+            (rechecks, AbortOnDropHandle::new(task))
+        });
         Self {
             teammates,
             statuses,
+            rechecks,
         }
     }
 
-    /// The next state change to send.
-    pub async fn next(&mut self) -> Status {
-        loop {
-            match self.statuses.recv().await {
-                Ok(status) => return status,
-                Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                    tracing::warn!(
-                        skipped,
-                        "teammate states were dropped before they were sent"
-                    );
-                }
-                Err(broadcast::error::RecvError::Closed) => std::future::pending().await,
+    /// The next report to send, or a redial.
+    pub async fn next(&mut self) -> TeammateEvent {
+        let recheck = async {
+            match &mut self.rechecks {
+                Some((events, _task)) => match events.recv().await {
+                    Some(event) => event,
+                    None => std::future::pending().await,
+                },
+                None => std::future::pending().await,
             }
+        };
+        tokio::select! {
+            event = recheck => event,
+            status = next_status(&mut self.statuses) => TeammateEvent::Send(status.into()),
         }
     }
 
     /// Handle a teammate message from the service.
     pub fn handle(&self, request: TeammateRequest) {
         self.teammates.handle(request);
+    }
+}
+
+/// While the engine check finds the engine unreachable, check again every
+/// [`ENGINE_RECHECK`] and report each result on the live connection. Once
+/// the engine answers and the machine can host, ask for a redial (this
+/// connection's dial didn't list the teammate capability) until the link
+/// ends; another problem is reported and ends the checks.
+async fn recheck_engine(
+    teammates: Arc<HostTeammates>,
+    events: mpsc::UnboundedSender<TeammateEvent>,
+) {
+    let mut ticks =
+        tokio::time::interval_at(tokio::time::Instant::now() + ENGINE_RECHECK, ENGINE_RECHECK);
+    ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        ticks.tick().await;
+        let report = teammates.detect().await;
+        if can_host(&report) {
+            if events.send(TeammateEvent::Redial).is_err() {
+                return;
+            }
+            continue;
+        }
+        let unreachable = report.problem == Some(TeammateHostProblem::EngineUnreachable);
+        let sent = events.send(TeammateEvent::Send(ToServerMessage::TeammateHost {
+            report,
+        }));
+        if sent.is_err() || !unreachable {
+            return;
+        }
+    }
+}
+
+/// The next state change, past any dropped ones.
+async fn next_status(statuses: &mut broadcast::Receiver<Status>) -> Status {
+    loop {
+        match statuses.recv().await {
+            Ok(status) => return status,
+            Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                tracing::warn!(
+                    skipped,
+                    "teammate states were dropped before they were sent"
+                );
+            }
+            Err(broadcast::error::RecvError::Closed) => std::future::pending().await,
+        }
     }
 }
 
@@ -592,6 +666,15 @@ async fn manage<EngineImpl: Engine>(
                     span.in_scope(|| {
                         tracing::warn!("the service refused this machine's credentials; stopping its teammates if it still does in {REFUSAL_PERSISTS:?}");
                     });
+                }
+            }
+            // Not an accept: the agents wait for the next accepted call.
+            Work::StoppedCalling(path) => {
+                if refused.remove(&path).is_some() {
+                    tracing::info!(
+                        ?path,
+                        "nothing calls the service on a refused path any more; its refusal no longer holds the teammates"
+                    );
                 }
             }
             Work::CredentialsAccepted(path) => {

@@ -123,8 +123,13 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   stopped for `credentialsRefused` (`Teammates::credentials_refused`). Each
   `CredentialPath` is tracked apart: an accepted call clears only its own
   path, and the agents run again (`credentials_accepted`) once none is
-  refused. A refused runtime dial is redialed 1 s to 60 s apart, every
-  10 min (±20%) once refused for 10 min. The bound-agent refresh is a
+  refused; a runtime supervisor that ends forgets its dial's refusal
+  (`stopped_calling`). A refused runtime dial is redialed 1 s to 60 s apart, every
+  10 min (±20%) once refused for 10 min. While a connection's engine check
+  finds the engine unreachable, `Link` checks again every 30 s
+  (`ENGINE_RECHECK`, its own task), sends each report, and asks the relay to
+  redial (when no turn runs) once the machine can host, so the dial lists
+  `teammate-container`. The bound-agent refresh is a
   `tokio` interval, so a busy stream can't starve it. `[teammates] engine` (`auto` probes, falling through to the next
   engine) and `[[teammates.allow]]` are in `config.rs`. `[macro]
   teammate_network` (local stack only) makes the holder join the stack's

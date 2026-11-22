@@ -163,6 +163,50 @@ async fn refused_credentials_are_redialed_and_an_accepted_dial_runs_the_stopped_
     clippy::result_large_err,
     reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
 )]
+async fn a_supervisor_that_ends_after_a_refusal_holds_no_agents() {
+    // The dial was refused, then answered with an error the supervisor
+    // doesn't redial: it ends, and its refusal with it, so the stream's
+    // next accepted call runs the agents stopped for refused credentials.
+    let (teammates, engine, _directory) =
+        crate::teammate::test::fake_hosting_stopped_for_refused_credentials().await;
+    let mut statuses = teammates.subscribe();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let runtime = start_runtime_hosting(&listener, Some(Arc::clone(&teammates)));
+    for status in [401, 404] {
+        let (socket, _) = tokio::time::timeout(Duration::from_secs(5), listener.accept())
+            .await
+            .expect("the machine dials")
+            .unwrap();
+        let _ = tokio_tungstenite::accept_hdr_async(
+            socket,
+            move |_: &tungstenite::handshake::server::Request, _| {
+                Err(tungstenite::http::Response::builder()
+                    .status(status)
+                    .body(None)
+                    .unwrap())
+            },
+        )
+        .await;
+    }
+    let _ = tokio::time::timeout(Duration::from_secs(1), runtime.ensure_connected()).await;
+    assert!(runtime._task.is_finished());
+
+    teammates.credentials_accepted(crate::harness::CredentialPath::Stream);
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while statuses.recv().await.unwrap().state
+            != agent_runtime_protocol::domain::schema::v0::TeammateRunState::Running
+        {}
+    })
+    .await
+    .expect("the agent stopped for refused credentials runs again");
+    assert_eq!(engine.runs(), 1);
+}
+
+#[tokio::test]
+#[expect(
+    clippy::result_large_err,
+    reason = "the handshake callback's error type is fixed by tungstenite's Callback trait"
+)]
 async fn a_forbidden_dial_is_redialed_like_a_refusal() {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let runtime = start_runtime(&listener);

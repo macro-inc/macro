@@ -83,6 +83,20 @@ pub fn credentials_refused(
     match **teammates {}
 }
 
+/// Nothing calls the service on `path` any more: its refusal no longer
+/// holds the teammates stopped.
+pub fn stopped_calling(teammates: Option<&std::sync::Arc<HostTeammates>>, path: CredentialPath) {
+    let Some(teammates) = teammates else {
+        return;
+    };
+    #[cfg(unix)]
+    teammates.stopped_calling(path);
+    #[cfg(not(unix))]
+    let _ = path;
+    #[cfg(not(unix))]
+    match **teammates {}
+}
+
 /// The service accepted this machine's harness credentials on `path`: run
 /// again the teammates a refusal stopped, once no path is refused.
 pub fn credentials_accepted(
@@ -103,6 +117,17 @@ pub fn credentials_accepted(
 /// The teammates to serve on one connection, with the engine check made
 /// before its dial.
 pub type TeammateHosting = (Arc<HostTeammates>, TeammateHostReport);
+
+/// What one connection's teammate traffic asks of the relay.
+#[derive(Debug)]
+pub enum TeammateEvent {
+    /// Send this to the service.
+    Send(ToServerMessage),
+    /// The engine answers again, but this connection's dial didn't list
+    /// the teammate capability: redial (once no turn is running) so the
+    /// service can send teammates here.
+    Redial,
+}
 
 #[cfg(unix)]
 type TeammateLink = crate::teammate::Link;
@@ -389,11 +414,22 @@ async fn relay(
                 }
             }
             Some(_) = probe_tasks.join_next(), if !probe_tasks.is_empty() => {}
-            status = next_teammate_status(teammates) => {
-                if to_service.send(status).is_err() {
+            event = next_teammate_event(teammates) => match event {
+                TeammateEvent::Send(message) => {
+                    if to_service.send(message).is_err() {
+                        return Ok(Relayed::Closed);
+                    }
+                }
+                // Ending the connection would end a running turn in Macro:
+                // the link asks again at its next engine check.
+                TeammateEvent::Redial if turns.is_idle() => {
+                    tracing::info!("the container engine answers again; redialing to host teammates");
                     return Ok(Relayed::Closed);
                 }
-            }
+                TeammateEvent::Redial => {
+                    tracing::debug!("the container engine answers again; redialing once no turn is running");
+                }
+            },
             request = handoff.next() => {
                 #[cfg(unix)]
                 {
@@ -505,11 +541,12 @@ fn unsupported_host_report() -> agent_runtime_protocol::domain::schema::v0::Team
     }
 }
 
-/// The next teammate state change to send; never resolves without teammates.
-async fn next_teammate_status(teammates: &mut Option<TeammateLink>) -> ToServerMessage {
+/// The next teammate report to send, or a redial; never resolves without
+/// teammates.
+async fn next_teammate_event(teammates: &mut Option<TeammateLink>) -> TeammateEvent {
     #[cfg(unix)]
     if let Some(link) = teammates {
-        return link.next().await.into();
+        return link.next().await;
     }
     #[cfg(not(unix))]
     let _ = teammates;
