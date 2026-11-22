@@ -222,6 +222,49 @@ async fn last_runs_report_each_actions_latest_finished_run(pool: PgPool) {
     assert!(last_runs[&recovered].is_success);
 }
 
+/// A run is found under its own routine only.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn execution_record_is_found_under_its_own_routine(pool: PgPool) {
+    use crate::domain::ports::ExecutionRecords;
+
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let routine = repo
+        .create_action(sample_action(user_owner(USER_A), "rated"))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let other = repo
+        .create_action(sample_action(user_owner(USER_A), "other"))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let ran_at = Utc::now().trunc_subsecs(3);
+    repo.create_execution_record(ActionExecutionRecord {
+        id: None,
+        action_id: routine,
+        resource_id: None,
+        start_time: ran_at,
+        end_time: ran_at,
+        is_success: true,
+        result: json!(null),
+        created_at: ran_at,
+    })
+    .await
+    .unwrap();
+    let run = repo.get_execution_records(&routine).await.unwrap()[0]
+        .id
+        .unwrap();
+
+    let found = repo.execution_record(&routine, &run).await.unwrap();
+    let elsewhere = repo.execution_record(&other, &run).await.unwrap();
+
+    assert_eq!(found.and_then(|record| record.id), Some(run));
+    assert!(elsewhere.is_none());
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_owned_actions_excludes_other_principals(pool: PgPool) {
     insert_user(&pool, USER_A).await;
