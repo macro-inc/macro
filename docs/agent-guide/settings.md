@@ -815,8 +815,10 @@ dot sits beside the name.
   Hermes; opens Machines within Integrations and follows the Machines
   availability gate; Back returns to Integrations).
 - Installed catalog apps and custom MCP servers, with their More menus.
-- The catalog: every Pipedream app not yet connected, tagged with its directory
-  categories. Apps Macro can import from show **Import** beside **Connect**.
+- The catalog: every app not yet held, tagged with its directory categories.
+  Apps Macro can import from show **Import** beside **Connect**; a held app
+  shows **Import** only when the server says its connection can be imported
+  from (`importAvailable`).
 
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
@@ -824,25 +826,24 @@ Sheets are hidden from the catalog because Macro syncs email and calendars
 natively. LinkedIn never appears in the catalog or its search: the backend
 hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
-Overlaid catalog apps (the `mcp_overlays` table, served at
-`GET /pipedream/mcp/overlays`) look the same in the catalog but never open
-Pipedream: their Connect action opens the vendor's own MCP OAuth consent in a new
-tab (system browser on native) and the row turns connected once that server is
-authorized, after which it lists as that catalog app (its icon, Agent tools
-category) among the integrations in use, not with the custom MCP servers at
-the top; native servers wait for the overlay list before rendering so one never
-jumps. Verify with an overlaid app such as Sentry or Asana; completing a
-Pipedream connection for one answers 409.
-GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
-authorized by the GitHub account link (the same GitHub App), so connecting
-GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
-provider page) runs the account link, and a linked account shows GitHub
-connected for Macro AI with no second consent. Disconnecting GitHub on its AI
-provider page unlinks the account. Verify by linking GitHub from its row and
-checking the GitHub catalog entry reads connected.
+Every row's status is the server's (`GET /connectors`); the page computes
+none and never says which provider holds a connection. Connect asks the server
+how (`POST /connectors/{key}/connect`) and follows its answer: a consent page
+in a new tab (system browser on native) or the embedded connect dialog, then
+`POST /connectors/{key}/complete` records it. A server added by URL is listed
+as a custom MCP server unless the server reports it as an app; existing native
+Linear and Notion connections therefore appear among the custom servers, and
+the Linear and Notion rows read Not connected. A held connection that no longer
+counts (for example one through a provider the user is not on) reads
+**Not connected** with **Connect**.
+GitHub's connection is the GitHub account link (the same GitHub App), so
+connecting GitHub anywhere (catalog, chat connect card, import dialog, the
+GitHub AI provider page) runs the account link, a link needing reauthorization
+reads as such, and disconnecting GitHub on its AI provider page unlinks the
+account.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
-and `Add Custom`. Pipedream Slack OAuth is available in production and
-development from the featured Slack provider. Connecting Slack here grants tool
+and `Add Custom`. Slack is available in production and development from the
+featured Slack provider. Connecting Slack here grants tool
 access; channel import is a separate action where the user chooses channels.
 Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
