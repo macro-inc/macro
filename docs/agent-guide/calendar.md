@@ -37,9 +37,11 @@ card with an accent time in its gutter. Only the timed card has the shared 32px 
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
-on phone and desktop. Adjacent arrows animate through native scrolling; far date
-jumps are instant once a running gesture settles, and reduced motion skips smooth
-scrolling. Buffer rendering never refuses a second swipe. Each page keeps its own
+on phone and desktop. A single unhurried arrow animates through native scrolling.
+Rapid arrows accumulate without dropping presses and jump to the latest target;
+only the final quiet target prepares data. Native snapping permits multi-page
+flings. Far date jumps wait for a running gesture to settle; reduced motion skips
+smooth scrolling. Buffer rendering never refuses a second swipe. Each page keeps its own
 vertical scroller, synchronized to the active one. Event drag/resize temporarily
 locks horizontal paging. The external hour gutter does not move horizontally.
 The phone all-day row starts at one 24px lane, grows for overlapping events, and
@@ -242,10 +244,10 @@ request's included: seen is not answered, so the row stays listed until the
 request is settled. Verify these on desktop and mobile, including a delayed read
 response and a failed write followed by another click.
 
-Opening a grid view draws the visible period alone. The two neighboring periods
+Opening a grid view draws the visible period first. Four neighboring periods
 mount on later tasks once the visible period has its events, or after a moment
-when that load is slow. They start beside whatever period is on screen by then,
-and paging waits for them. On the iOS and Android apps the periods seen last and
+when that load is slow. They start beside whatever period is on screen by then;
+paging never waits for their render jobs. On the iOS and Android apps the periods seen last and
 the calendar list are kept on the device for a week, so a cold start draws them
 before the cache answers; the fresh read then replaces them.
 

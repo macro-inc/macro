@@ -132,7 +132,7 @@ describe('calendar page start dates', () => {
   it('starts a late neighbor beside the period the active page moved to', async () => {
     const { pager } = mountCalendar('timeGridDay');
     fireEvent.click(screen.getByRole('button', { name: 'Another date' }));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(pager().initialDateFor(1).getDate()).toBe(4);
     expect(pager().initialDateFor(3).getDate()).toBe(6);
@@ -146,7 +146,7 @@ describe('calendar Today navigation', () => {
       const { calendar, scrollToTime } = mountCalendar(view);
       fireEvent.click(screen.getByRole('button', { name: 'Today' }));
       expect(scrollToTime).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(300);
       expect(calendar().getDate().getDate()).toBe(1);
       expect(scrollToTime).toHaveBeenCalledWith({ minutes: 765 });
     }
@@ -155,10 +155,10 @@ describe('calendar Today navigation', () => {
   it('returns from another date before scrolling to the current time', async () => {
     const { calendar, scrollToTime } = mountCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Another date' }));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(5);
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(1);
     expect(scrollToTime).toHaveBeenCalledWith({ minutes: 765 });
   });
@@ -167,7 +167,7 @@ describe('calendar Today navigation', () => {
     vi.setSystemTime(new Date(2026, 10, 1, 0, 15));
     const { scrollToTime } = mountCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
     expect(scrollToTime).toHaveBeenCalledWith({ minutes: 0 });
   });
 
@@ -175,7 +175,7 @@ describe('calendar Today navigation', () => {
     const { calendar, scrollToTime } = mountCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
     fireEvent.click(screen.getByRole('button', { name: 'Another date' }));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(5);
     expect(scrollToTime).not.toHaveBeenCalled();
   });
@@ -184,9 +184,8 @@ describe('calendar Today navigation', () => {
     const { calendar, scrollToTime, viewport } = mountCalendar();
     fireEvent.click(screen.getByRole('button', { name: 'Today' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next period' }));
-    viewport.scrollLeft = 300;
     viewport.dispatchEvent(new Event('scrollend'));
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(2);
     expect(scrollToTime).not.toHaveBeenCalled();
   });
@@ -300,9 +299,8 @@ describe('calendar native paging', () => {
     const { pager, viewport, calendar } = mountCalendar('timeGridThreeDay');
     pager().navigateToDate(new Date(2026, 10, 5));
     pager().nextPeriod();
-    viewport.scrollLeft = 400;
     viewport.dispatchEvent(new Event('scrollend'));
-    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calendar().getDate().getDate()).toBe(8);
     viewport.scrollLeft = 100;
     viewport.dispatchEvent(new Event('scrollend'));
@@ -367,4 +365,43 @@ describe('calendar native paging', () => {
     expect(pager().activeDate().getDate()).toBe(5);
     expect(calendar().getDate().getDate()).toBe(5);
   });
+  it.each([
+    'timeGridDay',
+    'timeGridThreeDay',
+    'timeGridWeek',
+    'dayGridMonth',
+  ] as const)(
+    'prepares only the final range after rapid period commands in %s',
+    async (view) => {
+      const { pager, pages, viewport } = mountCalendar(view);
+      await vi.advanceTimersByTimeAsync(300);
+      const dateChanges = [...pages.values()].map(({ calendar }) =>
+        vi.spyOn(calendar, 'gotoDate')
+      );
+      for (let index = 0; index < 5; index++) {
+        pager().nextPeriod();
+        await vi.advanceTimersByTimeAsync(20);
+      }
+      const target = new Date(2026, 10, 1);
+      if (view === 'dayGridMonth') target.setMonth(target.getMonth() + 5);
+      else
+        target.setDate(
+          target.getDate() +
+            5 *
+              (view === 'timeGridDay' ? 1 : view === 'timeGridThreeDay' ? 3 : 7)
+        );
+      expect(pager().navigationDate().toDateString()).toBe(
+        target.toDateString()
+      );
+      expect(
+        dateChanges.every((change) => change.mock.calls.length === 0)
+      ).toBe(true);
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(300);
+      expect(pager().activeDate().toDateString()).toBe(target.toDateString());
+      expect(dateChanges.every((change) => change.mock.calls.length <= 1)).toBe(
+        true
+      );
+    }
+  );
 });

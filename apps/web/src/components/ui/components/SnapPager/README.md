@@ -33,17 +33,22 @@ order. `activePage()` returns the middle key. Each descriptor exposes `position(
 slots change position after a settled swipe. `position()` on the controller tracks
 logical displacement since `reset()`.
 
-`next()` and `previous()` accumulate rapid requests. `goTo(offset)` targets an
-offset from the committed page and supersedes an earlier target. Far jumps are
-instant when idle and wait for native scrolling to settle when a fling is active.
-Single steps use native smooth scrolling except under reduced motion. `scrollend`
-commits immediately; a 100ms idle-scroll fallback supports older browsers. Neither
-path recycles a held gesture. A later gesture cancels pending commands through
-`onNavigationCancel`; continuing a held swipe also cancels a date request made
-before that continued movement.
+`next()`, `previous()`, and `goTo(offset)` add to the current command target;
+`targetPosition()` exposes that destination. Single unhurried steps use native
+smooth scrolling, except under reduced motion. A second press within
+`SNAP_RAPID_PRESS_MS` (180ms), or a target outside the ring, jumps immediately.
+Rapid presses report one aggregate `onSettle(moved)` after controls go quiet, so
+callers can prepare the final data range without loading every skipped period.
+A request during a native gesture waits until it settles instead of moving the
+track under a finger. A later gesture cancels pending commands through
+`onNavigationCancel`.
 
-`onSettle(moved)` runs after rotation and before queued navigation. A canceled
-programmatic move reports zero; re-centering itself does not report another move.
+Native snapping remains mandatory with `scroll-snap-stop: normal`, allowing
+strong flings to cross several pages. `scrollend` commits at rest; the fallback
+waits `SNAP_SETTLE_DELAY_MS` (180ms) after the last scroll instead of 100ms, so
+brief momentum pauses do not recycle the track early. Neither path recycles a
+held gesture. A canceled programmatic move reports zero; re-centering itself
+does not report another move.
 Update recycled content without remounting the stable page key. `reset()` explicitly
 returns to the initial ring without calling `onSettle`. `setLocked(true)` freezes
 horizontal navigation; unlock settles the current location. Locked resizes retain

@@ -29,7 +29,8 @@
   width: 100%;
   min-width: 0;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  /* Let native momentum cross pages; mandatory snapping still aligns at rest. */
+  scroll-snap-stop: normal;
 }
 
 .snap-pager-page[aria-hidden='true'] {

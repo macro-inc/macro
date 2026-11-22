@@ -242,7 +242,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     props.onNavigate();
     setPendingAnchor({
       date,
-      position: pager.position() + CALENDAR_PAGE_IDS.length,
+      position: pager.targetPosition() + CALENDAR_PAGE_IDS.length,
     });
     setRequestedDate(date);
     pager.goTo(CALENDAR_PAGE_IDS.length);

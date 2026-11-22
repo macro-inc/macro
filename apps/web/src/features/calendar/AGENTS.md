@@ -125,6 +125,8 @@ host lives in `../block-calendar/`.
   render queue, share active vertical scroll with all buffers, and lock horizontal
   paging during FullCalendar drag/resize. Explicit date selections prepare only the
   hidden destination before sliding, then update the date anchor at settlement.
+  Accumulate rapid period commands in SnapPager and prepare only the quiet final
+  range; headers follow the requested date immediately.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month

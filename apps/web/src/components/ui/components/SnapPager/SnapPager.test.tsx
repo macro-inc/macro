@@ -84,36 +84,57 @@ describe('SnapPager', () => {
     expect(() => createSnapPager({ pageCount: 1 })).toThrow(RangeError);
   });
 
-  it('accumulates rapid commands before settling', () => {
-    const pager = createSnapPager();
+  it.each([1, 2, 5, 12])(
+    'counts all %i rapid next presses without queuing intermediate pages',
+    (count) => {
+      const moved = vi.fn();
+      const pager = createSnapPager({ onSettle: moved });
+      const element = viewport();
+      pager.attachViewport(element);
+      for (let index = 0; index < count; index++) pager.next();
+      element.dispatchEvent(new Event('scrollend'));
+      vi.advanceTimersByTime(250);
+      expect(pager.position()).toBe(count);
+      expect(moved).toHaveBeenCalledExactlyOnceWith(count);
+      expect(element.scrollLeft).toBe(200);
+    }
+  );
+
+  it('accumulates mixed next, previous, and relative goTo commands', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
     const element = viewport();
     pager.attachViewport(element);
     pager.next();
-    pager.next();
-    expect(element.scrollTo).toHaveBeenLastCalledWith({
-      left: 400,
-      behavior: 'smooth',
-    });
-    element.dispatchEvent(new Event('scrollend'));
-    expect(pager.position()).toBe(2);
+    pager.goTo(3);
     pager.previous();
-    element.dispatchEvent(new Event('scrollend'));
-    expect(pager.position()).toBe(1);
+    pager.goTo(-5);
+    expect(pager.position()).toBe(-2);
+    vi.advanceTimersByTime(250);
+    expect(moved).toHaveBeenCalledExactlyOnceWith(-2);
   });
 
-  it('queues commands beyond the visible ring instead of dropping them', () => {
-    const pager = createSnapPager();
+  it('retargets fast presses immediately and reports only the quiet final target', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
     const element = viewport();
     pager.attachViewport(element);
     pager.next();
+    expect(element.scrollTo).toHaveBeenLastCalledWith({
+      left: 300,
+      behavior: 'smooth',
+    });
+    vi.advanceTimersByTime(40);
     pager.next();
-    pager.next();
-    expect(element.scrollLeft).toBe(400);
-    element.dispatchEvent(new Event('scrollend'));
     expect(pager.position()).toBe(2);
-    expect(element.scrollLeft).toBe(300);
+    expect(element.scrollLeft).toBe(200);
     element.dispatchEvent(new Event('scrollend'));
+    vi.advanceTimersByTime(40);
+    pager.next();
     expect(pager.position()).toBe(3);
+    expect(moved).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(250);
+    expect(moved).toHaveBeenCalledExactlyOnceWith(3);
   });
 
   it('locks horizontal commands and preserves the current location', () => {
@@ -238,7 +259,7 @@ describe('SnapPager', () => {
     expect(pager.position()).toBe(0);
     expect(moved).not.toHaveBeenCalled();
     window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-    vi.advanceTimersByTime(100);
+    vi.advanceTimersByTime(180);
     expect(pager.position()).toBe(1);
     expect(moved).toHaveBeenCalledExactlyOnceWith(1);
   });
@@ -252,9 +273,10 @@ describe('SnapPager', () => {
     pager.previous();
     expect(element.scrollTo).toHaveBeenLastCalledWith({
       left: 200,
-      behavior: 'smooth',
+      behavior: 'instant',
     });
     element.dispatchEvent(new Event('scrollend'));
+    vi.advanceTimersByTime(180);
     expect(pager.position()).toBe(0);
     expect(element.scrollLeft).toBe(200);
     expect(pager.phase()).toBe('idle');
@@ -273,7 +295,7 @@ describe('SnapPager', () => {
     element.dispatchEvent(new Event('scrollend'));
     expect(pager.position()).toBe(12);
     expect(element.scrollLeft).toBe(200);
-    expect(moved.mock.calls).toEqual([[1], [11]]);
+    expect(moved.mock.calls).toEqual([[12]]);
   });
 
   it('keeps the active page centered when resizing a locked viewport', () => {

@@ -13,7 +13,10 @@ import {
 import { createStore } from 'solid-js/store';
 import './snap-pager.css';
 
-const SETTLE_DELAY = 100;
+// Wait beyond brief momentum pauses before recycling a native scroll track.
+export const SNAP_SETTLE_DELAY_MS = 180;
+// Repeated controls jump to their aggregate target instead of replaying slides.
+export const SNAP_RAPID_PRESS_MS = 180;
 
 type SnapPagerPhase = 'idle' | 'scrolling' | 'settling';
 interface PagerState {
@@ -47,6 +50,8 @@ export interface SnapPagerController {
   activePage: Accessor<number>;
   /** Total logical displacement since reset. */
   position: Accessor<number>;
+  /** Accumulated command destination, including a pending native gesture request. */
+  targetPosition: () => number;
   phase: Accessor<SnapPagerPhase>;
   viewport: Accessor<HTMLDivElement | undefined>;
   attachViewport: (element: HTMLDivElement) => () => void;
@@ -108,7 +113,18 @@ export function createSnapPager(
   let pointerHeld = false;
   let queuedJump: number | undefined;
   let queuedAtScrollLeft: number | undefined;
+  let lastCommandAt: number | undefined;
+  let rapidNavigation = false;
+  let unreportedMovement = 0;
+  const reportSettle = () => {
+    const moved = unreportedMovement;
+    unreportedMovement = 0;
+    options.onSettle?.(moved);
+  };
   const cancelNavigation = () => {
+    lastCommandAt = undefined;
+    rapidNavigation = false;
+    if (unreportedMovement !== 0) reportSettle();
     if (pending === 0 && queuedJump === undefined) return;
     pending = 0;
     queuedJump = undefined;
@@ -119,7 +135,7 @@ export function createSnapPager(
 
   const scheduleSettle = () => {
     clearTimer();
-    timer = setTimeout(settle, SETTLE_DELAY);
+    timer = setTimeout(settle, SNAP_SETTLE_DELAY_MS);
   };
   // These passive lifecycle listeners never drive scrolling. They only prevent
   // a fallback timer from recycling pages beneath a finger that stopped moving.
@@ -144,13 +160,16 @@ export function createSnapPager(
     pointerHeld = false;
     scheduleSettle();
   };
-  const performJump = (target: number) => {
+  const performJump = (target: number, deferReport = false) => {
     const moved = target - position();
     pending = 0;
     queuedJump = undefined;
+    queuedAtScrollLeft = undefined;
     rotate(moved);
     if (attached) jump(attached, middle * attached.clientWidth);
-    setPhase('idle');
+    setPhase(deferReport ? 'scrolling' : 'idle');
+    if (deferReport) scheduleSettle();
+    else reportSettle();
   };
 
   const clearTimer = () => {
@@ -194,7 +213,7 @@ export function createSnapPager(
       setOrigin((value) => value + direction * steps);
       setPosition((value) => value + moved);
     });
-    options.onSettle?.(moved);
+    unreportedMovement += moved;
   };
 
   const navigate = () => {
@@ -217,6 +236,7 @@ export function createSnapPager(
       pending = 0;
       rotate(moved);
       setPhase('idle');
+      reportSettle();
       return;
     }
     const delta = Math.max(-middle, Math.min(middle, pending));
@@ -238,6 +258,16 @@ export function createSnapPager(
     clearTimer();
     const element = attached;
     if (!element || locked() || gestureHeld() || !element.clientWidth) return;
+    // A burst changes the visible target immediately but prepares data only once
+    // controls go quiet. Ignore synthetic scrollend events from each re-centre.
+    if (rapidNavigation && lastCommandAt !== undefined) {
+      const remaining = SNAP_RAPID_PRESS_MS - (Date.now() - lastCommandAt);
+      if (remaining > 0) {
+        timer = setTimeout(settle, remaining);
+        return;
+      }
+    }
+    rapidNavigation = false;
     const hadMovement = phase() !== 'idle' || pending !== 0;
     const moved = Math.max(
       -middle,
@@ -250,7 +280,7 @@ export function createSnapPager(
       pending = 0;
       setPhase('idle');
       if (queuedJump !== undefined) performJump(queuedJump);
-      else if (hadMovement) options.onSettle?.(0);
+      else if (hadMovement || unreportedMovement !== 0) reportSettle();
       return;
     }
     setPhase('settling');
@@ -260,6 +290,7 @@ export function createSnapPager(
     setPhase('idle');
     if (queuedJump !== undefined) performJump(queuedJump);
     else if (pending !== 0) navigate();
+    else reportSettle();
   };
 
   const onScroll = () => {
@@ -282,6 +313,32 @@ export function createSnapPager(
   };
   const onScrollEnd = () => settle();
 
+  const command = (offset: number) => {
+    if (locked() || !Number.isInteger(offset) || offset === 0) return;
+    const now = Date.now();
+    const rapid =
+      lastCommandAt !== undefined && now - lastCommandAt < SNAP_RAPID_PRESS_MS;
+    lastCommandAt = now;
+    const target = (queuedJump ?? position() + pending) + offset;
+    // Never re-centre a native gesture under the user's finger or momentum.
+    // Programmatic slides, in contrast, can be retargeted immediately.
+    if (
+      gestureHeld() ||
+      (phase() === 'scrolling' && pending === 0 && !rapidNavigation)
+    ) {
+      queuedJump = target;
+      queuedAtScrollLeft = attached?.scrollLeft;
+      return;
+    }
+    pending = target - position();
+    if (rapid || Math.abs(pending) > middle) {
+      clearTimer();
+      rapidNavigation = rapid;
+      performJump(target, rapid);
+      return;
+    }
+    navigate();
+  };
   const detach = (element: HTMLDivElement) => {
     element.removeEventListener('scroll', onScroll);
     element.removeEventListener('scrollend', onScrollEnd);
@@ -309,6 +366,7 @@ export function createSnapPager(
     pageOrder: order,
     activePage: () => order()[middle],
     position,
+    targetPosition: () => queuedJump ?? position() + pending,
     phase,
     viewport,
     origin,
@@ -328,44 +386,16 @@ export function createSnapPager(
       jump(element, middle * element.clientWidth);
       return () => detach(element);
     },
-    next() {
-      if (locked()) return;
-      if (queuedJump !== undefined) {
-        queuedJump += 1;
-        return;
-      }
-      pending += 1;
-      navigate();
-    },
-    previous() {
-      if (locked()) return;
-      if (queuedJump !== undefined) {
-        queuedJump -= 1;
-        return;
-      }
-      pending -= 1;
-      navigate();
-    },
-    goTo(offset) {
-      if (locked() || !Number.isInteger(offset) || offset === 0) return;
-      const target = position() + offset;
-      if (gestureHeld() || phase() === 'scrolling') {
-        queuedJump = target;
-        queuedAtScrollLeft = attached?.scrollLeft;
-        return;
-      }
-      pending = offset;
-      if (Math.abs(pending) > middle) {
-        clearTimer();
-        performJump(target);
-        return;
-      }
-      navigate();
-    },
+    next: () => command(1),
+    previous: () => command(-1),
+    goTo: command,
     reset() {
       clearTimer();
       pending = 0;
       queuedJump = undefined;
+      lastCommandAt = undefined;
+      rapidNavigation = false;
+      unreportedMovement = 0;
       batch(() => {
         slots.forEach(([, setSlot], index) => setSlot(index));
         setOrigin(0);
