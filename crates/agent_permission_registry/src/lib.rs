@@ -43,13 +43,23 @@ pub enum Action {
 }
 
 impl Action {
-    /// Every action, in display order.
+    /// Every action, in declaration order: for iterating, not showing.
     pub const ALL: [Action; 5] = [
         Action::Create,
         Action::Read,
         Action::Update,
         Action::Destroy,
         Action::Send,
+    ];
+
+    /// Every action, in the order a person sees them: Read, Create, Edit
+    /// (`update`), Send, Delete (`destroy`).
+    pub const DISPLAY: [Action; 5] = [
+        Action::Read,
+        Action::Create,
+        Action::Update,
+        Action::Send,
+        Action::Destroy,
     ];
 
     /// The action's stored name, e.g. `destroy`.

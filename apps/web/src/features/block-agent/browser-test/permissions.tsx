@@ -141,11 +141,17 @@ const saved: Record<string, ToolPermissionState> = {
 function view(): AgentToolPermissions {
   return {
     agentId: 'agent-1',
+    policyId: '0195dbd2-6539-7000-8000-0000000000a1',
     kind: 'agent',
     canEdit: VIEWER === OWNER,
     canTighten: true,
     version: CATALOG.version,
     restricted: Object.keys(saved).length,
+    defaults: ACTIONS.map((action) => ({
+      action,
+      state: 'always',
+      origin: 'default',
+    })),
     rules: Object.entries(saved).map(([key, state]) => {
       const [group, action] = key.split('.') as [string, PermissionAction];
       return {
@@ -171,6 +177,7 @@ function view(): AgentToolPermissions {
               action,
               state: state ?? 'always',
               origin: state ? 'group_action' : 'default',
+              exception: state !== undefined,
               tools,
               overrides: [],
             },

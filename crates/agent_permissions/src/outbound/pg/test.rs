@@ -69,6 +69,15 @@ fn group_action(state: Option<PermissionState>) -> Change {
     }
 }
 
+fn default(state: Option<PermissionState>) -> Change {
+    Change {
+        target: Target::Action {
+            action: Action::Send,
+        },
+        state,
+    }
+}
+
 fn tool(state: Option<PermissionState>) -> Change {
     Change {
         target: Target::Tool {
@@ -148,6 +157,76 @@ async fn an_agents_rules_upsert_delete_and_reset(pool: PgPool) {
 
     store.reset(owner).await.unwrap();
     assert!(store.rules(owner).await.unwrap().is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("permissions"))
+)]
+async fn a_default_and_an_explicit_allow_exception_round_trip(pool: PgPool) {
+    let store = PgPermissionStore::new(pool);
+    let policy = store
+        .ensure_policy(&PolicyOwner::Agent(AGENT))
+        .await
+        .unwrap();
+    store
+        .apply(
+            policy,
+            &[
+                default(Some(PermissionState::Ask)),
+                group_action(Some(PermissionState::Always)),
+            ],
+            &user(OWNER),
+            SetBy::Person,
+        )
+        .await
+        .unwrap();
+    let rules = store.rules(policy).await.unwrap();
+    assert_eq!(
+        states(&rules),
+        vec![
+            (
+                "email:send".to_owned(),
+                PermissionState::Always,
+                false,
+                false
+            ),
+            ("send".to_owned(), PermissionState::Ask, false, false),
+        ]
+    );
+    assert!(rules.iter().any(|rule| rule.target
+        == Target::Action {
+            action: Action::Send
+        }));
+
+    store
+        .apply(policy, &[default(None)], &user(OWNER), SetBy::Person)
+        .await
+        .unwrap();
+    assert_eq!(
+        states(&store.rules(policy).await.unwrap()),
+        vec![(
+            "email:send".to_owned(),
+            PermissionState::Always,
+            false,
+            false
+        )]
+    );
+
+    // A session's overlay holds a default too.
+    let session = AgentSessionId::new_from_uuid(SESSION);
+    store
+        .apply_session(
+            session,
+            &[default(Some(PermissionState::Never))],
+            &user(OTHER),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        states(&store.session_rules(session).await.unwrap()),
+        vec![("send".to_owned(), PermissionState::Never, true, true)]
+    );
 }
 
 #[sqlx::test(
@@ -271,6 +350,24 @@ async fn the_tables_refuse_a_stored_default_and_a_bad_target(pool: PgPool) {
     .execute(&pool)
     .await;
     assert!(always_overlay.is_err());
+    // The overlay takes a default, never `always`, and only a real action.
+    for (target, state, ok) in [
+        ("send", "never", true),
+        ("send", "always", false),
+        ("delete", "never", false),
+        ("email:send", "never", false),
+    ] {
+        let inserted = sqlx::query!(
+            "INSERT INTO agent_session_tool_permission (agent_session_id, kind, target, state)
+             VALUES ($1, 'action', $2, $3)",
+            SESSION,
+            target,
+            state,
+        )
+        .execute(&pool)
+        .await;
+        assert_eq!(inserted.is_ok(), ok, "{target} {state}");
+    }
     // The agent's label always comes with the restriction-only rule.
     let labelled_unrestricted = sqlx::query!(
         "INSERT INTO agent_permission_rule (policy_id, kind, target, state, via_agent, restriction_only)

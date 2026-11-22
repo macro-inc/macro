@@ -15,7 +15,11 @@ import type { ToolPermissionState } from './toolPermissionState';
 export interface ToolPermissionAction {
   /** The action. */
   action: PermissionAction;
-  /** `group_action`, `default` or `session`. */
+  /** This policy has an exception saved for it (in `rules`), even when
+its state equals the default. */
+  exception: boolean;
+  /** `group_action` (its exception), `action` (the action's default),
+`default` (nothing saved: always) or `session`. */
   origin: ToolPermissionOrigin;
   /** The operations whose state differs from `state`. */
   overrides: ToolPermissionOverride[];

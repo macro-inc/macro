@@ -8,12 +8,11 @@ import type { PermissionAction } from './permissionAction';
 import type { ToolPermissionTargetOneOfKind } from './toolPermissionTargetOneOfKind';
 
 /**
- * Every operation of `group` whose action is `action`.
+ * The default of `action`: every group's, unless the group has an
+exception. Stored only when it is not always.
  */
 export type ToolPermissionTargetOneOf = {
   /** The action. */
   action: PermissionAction;
-  /** A registry group id, e.g. `documents`. */
-  group: string;
   kind: ToolPermissionTargetOneOfKind;
 };

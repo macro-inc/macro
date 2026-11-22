@@ -73,6 +73,13 @@ export const VIEW: AgentToolPermissions = {
   canTighten: true,
   version: 'v1',
   restricted: 1,
+  defaults: [
+    { action: 'read', state: 'always', origin: 'default' },
+    { action: 'create', state: 'always', origin: 'default' },
+    { action: 'update', state: 'always', origin: 'default' },
+    { action: 'send', state: 'always', origin: 'default' },
+    { action: 'destroy', state: 'always', origin: 'default' },
+  ],
   rules: [
     {
       target: { kind: 'group_action', group: 'email', action: 'send' },
@@ -101,6 +108,7 @@ export const VIEW: AgentToolPermissions = {
           action: 'read',
           state: 'always',
           origin: 'default',
+          exception: false,
           tools: 1,
           overrides: [],
         },
@@ -108,6 +116,7 @@ export const VIEW: AgentToolPermissions = {
           action: 'send',
           state: 'ask',
           origin: 'group_action',
+          exception: true,
           tools: 2,
           overrides: [
             {
@@ -128,6 +137,7 @@ export const VIEW: AgentToolPermissions = {
           action: 'destroy',
           state: 'always',
           origin: 'default',
+          exception: false,
           tools: 1,
           overrides: [],
         },

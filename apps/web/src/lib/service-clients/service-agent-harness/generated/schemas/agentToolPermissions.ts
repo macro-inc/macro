@@ -7,6 +7,7 @@
 
 import type { AgentToolPermissionsSessionRules } from './agentToolPermissionsSessionRules';
 import type { BotId } from './botId';
+import type { ToolPermissionDefault } from './toolPermissionDefault';
 import type { ToolPermissionGroup } from './toolPermissionGroup';
 import type { ToolPermissionPolicyId } from './toolPermissionPolicyId';
 import type { ToolPermissionPolicyKind } from './toolPermissionPolicyKind';
@@ -22,6 +23,9 @@ export interface AgentToolPermissions {
   canEdit: boolean;
   /** The caller may tighten them. */
   canTighten: boolean;
+  /** Each action's default, in display order: what every group's action
+without an exception follows, a new group's included. */
+  defaults: ToolPermissionDefault[];
   /** Every catalog group with an operation, with the actions it has
 operations for. */
   groups: ToolPermissionGroup[];

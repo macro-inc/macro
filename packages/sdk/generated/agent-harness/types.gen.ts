@@ -763,6 +763,11 @@ export type AgentToolPermissions = {
      */
     canTighten: boolean;
     /**
+     * Each action's default, in display order: what every group's action
+     * without an exception follows, a new group's included.
+     */
+    defaults: Array<ToolPermissionDefault>;
+    /**
      * Every catalog group with an operation, with the actions it has
      * operations for.
      */
@@ -3273,6 +3278,11 @@ export type ShowPermissionsResult = {
      */
     current: Array<ShownPermission>;
     /**
+     * Each action's default as it stands now, in display order: what every
+     * group's action without an exception follows.
+     */
+    defaults?: Array<ToolPermissionDefault>;
+    /**
      * What the model should do next.
      */
     message: string;
@@ -3425,7 +3435,13 @@ export type ToolPermissionAction = {
      */
     action: PermissionAction;
     /**
-     * `group_action`, `default` or `session`.
+     * This policy has an exception saved for it (in `rules`), even when
+     * its state equals the default.
+     */
+    exception: boolean;
+    /**
+     * `group_action` (its exception), `action` (the action's default),
+     * `default` (nothing saved: always) or `session`.
      */
     origin: ToolPermissionOrigin;
     /**
@@ -3529,8 +3545,10 @@ export type ToolPermissionCatalogTool = {
 
 /**
  * One requested change. `state: None` removes the setting: a tool falls back
- * to its group's action, a group's action to always. `always` on a group's
- * action removes it too, since that is its default.
+ * to its group's action, a group's action to the action's default, a default
+ * to always. `always` on a default removes it too, since that is what no
+ * default means; a person's `always` on a group's action is kept, as an
+ * explicit exception.
  */
 export type ToolPermissionChange = {
     state?: null | ToolPermissionState;
@@ -3548,6 +3566,24 @@ export type ToolPermissionChanges = {
      * Between 1 and 200 changes, applied together.
      */
     changes: Array<ToolPermissionChange>;
+};
+
+/**
+ * One action's default, resolved.
+ */
+export type ToolPermissionDefault = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    /**
+     * `action` (a saved default), `default` (none: always) or `session`.
+     */
+    origin: ToolPermissionOrigin;
+    /**
+     * The state of every group's action that has no exception.
+     */
+    state: ToolPermissionState;
 };
 
 /**
@@ -3590,7 +3626,7 @@ export type ToolPermissionGroup = {
 /**
  * Where an effective state comes from.
  */
-export type ToolPermissionOrigin = 'tool' | 'group_action' | 'default' | 'session';
+export type ToolPermissionOrigin = 'tool' | 'group_action' | 'default' | 'action' | 'session';
 
 /**
  * An operation whose state differs from its group's action.
@@ -3659,10 +3695,16 @@ export type ToolPermissionRule = {
 export type ToolPermissionState = 'always' | 'ask' | 'never';
 
 /**
- * What a stored setting applies to: every operation of a group's action, or
- * one operation.
+ * What a stored setting applies to: an action's default, one group's
+ * action (an exception to the default), or one operation.
  */
 export type ToolPermissionTarget = {
+    /**
+     * The action.
+     */
+    action: PermissionAction;
+    kind: 'action';
+} | {
     /**
      * The action.
      */

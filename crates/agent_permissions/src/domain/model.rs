@@ -40,13 +40,21 @@ pub enum PermissionState {
     Never,
 }
 
-/// What a stored setting applies to: every operation of a group's action, or
-/// one operation.
+/// What a stored setting applies to: an action's default, one group's
+/// action (an exception to the default), or one operation.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[schema(as = ToolPermissionTarget)]
 pub enum Target {
-    /// Every operation of `group` whose action is `action`.
+    /// The default of `action`: every group's, unless the group has an
+    /// exception. Stored only when it is not always.
+    #[schema(title = "ActionTarget")]
+    Action {
+        /// The action.
+        action: Action,
+    },
+    /// An exception to the action's default: every operation of `group`
+    /// whose action is `action`.
     #[schema(title = "GroupActionTarget")]
     GroupAction {
         /// A registry group id, e.g. `documents`.
@@ -68,6 +76,8 @@ pub enum Target {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumString, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum TargetKind {
+    /// [`Target::Action`].
+    Action,
     /// [`Target::GroupAction`].
     GroupAction,
     /// [`Target::Tool`].
@@ -78,14 +88,17 @@ impl Target {
     /// The kind this target is stored under.
     pub fn kind(&self) -> TargetKind {
         match self {
+            Target::Action { .. } => TargetKind::Action,
             Target::GroupAction { .. } => TargetKind::GroupAction,
             Target::Tool { .. } => TargetKind::Tool,
         }
     }
 
-    /// The stored key: `documents:destroy` or `storage.delete_document`.
+    /// The stored key: `destroy`, `documents:destroy` or
+    /// `storage.delete_document`.
     pub fn key(&self) -> String {
         match self {
+            Target::Action { action } => action.as_str().to_owned(),
             Target::GroupAction { group, action } => format!("{group}:{}", action.as_str()),
             Target::Tool { service, operation } => format!("{service}.{operation}"),
         }
@@ -94,6 +107,9 @@ impl Target {
     /// The target stored as `kind` and `key`, or `None` when they are not one.
     pub fn from_stored(kind: TargetKind, key: &str) -> Option<Target> {
         match kind {
+            TargetKind::Action => Some(Target::Action {
+                action: Action::parse(key)?,
+            }),
             TargetKind::GroupAction => {
                 let (group, action) = key.split_once(':')?;
                 Some(Target::GroupAction {
@@ -124,8 +140,9 @@ pub struct Rule {
     /// The agent set it by restricting itself.
     pub via_agent: bool,
     /// Only restricts: an operation's setting takes the stricter of itself and
-    /// its group's action instead of replacing it. Set for anything not made
-    /// by a signed-in person; see [`SetBy`].
+    /// its group's action, and a group's action the stricter of itself and
+    /// the action's default, instead of replacing it. Set for anything not
+    /// made by a signed-in person; see [`SetBy`].
     #[serde(skip)]
     pub restriction_only: bool,
     /// When it was last set.
@@ -133,8 +150,10 @@ pub struct Rule {
 }
 
 /// One requested change. `state: None` removes the setting: a tool falls back
-/// to its group's action, a group's action to always. `always` on a group's
-/// action removes it too, since that is its default.
+/// to its group's action, a group's action to the action's default, a default
+/// to always. `always` on a default removes it too, since that is what no
+/// default means; a person's `always` on a group's action is kept, as an
+/// explicit exception.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schema(as = ToolPermissionChange)]
@@ -397,10 +416,12 @@ pub enum PolicyKind {
 pub enum Origin {
     /// The operation's own setting.
     Tool,
-    /// Its group's action setting.
+    /// Its group's action setting: an exception to the action's default.
     GroupAction,
     /// Nothing is set: always.
     Default,
+    /// The action's default.
+    Action,
     /// The agent restricted itself for this session only.
     Session,
 }
@@ -421,6 +442,18 @@ pub struct ToolPermissionOverride {
     pub origin: Origin,
 }
 
+/// One action's default, resolved.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolPermissionDefault {
+    /// The action.
+    pub action: Action,
+    /// The state of every group's action that has no exception.
+    pub state: PermissionState,
+    /// `action` (a saved default), `default` (none: always) or `session`.
+    pub origin: Origin,
+}
+
 /// One action of a group, resolved.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -429,8 +462,12 @@ pub struct ToolPermissionAction {
     pub action: Action,
     /// The state of its operations that have no setting of their own.
     pub state: PermissionState,
-    /// `group_action`, `default` or `session`.
+    /// `group_action` (its exception), `action` (the action's default),
+    /// `default` (nothing saved: always) or `session`.
     pub origin: Origin,
+    /// This policy has an exception saved for it (in `rules`), even when
+    /// its state equals the default.
+    pub exception: bool,
     /// How many operations the group has with this action.
     pub tools: u32,
     /// The operations whose state differs from `state`.
@@ -466,6 +503,9 @@ pub struct PermissionsView {
     pub version: String,
     /// How many operations are not always allowed.
     pub restricted: u32,
+    /// Each action's default, in display order: what every group's action
+    /// without an exception follows, a new group's included.
+    pub defaults: Vec<ToolPermissionDefault>,
     /// The saved settings, including any on a group's action no operation
     /// has yet (not in `groups`, applied once one does).
     pub rules: Vec<Rule>,

@@ -197,8 +197,8 @@ export class Agent extends MacroEntity<AgentRecord> {
 
   /**
    * Which Macro SDK operations this agent's programs may call: always, ask
-   * (only after a person approves) or never, per group and action and per
-   * operation. For a built-in persona, your own settings for it; when the
+   * (only after a person approves) or never: a default per action, each
+   * group's exceptions to it, and per operation. For a built-in persona, your own settings for it; when the
    * agent itself reads them in a session, that session's restrictions too.
    *
    * @readonly
@@ -214,10 +214,11 @@ export class Agent extends MacroEntity<AgentRecord> {
   }
 
   /**
-   * Make this agent's tool permissions stricter: set a group's action or an
-   * operation to `ask` or `never`. It can never loosen them; a change that
-   * would let any operation run more freely is refused with the operations
-   * it would loosen, and nothing changes. To get a permission loosened, ask
+   * Make this agent's tool permissions stricter: set an action's default
+   * (`{ kind: 'action', action }`), a group's action or an operation to
+   * `ask` or `never`. It can never loosen them; a change that would let any
+   * operation, default or group's action run more freely is refused with the
+   * operations it would loosen, and nothing changes. To get a permission loosened, ask
    * the person to change it in Macro. It is saved to the agent when the
    * person the agent acts for may edit it, otherwise for this session only.
    *

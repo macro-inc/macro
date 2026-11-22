@@ -332,9 +332,11 @@ where
         (status = 404, body = ToolPermissionError),
     )
 )]
-/// Change an agent's tool permissions in either direction. Only a person
-/// signed in to Macro who may edit the agent; for a built-in persona, the
-/// caller's own settings.
+/// Change an agent's tool permissions in either direction: an action's
+/// default (`always` removes it), an entity's exception to it (any state is
+/// kept, `always` included; `null` follows the default again) or one
+/// operation. Only a person signed in to Macro who may edit the agent; for a
+/// built-in persona, the caller's own settings.
 #[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn set_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,
@@ -376,8 +378,9 @@ where
 )]
 /// Make an agent's tool permissions stricter. An agent may call this on
 /// itself; it is saved to the agent when the person it acts for may edit
-/// it, else to the current session only. Refused when any operation would
-/// become more permissive.
+/// it, else to the current session only. Refused when anything would become
+/// more permissive: an operation, a default, or an entity's action no
+/// operation has yet.
 #[tracing::instrument(skip_all, fields(%agent_id), err(Debug, level = "warn"))]
 pub async fn tighten_handler<Access, Auth>(
     State(state): State<AgentPermissionsRouterState<Access, Auth>>,

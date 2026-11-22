@@ -76,6 +76,23 @@ fn an_action_parses_from_its_stored_name() {
 }
 
 #[test]
+fn every_action_is_shown_once_read_first_and_delete_last() {
+    let mut shown = Action::DISPLAY.to_vec();
+    assert_eq!(
+        shown,
+        [
+            Action::Read,
+            Action::Create,
+            Action::Update,
+            Action::Send,
+            Action::Destroy
+        ]
+    );
+    shown.sort();
+    assert_eq!(shown, Action::ALL);
+}
+
+#[test]
 fn the_version_is_twelve_hex_characters() {
     let version = super::version();
     assert_eq!(version.len(), 12);

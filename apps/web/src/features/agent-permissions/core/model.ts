@@ -38,6 +38,7 @@ export type ToolRef = { service: string; operation: string };
 export function targetKey(target: ToolPermissionTarget): string {
   if (target.kind === 'tool')
     return `tool:${target.service}.${target.operation}`;
+  if (target.kind === 'action') return `action:${target.action}`;
   return `group_action:${target.group}.${target.action}`;
 }
 
@@ -95,15 +96,20 @@ export function changeForTool(
 }
 
 /**
- * The change that sets a group's action. The server treats Always allow as
- * clearing the rule, since it is the default.
+ * The change that sets a group's action. This page sets no action defaults,
+ * so every default is Always allow: choosing it clears the group's rule
+ * (`null`, follow the default) rather than saving an explicit Allow
+ * exception, which the server would keep.
  */
 export function changeForAction(
   group: string,
   action: PermissionAction,
   state: ToolPermissionState
 ): ToolPermissionChange {
-  return { target: groupActionTarget(group, action), state };
+  return {
+    target: groupActionTarget(group, action),
+    state: state === 'always' ? null : state,
+  };
 }
 
 /** Whether the group has a tool for `action`. */
@@ -128,11 +134,12 @@ export function visibleGroups(
   return catalog.groups.filter((group) => group.tools.length > 0);
 }
 
-/** Whether the page shows `target`: a group's action some tool has, or a tool in the catalog. */
+/** Whether the page shows `target`: an action's default, a group's action some tool has, or a tool in the catalog. */
 export function isVisibleTarget(
   catalog: ToolPermissionCatalog,
   target: ToolPermissionTarget
 ): boolean {
+  if (target.kind === 'action') return true;
   if (target.kind === 'group_action') {
     const group = catalog.groups.find((entry) => entry.id === target.group);
     return group !== undefined && hasTools(group, target.action);
@@ -179,6 +186,7 @@ function ruleGroup(
   catalogGroup: ToolPermissionCatalogGroup
 ): boolean {
   const target = rule.target;
+  if (target.kind === 'action') return false;
   if (target.kind === 'group_action')
     return (
       target.group === catalogGroup.id && hasTools(catalogGroup, target.action)

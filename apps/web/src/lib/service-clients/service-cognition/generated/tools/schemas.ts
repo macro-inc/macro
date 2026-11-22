@@ -20894,6 +20894,7 @@ export const ExecutionReceipt = z.object({
                     z.literal('tool'),
                     z.literal('group_action'),
                     z.literal('default'),
+                    z.literal('action'),
                     z.literal('session'),
                   ];
                   const errors = schemas.reduce<z.ZodError[]>(
@@ -21006,6 +21007,7 @@ export const ExecutionReceipt = z.object({
                     z.literal('tool'),
                     z.literal('group_action'),
                     z.literal('default'),
+                    z.literal('action'),
                     z.literal('session'),
                   ];
                   const errors = schemas.reduce<z.ZodError[]>(

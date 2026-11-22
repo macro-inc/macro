@@ -1006,3 +1006,173 @@ async fn a_refused_request_creates_no_policy() {
     }
     assert!(fixture.store.policies.lock().unwrap().is_empty());
 }
+
+fn send_default(state: Option<PermissionState>) -> Change {
+    Change {
+        target: Target::Action {
+            action: Action::Send,
+        },
+        state,
+    }
+}
+
+fn email_send(state: Option<PermissionState>) -> Change {
+    Change {
+        target: Target::GroupAction {
+            group: "email".to_owned(),
+            action: Action::Send,
+        },
+        state,
+    }
+}
+
+#[tokio::test]
+async fn a_person_sets_a_default_and_an_explicit_allow_exception() {
+    let fixture = fixture();
+    let view = fixture
+        .service
+        .set(
+            &person(OWNER),
+            BotId::TEST_A,
+            vec![
+                send_default(Some(PermissionState::Ask)),
+                email_send(Some(PermissionState::Always)),
+            ],
+        )
+        .await
+        .unwrap();
+    // The Allow is kept: Email follows it, not the Ask default.
+    assert_eq!(view.rules.len(), 2);
+    let send = view
+        .defaults
+        .iter()
+        .find(|default| default.action == Action::Send)
+        .unwrap();
+    assert_eq!(
+        (send.state, send.origin),
+        (PermissionState::Ask, Origin::Action)
+    );
+    let email = view
+        .groups
+        .iter()
+        .find(|group| group.group == "email")
+        .unwrap();
+    assert_eq!(
+        (
+            email.actions[0].state,
+            email.actions[0].origin,
+            email.actions[0].exception
+        ),
+        (PermissionState::Always, Origin::GroupAction, true)
+    );
+    let gate = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(gate[0].state, PermissionState::Always);
+
+    // Allow on the default deletes its row; null on the exception removes it,
+    // so Email follows the default, now always again.
+    let view = fixture
+        .service
+        .set(
+            &person(OWNER),
+            BotId::TEST_A,
+            vec![
+                send_default(Some(PermissionState::Always)),
+                email_send(None),
+            ],
+        )
+        .await
+        .unwrap();
+    assert!(view.rules.is_empty());
+    assert_eq!(view.restricted, 0);
+}
+
+#[tokio::test]
+async fn an_agent_tightens_a_default_but_may_not_lower_or_remove_one() {
+    let fixture = fixture();
+    let caller = agent_caller(OWNER, BotId::TEST_A, None);
+    let tightened = fixture
+        .service
+        .tighten(
+            &caller,
+            BotId::TEST_A,
+            vec![send_default(Some(PermissionState::Never))],
+        )
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Agent);
+    assert_eq!(tightened.permissions.restricted, 1);
+
+    for state in [
+        None,
+        Some(PermissionState::Ask),
+        Some(PermissionState::Always),
+    ] {
+        let refused = fixture
+            .service
+            .tighten(&caller, BotId::TEST_A, vec![send_default(state)])
+            .await;
+        let Err(PermissionError::WouldLoosen(operations)) = refused else {
+            panic!("lowering the Send default to {state:?} was not refused");
+        };
+        assert_eq!(operations[0].operation, "send_email");
+    }
+    // An Allow exception under the Never default loosens Email · Send.
+    assert!(matches!(
+        fixture
+            .service
+            .tighten(
+                &caller,
+                BotId::TEST_A,
+                vec![email_send(Some(PermissionState::Always))]
+            )
+            .await,
+        Err(PermissionError::WouldLoosen(_))
+    ));
+}
+
+#[tokio::test]
+async fn an_agent_in_someone_elses_session_restricts_a_default_for_that_session() {
+    let fixture = fixture();
+    let caller = agent_caller(TEAMMATE, BotId::TEST_A, Some(AgentSessionId::TEST_A));
+    let tightened = fixture
+        .service
+        .tighten(
+            &caller,
+            BotId::TEST_A,
+            vec![send_default(Some(PermissionState::Ask))],
+        )
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Session);
+    assert!(fixture.store.read(&Key::Agent(BotId::TEST_A)).is_empty());
+    let send = tightened
+        .permissions
+        .defaults
+        .iter()
+        .find(|default| default.action == Action::Send)
+        .unwrap();
+    assert_eq!(
+        (send.state, send.origin),
+        (PermissionState::Ask, Origin::Session)
+    );
+    let gate = fixture
+        .service
+        .resolve_calls(
+            &SessionPolicy {
+                agent: BotId::TEST_A,
+                owner: user(TEAMMATE),
+                session: AgentSessionId::TEST_A,
+            },
+            &[send_email()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (gate[0].state, gate[0].origin),
+        (PermissionState::Ask, Origin::Session)
+    );
+}

@@ -10,5 +10,5 @@ export type ToolPermissionTargetOneOfKind =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ToolPermissionTargetOneOfKind = {
-  group_action: 'group_action',
+  action: 'action',
 } as const;
