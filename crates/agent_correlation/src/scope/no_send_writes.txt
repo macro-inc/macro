@@ -30,7 +30,6 @@ POST /agent-sessions/{session_id}/views
 POST /universal_input/classify
 POST /universal_input/extract
 PUT /agent-auto-archive-preferences
-PUT /agent-coding-preferences
 PUT /agent-sandbox-size
 PUT /agent-sessions/{session_id}/archived
 PUT /agent-sessions/{session_id}/auto-archive
@@ -41,7 +40,6 @@ PUT /agent-sessions/{session_id}/task
 PUT /agent-sessions/{session_id}/work-registration
 
 [auth]
-DELETE /team/join/{team_invite_id}
 PATCH /user/group
 PATCH /user/onboarding
 PATCH /user/tutorial
@@ -63,7 +61,6 @@ DELETE /chat/{chat_id}
 DELETE /chat/{chat_id}/permanent
 DELETE /import/entities/{id}
 PATCH /chat/{chat_id}
-PATCH /memory/explicit
 POST /ai-cost/pricing
 POST /chats
 POST /chats/{chat_id}/copy

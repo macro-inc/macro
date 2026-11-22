@@ -966,3 +966,14 @@ async fn a_tool_that_uses_nobodys_access_still_asks_the_gate() {
     assert_eq!(*gate.asked.lock().unwrap(), ["WebFetch", "WebSearch"]);
     assert_eq!(*inner.0.lock().unwrap(), [("WebSearch".to_owned(), search)]);
 }
+
+/// Only a turn streamed to someone watching reads the owner's memory as the
+/// person (enrolling them in daily refresh); a mention's reply and a turn
+/// nobody watches read it as a program.
+#[test]
+fn only_a_watched_turn_reads_memory_as_the_person() {
+    use memory::domain::MemoryReader;
+    assert_eq!(memory_reader(ReplyDelivery::Streamed), MemoryReader::Person);
+    assert_eq!(memory_reader(ReplyDelivery::Whole), MemoryReader::Program);
+    assert_eq!(memory_reader(ReplyDelivery::Unseen), MemoryReader::Program);
+}

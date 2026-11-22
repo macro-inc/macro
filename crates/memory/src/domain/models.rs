@@ -81,6 +81,16 @@ pub struct ActivityReports {
     pub reports: Vec<Activity>,
 }
 
+/// Who reads a person's memory. A person's own read (they opened it, or an
+/// agent turn they are watching) enrolls them in daily memory refresh; a
+/// program's (code mode, a routine, a tool call, a turn nobody watches)
+/// only reads, so what it does changes nothing that runs for them later.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryReader {
+    Person,
+    Program,
+}
+
 /// A private explicit memory document and its optimistic concurrency token.
 #[derive(Debug, Clone, Default, Serialize, JsonSchema, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]

@@ -403,6 +403,13 @@ const SENDS: &[(&str, &str)] = &[
     ("POST", "/passwords/teams/{id}/items/{id}/username/copy"),
     ("POST", "/passwords/teams/{id}/items/{id}/copy"),
     ("POST", "/mcp/servers"),
+    // What every later agent turn reads into its prompt (explicit memory,
+    // coding preferences): a scoped run plants nothing a full-access turn
+    // acts on later.
+    ("PATCH", "/memory/explicit"),
+    ("PUT", "/agent-coding-preferences"),
+    // Rejecting an invitation answers whoever sent it.
+    ("DELETE", "/team/join/{id}"),
 ];
 
 /// Requests that run any of a service's writes behind one path, outside
@@ -431,11 +438,22 @@ const GET_WRITES: &[(&str, &str)] = &[
 ];
 
 /// Whether a GET with `path` writes ([`GET_WRITES`]), so no scope makes it.
-/// A placeholder takes any segment, so a refusal never fails open on a
-/// token that doesn't look like an id.
+/// GETs that write whose `{id}` shares its place with a literal read
+/// (`/call/{channel_id}` beside `/call/meetings`), matched with typed
+/// placeholders ([`typed_matches`]) so the read stays readable.
+const TYPED_GET_WRITES: &[(&str, &str)] = &[
+    // Starts the channel's call.
+    ("GET", "/call/{id}"),
+];
+
+/// A [`GET_WRITES`] placeholder takes any segment, so a refusal never fails
+/// open on a token that doesn't look like an id.
 pub fn is_get_write(method: &str, path: &str) -> bool {
     let method = if method == "HEAD" { "GET" } else { method };
     listed(GET_WRITES, method, path)
+        || TYPED_GET_WRITES.iter().any(|(listed, template)| {
+            *listed == method && typed_matches(path, template, OwnSession::Unchecked)
+        })
 }
 
 /// Requests a generation session may make besides reads by method: its own

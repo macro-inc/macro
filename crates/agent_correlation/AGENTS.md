@@ -52,13 +52,18 @@ code, not in its prompt. The harness also signs the scope into the credential
   `macro_event_broker::Event` records from the request; message triggers
   are in `SENDS`). Every scope is refused the GETs that write
   (`GET_WRITES`, `is_get_write`: joining a team, verifying, turning an
-  attachment into a document, recording an open); memory reads, which
-  enroll, are refused only by the allowlists.
+  attachment into a document, recording an open, starting a channel's call);
+  memory reads are refused only by the allowlists, and a program's read
+  enrolls no one (`memory::domain::MemoryReader`). No scope edits what later
+  agent turns read into their prompt (explicit memory, coding preferences)
+  or answers an invitation (`SENDS`).
   Plain `enforce_signed_scope` binds no specs, so it refuses an allowlisted
   scope everything. The unfurl service validates no attribution: a scoped
-  run gets no unfurl host (harness `run_endpoints`) and always goes through
-  the egress proxy (`EgressRollout::egress_for`), so `--allow-net` names
-  only the forwarder. Under a scope whose
+  run gets no unfurl host (harness `run_endpoints`), and a run under an
+  allowlisted scope always goes through the egress proxy
+  (`EgressRollout::egress_for`), so `--allow-net` names only the forwarder.
+  Other scoped runs follow the egress flag: going direct, they can still
+  reach `/unfurl` on the shared gateway origin until it rolls out. Under a scope whose
   `caps_document_tokens_to_view` is true (`job`), document tokens
   (`documents::encode_permission_token`, which also signs `agent_scope`)
   and collab-surface tokens (`encode_surface_token`) grant view only; the

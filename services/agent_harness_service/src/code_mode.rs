@@ -49,18 +49,19 @@ impl<Flags> EgressRollout<Flags> {
 }
 
 impl<Flags: FeatureFlags> EgressRollout<Flags> {
-    /// The egress for a run acting as `user` under `scope`. A scoped run
-    /// always goes through the egress proxy, whatever the flag: the
-    /// forwarder carries only the hosts the run was given, so the scope's
+    /// The egress for a run acting as `user` under `scope`. A run under a
+    /// default-deny scope (one with an allowlist: a background job, a
+    /// channel mention) always goes through the egress proxy, whatever the
+    /// flag: the forwarder carries only the hosts the run was given, so its
     /// refusals hold outside the sandbox too. The forwarder is then a hard
     /// dependency: if it can't start, the run fails (`FailureCode::Egress`)
-    /// and never goes direct. Unscoped runs follow the flag.
+    /// and never goes direct. Other runs follow the flag until it rolls out.
     pub async fn egress_for(
         &self,
         user: &MacroUserIdStr<'_>,
         scope: Option<SessionScope>,
     ) -> Egress {
-        if scope.is_some() {
+        if scope.is_some_and(|scope| scope.allowlist().is_some()) {
             return Egress::Proxied;
         }
         self.egress(user).await

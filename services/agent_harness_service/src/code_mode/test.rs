@@ -290,7 +290,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
     // Send-looking writes that reach nobody else.
     let reviewed = [
         "auth.generateEmailLink",
-        "auth.rejectInvitation",
         "auth.postProfilePictures",
         // Its route refuses a scoped session tools.
         "cognition.sendChatMessage",
@@ -413,7 +412,6 @@ fn a_run_that_sends_nothing_is_refused_every_send_in_the_sdk() {
         "agent-harness.unregisterAgentSessionWork",
         // The person's own preferences.
         "agent-harness.putAgentAutoArchivePreferences",
-        "agent-harness.putAgentCodingPreferences",
         "agent-harness.putAgentSandboxSize",
         // Rejecting a pending tool call runs nothing; running or rewriting
         // one is refused.
@@ -714,13 +712,9 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
             name,
             "session run {scope:?}"
         );
-        // No egress flags (the owner's flag is off), yet a scoped run goes
-        // through the egress proxy.
-        let proxied = if scope.is_some() {
-            code_execution::domain::Egress::Proxied
-        } else {
-            code_execution::domain::Egress::Direct
-        };
+        // No egress flags (the owner's flag is off): these scopes have no
+        // allowlist, so they follow the flag until it rolls out.
+        let proxied = code_execution::domain::Egress::Direct;
         assert_eq!(run.environment.egress, proxied, "session run {scope:?}");
         let run = UserRunCredentials {
             egress: EgressRollout::new(None),
@@ -757,7 +751,8 @@ async fn the_egress_flag_fails_closed_to_direct() {
     let flag =
         |on: bool| FlagSnapshot::new([(EGRESS_PROXY_FLAG.to_owned(), FlagValue::Boolean(on))]);
     assert_eq!(flags(Ok(flag(true))).egress(&user).await, Egress::Proxied);
-    // A scoped run is proxied whatever the flag; an unscoped one follows it.
+    // A default-deny scope is proxied whatever the flag; another scope and
+    // an unscoped run follow it.
     assert_eq!(
         flags(Ok(flag(false)))
             .egress_for(&user, Some(SessionScope::Job))
@@ -768,7 +763,7 @@ async fn the_egress_flag_fails_closed_to_direct() {
         flags(Ok(flag(false)))
             .egress_for(&user, Some(SessionScope::NoSend))
             .await,
-        Egress::Proxied
+        Egress::Direct
     );
     assert_eq!(
         flags(Ok(flag(false))).egress_for(&user, None).await,

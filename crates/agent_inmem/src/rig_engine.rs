@@ -751,8 +751,11 @@ async fn drive_turn(
                 selection.loaded,
             )
         };
-        let (user_memory, sdk_docs, loaded_skills) =
-            tokio::join!(fetch_user_memory(memory, &owner), docs, loaded_skills);
+        let (user_memory, sdk_docs, loaded_skills) = tokio::join!(
+            fetch_user_memory(memory, &owner, memory_reader(delivery)),
+            docs,
+            loaded_skills
+        );
         let mut prompt = system_prompt(
             if routed {
                 &native_tools.routed_prompt
@@ -1193,12 +1196,24 @@ fn routes_documentation(delivery: ReplyDelivery, instructions: Option<&str>) -> 
     delivery != ReplyDelivery::Unseen || instructions.is_none_or(|text| text.trim().is_empty())
 }
 
+/// Who reads the owner's memory for a turn: the person, for a turn streamed
+/// to someone watching; otherwise (a mention's reply, a routine or
+/// suggestion session nobody watches) a program, which enrolls no one in
+/// daily memory refresh.
+fn memory_reader(delivery: ReplyDelivery) -> memory::domain::MemoryReader {
+    match delivery {
+        ReplyDelivery::Streamed => memory::domain::MemoryReader::Person,
+        ReplyDelivery::Whole | ReplyDelivery::Unseen => memory::domain::MemoryReader::Program,
+    }
+}
+
 /// The owner's memory block, or `None` when it is missing or failed to load.
 async fn fetch_user_memory(
     memory_service: &MemoryServiceImpl<PgMemoryRepo>,
     owner: &MacroUserIdStr<'static>,
+    reader: memory::domain::MemoryReader,
 ) -> Option<String> {
-    match memory_service.get_memory(owner.clone()).await {
+    match memory_service.get_memory(owner.clone(), reader).await {
         Ok(memory) => memory.map(|memory| memory.to_string()),
         Err(error) => {
             tracing::warn!(error=?error, %owner, "failed to fetch user memory; running without it");

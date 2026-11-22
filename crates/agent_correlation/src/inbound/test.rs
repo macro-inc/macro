@@ -952,6 +952,7 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
             axum::routing::get(handler.clone()),
         )
         .route("/memory", axum::routing::get(handler.clone()))
+        .route("/memory/explicit", axum::routing::patch(handler.clone()))
         .route(
             "/agent-sessions/{session}/name",
             axum::routing::put(handler.clone()),
@@ -1024,6 +1025,13 @@ async fn a_job_credential_through_propagate_reaches_only_its_lists() {
             &job,
             "PUT",
             format!("/properties/entities/task/{id}/{id}"),
+            StatusCode::FORBIDDEN,
+        ),
+        // A run that sends nothing plants nothing a later turn reads.
+        (
+            &no_send,
+            "PATCH",
+            "/memory/explicit".to_owned(),
             StatusCode::FORBIDDEN,
         ),
         // A run that sends nothing renames its own session, not another.

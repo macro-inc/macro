@@ -300,7 +300,11 @@ async fn current_membership_controls_profiles_and_activity() {
     let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
     let teammate = MacroUserIdStr::parse_from_str("macro|teammate@example.com").unwrap();
     let date = NaiveDate::from_ymd_opt(2026, 6, 17).unwrap();
-    let memory = service.get_memory(owner.clone()).await.unwrap().unwrap();
+    let memory = service
+        .get_memory(owner.clone(), MemoryReader::Person)
+        .await
+        .unwrap()
+        .unwrap();
     assert!(memory.contains("Teammate profile"));
     assert!(!memory.contains("Must stay hidden"));
     assert!(generator.inputs.lock().unwrap().is_empty());
@@ -315,7 +319,13 @@ async fn current_membership_controls_profiles_and_activity() {
             .await,
         Err(MemoryError::Forbidden)
     ));
-    assert!(service.get_memory(owner).await.unwrap().is_none());
+    assert!(
+        service
+            .get_memory(owner, MemoryReader::Person)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -599,7 +609,7 @@ fn retry_delay_grows_and_is_bounded() {
 }
 
 /// A person's own memory read enrolls them in daily refresh; a program's
-/// read, scoped or not, only reads.
+/// read only reads.
 #[tokio::test]
 async fn a_programs_memory_read_enrolls_no_one() {
     let repo = Repo::default();
@@ -611,28 +621,16 @@ async fn a_programs_memory_read_enrolls_no_one() {
         active(),
     );
     let user = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
-    for attribution in [
-        agent_correlation::context::Attribution {
-            correlation_id: Some(Uuid::from_u128(1)),
-            ..Default::default()
-        },
-        agent_correlation::context::Attribution {
-            scope: Some(agent_correlation::scope::SessionScope::NoSend),
-            ..Default::default()
-        },
-        agent_correlation::context::Attribution {
-            routine_id: Some(Uuid::from_u128(2)),
-            ..Default::default()
-        },
-    ] {
-        agent_correlation::context::scope_attribution(attribution, async {
-            service.explicit(&user).await.unwrap();
-            service.get_memory(user.clone()).await.unwrap();
-        })
-        .await;
-    }
+    service
+        .explicit(&user, MemoryReader::Program)
+        .await
+        .unwrap();
+    service
+        .get_memory(user.clone(), MemoryReader::Program)
+        .await
+        .unwrap();
     assert_eq!(repo.0.lock().unwrap().enrolled, 0);
-    service.explicit(&user).await.unwrap();
+    service.explicit(&user, MemoryReader::Person).await.unwrap();
     assert_eq!(
         repo.0.lock().unwrap().enrolled,
         1,

@@ -983,6 +983,7 @@ fn no_scope_makes_a_get_that_writes() {
     assert!(SessionScope::Generation.allows("GET", "/cognition/memory/explicit"));
     assert!(!SessionScope::Job.allows_on(Some(ALL_SPECS), "GET", "/cognition/memory/explicit"));
     assert!(SessionScope::NoSend.allows("GET", "/dss/call/meetings"));
+    assert!(!SessionScope::NoSend.allows("GET", &format!("/dss/call/{id}")));
     assert!(SessionScope::NoSend.allows("GET", &format!("/dss/call/join/{id}")));
 }
 
@@ -1045,13 +1046,41 @@ fn every_get_write_names_a_real_route() {
                 .collect::<Vec<_>>()
         })
         .collect();
-    for (method, template) in GET_WRITES {
+    for (method, template) in GET_WRITES.iter().chain(TYPED_GET_WRITES) {
         assert_eq!(*method, "GET");
         assert!(
-            gets.iter()
-                .any(|path| is_get_write("GET", &concrete(path))
-                    && matches(&concrete(path), template)),
+            gets.iter().any(|path| {
+                let path = concrete_typed(path);
+                is_get_write("GET", &path) && matches(&path, template)
+            }),
             "GET_WRITES names {template}, which no spec declares"
         );
+    }
+}
+
+/// No scope edits what every later agent turn reads into its prompt, nor
+/// answers an invitation: a scoped run plants nothing a later full-access
+/// turn acts on.
+#[test]
+fn no_scope_edits_what_later_turns_read() {
+    for (method, path) in [
+        ("PATCH", "/cognition/memory/explicit"),
+        ("PUT", "/agent-harness/agent-coding-preferences"),
+        (
+            "DELETE",
+            "/auth/team/join/0192f1a0-0000-7000-8000-000000000001",
+        ),
+    ] {
+        for scope in [
+            SessionScope::NoSend,
+            SessionScope::Generation,
+            SessionScope::DryRun,
+            SessionScope::Job,
+        ] {
+            assert!(
+                !scope.allows_on(Some(ALL_SPECS), method, path),
+                "{scope:?} {method} {path}"
+            );
+        }
     }
 }

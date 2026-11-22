@@ -38,7 +38,11 @@ on `ai_tools`. Runtime context is composed with `prompt::compose`.
 
 Explicit edits require a current revision, use one-based lines, and are never
 performed by generation. Deletion remains possible if older content would fail
-privacy review. Reads enroll a user for daily generation but never launch it.
+privacy review. A person's own read (`MemoryReader::Person`: the HTTP routes
+for an unattributed request, a cognition chat message, an agent turn streamed
+to someone watching) enrolls them for daily generation but never launches
+it; a program's read (`MemoryReader::Program`: code mode, routines, scoped
+runs, tool calls, unwatched or mention turns) only reads.
 Current memberships determine shared profile and activity access on every request.
 
 Daily reports are immutable. Weekly/monthly reports rebuild from daily reports
