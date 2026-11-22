@@ -316,3 +316,116 @@ fn unchanged_records_still_commit_projection_only_changes() {
         assert_page(&mut engine, &data).await;
     });
 }
+
+#[test]
+fn failed_projection_read_leaves_the_write_s_hot_records_in_place() {
+    block_on(async {
+        let storage = TursoStorage::open_in_memory("failed-projection-read").unwrap();
+        let mut engine = Engine::new(storage);
+        let variables = serde_json::Map::new();
+        let data = page(2);
+        engine
+            .write_query(None, FULL, Some("Full"), &variables, &data, None)
+            .await
+            .unwrap();
+        let document = key("GraphqlSoupDocument:0");
+        let record = engine
+            .storage()
+            .get_batch(std::slice::from_ref(&document))
+            .await
+            .unwrap()[0]
+            .clone()
+            .unwrap();
+        let token = |value: &str| predicate_index::Token::new(value).unwrap();
+        let projection = |owner: &str| {
+            cache_core::predicate::ProjectionMutation::Replace(predicate_index::IndexDocument {
+                record_key: predicate_index::RecordKey::new("GraphqlSoupDocument:0").unwrap(),
+                profile: predicate_index::Profile::new(token("soup-flat-v1")),
+                partition: token("document"),
+                exact_facts: vec![predicate_index::ExactFact {
+                    attribute: token("owner"),
+                    value: predicate_index::ExactValue::utf8(owner).unwrap(),
+                }],
+                integer_facts: vec![],
+                sort_facts: vec![],
+            })
+        };
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(document.clone(), record.clone())],
+                vec![projection("a")],
+            )
+            .await
+            .unwrap();
+        // The stored projection loses its facts, so reading it fails.
+        raw_execute(engine.storage(), "DELETE FROM index_document_facts", vec![]);
+        assert!(
+            engine
+                .put_records_with_projections(None, vec![(document, record)], vec![projection("b")])
+                .await
+                .is_err()
+        );
+        // The page is still served from the hot tier, as before the write.
+        assert_page(&mut engine, &data).await;
+    });
+}
+
+#[test]
+fn failed_projection_read_does_not_evict_warm_records() {
+    block_on(async {
+        let storage = TursoStorage::open_in_memory("failed-projection-read-eviction").unwrap();
+        // Room for exactly the records of a two-item page.
+        let mut engine = Engine::with_capacity(storage, 4);
+        let variables = serde_json::Map::new();
+        engine
+            .write_query(None, FULL, Some("Full"), &variables, &page(10), None)
+            .await
+            .unwrap();
+        let cold = key("GraphqlSoupDocument:9");
+        let record = engine
+            .storage()
+            .get_batch(std::slice::from_ref(&cold))
+            .await
+            .unwrap()[0]
+            .clone()
+            .unwrap();
+        let token = |value: &str| predicate_index::Token::new(value).unwrap();
+        let projection = |owner: &str| {
+            cache_core::predicate::ProjectionMutation::Replace(predicate_index::IndexDocument {
+                record_key: predicate_index::RecordKey::new("GraphqlSoupDocument:9").unwrap(),
+                profile: predicate_index::Profile::new(token("soup-flat-v1")),
+                partition: token("document"),
+                exact_facts: vec![predicate_index::ExactFact {
+                    attribute: token("owner"),
+                    value: predicate_index::ExactValue::utf8(owner).unwrap(),
+                }],
+                integer_facts: vec![],
+                sort_facts: vec![],
+            })
+        };
+        engine
+            .put_records_with_projections(
+                None,
+                vec![(cold.clone(), record.clone())],
+                vec![projection("a")],
+            )
+            .await
+            .unwrap();
+        // The two-item page fills the hot tier and evicts the cold record.
+        let data = page(2);
+        engine
+            .write_query(None, FULL, Some("Full"), &variables, &data, None)
+            .await
+            .unwrap();
+        raw_execute(engine.storage(), "DELETE FROM index_document_facts", vec![]);
+        assert!(
+            engine
+                .put_records_with_projections(None, vec![(cold, record)], vec![projection("b")])
+                .await
+                .is_err()
+        );
+        // The failed write left the warm page in the hot tier.
+        assert_page(&mut engine, &data).await;
+    });
+}
