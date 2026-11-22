@@ -1,0 +1,972 @@
+apps/web/src/features/granola-connect/primitives/create-granola-connection.ts
+  s_be0dcf8f48154b::t_c39898d965657e 3-8,16-17,19-21,25-27,31-32,34-35,42,45,55,63
+apps/web/src/lib/queries/connectors/connect.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-241
+crates/import_tracker/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1,6
+apps/web/src/lib/queries/slash-menu-mcps.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,7-9,12-16,20-33,35-40,42,47-49,53-64,66-68,72-90,93-97
+crates/import/src/domain/service/workspace/run/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 36,195,389,554,649,720
+apps/web/src/features/block-agent/browser-test/composer.browser.e2e.ts
+  s_be0dcf8f48154b::t_c39898d965657e 6,10,14-21
+crates/connectors/src/outbound/native/source.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-399
+apps/web/src/lib/queries/connectors/connect.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-246
+crates/connectors_e2e/tests/connectors.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-412
+crates/ai_tools/src/bin/memory/context.rs
+  s_be0dcf8f48154b::t_c39898d965657e 29-30
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 6,17-21,36,40-54,119-124,136,138,161,166,177,184
+crates/mcp_toolset/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 17-18,24-25,31
+apps/web/src/features/settings/agentMcpServers.ts
+  s_be0dcf8f48154b::t_c39898d965657e 6-7,9
+apps/web/src/lib/core/connectors/connection-context.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-7
+crates/agent_inmem/src/outbound/rig_engine/test/code_tools.rs
+  s_be0dcf8f48154b::t_c39898d965657e 124
+apps/web/src/routes/pages.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 87-97
+crates/connectors/src/outbound/native/models/aes_key.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-47
+crates/import_jira/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 15
+apps/web/src/lib/core/connectors/ConnectorIcon.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-26
+crates/connectors/src/outbound/pipedream/source/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-324
+crates/connectors/src/outbound/hosted_connections/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-249
+crates/import/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 327-378
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 4-6,11,20,27,32,35,40,42,52
+apps/web/src/features/onboarding/views/tools-step.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 16,28,72,76,83-90,96,99,102,117,142
+crates/connectors/src/outbound/macro_connect.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-13
+crates/connectors/src/outbound/native/provider_registry/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-30
+apps/web/src/features/settings/agentMcpServers.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 16-17
+crates/agent_egress/src/outbound/mcp_credentials.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-2,4-10,12-13,15-18,24,31-33,37,39,41-43,46,48-89,91-108,110-153,156,158,166,169-171,174,176-194
+crates/connectors/src/outbound/pipedream/api.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-607
+apps/web/src/lib/queries/connectors/wire.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-105
+crates/agent_egress/src/inbound/axum_router.rs
+  s_be0dcf8f48154b::t_c39898d965657e 278,304
+crates/import/src/domain/service/tracker_workspace.rs
+  s_be0dcf8f48154b::t_c39898d965657e 4,58
+crates/import/src/outbound/mcp_slack_source.rs
+  s_be0dcf8f48154b::t_c39898d965657e 8,16,22-25,28-31,35,42
+crates/connectors/fixtures/users.sql
+  s_be0dcf8f48154b::t_c39898d965657e 1-4
+apps/web/src/routes/routes.ts
+  s_be0dcf8f48154b::t_c39898d965657e 174-184
+crates/onboarding/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3-4,86-87,90-92,94-102,105,109-123,129,151-152,182-183
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 24-25
+apps/web/src/lib/core/component/AI/component/tool/McpToolCall.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,14
+crates/connectors/src/outbound/pipedream/api/capabilities.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-44
+packages/sdk/generated/agent-harness/index.ts
+  s_be0dcf8f48154b::t_c39898d965657e 4
+crates/connectors/src/outbound/macro_connect/vendor.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-244
+crates/agent_egress/src/domain/service/actor.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6-8,81-89,118-119,126-141,143,145-147,151-166,171-188,235-242,436,448-463,483-487
+crates/connectors/src/domain/resolve/test/properties.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-381
+infra/k8s/observability/cluster/manifests/prod/argocd/NetworkPolicy-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-36
+crates/import/src/domain/service/workspace/run/test/root.rs
+  s_be0dcf8f48154b::t_c39898d965657e 41,109
+crates/import_tracker/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 5,15
+services/agent_harness_service/src/cognition/api/tool_selection.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2-3,73,76,91,93,100-113
+  s_be0dcf8f48154b::t_3ab6d234efb442 114-115
+apps/web/src/features/onboarding/create-app-onboarding-context.ts
+  s_be0dcf8f48154b::t_c39898d965657e 23,54,71-79,254,257,259,263-267,269
+apps/web/src/lib/queries/connectors/connectors.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-199
+crates/connectors/src/inbound/axum_router.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-468
+crates/connectors/src/domain/discovery.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-189
+infra/k8s/observability/cluster/manifests/prod/edge/TargetGroupBinding-edge-argocd.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-12
+crates/connectors/src/domain/sign_in.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-123
+Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 81,149
+packages/sdk/generated/cognition/types.gen.ts
+  s_be0dcf8f48154b::t_c39898d965657e 40,44,46,48,206-249,505-531,535-536,540-575,579-610,1648,2322,2324,2326,2328,2330,2332,2336,2338,2340,2342,2344,2346,2349-2350,3215-3216,3219,3222-3224,3227,3229-3230,3233,3235-3236,3239,3242-3451,3877,3882,3886,3890,3894,3901,3903,3909,3911,3913,3918,3925,3927
+tooling/xtask/crates/xtask_workflows/src/workflows.rs
+  s_be0dcf8f48154b::t_c39898d965657e 50,170-173
+  s_be0dcf8f48154b::t_a11aab868958ef 174
+crates/import/src/domain/service/notion_workspace/object.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,40
+infra/k8s/observability/cluster/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 6-7
+crates/connectors/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-976
+crates/import_notion/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6
+crates/connectors/src/outbound/pipedream/api/capabilities/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-73
+crates/granola_sync/src/outbound/pg_repo.rs
+  s_be0dcf8f48154b::t_c39898d965657e 14-19,136
+crates/agent_egress/src/outbound/mcp_credentials/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2-8,10-13,15-16,22-23,26-28,30-37,39-46,48-50,52-66,68-71,75-87,90-97,100-131,133-152,157-180,183-184,186-187,189-200,204,207,210,212-215,217-243,245,247-320,322-323,326-356,358-359,361-370,373,375-391,394-395,397-398,400-422,424-429,431-437,439-440,442-458,461-467,469-473,475-485,487-489,491-521,524-550
+docs/agent-guide/calls.md
+  s_be0dcf8f48154b::t_c39898d965657e 233-236
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-cmd-params-cm.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 18-20
+services/agent_harness_service/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 151-152,233
+crates/connectors/src/outbound/native/server_access/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-157
+crates/import_tracker/src/outbound/mod.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-2
+apps/web/src/features/connector-import/browser-test/import.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 16-18,25-29,33,38
+crates/connectors/src/domain/sign_in/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-91
+crates/connectors/src/outbound/native/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-16
+crates/connectors/src/outbound/native/oauth/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-239
+crates/connectors/src/outbound/guarded_http/address_policy/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-55
+apps/web/src/features/connector-import/core/catalog.ts
+  s_be0dcf8f48154b::t_c39898d965657e 115
+crates/connectors/src/outbound/overlays/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-19
+crates/connectors/src/outbound/native/models/oauth_client_metadata/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-23
+apps/web/src/features/settings/connections/integration-items.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2-4,15-18,33,44,56,69-71,173-176,181,183-198,202-217,220-228,238-239,244,247-249,264,269,272,280-284,291,293-301,306,311,347-351,358-362,364,413-418,435,448,452-458
+crates/ai_tools/src/import_channels/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 38-41,191,227
+crates/connectors/src/outbound/native/oauth.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-320
+crates/connectors/src/outbound/guarded_http/address_policy.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-88
+crates/mcp_toolset/src/combined/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-104
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/SkillsMenu.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 84-85,89-90
+crates/connectors/src/outbound/native/ports.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-137
+crates/connectors/src/outbound/native/memory_store.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-77
+apps/web/src/features/onboarding/tests/connector-icons.ts
+  s_be0dcf8f48154b::t_c39898d965657e 5,8
+crates/import/src/domain/service/slack_discovery.rs
+  s_be0dcf8f48154b::t_c39898d965657e 13,127,234,338
+apps/web/src/features/connector-import/tests/fake-context.ts
+  s_be0dcf8f48154b::t_c39898d965657e 8-15,19-22,25
+crates/connectors/src/composition.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-244
+crates/connectors/src/outbound/native/models/server.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-109
+crates/granola_sync/src/domain/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,109
+crates/mcp_toolset/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 9-11,14,19-20,23-24
+  s_be0dcf8f48154b::t_5cbdc459e9f512 25
+apps/web/src/features/block-agent/component/AgentConnections.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,23-25
+crates/agent_egress/src/outbound/session_authority.rs
+  s_be0dcf8f48154b::t_c39898d965657e 30,125-127,139,160
+apps/web/src/features/block-agent/primitives/create-connector-continuation.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,8,24
+apps/web/src/features/tours/ViewTour.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 12,32-38,56,70,157-158,164
+apps/web/src/lib/core/component/LexicalMarkdown/component/menu/SkillsMenu/McpRow.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,34
+crates/agent_egress/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 50-54,74-75
+crates/connectors/src/domain/models/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-66
+crates/connectors/src/outbound/native/persisting_credential_store.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-85
+crates/import_jira/src/outbound/client/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2,52,54-63,65-66,82,92-120
+  s_be0dcf8f48154b::t_bee6dec2e8fbe7 121
+crates/mcp_toolset/src/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-53
+crates/connectors/src/outbound/app_directory/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-95
+crates/connectors/src/outbound/app_directory.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-174
+crates/import_tracker/test_support.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-6,9,11-12,15-17,19-25,28-42
+crates/onboarding/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 7,25
+crates/onboarding/src/domain/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 42-43,46,48,50-51,61
+infra/k8s/observability/cluster/manifests/prod/argocd/Service-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-26
+crates/connectors/src/outbound/native/source/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-545
+infra/k8s/observability/cluster/scripts/kind-smoke.sh
+  s_be0dcf8f48154b::t_c39898d965657e 44,46
+crates/connectors/src/domain/catalog/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-46
+apps/web/src/features/onboarding/tests/fake-onboarding-context.ts
+  s_be0dcf8f48154b::t_c39898d965657e 25,49-52,121-122,285,289,291,296-297,299-301,303-304,308-317,319
+crates/agent_harness/src/outbound/connected_apps.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-2,6,14,17,19-20,24-27,31,33,37,43-50,52-58
+crates/connectors/src/outbound/macro_connect/source.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-372
+crates/granola_sync/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 6-7,11-20,30,34,51-56
+crates/connectors/src/outbound/github_link.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-340
+crates/connectors/src/fake/source.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-488
+apps/web/src/features/settings/connections/github-connect-page.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-154
+crates/import/src/domain/service/notion_workspace.rs
+  s_be0dcf8f48154b::t_c39898d965657e 37,162,365
+infra/k8s/observability/cluster/manifests/prod/argocd/ExternalSecret-argocd-google.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-28
+infra/stacks/monitoring/README.md
+  s_be0dcf8f48154b::t_c39898d965657e 240
+apps/web/src/lib/service-clients/service-cognition/client.ts
+  s_be0dcf8f48154b::t_c39898d965657e 18-20,32,142-146,149-150,152,159-169,171-172,178-179,181,183,190-191,193,195,201-207,210-212
+packages/sdk/specs/agent-harness.json
+  s_be0dcf8f48154b::t_c39898d965657e 7277,7281,7285-7289,7297,7402-7406,7812
+apps/web/src/features/granola-connect/core/granola.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 5-11
+crates/connectors/src/outbound/guarded_http/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-179
+infra/k8s/observability/cluster/README.md
+  s_be0dcf8f48154b::t_c39898d965657e 19,31,70-76,79-83,89-91,97-117
+  s_be0dcf8f48154b::t_6372a2d0bbb760 118
+apps/web/src/features/settings/GitHub.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 3,6-11,20-21,25
+crates/agent_code_mode/src/domain/connected_apps.rs
+  s_be0dcf8f48154b::t_c39898d965657e 12-14
+crates/import/src/domain/service/workspace/run/test/dates.rs
+  s_be0dcf8f48154b::t_c39898d965657e 15
+services/agent_harness_service/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 19-26,201-206,211-215,236-238,313-314,382
+services/agent_harness_service/src/cognition/api.rs
+  s_be0dcf8f48154b::t_c39898d965657e 181-182,186-189,193-195,198,201
+services/agent_harness_service/src/scheduling/routine_suggestions.rs
+  s_be0dcf8f48154b::t_c39898d965657e 11-12,19,21,23,28,30
+packages/sdk/tests/connected-apps.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 100
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 25-221
+services/agent_harness_service/src/internal_mcp/test/code_mode.rs
+  s_be0dcf8f48154b::t_c39898d965657e 258
+services/document_storage_service/src/server.rs
+  s_be0dcf8f48154b::t_c39898d965657e 388-410,419-423,1716
+crates/connectors_e2e/src/agent.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-161
+crates/import/src/domain/service/workspace/run.rs
+  s_be0dcf8f48154b::t_c39898d965657e 14,127
+crates/connectors/src/outbound/native/server_access.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-122
+rules/ast-grep/rust-macro-connect-flag-in-policy.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-22
+crates/connectors/src/domain/ports.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-242
+crates/import_tracker/src/domain/model.rs
+  s_be0dcf8f48154b::t_c39898d965657e 183
+infra/k8s/observability/cluster/env/prod.nix
+  s_be0dcf8f48154b::t_c39898d965657e 37,45,57-59
+  s_be0dcf8f48154b::t_e2eb47b96f6e5f 60
+crates/connectors/src/domain/policy/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-79
+crates/connectors/src/outbound/native.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-19
+rules/ast-grep/tsx-connection-state-through-connectors-queries.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-80
+services/agent_harness_service/src/cognition/config/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6
+crates/connectors/src/outbound/native/sign_in/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-64
+apps/web/src/features/connector-import/context/contracts.ts
+  s_be0dcf8f48154b::t_c39898d965657e 4-5,10-11,19-20,23
+crates/agent_session/src/domain/routines/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 102-106,109,112,115
+crates/connectors/src/outbound/macro_connect/source/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-388
+apps/web/src/features/settings/connections/leftover-row.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2-3,7-9,11,28-30,33-34,36,42-47,49-51,53-56,59-70,72,92-93,109,120,124-148,150-155,158,163,168,173,179,183,186-202,207,216,222,231-249,253,255,258-259,261,267,272-273,275,326,329
+crates/agent_egress/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 8,25-29,42-46,48-49
+crates/import_linear/src/outbound/client.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1,8,13,79-80,82-86,90,92-93,100,255-256,260-261
+apps/web/src/features/tours/ViewTour.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 7,207,230,233-237
+crates/granola_sync/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-2
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-153
+apps/web/src/features/tours/core/view-tour.ts
+  s_be0dcf8f48154b::t_c39898d965657e 12-17
+apps/web/src/features/granola-connect/core/granola.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-4,6,10-14,18,20-25
+crates/connectors/src/outbound/native/models/oauth_client_metadata.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-45
+crates/agent_egress/src/domain/model.rs
+  s_be0dcf8f48154b::t_c39898d965657e 29-30,231-236,248,250-252,312-327,348-349,351-358,361,363-365,367-373,382-383,422-423,425-430,444-445,447-449,460-526,537,541-562,895
+crates/import/src/domain/service/test/admission.rs
+  s_be0dcf8f48154b::t_c39898d965657e 371-375,430,480,585,619
+services/agent_harness_service/src/scheduling.rs
+  s_be0dcf8f48154b::t_c39898d965657e 7,551,559-564,867,930
+crates/authentication_service_client/src/github_access_token.rs
+  s_be0dcf8f48154b::t_c39898d965657e 5-19,29-41,53-59,61-70,72-93
+services/document_storage_service/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 215
+crates/connectors/src/domain/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-825
+crates/connectors/src/outbound/pipedream/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-70
+crates/mcp_toolset/src/combined.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-106
+crates/connectors/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 1-97
+crates/connectors/src/inbound/toolset.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-448
+tooling/just/rust.just
+  s_be0dcf8f48154b::t_c39898d965657e 54-60,166
+apps/web/src/features/settings/connections/ai-grant-actions.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 12-13,50
+apps/web/src/features/slack-import/slack-import.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 6,83
+apps/web/src/features/settings/connections/ai-provider.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-162
+crates/connectors/src/domain.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-17
+crates/connectors/src/outbound.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-21
+crates/import/src/domain/service/slack_discovery/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 4,184
+crates/connectors/src/inbound/callbacks.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-302
+crates/import/src/domain/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 23,487,635,893,990,1081,1173,1309,1392-1406
+docs/architecture/cursor-agent-transport.md
+  s_be0dcf8f48154b::t_c39898d965657e 317
+crates/agent_harness/src/outbound/egress/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3,9-10,13,15-16,19-27,31-36,39,45-64,71,73,75,92-95,98-100,102,105,112-114,116,118-119,122-124,126-137,139,142,150,156-157,160,162,164-207,376
+crates/connectors/src/outbound/native/server_directory/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-209
+crates/granola_sync/src/inbound/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-58
+apps/web/src/features/onboarding/components/tool-tile.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,15,17-25,29,42
+infra/k8s/observability/cluster/manifests/prod/argocd/RoleBinding-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-21
+infra/k8s/observability/cluster/manifests/prod/argocd/ServiceAccount-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-14
+apps/web/src/features/settings/connections/github-item.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-137
+infra/k8s/observability/cluster/manifests/prod/edge/Deployment-edge.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 21
+crates/connectors/src/outbound/native/sign_in.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-53
+crates/agent_egress/src/outbound/macro_mcp/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3,78,104,134,155-161,185,206,236,271-277
+crates/agent_egress/src/outbound/forwarder.rs
+  s_be0dcf8f48154b::t_c39898d965657e 8
+apps/web/src/features/connector-import/views/import-dialog.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 75-76,78,85
+apps/web/src/lib/core/connectors/ConnectorIcon.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-49
+crates/connectors/src/domain/catalog.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-95
+crates/import/src/domain/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,76-85
+crates/connectors/src/inbound/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-30
+apps/web/src/features/settings/connections/integrations-view.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 4-5,20,22-24,39,47-54,59-74,112-113,182-207,212-213,250,278,311,329-339,341-344,348,353-354,358,401-404,415,420-461,468-546
+crates/import/src/domain/service/workspace.rs
+  s_be0dcf8f48154b::t_c39898d965657e 5,110,172
+apps/web/src/features/connector-import/connector-import-dialog.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 3-7,9,16-32,34-44,47-49,59
+services/agent_harness_service/src/cognition/api/tool_selection/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 123-217
+crates/onboarding/src/domain/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,54-55,58,62-64,71,73-74,79-80,83-84,86-90,99
+services/agent_harness_service/src/public_mcp/direct_tools_instructions.md
+  s_be0dcf8f48154b::t_c39898d965657e 1
+crates/connectors/src/outbound/pipedream.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-8
+apps/web/src/features/slack-import/slack-import.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 38,107
+apps/web/src/features/onboarding/queries/connected-tools.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 3,8,10-11,13-17,19,22-33,35-43,45-49,52-55
+crates/agent_harness/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 54-63
+crates/agent_harness/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 58,110-111
+.github/workflows/connectors_e2e.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-1390
+crates/connectors/src/outbound/native/persisting_credential_store/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-145
+crates/import/src/domain/service/workspace/run/test/reimport.rs
+  s_be0dcf8f48154b::t_c39898d965657e 53,185,271,328,402
+apps/web/src/lib/queries/connectors/catalog.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-118
+services/agent_harness_service/src/cognition/server.rs
+  s_be0dcf8f48154b::t_c39898d965657e 9,99-101,107,597-601,603,606-620,674,679,682-687,690,760,813,871,876-877,879-881,884-897,965-967,983-1016
+  s_be0dcf8f48154b::t_7557b393cef4e5 1017
+services/document_storage_service/src/api/context.rs
+  s_be0dcf8f48154b::t_c39898d965657e 554-559
+crates/connectors/src/outbound/native/server_directory.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-158
+crates/agent_session/src/domain/routines/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 189,192-197
+apps/web/tests/email-e2e/harness/front.ts
+  s_be0dcf8f48154b::t_c39898d965657e 21-22,306-312
+services/agent_harness_service/src/cognition/api/structured_completion.rs
+  s_be0dcf8f48154b::t_c39898d965657e 193
+apps/web/src/features/routines/core/draft.ts
+  s_be0dcf8f48154b::t_c39898d965657e 6
+crates/import/src/outbound/mcp_slack_source/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 4,569-573,575-605,610-631,633-638,640-649
+services/agent_harness_service/src/cognition/api/context/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 506,513,567,607-608,631,636,639,645,647,786-789,791-794,802-825,827
+apps/web/tests/email-e2e/README.md
+  s_be0dcf8f48154b::t_c39898d965657e 54-58
+crates/ai_tools/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 84,130
+apps/web/src/features/settings/ConnectorAppPicker.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-253
+crates/agent_harness/src/outbound/connected_apps/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2,4-5,8-12,15-30,33-44,47-53,56,58-68,70-119,121-126,128-131,133-141
+apps/web/src/lib/queries/slash-menu-mcps.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,6,9,13-16,18,21-28,30-31,35,37
+infra/k8s/observability/cluster/manifests/prod/argocd/StatefulSet-argocd-application-controller.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 25-26
+crates/import_notion/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 22-23,30,34-35,47-48
+apps/web/src/features/onboarding/primitives/tools.ts
+  s_be0dcf8f48154b::t_c39898d965657e 17-19,24-25
+docs/agent-guide/ai-chat.md
+  s_be0dcf8f48154b::t_c39898d965657e 72-75,78
+infra/k8s/observability/cluster/manifests/prod/external-secrets/ClusterSecretStore-secrets-manager.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 12
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3-4,27-41,87-89,91,147
+crates/agent_egress/src/outbound/mod.rs
+  s_be0dcf8f48154b::t_c39898d965657e 9-10
+apps/web/src/features/settings/connections/use-connections-model.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,5,7-12
+apps/web/src/lib/i18n/locales/en/github-connect.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-8
+apps/web/src/features/block-agent/ui/AgentComposerAddMenu.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 14-24,42,67,73-74,84,164-169,171,201-208,210
+apps/web/src/lib/core/connectors/ConnectedAppIcon.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-49
+crates/connectors/src/fake.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-315
+crates/connectors/src/outbound/native/redis_state_store.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-49
+crates/agent_code_mode/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 28
+crates/granola_sync/src/domain/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 24-26,28,34,38,43,70-74,89,94,96,166,263,265,283-295
+  s_be0dcf8f48154b::t_eb6d97a4f06879 296
+crates/connectors/src/outbound/native/pg_server_repo.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-190
+crates/ai_tools/src/mcp_app_catalog.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1,4,6,8-9,11-12,15-18,22,25-26,31,33-36,38,41-44
+crates/connectors_e2e/src/agent/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-36
+crates/granola_sync/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 18,33
+crates/import_jira/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 11,19
+crates/import_linear/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 15
+crates/connectors/src/domain/models.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-752
+crates/workspace-hack/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 123,295
+apps/web/src/features/onboarding/queries/connected-tools.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-2,8-9,11,13,15-17,20,23,25-32
+crates/ai_tools/src/tool_context/test/import_link_access.rs
+  s_be0dcf8f48154b::t_c39898d965657e 214-216,229,349,593
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1329,1333,1336-1339,1345,1444-1448,1801
+crates/connectors/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 1-57
+crates/connectors/src/inbound/test_support.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-120
+packages/sdk/specs/cognition.json
+  s_be0dcf8f48154b::t_c39898d965657e 1105-1109,1116-1119,1125-1132,1134,1139,1143-1156,1158-1161,1166,1171,1176,1181,1184,1186,1191,1196,1204-1216,1219-1239,1242,1246,1251-1252,1254,1256,1261-1262,1266,1270-1287,1289-1301,1303-1304,1308,1313-1314,1316,1318,1323-1324,1328,1333-1334,1338,1344-1368,1373,1380-1384,1388,1393-1394,1396,1398,1403-1404,1408,1412-1414,1416,1418,1426,1428-1439,1441-1450,1453,1457,1463,1467,1473,1475,1477,1482-1483,1487,1492-1493,1497,1501-1518,1520-1532,1536,1541-1542,1546,1551-1552,1554,1556,1561,1566,1572-1579,1582-1584,1586-1587,1592,1604,1609-1610,1612-1619,1622-1630,1637,1642-1643,1647,1652-1660,1665,1667-1668,1673,1681,1685,1691,1695,1700-1701,1703-1704,1708,1713-1715,1717,1721,1725-1727,1731,1736-1737,1739,1741,1746-1747,1751,1757-1763,1765,1769,1777,1781,1786-1787,1789,1791,1796-1800,1804,1808-1819,1821,1823,1829-1831,1833-1835,1840,1847-1848,1852,1858,1862,1868-1871,1873,1875,1880-1881,1885,1890-1891,1893,1895,1901,1905-1925,1933,1935-1937,1940,1942,1945,1949,1951,1954,1960,1964,1970,1973,1975-1977,1982,1994,1999-2050,2053,2055,2061-2073,2077,2081-2083,2088-2102,2105,2109,2114-2118,2121-2143,2147,2151-2153,2158-2162,2165-2168,2175-2176,2179,2182,2187,2189-2191,2194,2198,2204,2209,2211-2223,2226,2230,2238,2240-2249,2252,2255,2259,2267-2271,2274-2277,2283,2285,2292,2294,2301,2303,2306,2312,2314-2315,2324,2337-2341,2344,2349-2354,2357,2361,2367,2370,2374,2382,2384-2395,2398-2405,2408-2415,2417-2418,2421,2425,2430-2431,2435,2440-2441,2445,2451,2455,2463,2465-2468,2471,2475,2481,2485,2491-2496,2501,2509,2513,2518-2519,2521,2523,2528-2529,2533,2538-2539,2543,2549,2553,2558-2559,2563-2582,2586-2588,2593,2595-2597,2602,2605-2606,2610,2614,2620-2632,2636,2641-2659,2662-2672,3299-3300,3302,3304,3308,3564-3604,3606,3608,3610-3614,3618,3620-3621,3623-3632,4091-4133,4136,4141,4145,4149-4197,4201-4245,6239,7321-7334
+packages/sdk/src/coverage/skipped.ts
+  s_be0dcf8f48154b::t_c39898d965657e 204-214
+crates/connectors/src/inbound/toolset/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-307
+crates/connectors/src/outbound/native/provider_registry.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-114
+tooling/xtask/crates/xtask_workflows/src/workflows/email_e2e_alert.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2-7,12-13,18,26-47,103-105,107-111,113,130-133,146,156-157,167-176,186,189-190
+crates/connectors_e2e/src/config.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-93
+apps/web/src/features/block-agent/component/AgentConnections.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2,4,28-29
+crates/granola_sync/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 9,23,30,35-40,46,49,64,66,82,84,90-330
+apps/web/src/features/settings/connections/model.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,3,5-20,23-38,40-53,56-68,71-83,86-92,94-113
+apps/web/src/lib/core/connectors/ConnectedAppIcon.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-19
+crates/connectors/src/outbound/overlays.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-69
+.github/workspace-dep-closures.json
+  s_be0dcf8f48154b::t_c39898d965657e 439,600,916,1079,1297,2181,2657,2661,2743,3572,4894-4940,5934,8351,8362,10921,11012-11013,11015-11017,11021,11023-11024,11034,11037,11039-11040,11042-11043,11045-11049,11054-11055,11057-11059,11063,11065-11066,11076,11079,11081-11082,11084-11085,11087-11091,11096-11097,11099-11101,11105,11107-11108,11117,11122-11123,11125-11126,11128,11130-11133,11138-11139,11141-11143,11147,11149-11150,11159,11162,11164-11165,11167-11168,11170-11174,13223-13224,13227,13237,13240,15197,15314
+infra/k8s/observability/cluster/manifests/prod/argocd/Role-argocd-dex-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 1-23
+crates/import_notion/src/outbound.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3
+apps/web/src/features/block-agent/primitives/create-connector-continuation.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1,7-8,41-48
+apps/web/src/features/settings/connections/github-connect-page.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-78
+crates/agent_egress/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 29-48,131-132
+apps/web/src/features/onboarding/queries/tool-connect.ts
+  s_be0dcf8f48154b::t_c39898d965657e 3-7,10,12,16-23,26
+crates/connectors/src/composition/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-114
+services/agent_harness_service/src/cognition/service/integration_analytics/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2,6-7,10-11,16-18,20-21,26-28,32-33,38,40-41
+tooling/xtask/crates/xtask_workflows/src/workflows/scripts/connectors_e2e.sh
+  s_be0dcf8f48154b::t_c39898d965657e 1-30
+crates/agent_egress/src/domain/ports.rs
+  s_be0dcf8f48154b::t_c39898d965657e 18,50-51,58-62,68
+crates/connectors/src/inbound.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-67
+services/agent_harness_service/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 68,520-539,541-542,547,550-551,555,642,655,659,785,894,899,1611-1612,1964,1988,2155-2156
+infra/stacks/monitoring/monitors/oauth.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-3,13,24
+apps/web/src/features/routines/routine-apps.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,6,9,17-18,21,28,34-35,104,107-108,118-119,126-128
+.config/nextest.toml
+  s_be0dcf8f48154b::t_c39898d965657e 3-5,7,68-87
+apps/web/src/features/settings/connections/catalog-rows.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 3-4,7,15,24-25,89-94,100-102,108,112
+crates/ai_tools/src/connectors_config.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-224
+crates/connectors/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-34
+apps/web/src/features/onboarding/queries/tool-catalog.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 8-10,14-18,74
+crates/ai_tools/src/build_context.rs
+  s_be0dcf8f48154b::t_c39898d965657e 162-163,200-202,213,229,635-636,640,662,665-670,673,690,744
+crates/connectors_e2e/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 1-21
+crates/import/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 21,89-93,128
+crates/import_jira/src/outbound/client.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1,8,13,127-128,130-133,135,137-138,145,165,167
+crates/import_linear/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 12,20
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_be0dcf8f48154b::t_c39898d965657e 332-336,347,534-684
+apps/web/src/features/settings/connections/provider-meta.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 7,10-17,23
+apps/web/src/lib/core/connectors/pendingConnect.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-31
+crates/connectors/src/inbound/callbacks/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-201
+crates/granola_sync/src/outbound/accounts/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-42
+crates/onboarding/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 17,28
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-repo-server.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 24-25
+packages/sdk/generated/cognition/sdk.gen.ts
+  s_be0dcf8f48154b::t_c39898d965657e 5,267-337,503-504,506-507,511,513-514
+services/agent_harness_service/src/internal_mcp.rs
+  s_be0dcf8f48154b::t_c39898d965657e 112
+apps/web/src/routes/app-router-view.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 87,149,285-287
+  s_be0dcf8f48154b::t_9f5191bdc759f1 288
+crates/agent_egress/src/domain/error.rs
+  s_be0dcf8f48154b::t_c39898d965657e 37-38,42-44,48-53,55-56
+crates/granola_sync/src/inbound.rs
+  s_be0dcf8f48154b::t_c39898d965657e 10-11,13-16,25-46
+infra/k8s/observability/cluster/modules/edge.nix
+  s_be0dcf8f48154b::t_c39898d965657e 5,35-41,108-126,194-198,312-314
+  s_be0dcf8f48154b::t_5a1326e6ee1940 315
+rules/ast-grep/rust-no-transport-in-domain.yml
+  s_be0dcf8f48154b::t_c39898d965657e 24-28
+crates/connectors/src/domain/discovery/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-185
+crates/connectors/src/outbound/native/provider_registry/slack/README.md
+  s_be0dcf8f48154b::t_c39898d965657e 1-36
+crates/import/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 26,51
+apps/web/src/lib/i18n/locales/en.ts
+  s_be0dcf8f48154b::t_c39898d965657e 25,63
+crates/ai_tools/src/mcp_app_catalog/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2,4-6,8-10,12-13,17-21,25-28,32-35,38-53
+crates/import_notion/src/outbound/connected/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-134
+crates/mcp_toolset/src/mangle.rs
+  s_be0dcf8f48154b::t_c39898d965657e 9-10
+rules/ast-grep-tests/rust-macro-connect-flag-in-policy-test.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-16
+infra/k8s/observability/cluster/manifests/prod/edge/ConfigMap-edge.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 97-117
+.agents/rules/checks.md
+  s_be0dcf8f48154b::t_c39898d965657e 31-34
+crates/connectors/src/inbound/axum_router/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-505
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 288,293,505-516,522-526,663-795
+  s_be0dcf8f48154b::t_6ee6be99fd42d7 796
+crates/connectors/src/outbound/hosted_connections.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-349
+rules/ast-grep-tests/tsx-connection-state-through-connectors-queries-test.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-38
+apps/web/src/features/settings/Agents.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 57,89,852,1663,1666
+crates/import/src/domain/service/workspace/run/test/events.rs
+  s_be0dcf8f48154b::t_c39898d965657e 63,121,151,184,242,297
+crates/connectors/src/inbound/dto/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-160
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_be0dcf8f48154b::t_c39898d965657e 24,26-30,38,40-42,47-49,60,63,146,149,245-246,248,258-259,261-273
+apps/web/src/features/drive-view/tour.ts
+  s_be0dcf8f48154b::t_c39898d965657e 7
+apps/web/src/features/settings/connections/integrations-view.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 6,10-15,32,50,54,76-82,84-91,95,122-127,130,134,140,155,160,183,204,208-209,229,258,260-262,264-267,269-280,285,288-289,342
+apps/web/src/features/connector-import/core/providers.ts
+  s_be0dcf8f48154b::t_c39898d965657e 10
+apps/web/src/features/onboarding/primitives/tools.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 16,27,39,50
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_be0dcf8f48154b::t_c39898d965657e 7,116
+apps/web/src/lib/core/component/AI/component/tool/ConnectMcpServer.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2,4,10-18,36
+crates/import/src/domain/models/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2,157-165,167-168
+infra/k8s/observability/cluster/scripts/bootstrap.sh
+  s_be0dcf8f48154b::t_c39898d965657e 45-51
+crates/granola_sync/src/outbound/accounts.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,8-11,13-19,21-23,27-29,31-32,35-36,38
+apps/web/src/lib/queries/connectors/keys.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-7
+crates/connectors/src/outbound/github_link/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-380
+crates/granola_sync/src/outbound/pg_repo/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 110-111,116-118,120-138,141,173-178,210,212-216,229-233,236,247-265
+  s_be0dcf8f48154b::t_a3eb72c766ac3c 266
+infra/k8s/observability/cluster/modules/platform/external-secrets.nix
+  s_be0dcf8f48154b::t_c39898d965657e 55-65
+apps/web/src/features/settings/connections/slack-channel-import/SlackChannelImportFlow.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2,26-27
+apps/web/src/features/calls-view/components/calls-sidebar.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 250-252
+apps/web/src/features/tasks-view/tour.ts
+  s_be0dcf8f48154b::t_c39898d965657e 10
+crates/ai_tools/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 13,72,92-93,313-315,342-344
+docs/agent-guide/settings.md
+  s_be0dcf8f48154b::t_c39898d965657e 806-809,819-822,830-853,855-856
+apps/web/src/features/onboarding/context/onboarding-context.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 72
+crates/import_linear/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6
+crates/granola_sync/src/outbound/api.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6,10,17-21,35-43,46,53-60,62,78,83,132,139,142,171,173,183,186,214
+apps/web/src/features/onboarding/browser-test/onboarding.browser.e2e.ts
+  s_be0dcf8f48154b::t_c39898d965657e 77,547,664-665,669,684,689-691,695,702,705,713-716,722,724,739-741
+crates/connectors_e2e/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-26
+crates/import_linear/src/outbound/client/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2-3,8-12,26,28-41,43,50,61,63-65,67,76,78-80,82,90-123
+apps/web/src/features/settings/connections/add-custom-mcp-dialog.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 2,13,32
+crates/connectors/src/outbound/native/models/server/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-84
+apps/web/src/lib/queries/connectors/connectors.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-188
+crates/connectors_e2e/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 1-64
+apps/web/src/features/granola-connect/components/GranolaPromoChip.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1,20
+crates/granola_sync/src/domain/ports.rs
+  s_be0dcf8f48154b::t_c39898d965657e 25,39-40,43-46
+apps/web/src/features/onboarding/queries/tool-connect.test.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-2,6-8,14-18,20-34,37,40-44,47-64,67,69-78,80-84
+crates/granola_sync/src/outbound/api/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 2-3,87-110,113,117,120-136,138,146,165,171,190
+apps/web/src/lib/core/connectors/app-icons.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-34
+crates/import/src/domain/service/workspace/events.rs
+  s_be0dcf8f48154b::t_c39898d965657e 15,36
+crates/import_tracker/src/outbound/connection.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-221
+crates/connectors/src/outbound/github_link/auth_service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-38
+docs/development/ci.md
+  s_be0dcf8f48154b::t_c39898d965657e 54-62
+docs/runbooks/slack-live-channel-import.md
+  s_be0dcf8f48154b::t_c39898d965657e 129
+crates/connectors/src/outbound/native/pg_server_repo/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-231
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-rbac-cm.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 4
+crates/ai_tools/src/tool_context.rs
+  s_be0dcf8f48154b::t_c39898d965657e 178,185-186,192,204-205,2170,2172-2173,2308-2312,2315-2316,2318,2320-2324
+apps/web/tests/native/fixtures/bootstrap.ts
+  s_be0dcf8f48154b::t_c39898d965657e 106
+crates/import_tracker/src/outbound/connection/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-140
+crates/import_notion/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 15,27
+infra/k8s/observability/cluster/manifests/prod/argocd/Deployment-argocd-applicationset-controller.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 24
+docs/agent-guide/login.md
+  s_be0dcf8f48154b::t_c39898d965657e 335-341,346-352,355-360
+infra/k8s/observability/cluster/modules/platform/argocd.nix
+  s_be0dcf8f48154b::t_c39898d965657e 4-14,17-22,25-37,44,46,50-51,53-69,75-76,88-127
+services/agent_harness_service/src/cognition/api/context.rs
+  s_be0dcf8f48154b::t_c39898d965657e 98-101,105-108,113,116,165-169
+apps/web/src/features/crm/tour.ts
+  s_be0dcf8f48154b::t_c39898d965657e 16
+crates/agent_egress/src/outbound/macro_mcp.rs
+  s_be0dcf8f48154b::t_c39898d965657e 20,166,169,171-174
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_be0dcf8f48154b::t_c39898d965657e 410-411,422,439-440,451
+services/agent_harness_service/src/cognition/api/swagger.rs
+  s_be0dcf8f48154b::t_c39898d965657e 21-26,122-130,291-296,298-300
+crates/connectors/src/outbound/guarded_http.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-228
+crates/connectors_e2e/src/connector.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-82
+services/agent_harness_service/src/cognition/config.rs
+  s_be0dcf8f48154b::t_c39898d965657e 159,201-281
+  s_be0dcf8f48154b::t_6deeaabee66653 282
+services/agent_harness_service/src/config/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 81,91
+crates/import/src/domain/service/notion_workspace/personal.rs
+  s_be0dcf8f48154b::t_c39898d965657e 10,46
+tooling/xtask/crates/xtask_workflows/src/workflows/vars.rs
+  s_be0dcf8f48154b::t_c39898d965657e 22-24,47-65
+  s_be0dcf8f48154b::t_4b6a218bedbe4e 66
+apps/web/src/features/onboarding/views/tools-step.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 26-27,42,95,99
+apps/web/src/lib/core/connectors/connect-action.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-39
+crates/agent_egress/src/domain/service/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3-5,8,58,86-99,105,107-110,112-113,123-124,141,149,153-170,209,227,231-234,248-257,266-269,397-399,401-430,433,438,447-450,562-626,628,647,656,662-668,670-739,886-887,889,904,906-909,1105,1419
+crates/authentication_service_client/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 13-15
+crates/connectors/src/domain/resolve.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-216
+crates/import_tracker/Cargo.toml
+  s_be0dcf8f48154b::t_c39898d965657e 11,21
+apps/web/src/features/settings/connections/ai-provider.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 1-123
+services/agent_harness_service/src/routine_sessions/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1,16-17,20-21,24-27,30-46,48-51,54-61,63,66,68-71,74-76,78-82,84-95,98-121
+apps/web/src/features/settings/connections/model.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-3,13,15,21,24-27,30,33-34,36,38,40,43-44,46,49-50,82-83,86-93,96-99,101-105,108-115,118-155,160-161,164-165
+apps/web/src/lib/queries/connectors/mutations.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-116
+services/agent_harness_service/src/cognition/api/stream/chat_message.rs
+  s_be0dcf8f48154b::t_c39898d965657e 559,589
+apps/web/src/lib/queries/auth/github-link.ts
+  s_be0dcf8f48154b::t_c39898d965657e 5,91-94
+apps/web/src/lib/queries/connectors/index.ts
+  s_be0dcf8f48154b::t_c39898d965657e 1-23
+crates/import_jira/src/lib.rs
+  s_be0dcf8f48154b::t_c39898d965657e 6
+tooling/xtask/crates/xtask_workflows/src/workflows/connectors_e2e.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-130
+apps/web/src/features/connector-import/components/provider-row.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 10-15,38-43,58-72
+services/agent_harness_service/src/routine_sessions.rs
+  s_be0dcf8f48154b::t_c39898d965657e 13,22,27,36,50-53,56-57,59,62,64-70,73-78,80-88,94,96,98-99,107,112-136,139,141,147,150-152,155,160-161,163-168
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 9,38,41-42,44-45,47,57,62,113,129,249
+apps/web/src/features/onboarding/queries/tool-catalog.ts
+  s_be0dcf8f48154b::t_c39898d965657e 2,7-8,24,26-28
+crates/agent_egress/src/domain/service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 15-18,270,276,281-287,290-310,312-343,531-580,583,590-595,597,599,602-617,619-639,641-644,647
+crates/agent_inmem/src/rig_engine.rs
+  s_be0dcf8f48154b::t_c39898d965657e 163,194,309,906,910
+crates/agent_session/src/domain/routines.rs
+  s_be0dcf8f48154b::t_c39898d965657e 68,70-73,76-77
+apps/web/AGENTS.md
+  s_be0dcf8f48154b::t_c39898d965657e 503-514,909-910
+crates/connectors/src/outbound/pipedream/source.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-417
+infra/k8s/observability/cluster/manifests/prod/edge/NetworkPolicy-edge.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 24-33
+  s_be0dcf8f48154b::t_2617857bc1821f 23
+packages/sdk/generated/cognition/index.ts
+  s_be0dcf8f48154b::t_c39898d965657e 4
+infra/k8s/observability/cluster/manifests/prod/argocd/ConfigMap-argocd-cm.yaml
+  s_be0dcf8f48154b::t_c39898d965657e 3,6,109
+rules/ast-grep-tests/ts-connection-state-through-connectors-queries-test.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-38
+crates/connectors/src/domain/resolve/test.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-919
+.gitleaks.toml
+  s_be0dcf8f48154b::t_c39898d965657e 1-15
+crates/agent_harness/src/outbound/egress.rs
+  s_be0dcf8f48154b::t_c39898d965657e 3-5,14,16,28-29,35,37,39-41,55-60,66-88,91-92,96,98
+crates/connectors/src/domain/policy.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-77
+docs/agent-guide/setup-cards.md
+  s_be0dcf8f48154b::t_c39898d965657e 16-21
+tooling/xtask/crates/xtask_workflows/src/workflows/steps.rs
+  s_be0dcf8f48154b::t_c39898d965657e 8-9,576-593,596,604-605,612-613
+crates/connectors/src/outbound/native/provider_registry/slack/manifest.json
+  s_be0dcf8f48154b::t_c39898d965657e 1-52
+crates/connectors_e2e/src/api.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-370
+crates/import_notion/src/outbound/connected.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-123
+crates/connectors/src/inbound/dto.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-361
+apps/web/src/features/settings/Agents.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 275,280-282,284-285,288-290,292-293,298-319,321-332,335-337,366-374,2090-2091
+rules/ast-grep/ts-connection-state-through-connectors-queries.yml
+  s_be0dcf8f48154b::t_c39898d965657e 1-80
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_be0dcf8f48154b::t_c39898d965657e 16-18,21,24-29,153-164,286-288,298-299,313,317-357
+  s_be0dcf8f48154b::t_f55c0435361e05 358
+services/agent_harness_service/src/cognition/service/integration_analytics.rs
+  s_be0dcf8f48154b::t_c39898d965657e 1-2,10-11,21-22,42-43,45-46,51-58,62-64,109-120
+  s_be0dcf8f48154b::t_451c7b74568694 121
+apps/web/src/features/connector-import/views/import-dialog.test.tsx
+  s_be0dcf8f48154b::t_c39898d965657e 87,102-111,138,140,143
+.sqlx/query-24cf31d083b13a9c8ce1e920fdb3ae0e8bbcdec6b322c1dec80a42bc59566f0a.json
+  s_be0dcf8f48154b::t_857dcc21434ce2 1-17
+.sqlx/query-4c8de3a2e3da2257651b008ac867696502e1278350549bd70369f55ac06f5a10.json
+  s_be0dcf8f48154b::t_80299a1042b8ca 1-23
+.sqlx/query-65d6cd46ce33e6fe1fcbfceaef6f347eafc91afb736fd3bba1ca379dd2c954d1.json
+  s_be0dcf8f48154b::t_07a12be895374e 1-42
+.sqlx/query-8bfd839c224b399d999d9b5b82b5cde1cfe24dc0f5e44715aa4d5054455a05f6.json
+  s_be0dcf8f48154b::t_02ac67796bce47 1-18
+.sqlx/query-97cc817c772e1b4566b6951948b17039941705a4b1eedf1c8e7f68d211d1f518.json
+  s_be0dcf8f48154b::t_cf2f5e27c863cd 1-17
+.sqlx/query-99139acbb6d0a695e3621e951400c5675e28c13228c501911eb0911cd97a1f5e.json
+  s_be0dcf8f48154b::t_11034b271a731a 1-47
+.sqlx/query-a550aaa9c6a17a3cb56740cfd301772c45c5a3d50bbf8d07720dc9d25ae5fc12.json
+  s_be0dcf8f48154b::t_a98534d238a1ba 1-16
+Cargo.lock
+  s_be0dcf8f48154b::t_011db94af4d373 353,451,464,615,734,799,1304,5324-5382,6975,9660,11426,11463,11479,11496,11519,15153,24334
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/connectMcpServerResponse.ts
+  s_be0dcf8f48154b::t_98c99711e5dc47 7,13,15,17-18,21
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/connectorStatus.ts
+  s_be0dcf8f48154b::t_6e77d9ce60a7df 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/discoveryResultOneOfThree.ts
+  s_be0dcf8f48154b::t_87acf8ac3b78d4 18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_be0dcf8f48154b::t_a030d359cd9f8c 197
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_be0dcf8f48154b::t_28c14b937cdb69 7277,7281,7285-7289,7297,7402-7406,7812
+apps/web/src/lib/service-clients/service-cognition/generated/client.ts
+  s_be0dcf8f48154b::t_b6814918302bb8 11,14,19-22,80,1286-1291,1295-1296,1300-1301,1305-1306,1308-1310,1315-1317,1319-1320,1323,1325-1326,1328,1333,1338,1341-1348,1351-1352,1356-1357,1361-1362,1366-1373,1378-1380,1382-1383,1386-1387,1389-1390,1394,1399,1404,1408,1410-1411,1415-1416,1420-1422,1425-1426,1429-1431,1436-1438,1440-1455,1458-1459,1461-1462,1464,1469-1471,1476,1480-1481,1483-1493,1495,1498-1516,1520-1522,1524-1525,1528-1530,1532-1533,1535,1540,1545,1549,1551-1553,1556-1557,1561-1562,1566-1568,1571-1573,1576-1577,1579-1585,1588-1590,1592-1593,1596-1599,1601-1602,1604,1606,1611,1616,1620-1623,1625-1626,1630-1646,1650-1651,1654-1659,1663-1665,1667-1671,1674-1676,1678-1679,1681,1686-1688,1693,1697-1698,1700-1701,1705-1706,1710-1712,1715-1717,1720-1722,1724-1733,1738-1740,1742-1746,1749-1751,1753-1754,1761-1763,1768,1771-1773,1776,1778,1781-1783,1786-1792,1796-1807,1810-1816,1821-1823,1825-1826,1829-1830,1832-1833,1835-1837,1842,1849,1852-1853,1857-1859,1862-1865,1867-1870,1872-1874,1877-1880,1882-1884,1887-1889,1892-1894,1897,1900-1908,1913-1915,1917-1918,1921-1922,1924-1925,1929,1934,1939,1943,1945-1946,1950-1952,1955-1957,1960-1962,1964-1972,1977-1979,1981-1982,1985-1986,1988-1989,1991-1993,1998,2003,2007,2009,2011,2014,2018,2020-2021,2024,2026-2027,2029,2034,2039,2043-2044,2046-2048,2051-2052,2056-2057,2061-2077,2081-2091,2094-2102,2107-2109,2111-2112,2115-2116,2118-2119,2123,2128,2133,2137-2138,2140-2142,2145-2146,2150-2154,2158-2160,2162,2174-2175,2178-2179,2181-2182,2184,2189,2194,2198-2200,2202-2203,2207-2208,2212-2218,2222,2225-2228,2233-2235,2237-2238,2241-2242,2244-2245,2247-2249,2254,2259,2263-2264,2266,2268-2283,2286-2287,2290-2296,2298-2300,2302-2303,2306-2307,2309-2310,2312,2317,2324,2328,2330-2331,2335-2336,2340-2347,2349-2351,2353-2354,2357,2359-2360,2362,2367-2369,2374,2378-2379,2381-2382,2386,2391-2398,2400-2402,2404-2405,2408,2410-2411,2413,2418-2420,2425,2429-2431,2433-2434,2438-2439,2443-2445,2448-2449,2453,2456-2459,2464-2466,2468-2469,2472-2473,2475-2476,2478-2480,2485,2490,2494,2496-2497,2501-2502,2506-2509,2513-2515,2517-2518,2521-2522,2524-2525,2527-2529,2534,2539,2543,2545-2547,2550-2551,2555-2557,2560-2565,2570-2572,2574-2575,2578-2579,2581-2582,2584,2589,2594,2598,2600-2601,2605,2610,2613,2617-2619,2621-2622,2625,2627-2628,2630,2635,2640,2644,2646-2647,2651-2652,2656-2657,2659-2660,2663-2664,2666-2667,2674,2681,2685,2687-2689,2692-2693,2697-2698,2700-2701,2704-2705,2707-2708,2715,2722,2726-2727,2729-2730,2734,2736,2739,2741,2744-2745,2748-2750,2755-2757,2759-2760,2773-2774,2777-2778,2780-2781,2788,2795,2799,2801-2802,2806-2807,2811-2812,2814-2815,2818,2820-2821,2823,2828,2835,2839-2841,2843-2844,2848-2849,2853-2854,2858-2859,2861-2863,2868-2870,2872-2873,2876,2878-2879,2881,2886,2891,2895-2897,2899-2900,2904-2911,2914-2915,2919-2925,2930-2943,2945-2947,2950-2951,2953-2954,2961,2966,2970-2971,2973-2974,2978-2979,2983-2984,2987,2991-2993,2995-2996,2999,3001-3002,3004,3009,3014,3018-3020,3022-3024,3027-3029,3032-3043,3047-3053,3056-3061,3066-3068,3070-3071,3074-3075,3077-3078,3080-3082,3087,3092,3096-3097,3099-3100,3104-3105,3109-3112,3116-3118,3120-3121,3124-3125,3127-3128,3130-3132,3137,3142,3146,3148-3149,3153-3154,3158-3163,3167-3169,3171-3172,3175,3177-3178,3180,3185,3192,3196-3197,3199-3201,3204-3206,3209-3210,3214-3215,3218-3220,3225-3227,3229-3230,3233-3234,3236-3237,3244,3251
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/addServerRequest.ts
+  s_be0dcf8f48154b::t_137caf27147a9a 9,12-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/browseConnectorCatalogParams.ts
+  s_be0dcf8f48154b::t_3721438e5619a9 8,10,14,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogApp.ts
+  s_be0dcf8f48154b::t_8b5f923420bc8c 7-8,11,13-25
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogAppDescription.ts
+  s_be0dcf8f48154b::t_d5542be653cc3e 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogAppIconUrl.ts
+  s_be0dcf8f48154b::t_264e8a07e1263d 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogPage.ts
+  s_be0dcf8f48154b::t_59de01f4b49c83 7-8,11,13-17
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/catalogPageNextCursor.ts
+  s_be0dcf8f48154b::t_437af337b81729 1-11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStep.ts
+  s_be0dcf8f48154b::t_0f76454712e435 7-8,11,13
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOf.ts
+  s_be0dcf8f48154b::t_b6ad59bd4b7c06 7,10-12,14-16,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfThree.ts
+  s_be0dcf8f48154b::t_0b9964122447d3 7,10-11,13-21
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfThreeType.ts
+  s_be0dcf8f48154b::t_2c1a756e88b684 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectStepOneOfType.ts
+  s_be0dcf8f48154b::t_4a4140b9bc1ee2 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectedServer.ts
+  s_be0dcf8f48154b::t_97b586c9839cc1 9-10,13-14,16,18
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connector.ts
+  s_be0dcf8f48154b::t_17260ae258c19d 7-8,11-12,14-30
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorKind.ts
+  s_be0dcf8f48154b::t_fe13aba4f80d36 9,11,14-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorOauthCallbackParams.ts
+  s_be0dcf8f48154b::t_a95e378ef8d0b9 8,10,14,18,22
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorStatus.ts
+  s_be0dcf8f48154b::t_8142ae505b9253 1-20
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTarget.ts
+  s_be0dcf8f48154b::t_31fb6a06b1a5ad 7-8,11,13
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOf.ts
+  s_be0dcf8f48154b::t_e77cffccc7456e 7,10,12-16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfThree.ts
+  s_be0dcf8f48154b::t_71eaf8489426b9 7,9-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfThreeType.ts
+  s_be0dcf8f48154b::t_cd26e4a2dc9e1c 1-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/connectorTargetOneOfType.ts
+  s_be0dcf8f48154b::t_7fd3874a745d09 8-14
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/index.ts
+  s_be0dcf8f48154b::t_8f9c4327c6a177 40,43-47,101-114,393-395
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/onboardingState.ts
+  s_be0dcf8f48154b::t_5306abe19405aa 16
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequest.ts
+  s_be0dcf8f48154b::t_0b503eed894f26 7-8,11,13-17
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequestEnabled.ts
+  s_be0dcf8f48154b::t_544cd70f1f1509 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/schemas/updateConnectorRequestName.ts
+  s_be0dcf8f48154b::t_2f5bff788ca080 9,11
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_be0dcf8f48154b::t_4cfcfbee8631c4 1352-1374
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_be0dcf8f48154b::t_7b63dffccdfcda 258-265,1258,6396,6400,6403,6405
+apps/web/src/lib/service-clients/service-cognition/openapi.json
+  s_be0dcf8f48154b::t_6a674dea37d0fd 1105-1109,1116-1119,1125-1132,1134,1139,1143-1156,1158-1161,1166,1171,1176,1181,1184,1186,1191,1196,1204-1216,1219-1239,1242,1246,1251-1252,1254,1256,1261-1262,1266,1270-1287,1289-1301,1303-1304,1308,1313-1314,1316,1318,1323-1324,1328,1333-1334,1338,1344-1368,1373,1380-1384,1388,1393-1394,1396,1398,1403-1404,1408,1412-1414,1416,1418,1426,1428-1439,1441-1450,1453,1457,1463,1467,1473,1475,1477,1482-1483,1487,1492-1493,1497,1501-1518,1520-1532,1536,1541-1542,1546,1551-1552,1554,1556,1561,1566,1572-1579,1582-1584,1586-1587,1592,1604,1609-1610,1612-1619,1622-1630,1637,1642-1643,1647,1652-1660,1665,1667-1668,1673,1681,1685,1691,1695,1700-1701,1703-1704,1708,1713-1715,1717,1721,1725-1727,1731,1736-1737,1739,1741,1746-1747,1751,1757-1763,1765,1769,1777,1781,1786-1787,1789,1791,1796-1800,1804,1808-1819,1821,1823,1829-1831,1833-1835,1840,1847-1848,1852,1858,1862,1868-1871,1873,1875,1880-1881,1885,1890-1891,1893,1895,1901,1905-1925,1933,1935-1937,1940,1942,1945,1949,1951,1954,1960,1964,1970,1973,1975-1977,1982,1994,1999-2050,2053,2055,2061-2073,2077,2081-2083,2088-2102,2105,2109,2114-2118,2121-2143,2147,2151-2153,2158-2162,2165-2168,2175-2176,2179,2182,2187,2189-2191,2194,2198,2204,2209,2211-2223,2226,2230,2238,2240-2249,2252,2255,2259,2267-2271,2274-2277,2283,2285,2292,2294,2301,2303,2306,2312,2314-2315,2324,2337-2341,2344,2349-2354,2357,2361,2367,2370,2374,2382,2384-2395,2398-2405,2408-2415,2417-2418,2421,2425,2430-2431,2435,2440-2441,2445,2451,2455,2463,2465-2468,2471,2475,2481,2485,2491-2496,2501,2509,2513,2518-2519,2521,2523,2528-2529,2533,2538-2539,2543,2549,2553,2558-2559,2563-2582,2586-2588,2593,2595-2597,2602,2605-2606,2610,2614,2620-2632,2636,2641-2659,2662-2672,3299-3300,3302,3304,3308,3564-3604,3606,3608,3610-3614,3618,3620-3621,3623-3632,4091-4133,4136,4141,4145,4149-4197,4201-4245,6239,7321-7334
+rules/ast-grep-tests/__snapshots__/rust-macro-connect-flag-in-policy-snapshot.yml
+  s_be0dcf8f48154b::t_c92d2f05b45bdc 1-23
+rules/ast-grep-tests/__snapshots__/ts-connection-state-through-connectors-queries-snapshot.yml
+  s_be0dcf8f48154b::t_c60af118de009b 1-178
+rules/ast-grep-tests/__snapshots__/tsx-connection-state-through-connectors-queries-snapshot.yml
+  s_be0dcf8f48154b::t_fc3403e01d1460 1-178
+tooling/xtask/crates/xtask_workflows/checks.lock
+  s_be0dcf8f48154b::t_4d05f5a121acda 62-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "f6d9eb1c756d6aef612fd5c9928249499249b4b4",
+  "prompts": {},
+  "sessions": {
+    "s_be0dcf8f48154b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "84f26c56-f4ae-4114-a847-2d20de026f21",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
