@@ -122,7 +122,6 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
         let eligible = format!(
             "FROM {sorts} AS s JOIN {documents} AS d ON d.id = s.document_id WHERE s.attribute = ?2 AND d.profile IN ({after_source}){required}"
         );
-        mark_over_limit_incomplete(connection, &tables, &eligible, parameters.clone())?;
         driver::execute(
             connection,
             &format!(
@@ -130,6 +129,7 @@ fn derive(connection: &Db, derivation: &SortFactDerivation) -> Result<(), TursoS
             ),
             parameters,
         )?;
+        mark_over_limit_incomplete(connection, &tables, derivation)?;
     }
     derive_uncertainty(connection, derivation)
 }
@@ -177,16 +177,15 @@ fn derive_uncertainty(
     Ok(())
 }
 
-/// A document already at `MAX_ATTRIBUTES_PER_DOCUMENT` distinct attributes
-/// cannot take the derived fact: as the projection and composition do for
-/// such a document, it becomes incomplete (Dirty) and its queries fall back.
-/// Row counts bound distinct attributes from above, so SQL selects the few
-/// documents with that many rows and Rust counts their distinct attributes.
+/// A document the derived fact took past `MAX_ATTRIBUTES_PER_DOCUMENT`
+/// distinct attributes becomes incomplete (Dirty), as composition makes it,
+/// so its queries fall back and loads do not refuse it. Row counts bound
+/// distinct attributes from above, so SQL selects the few documents holding
+/// the fact with that many rows and Rust counts their distinct attributes.
 fn mark_over_limit_incomplete(
     connection: &Db,
     tables: &Tables,
-    eligible: &str,
-    parameters: Vec<Value>,
+    derivation: &SortFactDerivation,
 ) -> Result<(), TursoStorageError> {
     let Tables {
         documents,
@@ -199,9 +198,9 @@ fn mark_over_limit_incomplete(
     let candidates = driver::query(
         connection,
         &format!(
-            "SELECT s.document_id, ?1 {eligible} AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) >= {limit}"
+            "SELECT s.document_id FROM {sorts} AS s WHERE s.attribute = ?1 AND (SELECT COUNT(*) FROM {exact} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {integers} AS c WHERE c.document_id = s.document_id) + (SELECT COUNT(*) FROM {sorts} AS c WHERE c.document_id = s.document_id) > {limit}"
         ),
-        parameters,
+        vec![text(derivation.target)],
     )?;
     for row in candidates {
         let document_id = required_i64(&row, 0)?;
@@ -215,7 +214,7 @@ fn mark_over_limit_incomplete(
                 attributes.insert(required_text(&row, 0)?);
             }
         }
-        if attributes.len() < limit {
+        if attributes.len() <= limit {
             continue;
         }
         let dirty = projection_state_code(ProjectionIncompleteKind::Dirty);

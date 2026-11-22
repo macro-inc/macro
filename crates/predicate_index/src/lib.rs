@@ -304,18 +304,27 @@ impl SortFactDerivation {
         })
     }
 
-    /// Replace `document`'s target fact with the one its other facts derive.
-    /// Documents of other profiles keep what they have.
-    pub fn apply(&self, document: &mut IndexDocument) {
+    /// Replace `document`'s target fact with the one its other facts derive,
+    /// returning whether that changed it. Documents of other profiles keep
+    /// what they have.
+    pub fn apply(&self, document: &mut IndexDocument) -> bool {
         if !self.profiles.contains(&document.profile.token().as_str()) {
-            return;
+            return false;
         }
         let derived = self.derive(document);
+        let current = document
+            .sort_facts
+            .iter()
+            .find(|fact| fact.attribute.as_str() == self.target);
+        if current == derived.as_ref() {
+            return false;
+        }
         document
             .sort_facts
             .retain(|fact| fact.attribute.as_str() != self.target);
         document.sort_facts.extend(derived);
         document.sort_facts.sort();
+        true
     }
 
     /// Make the target exactly as uncertain as the facts it is derived from.

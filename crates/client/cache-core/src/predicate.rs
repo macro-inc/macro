@@ -289,11 +289,13 @@ pub fn compose_pending_optimistic_projection(
 /// Recompute every derived sort fact (`SORT_FACT_DERIVATIONS`) from the
 /// document's other facts. A stored mutation written by an older build, or
 /// a patch whose copy was taken before its source changed, never decides a
-/// derived value.
-fn derive_sort_facts(document: &mut IndexDocument) {
+/// derived value. Returns whether any derived fact changed.
+fn derive_sort_facts(document: &mut IndexDocument) -> bool {
+    let mut changed = false;
     for derivation in item_filter_index::SORT_FACT_DERIVATIONS {
-        derivation.apply(document);
+        changed |= derivation.apply(document);
     }
+    changed
 }
 
 /// The non-queryable state of a document whose composed facts are invalid.
@@ -741,12 +743,11 @@ pub fn apply_authoritative_projection_mutations(
         let state = match mutation {
             ProjectionMutation::Replace(document) => {
                 let mut document = document.clone();
-                let valid = document.validate().is_ok();
-                derive_sort_facts(&mut document);
+                let derived = derive_sort_facts(&mut document);
                 document.canonicalize();
-                // A derived fact can take a valid replacement past its
-                // attribute limit; storage would refuse to write it.
-                if valid && document.validate().is_err() {
+                // A derived fact can take a replacement past its attribute
+                // limit; storage would refuse to write it.
+                if derived && document.validate().is_err() {
                     Some(ProjectionState::Incomplete {
                         record_key: document.record_key,
                         profile: document.profile,
