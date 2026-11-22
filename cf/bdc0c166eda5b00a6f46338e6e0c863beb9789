@@ -14,6 +14,7 @@ apps/web/src/lib/queries/preview/tests/routine-fetcher.test.ts
   s_78b58492d62b5f::t_30e75f63afc2b4 2,5,7,21-23,25-26,79-96,98-106,108
   s_78b58492d62b5f::t_916593180eecd3 107
   s_78b58492d62b5f::t_0bd6e3f0b185ea 24
+  s_469178e7d0841d::t_20714f2047c1f0 97
 apps/web/AGENTS.md
   s_78b58492d62b5f::t_704a20365f03d3 1437
 docs/agent-guide/navigation.md
@@ -25,6 +26,14 @@ docs/agent-guide/navigation.md
   "base_commit_sha": "cfbdc0c166eda5b00a6f46338e6e0c863beb9789",
   "prompts": {},
   "sessions": {
+    "s_469178e7d0841d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "03e00d02-2073-4d8a-95c5-5b0e1b8f9396",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
     "s_78b58492d62b5f": {
       "agent_id": {
         "tool": "claude",
