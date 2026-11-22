@@ -545,6 +545,8 @@ describe('import review', () => {
       screen.getByLabelText("Failed: Notion couldn't be reached.")
     ).toBeTruthy();
     expect(screen.getByText('Onboarding')).toBeTruthy();
+    // The reason is visible text, not a tooltip, so touch shows it too.
+    expect(screen.getByText("Notion couldn't be reached.")).toBeTruthy();
   });
 
   it('offers to reconnect only when the connection was lost', () => {

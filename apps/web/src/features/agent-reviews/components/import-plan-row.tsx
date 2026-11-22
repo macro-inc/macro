@@ -161,14 +161,12 @@ function RowStatus(props: { node: ImportPlanNode; excluded: boolean }) {
       }
     >
       {(error) => (
-        <Tooltip label={error()} as="span" tabIndex={0}>
-          <span
-            class="shrink-0 text-xs text-failure"
-            aria-label={`Failed: ${error()}`}
-          >
-            Failed
-          </span>
-        </Tooltip>
+        <span
+          class="shrink-0 text-xs text-failure"
+          aria-label={`Failed: ${error()}`}
+        >
+          Failed
+        </span>
       )}
     </Show>
   );
@@ -282,6 +280,14 @@ export function ImportPlanRow(props: {
             <span class="truncate text-xs text-ink-muted">
               {props.node.reason}
             </span>
+          </Show>
+          {/* Why it failed, readable on touch too (no tooltip there). */}
+          <Show when={props.showStatus && props.node.error}>
+            {(error) => (
+              <span class="min-w-0 text-xs text-ink-muted wrap-break-word">
+                {error()}
+              </span>
+            )}
           </Show>
         </span>
         <Show when={props.node.kind === 'database' && props.node.rows !== null}>
