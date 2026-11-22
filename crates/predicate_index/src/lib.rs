@@ -262,6 +262,69 @@ pub struct IndexDocument {
     pub sort_facts: Vec<IntegerFact>,
 }
 
+/// A sort fact computed from other facts of the same document: `target` copies
+/// the `source` sort value of a `profile` document that has every `required`
+/// exact fact. A projection applies it with [`SortFactDerivation::derive`], and
+/// storage applies the same rule to the documents it already holds, so adding
+/// one needs no reprojection of existing records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SortFactDerivation {
+    /// Profile token of the documents it applies to.
+    pub profile: &'static str,
+    /// Sort attribute whose value is copied.
+    pub source: &'static str,
+    /// Sort attribute written.
+    pub target: &'static str,
+    /// Exact facts, as attribute and value, the document must have.
+    pub required: &'static [(&'static str, &'static [u8])],
+}
+
+impl SortFactDerivation {
+    /// The derived fact for `document`, if the rule applies to it.
+    pub fn derive(&self, document: &IndexDocument) -> Option<IntegerFact> {
+        if document.profile.token().as_str() != self.profile {
+            return None;
+        }
+        let has_required = self.required.iter().all(|(attribute, value)| {
+            document.exact_facts.iter().any(|fact| {
+                fact.attribute.as_str() == *attribute && fact.value.as_bytes() == *value
+            })
+        });
+        if !has_required {
+            return None;
+        }
+        let source = document
+            .sort_facts
+            .iter()
+            .find(|fact| fact.attribute.as_str() == self.source)?;
+        Some(IntegerFact {
+            attribute: Token::new(self.target).ok()?,
+            value: source.value,
+        })
+    }
+
+    /// A stable description of the rule, which storage records to know
+    /// whether its documents already carry the derived facts.
+    pub fn fingerprint(&self) -> String {
+        let required = self
+            .required
+            .iter()
+            .map(|(attribute, value)| {
+                let hex = value
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>();
+                format!("{attribute}={hex}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+        format!(
+            "{}:{}->{}[{required}]",
+            self.profile, self.source, self.target
+        )
+    }
+}
+
 fn validate_attribute_count<'a>(
     attributes: impl IntoIterator<Item = &'a Token>,
 ) -> Result<(), ValidationError> {

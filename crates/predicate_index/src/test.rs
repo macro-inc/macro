@@ -383,3 +383,56 @@ fn effective_projection_rejects_an_unassigned_owner() {
         Err(ValidationError::InvalidOptimisticOwner)
     );
 }
+
+#[test]
+fn sort_fact_derivation_copies_the_source_only_when_every_required_fact_matches() {
+    const RULE: SortFactDerivation = SortFactDerivation {
+        profile: "profile-v1",
+        source: "source-ts",
+        target: "target-ts",
+        required: &[("visible", &[1]), ("kind", b"a")],
+    };
+    let base = IndexDocument {
+        record_key: RecordKey::new("Thing:1").unwrap(),
+        profile: Profile::new(token("profile-v1")),
+        partition: token("thing"),
+        exact_facts: vec![
+            ExactFact {
+                attribute: token("visible"),
+                value: ExactValue::new([1]).unwrap(),
+            },
+            ExactFact {
+                attribute: token("kind"),
+                value: exact("a"),
+            },
+        ],
+        integer_facts: vec![],
+        sort_facts: vec![IntegerFact {
+            attribute: token("source-ts"),
+            value: 7,
+        }],
+    };
+    assert_eq!(
+        RULE.derive(&base),
+        Some(IntegerFact {
+            attribute: token("target-ts"),
+            value: 7
+        })
+    );
+    let mut other_profile = base.clone();
+    other_profile.profile = Profile::new(token("profile-v2"));
+    assert_eq!(RULE.derive(&other_profile), None);
+    let mut hidden = base.clone();
+    hidden.exact_facts[0].value = ExactValue::new([0]).unwrap();
+    assert_eq!(RULE.derive(&hidden), None);
+    let mut missing = base.clone();
+    missing.exact_facts.pop();
+    assert_eq!(RULE.derive(&missing), None);
+    let mut no_source = base;
+    no_source.sort_facts.clear();
+    assert_eq!(RULE.derive(&no_source), None);
+    assert_eq!(
+        RULE.fingerprint(),
+        "profile-v1:source-ts->target-ts[visible=01,kind=61]"
+    );
+}
