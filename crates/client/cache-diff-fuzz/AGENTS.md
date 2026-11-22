@@ -80,7 +80,7 @@ purpose (it says what).
   out the rows holding that text (and `--decoded-facts` the blob facts of that attribute).
   Optimistic layers keep the projections they apply as JSON text, so add
   `--ignore-json-fact NAME` too: in each layer's `projectionMutations` it drops NAME from a
-  `Patch`'s `sorts`, and from an `Unknown`'s `affected_attributes` that names another
+  `Patch`'s `sorts` and a `Replace`'s `sort_facts`, and from an `Unknown`'s `affected_attributes` that names another
   attribute (an empty list means every attribute); layer text is then compared re-serialized. In a `CHAIN_*` run comparing a migrated file with a
   fresh one, segment 0 is old against new and differs by design; compare the last
   segments' traces, which end with a hash per table (`runs/RUN/upgrade/SEED/{a,b}1`, kept

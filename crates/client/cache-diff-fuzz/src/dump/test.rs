@@ -81,13 +81,13 @@ fn json_facts_dropped_from_layer_projections_only() {
     assert_eq!(
         without_json_facts(
             &layer(
-                r#"[{"Patch":{"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+                r#"[{"Replace":{"sort_facts":[{"attribute":"view","value":1}]}},{"Patch":{"sorts":[{"attribute":"view","value":1},{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox","view"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
                 data
             ),
             &names
         ),
         layer(
-            r#"[{"Patch":{"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
+            r#"[{"Replace":{"sort_facts":[]}},{"Patch":{"sorts":[{"attribute":"keep","value":2}]}},{"Unknown":{"affected_attributes":["inbox"]}},{"Unknown":{"affected_attributes":["view"]}}]"#,
             data
         )
     );
@@ -102,20 +102,25 @@ fn json_facts_dropped_from_layer_projections_only() {
 }
 
 #[test]
-fn json_facts_leave_blobs_alone() {
+fn json_facts_only_in_layer_text() {
     let source = r#"@macro-cache/optimistic-source:{"projectionMutations":[{"Patch":{"sorts":[{"attribute":"view","value":1}]}}]}"#;
     let out = dump(
         &format!(
-            "CREATE TABLE layers (id INTEGER, source TEXT, bytes BLOB);
-             INSERT INTO layers VALUES (1, '{source}', CAST('{source}' AS BLOB));"
+            "CREATE TABLE optimistic_layers (id INTEGER, source TEXT, bytes BLOB);
+             INSERT INTO optimistic_layers VALUES (1, '{source}', CAST('{source}' AS BLOB));
+             CREATE TABLE search_documents (search_text TEXT);
+             INSERT INTO search_documents VALUES ('{source}');"
         ),
         &[],
         &["view"],
     );
-    let row: Vec<String> = serde_json::from_str(&out["layers"][0]).unwrap();
+    let row: Vec<String> = serde_json::from_str(&out["optimistic_layers"][0]).unwrap();
     assert_eq!(
         row[1],
         r#"t:@macro-cache/optimistic-source:{"projectionMutations":[{"Patch":{"sorts":[]}}]}"#
     );
     assert_eq!(row[2], format!("b:{source}"));
+    // Only the layers table holds projections.
+    let other: Vec<String> = serde_json::from_str(&out["search_documents"][0]).unwrap();
+    assert_eq!(other[0], format!("t:{source}"));
 }

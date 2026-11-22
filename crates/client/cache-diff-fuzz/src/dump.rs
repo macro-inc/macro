@@ -52,19 +52,25 @@ pub fn tables(
     for name in names {
         let name = name.trim_matches('"').to_owned();
         let mut table = Vec::new();
+        // Only optimistic layers keep projections; other text is compared as it is.
+        let layer_facts: &[String] = if name == "optimistic_layers" {
+            json_facts
+        } else {
+            &[]
+        };
         // A JSON array, so no value can run into the next one.
         rows(&mut select(&connection, ignore, &name, "*")?, |values| {
             table.push(row_text(
-                values.iter().map(|value| render_text(value, json_facts)),
+                values.iter().map(|value| render_text(value, layer_facts)),
             ));
         })?;
         out.insert(name, table);
     }
     if decoded {
-        decode_records(&connection, ignore, json_facts, &mut out)?;
+        decode_records(&connection, ignore, &mut out)?;
     }
     if facts {
-        decode_facts(&connection, ignore, json_facts, &mut out)?;
+        decode_facts(&connection, ignore, &mut out)?;
     }
     for table in out.values_mut() {
         table.sort();
@@ -77,7 +83,6 @@ pub fn tables(
 fn decode_records(
     connection: &Arc<Connection>,
     ignore: &[(String, String)],
-    json_facts: &[String],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if !out.contains_key("records") {
@@ -104,7 +109,7 @@ fn decode_records(
                         Err(error) => format!("r!{error} {}", opaque_bytes(bytes)),
                     }
                 }
-                other => render_text(other, json_facts),
+                other => render(other),
             };
             records.push(row_text(values[..2].iter().map(render).chain([value])));
         },
@@ -128,7 +133,7 @@ fn decode_records(
             documents.push(row_text(values.iter().enumerate().map(
                 |(index, value)| match index == 6 && ours {
                     true => "h:record".to_owned(),
-                    false => render_text(value, json_facts),
+                    false => render(value),
                 },
             )));
         },
@@ -141,7 +146,6 @@ fn decode_records(
 fn decode_facts(
     connection: &Arc<Connection>,
     ignore: &[(String, String)],
-    json_facts: &[String],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if out.contains_key("meta") {
@@ -153,7 +157,7 @@ fn decode_facts(
                 meta.push(row_text(values.iter().enumerate().map(
                     |(index, value)| match index == 1 && schema {
                         true => "schema".to_owned(),
-                        false => render_text(value, json_facts),
+                        false => render(value),
                     },
                 )));
             },
@@ -379,7 +383,8 @@ fn render_text(value: &Value, names: &[String]) -> String {
 const OPTIMISTIC_SOURCE: &str = "@macro-cache/optimistic-source:";
 
 /// An optimistic layer's source, written again with its `projectionMutations`
-/// lacking each `{"attribute":NAME,"value":N}` of a `Patch`'s `sorts`, and NAME
+/// lacking each `{"attribute":NAME,"value":N}` of a `Patch`'s `sorts` or a
+/// `Replace`'s `sort_facts`, and NAME
 /// in an `Unknown`'s `affected_attributes` that names another attribute (an
 /// empty list means every attribute, so a list of NAME alone stays). Any other
 /// text is returned as it is.
@@ -399,15 +404,17 @@ fn without_json_facts(text: &str, names: &[String]) -> String {
         .get_mut("projectionMutations")
         .and_then(serde_json::Value::as_array_mut);
     for mutation in mutations.into_iter().flatten() {
-        if let Some(sorts) = mutation
-            .pointer_mut("/Patch/sorts")
-            .and_then(serde_json::Value::as_array_mut)
-        {
-            sorts.retain(|fact| {
-                !(fact.as_object().is_some_and(|fact| fact.len() == 2)
-                    && fact.get("attribute").is_some_and(named)
-                    && fact.get("value").is_some_and(serde_json::Value::is_number))
-            });
+        for pointer in ["/Patch/sorts", "/Replace/sort_facts"] {
+            if let Some(sorts) = mutation
+                .pointer_mut(pointer)
+                .and_then(serde_json::Value::as_array_mut)
+            {
+                sorts.retain(|fact| {
+                    !(fact.as_object().is_some_and(|fact| fact.len() == 2)
+                        && fact.get("attribute").is_some_and(named)
+                        && fact.get("value").is_some_and(serde_json::Value::is_number))
+                });
+            }
         }
         if let Some(attributes) = mutation
             .pointer_mut("/Unknown/affected_attributes")
