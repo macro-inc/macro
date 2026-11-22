@@ -64,8 +64,9 @@ CREATE TABLE computer_screen_drives (
     thaw_settled_at TIMESTAMPTZ,
     thaw_settled    TEXT CHECK (thaw_settled IN ('thawed', 'superseded', 'deadMan', 'expired')),
     thaw_tried_at   TIMESTAMPTZ,
-    -- Thaws that failed while the computer ran.
-    thaw_failures   INTEGER     NOT NULL DEFAULT 0
+    -- Thaws that failed while the computer ran, and when the first did.
+    thaw_failures        INTEGER     NOT NULL DEFAULT 0,
+    thaw_first_failed_at TIMESTAMPTZ
 );
 
 -- Ended drives whose thaw isn't settled, in the order the harness retries

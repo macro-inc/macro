@@ -666,7 +666,7 @@ impl ScreenRepo for PgScreenRepo {
     async fn owed_thaws(&self) -> Result<Vec<OwedThaw>, PgScreenError> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, computer_id, started_at, ended_at AS "ended_at!", thaw_failures
+            SELECT id, computer_id, started_at, ended_at AS "ended_at!", thaw_failures, thaw_first_failed_at
             FROM computer_screen_drives
             WHERE ended_at IS NOT NULL AND thaw_settled_at IS NULL
             ORDER BY thaw_tried_at NULLS FIRST, ended_at
@@ -685,6 +685,7 @@ impl ScreenRepo for PgScreenRepo {
                     drive: DriveId::of(computer_id, row.started_at),
                     ended_at: row.ended_at,
                     failures: u32::try_from(row.thaw_failures).unwrap_or(0),
+                    first_failed_at: row.thaw_first_failed_at,
                 }
             })
             .collect())
@@ -712,7 +713,9 @@ impl ScreenRepo for PgScreenRepo {
             r#"
             UPDATE computer_screen_drives
             SET thaw_tried_at = now(),
-                thaw_failures = thaw_failures + CASE WHEN $2 THEN 1 ELSE 0 END
+                thaw_failures = thaw_failures + CASE WHEN $2 THEN 1 ELSE 0 END,
+                thaw_first_failed_at = CASE WHEN $2 THEN coalesce(thaw_first_failed_at, now())
+                                            ELSE thaw_first_failed_at END
             WHERE id = $1
             "#,
             row,

@@ -449,6 +449,8 @@ pub struct OwedThaw {
     pub ended_at: DateTime<Utc>,
     /// Thaws that failed while the computer ran.
     pub failures: u32,
+    /// When the first of them failed.
+    pub first_failed_at: Option<DateTime<Utc>>,
 }
 
 /// How a thaw the guest answered came out.

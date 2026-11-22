@@ -588,10 +588,18 @@ async fn a_thaw_failing_past_the_guests_timer_settles(pool: PgPool) {
         .await
         .unwrap();
 
-    for round in 1..THAW_FAILURES_BEFORE_DEAD_MAN {
+    // Every replica counts failures, so enough of them can pile up before
+    // the guest's timer can have fired: they don't settle the thaw yet.
+    for round in 0..=THAW_FAILURES_BEFORE_DEAD_MAN {
         service.reap().await.unwrap();
         assert_eq!(owed(&pool).await, 1, "round {round}");
     }
+    sqlx::query!(
+        "UPDATE computer_screen_drives SET thaw_first_failed_at = now() - interval '10 minutes'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     service.reap().await.unwrap();
 
     assert_eq!(owed(&pool).await, 0);
@@ -681,6 +689,57 @@ async fn a_backlog_of_dead_thaws_never_starves_a_new_one(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(settled.as_deref(), Some("thawed"));
+}
+
+/// A renewal that found the agent unfrozen freezes it again while its drive
+/// is live, and never for a drive that ended or was taken over since.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unfrozen_drive_is_frozen_again_only_while_live(pool: PgPool) {
+    let (service, signal, _) = service(pool).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    let TakeOver::Taken(lease) = service.take_over(&driver, session).await.unwrap() else {
+        panic!("not taken");
+    };
+
+    service.refreeze(COMPUTER, &lease.drive_id()).await.unwrap();
+    assert_eq!(
+        signal.0.lock().unwrap().last().map(String::as_str),
+        Some("driving macro|alice@example.com")
+    );
+    assert!(service.lease(COMPUTER).await.unwrap().is_some());
+
+    service
+        .hand_back(COMPUTER, driver.user_id.clone(), None)
+        .await
+        .unwrap();
+    let told = signal.0.lock().unwrap().len();
+    service.refreeze(COMPUTER, &lease.drive_id()).await.unwrap();
+    assert_eq!(
+        signal.0.lock().unwrap().len(),
+        told,
+        "a drive that ended was frozen again"
+    );
+}
+
+/// When the agent can't be frozen again either, the drive ends.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unfrozen_drive_that_cannot_refreeze_ends(pool: PgPool) {
+    let (service, signal, _) = service(pool).await;
+    let driver = grant(Mode::Drive);
+    let session = service.open_session(&driver).await.unwrap();
+    let TakeOver::Taken(lease) = service.take_over(&driver, session).await.unwrap() else {
+        panic!("not taken");
+    };
+    signal.1.store(true, Ordering::SeqCst);
+
+    service.refreeze(COMPUTER, &lease.drive_id()).await.unwrap();
+
+    assert_eq!(service.lease(COMPUTER).await.unwrap(), None);
+    assert_eq!(
+        service.drive_end(&lease).await.unwrap(),
+        Some(DriveEnd::Unpaused)
+    );
 }
 
 /// When the guest let the agent run mid-drive and it can't be frozen again,

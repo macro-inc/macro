@@ -1483,7 +1483,7 @@ pub async fn run() -> anyhow::Result<()> {
         &computer_tasks,
         service_shutdown.clone(),
     );
-    let lost_freezes = guest_files.lost_freezes();
+    let unfrozen_drives = guest_files.unfrozen_drives();
     let screens: Arc<computers::screen::Screens> =
         Arc::new(computer_screen::domain::service::ScreenService::new(
             computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
@@ -1505,21 +1505,21 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             computers::screen::access::MacroPeople::new(pool.clone()),
         ));
-    // Ends drives whose agent the guest let run and couldn't freeze again.
-    if let Some(mut lost_freezes) = lost_freezes {
+    // Freezes again (while live) or ends drives a renewal found unfrozen.
+    if let Some(mut unfrozen_drives) = unfrozen_drives {
         let screens = Arc::clone(&screens);
         let shutdown = service_shutdown.clone();
         computer_tasks.spawn(async move {
             loop {
-                let lost = tokio::select! {
+                let unfrozen = tokio::select! {
                     () = shutdown.cancelled() => return,
-                    lost = lost_freezes.recv() => lost,
+                    unfrozen = unfrozen_drives.recv() => unfrozen,
                 };
-                let Some(lost) = lost else {
+                let Some(unfrozen) = unfrozen else {
                     return;
                 };
-                if let Err(error) = screens.freeze_lost(lost.computer_id, &lost.drive).await {
-                    tracing::warn!(error = ?error, "could not end a drive whose freeze was lost");
+                if let Err(error) = screens.refreeze(unfrozen.computer_id, &unfrozen.drive).await {
+                    tracing::warn!(error = ?error, "could not freeze an unfrozen drive's agent again");
                 }
             }
         });

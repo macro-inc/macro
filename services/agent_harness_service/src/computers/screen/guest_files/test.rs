@@ -260,17 +260,19 @@ async fn a_hand_back_on_a_sleeping_computer_is_never_execd_into() {
     assert!(files.running(&[COMPUTER]).await.unwrap().is_empty());
 }
 
-/// The guest's timer fired during an exec outage (keep: thawed), or a late
-/// freeze of an earlier drive took the fence (keep: superseded): the live
-/// drive is frozen again.
+/// The guest's timer fired during an exec outage, or the unit was thawed
+/// or restarted (keep: thawed), a late freeze of an earlier drive took the
+/// fence (keep: superseded), or the timer couldn't be re-armed (failed): the
+/// drive is reported for the screen service to freeze again while it is
+/// live, never frozen again here.
 #[tokio::test]
-async fn a_keep_that_finds_the_agent_unfrozen_freezes_it_again() {
+async fn a_keep_that_finds_the_agent_unfrozen_reports_the_drive() {
     for kept in ["thawed", "superseded", "failed"] {
         let helper = Arc::new(FakeHelper::answering("frozen"));
         helper.answer("keep", kept);
         let tasks = TaskTracker::new();
         let (files, shutdown) = files(&helper, &running(), &tasks);
-        let mut lost = files.lost_freezes().unwrap();
+        let mut unfrozen = files.unfrozen_drives().unwrap();
         let lease = lease();
         files.driving(&lease).await.unwrap();
 
@@ -282,37 +284,33 @@ async fn a_keep_that_finds_the_agent_unfrozen_freezes_it_again() {
             helper.asked(),
             [
                 format!("freeze {}", drive.as_str()),
-                format!("keep {}", drive.as_str()),
-                format!("freeze {}", drive.as_str())
+                format!("keep {}", drive.as_str())
             ],
             "{kept}"
         );
-        assert!(lost.try_recv().is_err(), "{kept}");
+        assert_eq!(
+            unfrozen.try_recv().unwrap(),
+            UnfrozenDrive {
+                computer_id: COMPUTER,
+                drive: lease.drive_id()
+            },
+            "{kept}"
+        );
     }
 }
 
-/// When the agent can't be frozen again either, the drive is reported lost.
 #[tokio::test]
-async fn a_drive_whose_agent_cannot_be_refrozen_is_lost() {
+async fn a_keep_that_finds_the_agent_frozen_reports_nothing() {
     let helper = Arc::new(FakeHelper::answering("frozen"));
-    helper.answer("keep", "thawed");
     let tasks = TaskTracker::new();
     let (files, shutdown) = files(&helper, &running(), &tasks);
-    let mut lost = files.lost_freezes().unwrap();
+    let mut unfrozen = files.unfrozen_drives().unwrap();
     let lease = lease();
-    files.driving(&lease).await.unwrap();
-    helper.answer("freeze", "failed");
 
     files.renewed(&lease).await;
     settle(&tasks, &shutdown).await;
 
-    assert_eq!(
-        lost.try_recv().unwrap(),
-        LostFreeze {
-            computer_id: COMPUTER,
-            drive: lease.drive_id()
-        }
-    );
+    assert!(unfrozen.try_recv().is_err());
 }
 
 /// A computer whose image has no helper can't freeze an agent, and has

@@ -147,9 +147,11 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   0750 directory the sandbox hides whole with `InaccessiblePaths`, since the
   agent is in group `macro` too) runs `files/macro-agent-pause` per
   connection: `freeze|keep|thaw <drive>`, under one `flock`, fenced by the
-  drive in `/run/macro-agent-pause/paused`. A freeze arms a transient timer
-  (`macro-agent-autothaw`, 180 s, re-armed by `keep`) that thaws the unit on
-  its own. The harness asks over the fleet's exec. A restart asked for while
+  drive in `/run/macro-agent-pause/paused`; a drive the harness thawed is
+  remembered (`ended`, the last 64) and never frozen again. A freeze arms a
+  transient timer (`macro-agent-autothaw-*`, 180 s, re-armed by `keep`; a new
+  one is armed before the old one stops) that thaws the unit on its own. A
+  thaw that doesn't take keeps the fence and the timer. The harness asks over the fleet's exec. A restart asked for while
   frozen (`macro-agent-restart`) waits for the thaw. The agent's Xvnc runs
   with `-SendPrimary=0`. `checks.macro-box-agent-pause` tests the helper
   against a fake systemctl, including a late thaw racing a newer freeze. No

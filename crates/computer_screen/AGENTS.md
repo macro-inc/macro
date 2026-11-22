@@ -62,8 +62,10 @@ agent's brain waiting while a person drives.
   at all; the hold on its brain requests stays, for a computer whose agent
   restarted mid-drive. Each renewal keeps it frozen (`renewed`); the guest
   thaws it on its own when no renewal comes. When a renewal finds it
-  unfrozen and it can't be frozen again, `freeze_lost` ends the drive as
-  `unpaused` (with the hand-back notice), and the driver is told. A release thaws it for that
+  unfrozen, `refreeze` freezes it again only while that drive is the live
+  one; when that fails, `freeze_lost` ends the drive as `unpaused` (with the
+  hand-back notice), and the driver is told. `deadMan` settles a thaw only
+  once its first failure is older than `GUEST_TIMER` and a margin. A release thaws it for that
   drive, off the caller's path; the guest fences thaws by drive, so a late
   one never undoes a newer freeze.
 - Notices (`computer.screen.takeOver`/`handBack`) name the driver by name

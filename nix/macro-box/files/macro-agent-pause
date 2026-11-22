@@ -8,11 +8,13 @@
 #
 #   freeze <drive>  freeze the unit for this drive and arm the dead-man timer
 #                   -> frozen | idle (the agent isn't running) | failed
+#                      | superseded (the drive already ended: never again)
 #   keep <drive>    the drive goes on: re-arm the timer
-#                   -> frozen | thawed (nothing is frozen: the timer fired)
+#                   -> frozen | thawed (it isn't frozen: the timer fired, or
+#                      something thawed or restarted the unit)
 #                      | superseded (another drive froze it) | failed
-#   thaw <drive>    the drive ended: thaw, unless a newer drive froze it
-#                   -> running | superseded | failed
+#   thaw <drive>    the drive ended: thaw, unless a newer drive froze it,
+#                   and never freeze it again -> running | superseded | failed
 #   autothaw <drive> the timer ran out without a keep: thaw as above
 #   restart -       restart the agent, or once thawed if it is frozen
 #                   -> restarted | deferred
@@ -57,28 +59,58 @@ fi
 
 state() { "$systemctl" show -P "$1" "$unit" 2>/dev/null || true; }
 paused_by() { cat "$dir/paused" 2>/dev/null || true; }
-# Arm (or re-arm) the timer for this drive; fails when it can't be.
+# Drives the harness thawed: they ended, so they never freeze again.
+ended() { grep -qx "$1" "$dir/ended" 2>/dev/null; }
+remember_ended() {
+  { cat "$dir/ended" 2>/dev/null || true; printf '%s\n' "$1"; } | tail -n 64 >"$dir/ended.new"
+  mv -f "$dir/ended.new" "$dir/ended"
+}
+# Point the fence at $1 (empty: none).
+fence() {
+  if [ -n "$1" ]; then printf '%s\n' "$1" >"$dir/paused"; else rm -f "$dir/paused"; fi
+}
+# Arm a fresh timer for $1, then stop the one it replaces: a failure leaves
+# the old timer armed. Fails when the new one can't be armed.
 arm() {
-  "$systemctl" stop "$timer.timer" "$timer.service" >/dev/null 2>&1 || true
-  "$systemd_run" --quiet --collect --unit="$timer" --on-active="$after" \
-    "$self" autothaw "$drive" >/dev/null 2>&1
+  local name
+  name="$timer-$(date +%s%N)"
+  "$systemd_run" --quiet --collect --unit="$name" --on-active="$after" \
+    "$self" autothaw "$1" >/dev/null 2>&1 || return 1
+  disarm
+  printf '%s\n' "$name" >"$dir/timer"
+}
+disarm() {
+  local old
+  old=$(cat "$dir/timer" 2>/dev/null || true)
+  if [ -n "$old" ]; then
+    "$systemctl" stop "$old.timer" >/dev/null 2>&1 || true
+  fi
+  rm -f "$dir/timer"
+}
+active() {
+  case "$(state ActiveState)" in
+    active | activating | reloading) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 case "$verb" in
   freeze)
-    printf '%s\n' "$drive" >"$dir/paused"
-    if ! arm; then
-      rm -f "$dir/paused"
+    if ended "$drive"; then
+      echo superseded
+      exit 0
+    fi
+    previous=$(paused_by)
+    fence "$drive"
+    if ! arm "$drive"; then
+      fence "$previous"
       echo failed
       exit 0
     fi
-    case "$(state ActiveState)" in
-      active | activating | reloading) ;;
-      *)
-        echo idle
-        exit 0
-        ;;
-    esac
+    if ! active; then
+      echo idle
+      exit 0
+    fi
     "$systemctl" freeze "$unit" >/dev/null 2>&1 || true
     if [ "$(state FreezerState)" = frozen ]; then echo frozen; else echo failed; fi
     ;;
@@ -88,7 +120,10 @@ case "$verb" in
       echo thawed
     elif [ "$current" != "$drive" ]; then
       echo superseded
-    elif arm; then
+    elif active && [ "$(state FreezerState)" != frozen ]; then
+      # Fenced, but running: something thawed or restarted the unit.
+      echo thawed
+    elif arm "$drive"; then
       echo frozen
     else
       echo failed
@@ -96,19 +131,22 @@ case "$verb" in
     ;;
   thaw | autothaw)
     current=$(paused_by)
+    if [ "$verb" = thaw ]; then
+      remember_ended "$drive"
+    fi
     if [ -n "$current" ] && [ "$current" != "$drive" ]; then
       echo superseded
       exit 0
     fi
-    rm -f "$dir/paused"
-    if [ "$verb" = thaw ]; then
-      "$systemctl" stop "$timer.timer" >/dev/null 2>&1 || true
-    fi
     "$systemctl" thaw "$unit" >/dev/null 2>&1 || true
     if [ "$(state FreezerState)" = frozen ]; then
+      # Still frozen: the fence and the timer stay, so it is retried, and
+      # the timer bounds it meanwhile.
       echo failed
       exit 0
     fi
+    fence ""
+    disarm
     # A restart asked for while it was frozen.
     if [ -e "$dir/restart" ]; then
       rm -f "$dir/restart"
