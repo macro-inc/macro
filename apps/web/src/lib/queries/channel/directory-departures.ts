@@ -324,8 +324,11 @@ export function createDepartureRecheck(
         read.kind === 'read' &&
         !read.channel?.isParticipant
       ) {
-        // Rejoins kept landing during every read: check again later.
-        retry(id, departure, departure.repair);
+        // Rejoins kept landing during every read: check again later. The
+        // last answer, written over those rejoins, can leave the cache
+        // showing them out, so the next check reads the primary whatever it
+        // shows.
+        retry(id, departure, true);
         return 'rejoined_during_check';
       }
       if (read.kind === 'failed') {

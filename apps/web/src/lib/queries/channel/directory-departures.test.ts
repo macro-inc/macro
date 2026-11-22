@@ -365,6 +365,34 @@ describe('checking a channel the viewer left again', () => {
     expect(answers).toHaveLength(4);
   });
 
+  it('reads the primary again after rejoins during every read even when the cache ends showing the viewer out', async () => {
+    const answers: ((read: PrimaryChannelRead) => void)[] = [];
+    const h = setup(
+      () =>
+        new Promise((resolve) => {
+          answers.push(resolve);
+        })
+    );
+    leave(h, 'deletion');
+    comeBack(h);
+    await vi.advanceTimersByTimeAsync(RECHECKS[0]);
+
+    for (let read = 0; read < 3; read += 1) {
+      h.recheck.rejoin(channelUuid('gone'));
+      answers[read]?.({ kind: 'read', channel: null });
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(checks()[0]?.attrs['channel_directory.departure_outcome']).toBe(
+      'rejoined_during_check'
+    );
+    // The last answer was written over the rejoins: the cache shows the
+    // viewer out, though they may be in.
+    h.show(complete(channel('kept')));
+
+    await vi.advanceTimersByTimeAsync(RECHECKS[1] - RECHECKS[0]);
+    expect(answers).toHaveLength(4);
+  });
+
   it('reads once more when a scan shows the viewer joined again while a read that shows them out was out', async () => {
     const answers: ((read: PrimaryChannelRead) => void)[] = [];
     const h = setup(
