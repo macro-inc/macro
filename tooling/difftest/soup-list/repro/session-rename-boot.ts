@@ -1,5 +1,5 @@
 /**
- * Repro (bun run repro/session-rename-boot.ts [rounds]): renames an agent
+ * Repro (bun run repro/session-rename-boot.ts [rounds] [delayMs,...]): renames an agent
  * session in the app right after both apps reload, as a sequence step after a
  * reload does, and times when each side's Quick Access sessions list shows the
  * new name (or never, within 30 s). Per round: reload both pages, mount and
@@ -13,6 +13,7 @@ import { closeBrowser, launch, loadProbe, openUser, type Side } from '../lib/bro
 import { pageLoad } from '../lib/inflight';
 import { mount, settle, unmount, write } from '../lib/probe';
 const rounds = Number(process.argv[2] ?? 6);
+const delays = process.argv[3]?.split(',').map(Number);
 const tag = Date.now().toString(36);
 const email = `owner@wrepro-${tag}.difftest.dev`;
 const owner = await new ApiUser('https://localhost:23209', email).login();
@@ -43,7 +44,8 @@ try {
       await loadProbe(s, side, probe[side]);
     })));
     for (const side of sides) await mount(s.pages[side], 'qa', 'qa.agentSessions', {});
-    for (const side of sides) await settle(s.pages[side], 'qa', { timeoutMs: 60_000 });
+    if (delays) await Bun.sleep(Math.max(0, reloadAt + delays[r % delays.length] - Date.now()));
+    else for (const side of sides) await settle(s.pages[side], 'qa', { timeoutMs: 60_000 });
     const id = ids[r % ids.length];
     const name = `Renamed ${r} ${tag}`;
     const t0 = Date.now();
@@ -54,7 +56,7 @@ try {
       await Bun.sleep(250);
     }
     await Bun.sleep(3_000); // let the spans of the window export
-    const row: Record<string, unknown> = { round: r, reloadToWriteMs: t0 - reloadAt, writes: writes.join('/') };
+    const row: Record<string, unknown> = { round: r, delayMs: delays?.[r % delays.length] ?? null, reloadToWriteMs: t0 - reloadAt, writes: writes.join('/') };
     for (const side of sides) {
       const ready = s.spans[side].filter((x) => x.name === 'graphql_cache.host_ready' && x.start !== undefined && x.start >= reloadAt).map((x) => (x.start as number) - t0);
       const shownName = (await names(side)).find((e) => e.id === id)?.name ?? null;
