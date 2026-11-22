@@ -1,0 +1,76 @@
+crates/call/src/domain/service/test.rs
+  s_e4dab6ab069ba5::t_a070ae67368ddc 604,646,970,1008,1010,1059,1097,1099,1266,1358,1412,1443,1471,4332,4436
+  s_e4dab6ab069ba5::t_f9eda88fa4c83b 1620,1622,1624,1650,1652,1701,1703,1725
+  s_e4dab6ab069ba5::t_7bba89d5888c98 3250-3251,3927,3944
+crates/call/src/domain/service/test/meeting_startup.rs
+  s_e4dab6ab069ba5::t_a070ae67368ddc 8,173,303,337,390
+  s_e4dab6ab069ba5::t_dcafede8158523 245
+  s_e4dab6ab069ba5::t_47253554e77588 365-368,370-378,380-384,386-389
+crates/call/src/domain/service/orphan_rooms.rs
+  s_e4dab6ab069ba5::t_5e05f5cffbfd44 6-11,58,60-61,63
+crates/call/src/domain/service/test/join.rs
+  s_e4dab6ab069ba5::t_a070ae67368ddc 163
+crates/call/src/domain/ports.rs
+  s_e4dab6ab069ba5::t_c3e78bc5a78355 76-77,81,337-340,344,371-375,379,383,387,390-391,393-395,398,401-407,419-420,430-433,437
+crates/call/src/domain/service/test/channel_startup.rs
+  s_e4dab6ab069ba5::t_dcafede8158523 115
+crates/call/src/domain/service/meetings.rs
+  s_e4dab6ab069ba5::t_5e05f5cffbfd44 25-26,36,38,41-49,51,607-609,611-613,743-748
+  s_e4dab6ab069ba5::t_76e9012a9fbd7d 750
+crates/call/src/domain/service.rs
+  s_e4dab6ab069ba5::t_5e05f5cffbfd44 1704,1922,1925,2165
+crates/call/src/domain/service/test/orphan_rooms.rs
+  s_e4dab6ab069ba5::t_907350198a29f4 43-44,49,51,80,105,139,145-152,156-163,165-173,186,225-226,228-235
+crates/call/src/outbound/pg_call_repo.rs
+  s_be29728584c444::t_b313a478340f62 339,343,1088,1092-1095,1097,1099,1107-1120,1122,1124,1157-1162,1169,1171,1175,1177,1179-1180,1182-1183,1185,1188,1190-1192,1194-1195,1197-1200,1203,1207-1230,1287-1304,1311,1315-1316,1320,1324-1326,1337,1356,1365,1370-1374,1377,1381,1390,1394-1412
+crates/call/src/outbound/pg_call_repo/lifecycle.rs
+  s_ebcb6b1bfaf7ce::t_4ac359024bf128 10,19-21,27,31
+crates/call/src/outbound/pg_call_repo/meetings/test.rs
+  s_9671c7bc652ab5::t_eac58334063bb0 282-284,342-344
+crates/call/src/outbound/pg_call_repo/call_list/test.rs
+  s_e4dab6ab069ba5::t_7557898981e928 279-281
+crates/call/src/outbound/pg_call_repo/team_share/test.rs
+  s_e4dab6ab069ba5::t_ffc2b79bb9576d 20-21,466,493,513,544,550
+crates/call/src/outbound/pg_call_repo/test.rs
+  s_e4dab6ab069ba5::t_fbbbe644dae672 61-62,173,685,761,799,880,898,904,909-911,921,927,970,1038-1041,1044-1045,1106,1108,1153,1191-1192,1195,1295,1312,1415,1432,1458,1475,3441-3445,3448-3452,3460-3464,3486-3490,3493,3544,3662,3744,3795,3979,3982,3984,3990,3994,4000,4015-4016,4021
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "212214a1e8f9e4899d8f3222e7a83a20082640b1",
+  "prompts": {},
+  "sessions": {
+    "s_9671c7bc652ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a46e4f3c-7142-45e8-9694-084925c538ce",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_be29728584c444": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5746c7bf-29e9-4305-95dc-24b74d8dccb4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_ebcb6b1bfaf7ce": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "56ea889e-d12a-4b7f-8492-51a639a581b9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

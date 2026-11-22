@@ -1,0 +1,30 @@
+crates/macro_db_client/src/call_record/get.rs
+  s_e4dab6ab069ba5::t_244d0bba6b5457 126-127
+services/call_recording_preview_handler/AGENTS.md
+  s_e4dab6ab069ba5::t_2c2e55745d5756 23-25
+crates/call/src/outbound/pg_call_repo.rs
+  s_e4dab6ab069ba5::t_244d0bba6b5457 1753-1754,1789-1790,1795-1805
+crates/call/AGENTS.md
+  s_e4dab6ab069ba5::t_ed3cd402bfd0af 17-21,28-30,40-45,86-101,110-114
+  s_e4dab6ab069ba5::t_2c2e55745d5756 80,102
+crates/macro_db_client/AGENTS.md
+  s_e4dab6ab069ba5::t_2c2e55745d5756 59-63
+services/document_storage_service/AGENTS.md
+  s_e4dab6ab069ba5::t_bb6aee03e73596 138-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6f1cf6dd8ed03e0b4e712ece11a14bf806c1a78d",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

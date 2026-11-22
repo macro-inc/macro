@@ -1,0 +1,54 @@
+crates/call/src/outbound/scheduled_call_resume.rs
+  s_e4dab6ab069ba5::t_a9df7b6e3fa69e 1-34
+services/document_storage_service/src/server.rs
+  s_e4dab6ab069ba5::t_a9df7b6e3fa69e 1062-1069
+crates/call/src/outbound/pg_call_repo/meetings/test.rs
+  s_e4dab6ab069ba5::t_ccd80c1c504105 156,159-161,292,295-297,368,371-373
+  s_e4dab6ab069ba5::t_496229460b7922 2,57-58,60-63,157,234,293,369
+crates/call/src/domain/ports.rs
+  s_e4dab6ab069ba5::t_a9df7b6e3fa69e 1430-1431
+  s_e4dab6ab069ba5::t_f913444d2f2992 29,160-166,171-172,1429,1432-1435
+  s_e4dab6ab069ba5::t_fe53d3906a1684 30
+  s_e4dab6ab069ba5::t_4be8a821248d7e 1436-1437
+crates/call/src/outbound/mod.rs
+  s_e4dab6ab069ba5::t_fe53d3906a1684 17-18
+crates/call/src/domain/service.rs
+  s_e4dab6ab069ba5::t_a9df7b6e3fa69e 71,104,145,184-190,242,269,296
+crates/call/src/outbound/pg_call_repo.rs
+  s_e4dab6ab069ba5::t_f6a55803f95fe7 420-422
+  s_e4dab6ab069ba5::t_fe53d3906a1684 33
+crates/call/src/outbound/pg_call_repo/meetings.rs
+  s_e4dab6ab069ba5::t_f6a55803f95fe7 4,248-249,251-256,259-270,276,281-315,318,320,336-347,395-432
+  s_e4dab6ab069ba5::t_b03a1758bbe8c2 433
+crates/call/src/domain/service/meetings.rs
+  s_e4dab6ab069ba5::t_391c0bfc4ab959 6,304-312,316-331,339,341,355,357-360,369-373,384-385,403-411,417-424,464-466,573-575
+  s_e4dab6ab069ba5::t_fe53d3906a1684 412-416
+crates/call/src/outbound/pg_call_repo/test.rs
+  s_e4dab6ab069ba5::t_496229460b7922 3418,3481,3527,3548,3580-3581,3583-3585,3648,3674,3694,3733,3780
+  s_e4dab6ab069ba5::t_abed5e3e0c99f1 3
+  s_e4dab6ab069ba5::t_ccd80c1c504105 3417,3419-3421,3480,3482-3485,3526,3528-3531,3547,3549-3551,3693,3695-3697,3732,3734-3736,3779,3781-3783
+crates/call/src/domain/service/test/meeting_startup.rs
+  s_e4dab6ab069ba5::t_fe53d3906a1684 2,114,117,127,218-220,282
+crates/call/src/domain/meetings/test.rs
+  s_e4dab6ab069ba5::t_a120e3f6a0338a 117-169
+crates/call/src/domain/meetings.rs
+  s_e4dab6ab069ba5::t_a120e3f6a0338a 3,81-102,138
+  s_e4dab6ab069ba5::t_f913444d2f2992 7,103-137,139
+  s_e4dab6ab069ba5::t_818a4428dd2a11 140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "72e01da223e1ab2ce1288259b24cf313433822f6",
+  "prompts": {},
+  "sessions": {
+    "s_e4dab6ab069ba5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cd9cc4b6-e475-4672-bb0c-d61b5198aec2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
