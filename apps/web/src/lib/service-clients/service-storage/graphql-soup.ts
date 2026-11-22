@@ -130,6 +130,7 @@ import {
 } from './graphql/generated/graphql';
 import { isActivityUpdatesSubscription } from './graphql-activity-updates';
 import { shouldRetryGraphqlMutation } from './graphql-mutation-retry';
+import { channelMembershipReceiptExchange } from './channel-membership';
 import { notificationReceiptExchange } from './graphql-notification-receipt';
 import {
   createGraphqlSoupSubscriptionsLifecycle,
@@ -590,6 +591,7 @@ function getUncachedRealtimeClient(): Client {
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
+      channelMembershipReceiptExchange(),
       sessionSubscriptionExchange(
         websocketClient,
         stripGraphqlSoupClientDirectives
@@ -1059,6 +1061,7 @@ export function getGraphqlSoupClient(): Client {
             isUncachedSubscription: isActivityUpdatesSubscription,
           }),
           notificationReceiptExchange(publishNotificationPatch),
+          channelMembershipReceiptExchange(),
           sessionSubscriptionExchange(
             graphqlWsClient,
             stripGraphqlSoupClientDirectives
