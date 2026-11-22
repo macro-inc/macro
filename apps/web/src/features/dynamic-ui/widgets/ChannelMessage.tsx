@@ -5,6 +5,7 @@ import { openThreadMessage } from '@channel/StandaloneThread/open-thread-message
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { useChannelName, useChannelType } from '@core/context/channels';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import { Button, Item, Card as UiCard } from '@ui';
 import { Card, CardBody } from '../../agent-cards/components/kit/card';
 import type { WidgetOf } from '../view';
@@ -54,19 +55,24 @@ export function ChannelMessage(props: ChannelMessageProps) {
               size="sm"
             />
           </Item.Media>
-          <Item.Content class="gap-0">
+          <Item.Content class="min-w-0 gap-0">
             <UiCard.Title class="truncate">{title()}</UiCard.Title>
             <UiCard.Description>
               {props.caption ?? t('agentCards.channelThread')}
             </UiCard.Description>
           </Item.Content>
           <Item.Actions>
+            {/* On a phone the label gives way to the channel name: an icon
+                button, still named for screen readers and by its tooltip. */}
             <Button
               variant="ghost"
               size="sm"
+              aria-label={t('agentCards.openInChannel')}
+              tooltip={t('agentCards.openInChannel')}
               onClick={() => open(props.messageId)}
             >
-              {t('agentCards.openInChannel')}
+              <ArrowSquareOutIcon class="size-4 sm:hidden" aria-hidden="true" />
+              <span class="max-sm:hidden">{t('agentCards.openInChannel')}</span>
             </Button>
           </Item.Actions>
         </Item>
