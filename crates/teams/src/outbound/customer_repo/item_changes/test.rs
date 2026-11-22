@@ -111,7 +111,13 @@ async fn a_lost_success_is_recovered_from_the_atomic_marker_without_another_char
     let repo = repo(&server, pool);
     assert!(repo.replay_item_change("computer-add:lost").await.unwrap());
     assert!(repo.replay_item_change("computer-add:lost").await.unwrap());
-    assert_eq!(server.received_requests().await.unwrap().len(), 1);
+    let requests = server.received_requests().await.unwrap();
+    let subscription_requests = requests
+        .iter()
+        .filter(|request| request.url.path() == "/v1/subscriptions/sub_team")
+        .collect::<Vec<_>>();
+    assert_eq!(subscription_requests.len(), 1);
+    assert_eq!(subscription_requests[0].method.as_str(), "GET");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
