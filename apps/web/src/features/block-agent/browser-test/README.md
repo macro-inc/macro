@@ -8,6 +8,10 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome \
 bunx playwright test --config src/features/block-agent/browser-test/playwright.config.ts
 ```
 
+`composer.html?model=<id>` gives the session composer the model selector a
+session passes it; `narrow-composer.browser.e2e.ts` checks at a 390 px window
+that a long model name truncates and Send stays inside the composer.
+
 `queued.html` renders the queued-message rows over the real composer
 (`?count=N` entries, `?light` for the light theme) with an in-page log of
 edits, removals and steers; `queued.browser.e2e.ts` checks that an open row

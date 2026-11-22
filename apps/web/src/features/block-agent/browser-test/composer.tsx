@@ -1,4 +1,5 @@
 import '@app/index.css';
+import { UnifiedModelSelector } from '@app/features/agents-view/model-selector';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
@@ -33,8 +34,12 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   interactionForUser: () => undefined,
 };
 
-/** The composer an agent session block mounts. */
+/**
+ * The composer an agent session block mounts. `?model=<id>` adds the model
+ * selector a session passes it, with that model chosen.
+ */
 function Fixture() {
+  const model = new URLSearchParams(location.search).get('model');
   return (
     <main class="flex min-h-screen flex-col justify-end bg-page p-4 text-ink">
       <div class="mx-auto w-full max-w-2xl">
@@ -42,6 +47,20 @@ function Fixture() {
           onSend={() => {}}
           onAttachFiles={() => {}}
           commands={() => []}
+          modelControl={
+            model ? (
+              <UnifiedModelSelector
+                state={{
+                  model,
+                  models: [{ id: model, label: model }],
+                  suggestedModels: [{ id: model, label: model }],
+                  onModel: () => {},
+                  onEffort: () => {},
+                  onSpeed: () => {},
+                }}
+              />
+            ) : undefined
+          }
         />
       </div>
     </main>
