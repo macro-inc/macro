@@ -12613,9 +12613,10 @@ enum SoupChannelReads {
 	Served only for channel directory pages: a timestamp sort (not NAME,
 	PROPERTY or NOTIFIED_AT), newest first, at most 100 items, channel
 	threads excluded by a nil-id filter, no `favoritesOnly: true`, no CRM
-	company or contact (neither `crmAssociation` nor a `crmAssociated`
-	literal anywhere in the document filter; a CRM email scope is
-	allowed), and either no channel filter or one that admits only
+	association of any kind (company, contact or activity), neither as
+	`crmAssociation` nor as a `crmAssociated` literal anywhere in the
+	document filter (a CRM email scope is allowed), and either no
+	channel filter or one that admits only
 	channels it names by id: at most 100 id literals, with nothing beside
 	them but at most two isParticipant literals in the whole tree. Any
 	other page is refused.

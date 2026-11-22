@@ -31,10 +31,13 @@ viewer pattern), which apply to every type defined here.
   never falling back to the replica service. It admits only channel directory
   pages (`SoupRequest::is_channel_directory_page`: a timestamp sort, newest
   first, at most 100 items, channel threads excluded, no `favoritesOnly: true`
-  and no CRM company or contact, whether `crmAssociation` or a
-  `crmAssociated` literal anywhere in the document filter (Soup turns both
-  into channel ids after the check, and reads a record's references through
-  the channel repository; a CRM email scope stays allowed), and no channel
+  and no CRM association of any kind (company, contact or activity), whether
+  `crmAssociation` or a `crmAssociated` literal anywhere in the document
+  filter (Soup resolves each record after the check, reading a company's or
+  contact's references through the channel repository; it rewrites a
+  document literal into the record's document ids, and `crmAssociation` also
+  restricts every source, channels included, to the record's entities; a CRM
+  email scope stays allowed), and no channel
   filter or one admitting only channels it names by id, at most 100 id
   literals with nothing beside them but at most two `isParticipant` literals
   in the whole tree) and refuses the rest,

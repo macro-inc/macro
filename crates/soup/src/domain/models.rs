@@ -473,15 +473,20 @@ impl SoupRequest<EntityFilterAst> {
     /// continuation of a timestamp-sorted Soup, newest first, at most
     /// [`CHANNEL_DIRECTORY_PAGE_LIMIT`] items, with channel threads left out
     /// and a channel filter the request bounds (`channel_directory::bounded`).
-    /// It carries no `favorites_only: true` and no CRM record, whether as the
-    /// request's association or as a `CrmAssociated` literal anywhere in its
-    /// document filter: Soup resolves either before any source query,
-    /// turning it into channel ids (as many as the favorites or the record
-    /// hold) and reading a record's references through the channel
-    /// repository. A CRM email scope is a separate field the email leg reads,
-    /// and stays allowed. Only such a page may read its channels from the
-    /// primary database: it costs what one page of the REST channel list
-    /// costs there.
+    /// It carries no `favorites_only: true`, which Soup turns into the ids of
+    /// every favorite, and no CRM association of any kind (company, contact
+    /// or activity), whether the request's association or a `CrmAssociated`
+    /// literal anywhere in its document filter, under NOT too. Soup resolves
+    /// each such record before any source query, reading a company's or a
+    /// contact's references through the channel repository; it rewrites a
+    /// document literal into the record's document ids, and the request's
+    /// association also restricts every source to the record's entities,
+    /// the channel filter to as many channel ids as the record holds. A CRM
+    /// email scope is a separate field the email leg reads, and stays
+    /// allowed. Only such a page may read its channels from the primary
+    /// database, where its channel query is the REST channel list's joined
+    /// query or, for named ids whose filter tests participation without
+    /// requiring it, the named read those ids bound.
     ///
     /// Newest first because the channel query fetches descending and an
     /// ascending page reverses that slice, so its next page would read nearly
