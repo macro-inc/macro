@@ -474,3 +474,45 @@ async fn the_route_walker_does_not_run_the_handler_of_a_route_that_declares_a_ca
     assert!(undeclared.is_empty());
     assert_eq!(RAN.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn a_decision_an_extractor_makes_again_is_the_one_the_response_and_span_describe() {
+    async fn decides_again(Extension(slot): Extension<DecisionSlot>) -> StatusCode {
+        let refusal = Refusal {
+            code: RefusalCode::PersonOnly,
+            category: Category::CredentialMint,
+            caller: Caller::AccountManager,
+            enforcement: Enforcement::Enforced,
+        };
+        slot.set(RouteDecision {
+            category: Category::CredentialMint,
+            verdict: Verdict::Refused(refusal),
+        });
+        StatusCode::FORBIDDEN
+    }
+    let router = Router::new().route("/keys", post(Category::CredentialMint, decides_again));
+    let mut request = Request::builder()
+        .method(Method::POST)
+        .uri("/keys")
+        .body(Body::empty())
+        .unwrap();
+    request
+        .extensions_mut()
+        .insert(resolved(Caller::ApiCredential));
+
+    let response = router.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        response
+            .extensions()
+            .get::<ResponseSpanFields>()
+            .map(|fields| fields.0.clone()),
+        Some(vec![
+            ("route_policy.category", "credential_mint"),
+            ("route_policy.outcome", "refused"),
+            ("route_policy.caller", "account_manager"),
+            ("route_policy.code", "person_only"),
+        ])
+    );
+}

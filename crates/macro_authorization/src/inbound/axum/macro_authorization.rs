@@ -6,7 +6,7 @@ use ::axum::{
 };
 
 use macro_auth::credential::{CredentialKind, TokenSource};
-use route_policy::{ActiveRollout, Caller, NoRollout, RouteDecision, Verdict};
+use route_policy::{ActiveRollout, Caller, DecisionSlot, NoRollout, RouteDecision, Verdict};
 
 use crate::{CredentialOrigin, MacroAuthorization, MacroAuthorizationService};
 
@@ -141,6 +141,9 @@ fn refuse_account_manager_route(parts: &mut Parts) -> Result<(), MacroAuthorizat
         None => RouteDecision::new(caller, decided.category, safe_method, preflight, &NoRollout),
     };
     parts.extensions.insert(decision);
+    if let Some(slot) = parts.extensions.get::<DecisionSlot>() {
+        slot.set(decision);
+    }
     let Verdict::Refused(refusal) = decision.verdict else {
         return Ok(());
     };

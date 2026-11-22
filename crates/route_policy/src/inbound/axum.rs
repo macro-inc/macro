@@ -49,8 +49,8 @@ use macro_tower_layers::ResponseSpanFields;
 use tower::{Layer, Service};
 
 use crate::{
-    ActiveRollout, Caller, Category, NO_CALLER_MESSAGE, NoRollout, Refusal, RefusalCode,
-    ResolvedCaller, RouteDecision, Verdict,
+    ActiveRollout, Caller, Category, DecisionSlot, NO_CALLER_MESSAGE, NoRollout, Refusal,
+    RefusalCode, ResolvedCaller, RouteDecision, Verdict,
 };
 
 macro_rules! method_constructor {
@@ -211,8 +211,11 @@ where
             ))));
         }
         request.extensions_mut().insert(decision);
+        let slot = DecisionSlot::new(decision);
+        request.extensions_mut().insert(slot.clone());
         let handling = self.inner.call(request);
-        Box::pin(async move { Ok(with_decision(handling.await?, decision)) })
+        // An extractor may decide again; the response describes its decision.
+        Box::pin(async move { Ok(with_decision(handling.await?, slot.get())) })
     }
 }
 

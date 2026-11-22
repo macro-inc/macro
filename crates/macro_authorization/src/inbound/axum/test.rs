@@ -2358,3 +2358,28 @@ async fn a_manager_credential_is_held_to_what_an_account_manager_may_do() {
     .await;
     assert_eq!(status, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn a_refused_manager_key_leaves_the_manager_decision_on_the_response() {
+    let router = categorized_router();
+    let response = router
+        .oneshot(empty_body(user_api_key_request("/keys", MANAGER_API_KEY)))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    let decision = response
+        .extensions()
+        .get::<route_policy::RouteDecision>()
+        .copied()
+        .expect("the response carries the route decision");
+    assert_eq!(decision.category, route_policy::Category::CredentialMint);
+    assert!(
+        matches!(
+            decision.verdict,
+            route_policy::Verdict::Refused(refusal)
+                if refusal.caller == route_policy::Caller::AccountManager
+        ),
+        "{decision:?}"
+    );
+}
