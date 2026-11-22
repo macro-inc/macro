@@ -132,13 +132,23 @@ empty, so their queued writes stay with the build that wrote them. When the
 failed open cannot read their version, it fails and keeps them. A recovery
 open, which the coordinator asks for after an open fails or a worker is lost
 mid-open, decides before wiping its own files: it counts an attempt in the
-marker, takes the older name's lock, opens the files only to read their
-version, and hands them back if it is still the moved one; the marker goes only
-once it has acted. While it cannot decide (the lock is busy, the marker or the
-version does not read, the files do not connect, or their WAL still holds
-frames) it fails and keeps everything, and the coordinator retries it. After
-three such attempts the next recovery discards the files unopened, so files
-that never open cannot keep the cache from starting. Files at a newer version
+marker (which reserves its first attempts' bytes, so counting overwrites one in
+place and needs no more storage), takes the older name's lock, opens the files
+only to read their version, and hands them back if it is still the moved one;
+the marker goes only once it has acted. While it cannot decide (the lock is
+busy, the version does not read, the files do not connect, or their WAL still
+holds frames) it fails and keeps everything, and the coordinator retries it.
+After three such attempts the next recovery discards the files unopened, so
+files that never open cannot keep the cache from starting. An attempt that
+cannot be counted still decides if it can, and discards where it cannot, since
+nothing would bound the next one. A marker that does not read is counted the
+same way in a file beside it (`<name>-adopting-unread`), and the fourth such
+recovery discards the files without knowing their version. A read that returns
+fewer bytes than the file holds is an error, never a shorter marker or WAL
+header. The coordinator retries a failed recovery a few times at once, so this
+usually resolves within one page load; a recovery that meets a busy sync
+handle fails as `storage-busy`, which stops those retries, and the next page
+load goes on counting. Files at a newer version
 were upgraded here, so the older build could not open them, and files whose
 older name holds a database again cannot go back over it; both are reset
 (`discarded`). Once the moved files have opened they are this build's own.
@@ -159,9 +169,18 @@ lose them instead, and each needs a worker lost or an open failing mid-upgrade:
   newer version, so it is discarded. An open slower than the coordinator's
   database watchdog (20 seconds) counts as lost; the largest caches can reach
   that on their first open;
-- the moved files cannot be read through three recovery opens in a row (OPFS
-  or connect failures, or a version that does not read): the next one discards
-  them unread, though the older build might still have opened them.
+- three recovery opens cannot decide where the moved files go, for any reason
+  above: OPFS or connect failures, a marker or version that does not read, a
+  WAL that still holds frames, the older name's lock held by a tab of the older
+  build through all three, or recoveries lost after counting their attempt. The
+  next one discards the files unread, though the older build might still have
+  opened them;
+- the first carry-forward into storage 12 only: a tab of a build from before
+  upgrades that is already at storage 12 shares this build's name but knows
+  nothing of markers. If it opens that name after the adopting worker was lost
+  or let it go, while a move is split or the moved files are still at 11, it
+  resets them as any half pair or older file. Builds that use the name of any
+  later storage version all know the marker.
 
 Already true before upgrades, and unchanged: a worker lost after its open was
 ready but before the coordinator saw it wipes the file on the recovery open; an
