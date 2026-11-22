@@ -239,6 +239,19 @@ fn a_problem_never_repeats_what_the_view_holds() {
     }
 }
 
+/// The model passes the schema's root to `execution.views.present`, so the
+/// root is the view itself: a schema rooted at a `view` property had the model
+/// present `{ view: { widgets } }`, which is missing "widgets".
+#[test]
+fn the_present_view_schema_is_the_view_itself() {
+    let schema: serde_json::Value =
+        serde_json::from_str(&present_view_schema()).expect("the schema is JSON");
+    assert_eq!(schema["title"], "PresentView");
+    assert_eq!(schema["$ref"], "#/$defs/View");
+    assert_eq!(schema["$defs"]["View"]["required"], json!(["widgets"]));
+    assert!(schema.get("properties").is_none());
+}
+
 /// Maps are sorted: serde_json keeps insertion order only when a build
 /// unifies its `preserve_order` feature.
 #[test]
