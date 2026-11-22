@@ -107,7 +107,11 @@ the tags when the flag goes.
 ## Gotchas
 
 - Group ids and operation keys are stored: renaming one in the registry
-  orphans its rows, which then resolve to nothing (always).
+  orphans its rows, which then resolve to nothing (always). Moving operations
+  to another group takes a migration copying the old group's `group_action`
+  rows (both policy tables and the session overlay), as
+  `20261122220000_agent_tool_permission_channel_admin.sql` did for
+  `channel_admin`.
 - The handler decides nothing: it maps the credential to `Credential` and the
   service applies every rule. Loosening and reset need `PersonSession`.
 - With the rollout off for the caller, every route answers 404.
