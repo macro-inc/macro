@@ -1041,6 +1041,12 @@ created task in place.
    desktop) as soon as the server returns, then copies the task link in the
    background. A denied or prompted clipboard write never delays or replaces
    that toast.
+   Created from a project's Tasks section (its **Add task** → **New task**),
+   the task shows in that list on submit, dimmed and inert (no open, select,
+   drag or menu) until the server answers, then takes its real id; the
+   project's empty state gives way to the list at once. A failed create
+   removes the row, and the composer's **Task creation was not confirmed**
+   toast offers **Recover draft**.
 
 The property row adapts when the launching pane supplies a task-composer preset.
 The app shell's creation-context provider snapshots the focused pane's preset
