@@ -921,13 +921,15 @@ fn channel_filter_names_channels(expr: &Expr<ChannelLiteral>) -> bool {
 #[cfg(feature = "list")]
 fn channel_filter_keys_channels(expr: &Expr<ChannelLiteral>) -> bool {
     /// Whether the rendered subtree keys channels, and whether its negation
-    /// does; `None` when it renders to nothing.
-    type Keys = Option<(bool, bool)>;
-    let either =
-        |a: Keys, b: Keys, join: fn((bool, bool), (bool, bool)) -> (bool, bool)| match (a, b) {
-            (None, other) | (other, None) => other,
-            (Some(a), Some(b)) => Some(join(a, b)),
-        };
+    /// does.
+    type Sides = (bool, bool);
+    /// `None` when the subtree renders to nothing.
+    type Keys = Option<Sides>;
+    type Join = fn(Sides, Sides) -> Sides;
+    let either = |a: Keys, b: Keys, join: Join| match (a, b) {
+        (None, other) | (other, None) => other,
+        (Some(a), Some(b)) => Some(join(a, b)),
+    };
     expr.collapse_frames(|frame: filter_ast::ExprFrame<Keys, _>| match frame {
         filter_ast::ExprFrame::And(a, b) => either(a, b, |a, b| (a.0 || b.0, a.1 && b.1)),
         filter_ast::ExprFrame::Or(a, b) => either(a, b, |a, b| (a.0 && b.0, a.1 || b.1)),
