@@ -22,9 +22,12 @@ use turso_core::{
 /// so builds on both sides of that schema change compare.
 ///
 /// Each `(column, value)` in `ignore` leaves out the rows whose `column` holds
-/// `value` as text, in every table that has that column, everywhere above too.
-/// Each name in `json_facts` drops every fact `{"attribute":NAME,"value":N}`
-/// from stored text, as optimistic layers keep the index documents they project.
+/// the text `value`, in every table declaring that column, everywhere above too;
+/// `attribute` also leaves out the facts of that attribute in a decoded facts
+/// blob (not in one compared as bytes). Each name in `json_facts` is dropped
+/// from stored text holding JSON as [`without_json_facts`] says, as optimistic
+/// layers keep the projections they apply; with any name given, such text is
+/// compared re-serialized.
 pub fn tables(
     path: &Path,
     decoded: bool,
@@ -53,18 +56,16 @@ pub fn tables(
         // A JSON array, so no value can run into the next one.
         rows(&mut select(&connection, ignore, &name, "*")?, |values| {
             table.push(row_text(
-                values
-                    .iter()
-                    .map(|value| without_json_facts(render(value), json_facts)),
+                values.iter().map(|value| render_text(value, json_facts)),
             ));
         })?;
         out.insert(name, table);
     }
     if decoded {
-        decode_records(&connection, ignore, &mut out)?;
+        decode_records(&connection, ignore, json_facts, &mut out)?;
     }
     if facts {
-        decode_facts(&connection, ignore, &mut out)?;
+        decode_facts(&connection, ignore, json_facts, &mut out)?;
     }
     for table in out.values_mut() {
         table.sort();
@@ -77,6 +78,7 @@ pub fn tables(
 fn decode_records(
     connection: &Arc<Connection>,
     ignore: &[(String, String)],
+    json_facts: &[String],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if !out.contains_key("records") {
@@ -103,7 +105,7 @@ fn decode_records(
                         Err(error) => format!("r!{error} {}", opaque_bytes(bytes)),
                     }
                 }
-                other => render(other),
+                other => render_text(other, json_facts),
             };
             records.push(row_text(values[..2].iter().map(render).chain([value])));
         },
@@ -127,7 +129,7 @@ fn decode_records(
             documents.push(row_text(values.iter().enumerate().map(
                 |(index, value)| match index == 6 && ours {
                     true => "h:record".to_owned(),
-                    false => render(value),
+                    false => render_text(value, json_facts),
                 },
             )));
         },
@@ -140,6 +142,7 @@ fn decode_records(
 fn decode_facts(
     connection: &Arc<Connection>,
     ignore: &[(String, String)],
+    json_facts: &[String],
     out: &mut BTreeMap<String, Vec<String>>,
 ) -> Result<(), String> {
     if out.contains_key("meta") {
@@ -151,13 +154,19 @@ fn decode_facts(
                 meta.push(row_text(values.iter().enumerate().map(
                     |(index, value)| match index == 1 && schema {
                         true => "schema".to_owned(),
-                        false => render(value),
+                        false => render_text(value, json_facts),
                     },
                 )));
             },
         )?;
         out.insert("meta".into(), meta);
     }
+    // The fact tables leave out ignored attributes in `select`; a blob needs the same.
+    let ignored: Vec<&str> = ignore
+        .iter()
+        .filter(|(column, _)| column == "attribute")
+        .map(|(_, value)| value.as_str())
+        .collect();
     let mut documents = BTreeMap::new();
     if out.contains_key("index_document_facts") {
         rows(
@@ -170,7 +179,9 @@ fn decode_facts(
             |values| {
                 // Undecodable values keep their bytes, so two different ones differ.
                 let facts = match &values[1] {
-                    Value::Blob(blob) => facts_blob::decode(blob).ok_or_else(|| opaque_bytes(blob)),
+                    Value::Blob(blob) => {
+                        facts_blob::decode(blob, &ignored).ok_or_else(|| opaque_bytes(blob))
+                    }
                     other => Err(render(other)),
                 };
                 documents.insert(render(&values[0]), facts);
@@ -226,12 +237,12 @@ fn decode_facts(
 
 /// The facts blob of storage schema 13 (`cache-turso`'s `storage/facts_blob.rs`),
 /// read back as one `tag attribute value` line per fact, rendered as the fact
-/// tables' rows are.
+/// tables' rows are, without the facts of `ignored` attributes.
 mod facts_blob {
     use super::{render, render_bytes};
     use turso_core::Value;
 
-    pub fn decode(blob: &[u8]) -> Option<Vec<String>> {
+    pub fn decode(blob: &[u8], ignored: &[&str]) -> Option<Vec<String>> {
         let mut reader = Reader { blob, at: 0 };
         if reader.byte()? != 1 {
             return None;
@@ -243,7 +254,9 @@ mod facts_blob {
             let attribute = reader.attribute(&mut previous)?;
             let length = usize::try_from(reader.varint()?).ok()?;
             let value = render_bytes(reader.bytes(length)?);
-            facts.push(format!("e {attribute} {value}"));
+            if !ignored.contains(&attribute) {
+                facts.push(format!("e {attribute} {value}"));
+            }
         }
         for tag in ["i", "s"] {
             let count = reader.varint()?;
@@ -252,10 +265,12 @@ mod facts_blob {
                 let attribute = reader.attribute(&mut previous)?;
                 let raw = reader.varint()?;
                 let value = ((raw >> 1) as i64) ^ -((raw & 1) as i64);
-                facts.push(format!(
-                    "{tag} {attribute} {}",
-                    render(&Value::from_i64(value))
-                ));
+                if !ignored.contains(&attribute) {
+                    facts.push(format!(
+                        "{tag} {attribute} {}",
+                        render(&Value::from_i64(value))
+                    ));
+                }
             }
         }
         (reader.at == blob.len()).then_some(facts)
@@ -314,61 +329,94 @@ fn select(
     columns: &str,
 ) -> Result<Statement, String> {
     let name = quoted(table, '"');
+    // The declared columns: a probe query would accept an unknown
+    // double-quoted name as a string literal, and `rowid` in every table.
+    let mut declared = Vec::new();
+    rows(
+        &mut connection
+            .prepare(format!("PRAGMA table_info({name})"))
+            .map_err(|error| format!("{table}: {error}"))?,
+        |values| {
+            if let Some(Value::Text(column)) = values.get(1) {
+                declared.push(column.as_str().to_owned());
+            }
+        },
+    )?;
     let mut clause = String::new();
     for (column, value) in ignore {
-        let column = quoted(column, '"');
-        // Only in tables that have the column.
-        if connection
-            .prepare(format!("SELECT {column} FROM {name} LIMIT 0"))
-            .is_ok()
-        {
-            let word = if clause.is_empty() { "WHERE" } else { "AND" };
-            clause.push_str(&format!(" {word} {column} IS NOT {}", quoted(value, '\'')));
+        if !declared.contains(column) {
+            continue;
         }
+        let column = quoted(column, '"');
+        let word = if clause.is_empty() { "WHERE" } else { "AND" };
+        // Text only: `=` would apply the column's affinity, so `07` would match 7.
+        clause.push_str(&format!(
+            " {word} NOT (typeof({column}) = 'text' AND {column} = {})",
+            quoted(value, '\'')
+        ));
     }
     connection
         .prepare(format!("SELECT {columns} FROM {name}{clause}"))
         .map_err(|error| format!("{table}: {error}"))
 }
 
-/// Drops each `{"attribute":NAME,"value":N}` object and each `"NAME"` array
-/// element (an attribute a layer marks unknown), with a comma beside it, for
-/// each name in `names`.
-fn without_json_facts(mut text: String, names: &[String]) -> String {
-    for name in names {
-        let quoted = serde_json::Value::from(name.as_str()).to_string();
-        let needle = format!("{{\"attribute\":{quoted},\"value\":");
-        while let Some(start) = text.find(&needle) {
-            let Some(length) = text[start..].find('}') else {
-                break;
-            };
-            drop_element(&mut text, start, start + length + 1);
+/// `value` rendered, with the facts in `names` dropped from JSON text as
+/// [`without_json_facts`] does.
+fn render_text(value: &Value, names: &[String]) -> String {
+    match value {
+        Value::Text(text) if !names.is_empty() => {
+            format!("t:{}", without_json_facts(text.as_str(), names))
         }
-        let mut from = 0;
-        while let Some(found) = text[from..].find(&quoted) {
-            let (start, end) = (from + found, from + found + quoted.len());
-            let element = (text[..start].ends_with(',') || text[..start].ends_with('['))
-                && (text[end..].starts_with(',') || text[end..].starts_with(']'));
-            if element {
-                from = drop_element(&mut text, start, end);
-            } else {
-                from = end;
-            }
-        }
+        other => render(other),
     }
-    text
 }
 
-/// Removes `text[from..to]` with the comma before it, or else the one after it;
-/// returns where the text after it now starts.
-fn drop_element(text: &mut String, mut from: usize, mut to: usize) -> usize {
-    if text[..from].ends_with(',') {
-        from -= 1;
-    } else if text[to..].starts_with(',') {
-        to += 1;
+/// Text holding JSON (after any prefix, as `@macro-cache/optimistic-source:`
+/// has), written again without each `{"attribute":NAME,"value":N}` array
+/// element and without NAME in an `affected_attributes` list that keeps
+/// another attribute: an empty list means every attribute, so a list of NAME
+/// alone stays. Other text is returned as it is.
+fn without_json_facts(text: &str, names: &[String]) -> String {
+    let Some(start) = text.find(['{', '[']) else {
+        return text.to_owned();
+    };
+    let Ok(mut json) = serde_json::from_str::<serde_json::Value>(&text[start..]) else {
+        return text.to_owned();
+    };
+    drop_facts(&mut json, names);
+    format!("{}{json}", &text[..start])
+}
+
+fn drop_facts(json: &mut serde_json::Value, names: &[String]) {
+    let named = |value: &serde_json::Value| {
+        value
+            .as_str()
+            .is_some_and(|text| names.iter().any(|name| name == text))
+    };
+    match json {
+        serde_json::Value::Array(items) => {
+            items.retain(|item| {
+                !matches!(item, serde_json::Value::Object(fact)
+                    if fact.len() == 2
+                        && fact.get("attribute").is_some_and(named)
+                        && fact.get("value").is_some_and(serde_json::Value::is_number))
+            });
+            items.iter_mut().for_each(|item| drop_facts(item, names));
+        }
+        serde_json::Value::Object(fields) => {
+            for (key, value) in fields.iter_mut() {
+                match value {
+                    serde_json::Value::Array(attributes) if key == "affected_attributes" => {
+                        if attributes.iter().any(|attribute| !named(attribute)) {
+                            attributes.retain(|attribute| !named(attribute));
+                        }
+                    }
+                    other => drop_facts(other, names),
+                }
+            }
+        }
+        _ => {}
     }
-    text.replace_range(from..to, "");
-    from
 }
 
 fn quoted(name: &str, quote: char) -> String {
@@ -424,3 +472,6 @@ fn rows(statement: &mut Statement, mut visit: impl FnMut(Vec<Value>)) -> Result<
         }
     }
 }
+
+#[cfg(test)]
+mod test;

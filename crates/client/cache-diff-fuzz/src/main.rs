@@ -66,15 +66,16 @@ struct Args {
     /// and the storage schema version masked (see `dump::tables`).
     #[arg(long)]
     decoded_facts: bool,
-    /// Leave out stored rows whose COLUMN holds VALUE, in every table with that
-    /// column (repeatable; see `dump::tables`): rows a change stores on purpose,
-    /// such as a new derived sort fact (`attribute=NAME`) or its `meta` entry
-    /// (`key=NAME`).
+    /// Leave out stored rows whose COLUMN holds the text VALUE, in every table
+    /// declaring that column (repeatable; see `dump::tables`): rows a change
+    /// stores on purpose, such as a new derived sort fact (`attribute=NAME`) or
+    /// its `meta` entry (`key=NAME`).
     #[arg(long, value_name = "COLUMN=VALUE", value_parser = ignore_rows)]
     ignore_rows: Vec<(String, String)>,
-    /// Drop every `{"attribute":NAME,"value":N}` fact from stored text
-    /// (repeatable; see `dump::tables`): optimistic layers keep the index
-    /// documents they project, so a new derived sort fact shows there too.
+    /// Drop `{"attribute":NAME,"value":N}` facts, and NAME from non-empty
+    /// `affected_attributes` lists, in stored JSON text (repeatable; see
+    /// `dump::tables`): optimistic layers keep the projections they apply, so a
+    /// new derived sort fact shows there too.
     #[arg(long, value_name = "NAME")]
     ignore_json_fact: Vec<String>,
     /// Compare responses without their `sourceHash` (an upgrade to a build that
@@ -311,7 +312,7 @@ fn run(
     outcome.map_err(|error| rootcause::report!("seed {seed} stopped early: {error}"))
 }
 
-/// A share from 0 to 1; NaN and anything outside fail to parse.
+/// `COLUMN=VALUE`, COLUMN of lowercase letters and `_`.
 fn ignore_rows(text: &str) -> Result<(String, String), String> {
     match text.split_once('=') {
         Some((column, value))
@@ -326,6 +327,7 @@ fn ignore_rows(text: &str) -> Result<(String, String), String> {
     }
 }
 
+/// A share from 0 to 1; NaN and anything outside fail to parse.
 fn share(text: &str) -> Result<f64, String> {
     let value: f64 = text.parse().map_err(|error| format!("{error}"))?;
     if (0.0..=1.0).contains(&value) {

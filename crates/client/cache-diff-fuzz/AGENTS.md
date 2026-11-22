@@ -76,10 +76,12 @@ purpose (it says what).
   stats `split.issued-during` and `split.issued-after` say how many reads overlapped.
 - When a change stores new rows on purpose, such as a derived sort fact and the `meta`
   key that versions it, add `--ignore-rows COLUMN=VALUE` (repeatable: e.g.
-  `attribute=NAME`, `key=NAME`) to both sides: every table with that column leaves those
-  rows out of the dump. Optimistic layers keep the documents they project as text, so add
-  `--ignore-json-fact NAME` too: it drops `{"attribute":NAME,"value":N}` facts and `"NAME"`
-  array elements from stored text. In a `CHAIN_*` run comparing a migrated file with a
+  `attribute=NAME`, `key=NAME`) to both sides: every table declaring that column leaves
+  out the rows holding that text (and `--decoded-facts` the blob facts of that attribute).
+  Optimistic layers keep the projections they apply as JSON text, so add
+  `--ignore-json-fact NAME` too: it drops `{"attribute":NAME,"value":N}` array elements, and
+  NAME from an `affected_attributes` list that names another attribute (an empty list
+  means every attribute), and compares JSON text re-serialized. In a `CHAIN_*` run comparing a migrated file with a
   fresh one, segment 0 is old against new and differs by design; compare the last
   segments' traces, which end with a hash per table (`runs/RUN/upgrade/SEED/{a,b}1`, kept
   for each differing seed; rerun the segment with `--full` for the rows).
