@@ -743,7 +743,6 @@ export default {
       '설정을 찾을 수 없습니다. “서명”, “테마”, “캘린더”로 검색해 보세요.',
     backToSettings: '설정으로 돌아가기',
     closeSettings: '설정 닫기',
-    goToTab: '설정 탭 {{number}}(으)로 이동',
     editProfile: '프로필 편집',
     logOut: '로그아웃',
     yourAccount: '내 계정',

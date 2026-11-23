@@ -4,6 +4,8 @@ use entity_access::domain::models::EntityAccessAuth;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityType, PropertyOwner};
+
+use crate::domain::error::PropertiesErr;
 use system_properties::SystemPropertyKey;
 use uuid::Uuid;
 
@@ -45,12 +47,25 @@ pub fn extract_option_ids_from_property_value(value: &Option<PropertyValue>) -> 
     }
 }
 
+/// Refuse a value write of a property no caller sets: Time logged is the sum
+/// of the task's time entries, and only time tracking writes it.
+pub fn reject_derived_property(property_id: Uuid) -> Result<(), PropertiesErr> {
+    if property_id == SystemPropertyKey::TIME_LOGGED_UUID {
+        return Err(PropertiesErr::Validation(
+            "Time logged is the sum of the task's time entries; log time on the task instead"
+                .to_string(),
+        ));
+    }
+    Ok(())
+}
+
 /// Check if a property can be attached to the given entity type.
 pub fn is_property_applicable_to(property_id: Uuid, entity_type: EntityType) -> bool {
-    // Task-only properties: Parent Task, Subtasks and Project
+    // Task-only properties: Parent Task, Subtasks, Project and Time logged
     if property_id == SystemPropertyKey::PARENT_TASK_UUID
         || property_id == SystemPropertyKey::SUBTASKS_UUID
         || property_id == SystemPropertyKey::PROJECT_UUID
+        || property_id == SystemPropertyKey::TIME_LOGGED_UUID
     {
         return entity_type == EntityType::Task;
     }

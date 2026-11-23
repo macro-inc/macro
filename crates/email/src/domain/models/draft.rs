@@ -147,6 +147,8 @@ pub struct SimpleMessageInfo {
     pub thread_db_id: Uuid,
     /// Provider thread ID.
     pub provider_thread_id: Option<String>,
+    /// The message this one replies to.
+    pub replying_to_id: Option<Uuid>,
     /// Headers JSON.
     pub headers_json: Option<JsonValue>,
     /// Whether the message has been sent.

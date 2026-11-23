@@ -85,6 +85,7 @@ export interface InitiativeListing {
   priority: InitiativePriority | undefined;
   /** Assigned users, independent of sharing membership. */
   assignees: User[];
+  startDate: string | undefined;
   dueDate: string | undefined;
   /** Whether the Status counts as complete. */
   completed: boolean;
@@ -173,6 +174,7 @@ export class InitiativeNamespace {
         assignees: row.properties.assignees.map((id) =>
           User.byId(this.client, id),
         ),
+        startDate: row.properties.startDate ?? undefined,
         dueDate: row.properties.dueDate ?? undefined,
         completed: row.properties.completed,
         taskCount: row.taskCount,

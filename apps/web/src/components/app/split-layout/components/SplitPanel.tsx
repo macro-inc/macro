@@ -260,6 +260,7 @@ export function SplitPanel(props: SplitPanelProps) {
             contentOffsetTop,
             navigationCollapsed,
             splitHotkeyScope,
+            splitRootHotkeyScope: splitHotkeyScope,
             bottomPanel,
             registerBottomPanel: (panel) => {
               setBottomPanel(panel);

@@ -2,20 +2,28 @@
 
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use tracing;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 use crate::api::requests::SetPropertyValue;
-use crate::shared::EntityReference;
+use crate::shared::stored_value::{StoredValue, TaggedValue};
+use crate::shared::{DateValue, EntityReference};
 
 /// Property value (service representation).
 ///
 /// Represents the actual value stored for an entity property.
 /// This is serialized to/from JSONB in the database.
-#[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema, PartialEq)]
-#[serde(tag = "type", content = "value")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(
+    tag = "type",
+    content = "value",
+    from = "StoredValue",
+    into = "StoredValue"
+)]
 pub enum PropertyValue {
     /// Boolean value
     /// Serializes as: {"type": "Boolean", "value": true}
@@ -29,9 +37,9 @@ pub enum PropertyValue {
     /// Serializes as: {"type": "String", "value": "text"}
     #[serde(rename = "String")]
     Str(String),
-    /// Date/timestamp value
-    /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
-    Date(DateTime<Utc>),
+    /// Date value, with or without a time of day
+    /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
+    Date(DateValue),
     /// Date range value
     /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
     DateRange(crate::shared::DateRange),
@@ -48,6 +56,27 @@ pub enum PropertyValue {
     /// Single-select: {"type": "Link", "value": ["https://example.com"]} (length 0 or 1)
     /// Multi-select: {"type": "Link", "value": ["https://example.com", "https://other.com"]} (length 0+)
     Link(Vec<String>),
+}
+
+impl utoipa::PartialSchema for PropertyValue {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        crate::shared::stored_value::property_value_schema(
+            "Property value (service representation).\n\n\
+             Represents the actual value stored for an entity property.\n\
+             This is serialized to/from JSONB in the database.",
+        )
+    }
+}
+
+impl utoipa::ToSchema for PropertyValue {
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        crate::shared::stored_value::property_value_schemas(schemas);
+    }
 }
 
 // ===== Conversions =====
@@ -82,6 +111,41 @@ impl From<crate::api::PropertyValue> for PropertyValue {
     }
 }
 
+impl From<StoredValue> for PropertyValue {
+    fn from(stored: StoredValue) -> Self {
+        match stored.value {
+            TaggedValue::Bool(v) => PropertyValue::Bool(v),
+            TaggedValue::Num(v) => PropertyValue::Num(v),
+            TaggedValue::Str(v) => PropertyValue::Str(v),
+            TaggedValue::Date(at) if stored.has_time => {
+                PropertyValue::Date(DateValue::with_time(at))
+            }
+            TaggedValue::Date(at) => PropertyValue::Date(DateValue::new(at)),
+            TaggedValue::DateRange(v) => PropertyValue::DateRange(v),
+            TaggedValue::SelectOption(v) => PropertyValue::SelectOption(v),
+            TaggedValue::EntityRef(v) => PropertyValue::EntityRef(v),
+            TaggedValue::Link(v) => PropertyValue::Link(v),
+        }
+    }
+}
+
+impl From<PropertyValue> for StoredValue {
+    fn from(value: PropertyValue) -> Self {
+        let has_time = matches!(&value, PropertyValue::Date(date) if date.has_time());
+        let value = match value {
+            PropertyValue::Bool(v) => TaggedValue::Bool(v),
+            PropertyValue::Num(v) => TaggedValue::Num(v),
+            PropertyValue::Str(v) => TaggedValue::Str(v),
+            PropertyValue::Date(date) => TaggedValue::Date(date.at()),
+            PropertyValue::DateRange(v) => TaggedValue::DateRange(v),
+            PropertyValue::SelectOption(v) => TaggedValue::SelectOption(v),
+            PropertyValue::EntityRef(v) => TaggedValue::EntityRef(v),
+            PropertyValue::Link(v) => TaggedValue::Link(v),
+        };
+        StoredValue { value, has_time }
+    }
+}
+
 /// Convert SetPropertyValue (API request format) to PropertyValue (storage format).
 ///
 /// This function handles the conversion from the API's single/multi variants
@@ -91,7 +155,11 @@ pub fn convert_set_property_value_to_property_value(value: &SetPropertyValue) ->
     match value {
         // Single primitive values
         SetPropertyValue::Boolean { value } => PropertyValue::Bool(*value),
-        SetPropertyValue::Date { value } => PropertyValue::Date(*value),
+        SetPropertyValue::Date { value, has_time } => PropertyValue::Date(if *has_time {
+            DateValue::with_time(*value)
+        } else {
+            DateValue::new(*value)
+        }),
         SetPropertyValue::DateRange { value } => PropertyValue::DateRange(*value),
         SetPropertyValue::Number { value } => PropertyValue::Num(*value),
         SetPropertyValue::String { value } => PropertyValue::Str(value.clone()),
