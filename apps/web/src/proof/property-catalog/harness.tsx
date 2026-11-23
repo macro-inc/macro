@@ -646,26 +646,60 @@ function busyNow(client: QueryClient, reg: Registry) {
 // Settled: nothing busy, and the snapshot unchanged for a quiet window (a
 // live query re-evaluates after its fetch ends, and cache pushes arrive with
 // no fetch at all).
+//
+// The bound is the page's own time. Two things the harness does are taken
+// out of it: the snapshots this loop takes, which hold the page's main thread
+// (a list of 2,500 definitions costs hundreds of milliseconds under machine
+// load), and the driver's event-loop stalls, during which no route handler
+// answers any page's requests (`__pcDriverStalledMs`, from run.mjs). Both are
+// reported in the timing (`measureMs`, `stalledMs`), and the wait never runs
+// past three times the bound.
 const QUIET_MS = 150;
+declare global {
+  interface Window {
+    __pcDriverStalledMs?: (sinceEpochMs: number) => Promise<number>;
+  }
+}
+async function driverStalledSince(sinceEpochMs: number) {
+  try {
+    return (await window.__pcDriverStalledMs?.(sinceEpochMs)) ?? 0;
+  } catch {
+    return 0;
+  }
+}
 async function settle(client: QueryClient, reg: Registry, boundMs: number) {
   const start = performance.now();
+  const startEpoch = Date.now();
   let quietSince = -1;
   let last = '';
-  while (performance.now() - start < boundMs) {
+  let measureMs = 0;
+  let stalledMs = 0;
+  const pageMs = () => performance.now() - start - measureMs - stalledMs;
+  const timing = (ms: number) => ({
+    ms: Math.round(ms),
+    measureMs: Math.round(measureMs),
+    stalledMs: Math.round(stalledMs),
+  });
+  for (;;) {
+    if (pageMs() >= boundMs) {
+      stalledMs = await driverStalledSince(startEpoch);
+      if (pageMs() >= boundMs || performance.now() - start >= 3 * boundMs) break;
+    }
     const t = performance.now();
     const snap = JSON.stringify(snapshot(reg));
     const cost = performance.now() - t;
+    measureMs += cost;
     const idle = busyNow(client, reg).length === 0;
     if (idle && snap === last) {
       if (quietSince < 0) quietSince = performance.now();
       if (performance.now() - quietSince >= QUIET_MS)
-        return { ms: Math.round(quietSince - start), timedOut: false };
+        return { ...timing(quietSince - start), timedOut: false };
     } else quietSince = idle ? performance.now() : -1;
     last = snap;
     await sleep(Math.max(30, Math.round(cost * 3)));
   }
   return {
-    ms: Math.round(performance.now() - start),
+    ...timing(performance.now() - start),
     timedOut: true,
     busy: busyNow(client, reg),
     fetches: fetchesSince(start),

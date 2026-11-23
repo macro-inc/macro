@@ -72,8 +72,9 @@ retried page load happened.
   changes), whether a created or deleted definition is listed by both (level
   `visibility`, a `diff` when either is wrong or its listing fails), the
   mutation's result, live readers and callers OLD vs NEW after settling
-  (bound `SETTLE_MS`; a side that does not settle in time is a `state`
-  difference at level `settle`, and its snapshot is not compared), a fresh
+  (bound `SETTLE_MS` of the page's own time; a side that does not settle in
+  time is a `state` difference at level `settle`, and its snapshot is not
+  compared), a fresh
   cold mount OLD vs NEW, live vs fresh staleness per side, and only then the
   property editor's imperative read (`fetchPropertyDefinitionWithOptions`),
   which fetches into the live cache and would otherwise repair a stale
@@ -110,6 +111,17 @@ retried page load happened.
   optimistic write rolls back, until the next write; no caller reads the
   fetching flag of a failed options or tag-set list. That side counts as
   settled and its snapshot is compared; `settle.refusedBusy` counts them.
+- `harness-time`: a settle that ran past `SETTLE_MS` by the clock but not by
+  the page's own time. The settle loop takes out of its bound the time its own
+  snapshots held the page's main thread (`measureMs`: a snapshot of 2,500
+  definitions costs hundreds of milliseconds under machine load, and the loop
+  takes one every few turns) and the driver's event-loop stalls since it began
+  (`stalledMs`, asked of the driver through `__pcDriverStalledMs`: no route
+  handler answers any page while the driver is stalled). It never waits past
+  three times the bound. Not a failure; `settle.harnessTime` and
+  `settle.fresh.harnessTime` count them, `measureMsMax` and `stalledMsMax`
+  give the largest of each, and each is kept in `settleTimeouts` with its
+  figures.
 - `old-stale`: main's live readers miss some updates (an invalidation that
   does not reach them) that the cache's live queries pick up. A live reader or
   caller whose data differs counts as `old-stale` instead of `diff` only when
@@ -269,7 +281,7 @@ The counts measure work attempted, not successes, and are not interchangeable:
 - `volume` reports its targets beside the successful counts. `load.ops` and
   `sameUserReads` count returned attempts, errors included.
 - `settle` buckets by elapsed time to first quiet (the settle is confirmed
-  60 ms later), or to the timeout; the last bucket is everything from 2.5 s.
+  150 ms later), or to the timeout; the last bucket is everything from 2.5 s.
 - `traffic` counts requests as sent by method and service (REST GET includes
   HEAD and OPTIONS); `otherWrites` counts every non-catalog request that could
   write, which can include a persisted GraphQL read.

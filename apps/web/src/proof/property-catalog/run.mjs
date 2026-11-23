@@ -835,11 +835,24 @@ const browser = await chromium.launch({
   headless: CONFIG.headless,
   args: ['--disable-dev-shm-usage', '--no-sandbox', '--disable-gpu', '--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights'],
 });
+// Fulfills a route with a response the driver fetched, then frees it. Playwright
+// keeps every `route.fetch` body in the driver process until it is disposed or
+// its context closes, and a context here lives for the whole run: without this
+// the driver held every API response of the run (58 GB by the second hour of
+// the load run), and its collections stalled the event loop for seconds at a
+// time, holding every page's answers.
+async function fulfillFetched(r, resp) {
+  try {
+    await r.fulfill({ response: resp });
+  } finally {
+    await resp.dispose().catch(() => {});
+  }
+}
 const ONBOARDED = { status: 'completed', skipped: true, started_at: new Date().toISOString(), completed_at: new Date().toISOString() };
 async function baseRoutes(ctx) {
   await ctx.route((u) => u.toString().startsWith(`${ORIGIN}/`) && !/\/src\/|\/node_modules\/|\/@/.test(new URL(u.toString()).pathname), async (r) => {
     try {
-      await r.fulfill({ response: await r.fetch({ maxRedirects: 0 }) });
+      await fulfillFetched(r, await r.fetch({ maxRedirects: 0 }));
     } catch {
       await r.abort().catch(() => {});
     }
@@ -968,8 +981,11 @@ async function openSide(storageState, side, label) {
       // A failed module fetch fails the page load, which loadHarness retries; it
       // must never fall back to the head's module on the OLD side.
       const resp = await r.fetch({ url: u.toString(), maxRedirects: 0 }).catch((e) => (harnessError(`${label}: old module ${u.pathname}: ${firstLine(e)}`), null));
-      if (!resp || resp.status() !== 200) return r.abort('failed');
-      await r.fulfill({ response: resp });
+      if (!resp || resp.status() !== 200) {
+        await resp?.dispose().catch(() => {});
+        return r.abort('failed');
+      }
+      await fulfillFetched(r, resp);
     });
   if (side === 'neu' && ['drop-row', 'swap-order', 'alter-field'].includes(CONFIG.mutant)) {
     const g = rng(CONFIG.seed * 7919 + label.length);
@@ -979,11 +995,13 @@ async function openSide(storageState, side, label) {
       const resp = await r.fetch().catch((e) => (harnessError(`${label}: mutant fetch: ${firstLine(e)}`), null));
       if (!resp) return r.abort('failed');
       const json = await resp.json();
-      const m = mutateResponse(json, CONFIG.mutant, g);
+      const status = resp.status();
       const headers = { ...resp.headers() };
+      await resp.dispose().catch(() => {});
+      const m = mutateResponse(json, CONFIG.mutant, g);
       delete headers['content-encoding'];
       delete headers['content-length'];
-      await r.fulfill({ status: resp.status(), headers, body: JSON.stringify(json) });
+      await r.fulfill({ status, headers, body: JSON.stringify(json) });
       // marked once delivered, so no observation taken before it can match
       if (m) {
         R.mutant.applied++;
@@ -1033,6 +1051,9 @@ async function openSide(storageState, side, label) {
     if (e) e.failed = true;
   });
   const page = await bctx.newPage();
+  // The driver's stalls since a page-side settle began, so the settle can take
+  // them out of its bound (`settle` in harness.tsx).
+  await page.exposeFunction('__pcDriverStalledMs', (since) => driverStalls.reduce((a, x) => a + Math.max(0, Math.min(x.end, Date.now()) - Math.max(x.end - x.ms, since)), 0));
   // Uncaught page errors, by side and message: one seen on one side only is a
   // difference (checked at the end of the run).
   page.on('pageerror', (e) => {
@@ -1448,15 +1469,26 @@ async function settleAll(pair) {
   res.forEach((t, i) => {
     if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms }, { waitedOn: t.waitedOn });
   });
-  for (const t of res) {
+  for (const [i, t] of res.entries()) {
     R.settle.samples++;
     R.settle.maxMs = Math.max(R.settle.maxMs, t.ms);
     if (t.timedOut) R.settle.timeouts++;
+    noteHarnessTime(R.settle, t, SIDE_NAMES[i], 'settled');
     bump(R.settle.buckets, t.ms < 250 ? '<250ms' : t.ms < 1000 ? '250ms-1s' : t.ms < 2500 ? '1-2.5s' : '2.5-5s');
   }
   return res.map((t) => t.timedOut);
 }
 const SIDE_NAMES = ['A old', 'A new', 'B old', 'B new'];
+// A settle that took longer than the bound by the clock, but not by the page's
+// own time: the harness's snapshots and the driver's stalls made up the rest.
+// Not a failure; counted (`settle.harnessTime`) and kept with its figures.
+function noteHarnessTime(bucket, t, who, what) {
+  bucket.measureMsMax = Math.max(bucket.measureMsMax ?? 0, t.measureMs ?? 0);
+  bucket.stalledMsMax = Math.max(bucket.stalledMsMax ?? 0, t.stalledMs ?? 0);
+  if (t.timedOut || t.ms < CONFIG.settleMs) return;
+  bucket.harnessTime = (bucket.harnessTime ?? 0) + 1;
+  record('settle', `${who} ${what} past the bound in harness time`, 'harness-time', null, { ms: t.ms, measureMs: t.measureMs, stalledMs: t.stalledMs });
+}
 // Writes a side sent outside a write window (a late retry, a mutation the
 // cache replayed on its own, OLD writing by itself): each is a difference,
 // checked before any window opens and at every comparison.
@@ -1775,6 +1807,7 @@ async function compareStep(pair, level, op) {
     R.settle.fresh.maxMs = Math.max(R.settle.fresh.maxMs, f.timing.ms);
     if (f.timing.timedOut) R.settle.fresh.timeouts++;
   }
+  fresh.forEach((f, i) => noteHarnessTime(R.settle.fresh, f.timing, SIDE_NAMES[i], 'fresh mount settled'));
   fresh.forEach((f, i) => {
     if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms }, { waitedOn: f.timing.waitedOn });
   });
