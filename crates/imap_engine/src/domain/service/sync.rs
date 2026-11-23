@@ -158,10 +158,35 @@ pub(super) fn changes(
     })
 }
 
+/// Separate physical scan checkpoints from changes visible to the host.
+#[derive(Default)]
+pub(super) struct SnapshotChanges {
+    pub(super) state_changed: bool,
+    pub(super) mailbox_changed: bool,
+}
+impl SnapshotChanges {
+    fn folder(&mut self, previous: Option<&FolderState>, current: &FolderState) {
+        self.state_changed |= previous != Some(current);
+        self.mailbox_changed |= previous.is_none_or(|old| {
+            old.folder != current.folder
+                || old.path != current.path
+                || old.uid_validity != current.uid_validity
+                || old.monitored != current.monitored
+                || old.virtual_label != current.virtual_label
+                || old.phantom != current.phantom
+                || old.detected_role != current.detected_role
+                || old.sequence != current.sequence
+        });
+    }
+}
+
 pub(super) fn merge_snapshot(
     state: &mut AccountState,
     remote: Vec<RemoteFolder>,
-) -> Result<(), Error> {
+) -> Result<SnapshotChanges, Error> {
+    let mut changed = SnapshotChanges::default();
+    let old_folder_count = state.folders.len();
+    let old_thread_count = state.thread_refs.len();
     let unmonitored = remote
         .iter()
         .filter(|f| !f.monitored)
@@ -250,6 +275,7 @@ pub(super) fn merge_snapshot(
                         .or_insert_with(|| message.clone());
                 }
             }
+            changed.folder(previous.as_ref(), &folder);
             state.folders.insert(folder_id, folder);
             continue;
         }
@@ -397,14 +423,27 @@ pub(super) fn merge_snapshot(
                     removed: false,
                 });
             }
+            changed.mailbox_changed |= prior.is_none_or(|old| {
+                old.version != message.version
+                    || old.mime_base64 != message.mime_base64
+                    || old.thread_id != message.thread_id
+                    || old.received_at != message.received_at
+                    || old.size != message.size
+                    || old.is_sent != message.is_sent
+                    || old.draft_correlation != message.draft_correlation
+            });
             next_members.insert((folder_id.clone(), id.clone()));
-            next_locations.push(Location {
+            let location = Location {
                 folder_id: folder_id.clone(),
                 uid_validity: folder.uid_validity,
                 uid: item.uid,
                 message_id: id.clone(),
                 fingerprint,
-            });
+            };
+            changed.state_changed |= by_locator
+                .get(&(folder_id.clone(), remote.uid_validity, item.uid))
+                .is_none_or(|old| **old != location);
+            next_locations.push(location);
             next_messages.insert(id, message);
         }
         for old in by_folder.get(folder_id.as_str()).into_iter().flatten() {
@@ -420,8 +459,11 @@ pub(super) fn merge_snapshot(
         if folder.journal.len() > 10000 {
             folder.journal.drain(..folder.journal.len() - 10000);
         }
+        changed.folder(previous.as_ref(), &folder);
         state.folders.insert(folder_id, folder);
     }
+    changed.mailbox_changed |= old_folder_count != folder_ids.len()
+        || state.folders.keys().any(|id| !folder_ids.contains(id));
     state.folders.retain(|id, _| folder_ids.contains(id));
     // Keep app-sent fallback snapshots even when a server has no Sent folder.
     for (id, message) in &state.messages {
@@ -433,13 +475,19 @@ pub(super) fn merge_snapshot(
         if message.draft_correlation.is_some()
             && let Some(draft) = state.drafts.get_mut(id)
         {
+            changed.state_changed |=
+                draft.submission != Some(SubmissionOutcome::Accepted) || draft.draft.is_draft;
             draft.submission = Some(SubmissionOutcome::Accepted);
             draft.draft.is_draft = false;
         }
     }
+    changed.state_changed |= changed.mailbox_changed
+        || old_thread_count != state.thread_refs.len()
+        || old_locations.len() != next_locations.len()
+        || state.messages.len() != next_messages.len();
     state.messages = next_messages;
     state.locations = next_locations;
-    Ok(())
+    Ok(changed)
 }
 
 /// Canonical organization concurrency token shared by sync and point writes.

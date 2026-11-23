@@ -2,6 +2,7 @@ mod credential_health;
 mod reads;
 mod restart;
 mod send_lifetime;
+mod sync_cost;
 use super::*;
 use chrono::{Duration, Utc};
 

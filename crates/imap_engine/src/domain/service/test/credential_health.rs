@@ -30,22 +30,6 @@ impl CredentialCipher for FailingCipher {
         Err(self.failure)
     }
 }
-#[derive(Default)]
-struct RecordingNotifier(std::sync::Mutex<Vec<Notification>>, AtomicU32);
-#[async_trait::async_trait]
-impl Notifier for RecordingNotifier {
-    async fn notify(&self, notification: Notification) -> Result<(), Error> {
-        if self
-            .1
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
-            .is_ok()
-        {
-            return Err(Error::ConnectionUnavailable);
-        }
-        self.0.lock().unwrap().push(notification);
-        Ok(())
-    }
-}
 struct Fixture {
     engine: Engine,
     repository: Arc<MemoryRepository>,
@@ -275,7 +259,13 @@ async fn failed_host_hint_is_flushed_before_idle_without_waiting_for_another_sna
         ..
     } = fixture(Error::CredentialsUnavailable);
     cipher.recovered.store(true, Ordering::Release);
-    // The host is unavailable while a new snapshot is committed.
+    // The empty remote snapshot removes a previously indexed mailbox.
+    merge_snapshot(
+        &mut repository.state.lock().unwrap(),
+        super::sync_cost::inbox(1, 2),
+    )
+    .unwrap();
+    // The host is unavailable while that mailbox change is committed.
     notifier.1.store(20, Ordering::Release);
     let cancel = CancellationToken::new();
     let mut actor = Box::pin(engine.run_account(binding, cancel.clone()));
@@ -298,6 +288,11 @@ async fn failed_host_hint_is_flushed_before_idle_without_waiting_for_another_sna
 #[tokio::test(start_paused = true)]
 async fn unavailable_host_hint_does_not_block_the_next_provider_round() {
     let mut fixture = fixture(Error::CredentialsUnavailable);
+    merge_snapshot(
+        &mut fixture.repository.state.lock().unwrap(),
+        super::sync_cost::inbox(1, 2),
+    )
+    .unwrap();
     fixture.cipher.recovered.store(true, Ordering::Release);
     fixture.notifier.1.store(u32::MAX, Ordering::Release);
     let cancel = CancellationToken::new();

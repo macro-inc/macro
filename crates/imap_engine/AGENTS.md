@@ -221,3 +221,9 @@ Retry durable host notifications independently of provider scans and IDLE. Retai
 no command lease or database connection during the bounded callback; clear pending
 only after an ACK for the observed revision. Drain the fenced save on shutdown.
 A callback outage must never freeze provider synchronization.
+
+Skip full-state saves and new host hints for unchanged sync snapshots. Persist
+UIDNEXT, MODSEQ and other physical baselines without a callback when mailbox
+metadata and journals are unchanged. Keep Sent reconciliation on quiet rounds;
+leave earlier pending hints to the independent retry worker without resetting
+their revision, age or callback backoff. Health-only recovery uses save_health.

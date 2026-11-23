@@ -553,3 +553,10 @@ until its five-second lock timeout, even before obtaining its exclusive lock.
 These are local measurements, not production timing claims. Inherited wide-link
 claim fallback and reimport costs are compared with the previous head in the
 report; the new floor lookup uses a bounded full-key lateral join.
+
+Unchanged full walks do not rewrite the durable mailbox state or create a host
+notification. Physical baseline-only changes (such as UIDNEXT and MODSEQ) are
+persisted without a callback; folder catalog, journal and health changes still
+publish. Quiet walks continue Sent reconciliation. Earlier pending hints retain
+their revision and age and are delivered by the independent retry worker with
+its existing backoff, rather than retried early by a quiet walk.

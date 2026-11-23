@@ -93,7 +93,7 @@ mailbox, admission, settings and normalized engine queries.
 | --- | --- |
 | Per-account connections | The scheduler and `actor.rs` fence the primary with a renewable account lease; a command lease and one optional watcher cover concurrent work. The two-replica tests exercise takeover. |
 | Main folder | The default primary is Inbox. With X-GM-EXT-1 and a listed All Mail folder, the primary waits there instead; hiding All Mail restores ordinary folder sync. Local Dovecot exercises the ordinary Inbox case. |
-| Sync state machine | `protocol.rs::snapshot` selects a full or CONDSTORE pass and reconciles UID membership against `service/sync.rs`. `service/test.rs` covers reset, move and ambiguous identity. |
+| Sync state machine | `protocol.rs::snapshot` selects a full or CONDSTORE pass and reconciles UID membership against `service/sync.rs`. `service/test.rs` covers reset, move and ambiguous identity. `service/test/sync_cost.rs` and the 10,000-message PostgreSQL repeat-sync case prove unchanged walks do not save or notify, while physical baselines still persist without a callback. |
 | Index | `outbound/postgres/storage.rs` keys message, location, folder, change and draft entries by link. The large-mailbox test preserves unrelated entries during point updates and pages the first 501 membership rows. |
 | Events | Folder changes enter durable per-folder journals. `outbound/notifications.rs` wakes the email importer and its existing projection pipeline. |
 | IDLE | `domain/adaptive_idle.rs` and `actor.rs` choose bounded restart intervals and persist host observations. Each primary or optional watcher opens a new selected socket per IDLE interval and closes it after DONE; a server without IDLE is polled every 30 seconds. |

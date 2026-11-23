@@ -450,3 +450,23 @@ impl MailTransport for UncertainTransport {
         }
     }
 }
+
+#[derive(Default)]
+pub(crate) struct RecordingNotifier(
+    pub(crate) std::sync::Mutex<Vec<Notification>>,
+    pub(crate) std::sync::atomic::AtomicU32,
+);
+#[async_trait::async_trait]
+impl Notifier for RecordingNotifier {
+    async fn notify(&self, notification: Notification) -> Result<(), Error> {
+        if self
+            .1
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_sub(1))
+            .is_ok()
+        {
+            return Err(Error::ConnectionUnavailable);
+        }
+        self.0.lock().unwrap().push(notification);
+        Ok(())
+    }
+}

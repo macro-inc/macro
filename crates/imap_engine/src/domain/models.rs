@@ -433,7 +433,7 @@ pub enum Error {
 }
 
 /// A message's current location. Never look up a UID without the account and folder.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
     /// Folder identity.
     pub folder_id: String,
@@ -448,7 +448,7 @@ pub struct Location {
 }
 
 /// Indexed remote folder state.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FolderState {
     /// Whether this folder currently has a monitored or derived synchronization feed.
     #[serde(default = "default_monitored")]
@@ -488,7 +488,7 @@ pub(super) fn default_monitored() -> bool {
 }
 
 /// One committed folder change.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Change {
     /// Strictly increasing sequence.
     pub sequence: u64,

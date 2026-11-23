@@ -490,6 +490,12 @@ impl Engine {
         self.refresh_at(a, Utc::now()).await
     }
 
+    #[tracing::instrument(skip_all, name = "imap.sync.refresh", fields(
+        link_id = %a.binding.link_id,
+        sync.state_changed = tracing::field::Empty,
+        sync.mailbox_changed = tracing::field::Empty,
+        sync.health_changed = tracing::field::Empty,
+    ))]
     async fn refresh_at(&self, a: &mut Account, now: DateTime<Utc>) -> Result<(), Error> {
         if a.state.sync_retry_at.is_some_and(|retry_at| retry_at > now) {
             self.notify(a).await?;
@@ -516,14 +522,32 @@ impl Engine {
             }
             Err(error) => return Err(error),
         };
+        let health_changed = a.state.mailbox_issue.is_some()
+            || a.state.sync_retry_at.is_some()
+            || a.state.sync_size_failures != 0;
         a.state.mailbox_issue = None;
         a.state.sync_retry_at = None;
         a.state.sync_size_failures = 0;
-        merge_snapshot(&mut a.state, remote)?;
-        a.state.mark_notification_pending();
-        self.repository.save(a).await?;
+        let changes = merge_snapshot(&mut a.state, remote)?;
+        let span = tracing::Span::current();
+        span.record("sync.state_changed", changes.state_changed);
+        span.record("sync.mailbox_changed", changes.mailbox_changed);
+        span.record("sync.health_changed", health_changed);
+        if changes.mailbox_changed || health_changed {
+            a.state.mark_notification_pending();
+        }
+        if changes.state_changed {
+            self.repository.save(a).await?;
+        } else if health_changed {
+            self.repository.save_health(a).await?;
+        }
         self.reconcile_sent(a, &c).await?;
-        self.notify(a).await
+        if changes.mailbox_changed || health_changed {
+            self.notify(a).await?;
+        }
+        // A quiet scan must not bypass the independent hint worker's retry
+        // backoff or turn an earlier pending notification into a new revision.
+        Ok(())
     }
 
     async fn read_message(&self, a: &Account, id: &str) -> Result<Option<Message>, Error> {

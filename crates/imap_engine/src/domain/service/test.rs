@@ -9,7 +9,10 @@ mod idle;
 mod ownership;
 mod reads;
 pub(crate) mod send_lifetime;
-pub(crate) use fakes::{MemoryRepository, ProviderWorkControl, TestCipher, UncertainTransport};
+pub(crate) mod sync_cost;
+pub(crate) use fakes::{
+    MemoryRepository, ProviderWorkControl, RecordingNotifier, TestCipher, UncertainTransport,
+};
 
 #[test]
 fn moving_and_uidvalidity_reset_preserve_identity_and_emit_folder_removals() {
