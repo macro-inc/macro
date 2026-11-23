@@ -778,9 +778,11 @@ impl<'a> Exec<'a> {
                 self.record(index, "clear", outcome);
             }
             Op::Idle => {
-                // Builds differ here by design: only the idle checkpoint build
-                // checkpoints. What it did is counted, not compared; a failed
-                // checkpoint fails the seed.
+                // Builds differ here by design: only a build with the idle hook
+                // (IDLE_CHECKPOINT=1) runs this checkpoint. A host with its own
+                // background idle checkpoint runs that on every build. What this
+                // one did is counted, not compared; a failed checkpoint fails the
+                // seed.
                 self.pause(index);
                 if !self.idle_hook {
                     return Ok(());

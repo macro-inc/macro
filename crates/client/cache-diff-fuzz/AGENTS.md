@@ -41,7 +41,9 @@ purpose (it says what).
 
 - Build a side: `build-side.sh NAME BASE [BRANCH...]`, NAME of letters, digits, `-` and `_` (a detached worktree in
   `~/.cache/cache-diff-fuzz/sides/NAME`, binary in `bin/NAME`). Set
-  `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`.
+  `IDLE_CHECKPOINT=1` when the side has `TursoStorage::checkpoint_if_due`: it turns on the
+  fuzzer's `idle` op checkpoint. A native host with its own background idle checkpoint runs
+  that on every side, whatever the flag.
 - Compare: `fuzz.sh RUN FIRST COUNT SIDE_A SIDE_B [JOBS]`. RUN must be a new name
   of the same characters as NAME (so must `TARGET`).
   The run works on copies of both binaries, the schema and the assets, so a
@@ -75,10 +77,11 @@ purpose (it says what).
   database file. Background tasks the host spawns run on a Tokio runtime.
 - When the cache core splits a hydrate into a stage and a commit (`Engine::stage_hydrate`),
   build the side with `STAGED_HYDRATE=1` and give it `--stage-hydrates`: each hydrate is
-  staged before the op ahead of it runs and committed at its own turn, or run whole when
-  that op made the stage stale (stats `stage.committed`, `stage.whole-at-commit`). A stage
-  that fails answers the hydrate with its error, as the browser's `prepareHydrate` rejects,
-  unless storage moved since it was staged; then the hydrate runs whole.
+  staged before the op ahead of it runs and committed at its own turn, or, when that op made
+  the stage stale, sent through the host's `hydrate_query` instead (stats `stage.committed`,
+  `stage.whole-at-commit`; a native host that stages hydrates itself stages that one again).
+  A stage that fails answers the hydrate with its error, as the browser's `prepareHydrate`
+  rejects, unless storage moved since it was staged; then it goes through `hydrate_query` too.
   Staging reads the authority and the contact fence before the op ahead, which the
   browser never lets a write do; a difference that only that ordering explains is the
   harness's.
