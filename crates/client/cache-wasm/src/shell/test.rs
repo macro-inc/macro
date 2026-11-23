@@ -13,6 +13,7 @@ mod hydration_scope;
 mod mail_projection;
 mod people;
 mod schema_change;
+mod schema_cost;
 
 #[wasm_bindgen_test]
 fn read_response_conversion_preserves_json_and_revision_strings() {

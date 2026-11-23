@@ -179,6 +179,11 @@ fn schema_change_cost_on_a_retained_cache() {
         "first open, storing the schema: {}",
         timed_open(&stored, &bundled_schema(), Some(bundled_schema()))
     );
+    // CACHE_SCHEMA_OUT=<file> keeps that database, which the browser
+    // measurement (cache-wasm's `schema_cost`) opens.
+    if let Some(out) = std::env::var_os("CACHE_SCHEMA_OUT").map(PathBuf::from) {
+        copy_pair(&stored, &out);
+    }
     let message = "GraphqlSoupEmailMessage";
     let thread = "GraphqlSoupEmailThread";
     let cases = [
