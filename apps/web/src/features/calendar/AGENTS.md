@@ -144,6 +144,7 @@ host lives in `../block-calendar/`.
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
   picker uses four columns of 36px choices and a 12-year mode, with no selected dot.
+  Preserve TopBar's `split-header` container name in both the live header and skeleton so shared action labels collapse against the calendar pane.
 - Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.

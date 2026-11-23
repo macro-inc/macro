@@ -343,7 +343,7 @@ export function Header(props: {
       <Match when={!usesTouchHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
-          class="@container/calendar-toolbar h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2 [--view-search-height:2rem]"
+          class="h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2 [--view-search-height:2rem]"
         >
           <div
             class="relative flex min-w-0 flex-1 items-center gap-2"

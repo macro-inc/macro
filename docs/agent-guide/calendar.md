@@ -85,7 +85,9 @@ reopen the previous day. Each date announces every event title, including
 hidden events. Dates outside the supported occurrence range are disabled.
 Split and window resizes keep the committed period, re-snap the horizontal pager
 after measuring, and restore the last user hour offset in each time grid.
-The calendar Today navigation uses the shared secondary Button.
+The calendar Today navigation uses the shared secondary Button. The live toolbar
+and its skeleton retain the shell's `split-header` container so shared action
+labels collapse against the calendar pane rather than an unrelated ancestor.
 Desktop event creation and editing use one 476px floating composer, not a second split.
 Its responsive sidebar placement shares the same mounted field tree. The agent
 keeps its existing composition. The registered legacy split route also uses the

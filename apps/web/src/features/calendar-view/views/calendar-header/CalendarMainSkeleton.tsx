@@ -13,19 +13,19 @@ export function CalendarMainSkeleton(
   // The toolbar's 20px inline inset offsets the pane's 760px/304px breakpoints.
   return (
     <ViewSkeleton.Main>
-      <ViewShell.TopBar class="@container/calendar-toolbar h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2">
+      <ViewShell.TopBar class="h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2">
         <div class="flex min-w-0 flex-1 items-center gap-2">
           <ViewSkeleton.Control control={2} />
           <ViewSkeleton.Control
             control="Today"
-            class="hidden @min-[284px]/calendar-toolbar:inline-flex"
+            class="hidden @min-[284px]/split-header:inline-flex"
           />
           <ViewSkeleton.Control
             control={1}
-            class="@min-[284px]/calendar-toolbar:hidden"
+            class="@min-[284px]/split-header:hidden"
           />
           <div class="flex-1" />
-          <div class="hidden items-center gap-1 @min-[740px]/calendar-toolbar:flex">
+          <div class="hidden items-center gap-1 @min-[740px]/split-header:flex">
             <For each={CALENDAR_PERIODS}>
               {(view) => (
                 <ViewSkeleton.Control control={calendarPeriodLabel(view)} />
@@ -34,11 +34,11 @@ export function CalendarMainSkeleton(
           </div>
           <ViewSkeleton.Control
             control={calendarPeriodLabel(props.period)}
-            class="max-w-18 @min-[740px]/calendar-toolbar:hidden"
+            class="max-w-18 @min-[740px]/split-header:hidden"
           />
           <ViewSkeleton.Control
             control={1}
-            class="@min-[740px]/calendar-toolbar:w-52"
+            class="@min-[740px]/split-header:w-52"
           />
         </div>
         <div class="flex min-h-9 min-w-0 basis-full items-center gap-2">

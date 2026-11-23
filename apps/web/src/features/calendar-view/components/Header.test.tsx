@@ -44,23 +44,34 @@ vi.mock('@ui', async () => ({
   Hotkey: (await import('@app/components/ui/components/Hotkey')).Hotkey,
   cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
-vi.mock('@app/components/view-shell', () => ({
+vi.mock('@app/components/view-shell', async () => ({
   useViewShell: () => ({
     aside: { isCollapsed: () => false, isOverlay: () => false },
     breakpoints: { narrow: () => false },
   }),
   ViewSidebar: { Toggle: () => <button>Show sidebar</button> },
   ViewShell: {
-    TopBar: (props: { children: JSX.Element; navigation?: JSX.Element }) => (
-      <header>
-        {props.navigation}
-        {props.children}
-      </header>
-    ),
+    TopBar: (await import('@app/components/view-shell/ViewShell')).ViewShell
+      .TopBar,
     TopBarIsland: (props: { children: JSX.Element }) => (
       <div>{props.children}</div>
     ),
   },
+}));
+vi.mock(
+  '@components/app/split-layout/components/SplitHeaderContextMenu',
+  () => ({
+    SplitHeaderContextMenu: (props: { children: JSX.Element }) =>
+      props.children,
+  })
+);
+vi.mock('@app/components/view-shell/ViewNavigationControls', () => ({
+  ViewNavigationControls: () => null,
+  ViewSidebarCloseButton: () => null,
+  ViewSidebarToggle: () => null,
+}));
+vi.mock('@app/components/view-shell/tour', () => ({
+  VIEW_SHELL_TOUR: { topBar: 'view-top-bar' },
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: {} }),
@@ -158,6 +169,11 @@ describe('calendar headers', () => {
       document.documentElement.setAttribute('data-touch-device', 'false');
       render(() => <Header presentation="workspace" />);
       const heading = screen.getByRole('heading', { name: 'October 2026' });
+      const topBar = heading.closest('[data-view-shell-top-bar]');
+      expect(topBar?.classList.contains('@container/split-header')).toBe(true);
+      expect(topBar?.classList.contains('@container/calendar-toolbar')).toBe(
+        false
+      );
       const trigger = screen.getByRole('button', { name: 'Choose month' });
       expect(heading.contains(trigger)).toBe(true);
       expect(trigger.textContent).toContain('October 2026');
