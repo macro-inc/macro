@@ -786,7 +786,11 @@ test('Buy is one dialog with no steps: it gets the computer, sets up its agent, 
   await page.goto('/');
   await page.getByRole('button', { name: 'Get a computer' }).click();
   const steps = dialog(page).getByRole('list', { name: 'Setup steps' });
-  await expect(dialog(page)).toContainText("It's ready in a couple of seconds");
+  await expect(
+    dialog(page).getByRole('button', { name: 'Buy · $40.00/month' })
+  ).toBeVisible();
+  await expect(dialog(page)).not.toContainText('couple of seconds');
+  await expect(dialog(page)).not.toContainText('prorated');
   await expect(steps).toHaveCount(0);
   await dialog(page)
     .getByRole('button', { name: 'Buy · $40.00/month' })

@@ -276,9 +276,6 @@ test('a failed setup notice says why and reopens setup to Retry', async ({
     'Setup stopped before the computer came up'
   );
   await expect(dialog(page)).not.toContainText('Preparing sign-in');
-  await expect(dialog(page)).not.toContainText(
-    'Everyone using this computer can use this Claude sign-in'
-  );
   await expect(
     dialog(page).getByRole('button', { name: 'Use Macro credits instead' })
   ).toHaveCount(0);

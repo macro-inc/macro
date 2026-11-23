@@ -285,9 +285,6 @@ export function InviteAgentForm(props: {
               )}
             </Show>
             <p class="text-xs text-ink-muted">{t('teamAgents.computerHint')}</p>
-            <p class="text-xs text-ink-muted">
-              {t('settingsBilling.proration')}
-            </p>
           </div>
 
           <div ref={notice} data-add-agent-state={props.state.kind}>

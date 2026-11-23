@@ -23,7 +23,7 @@ export function ClaudeSignInDialog(props: {
   title?: string;
   /** Replaces the default line under the title. */
   description?: string;
-  /** Replaces the default small print about who can use the sign-in. */
+  /** Small print under the sign-in, e.g. whose computer keeps it. */
   footnote?: string;
   /** Replaces the default toast once signed in. */
   onSignedIn?: () => void;
@@ -65,7 +65,7 @@ export function ClaudeSignInDialog(props: {
           entry={props.entry}
           title={props.title}
           description={props.description}
-          footnote={props.footnote ?? t('computers.claudeSharedAccount')}
+          footnote={props.footnote}
           secondary={
             onCredits()
               ? {

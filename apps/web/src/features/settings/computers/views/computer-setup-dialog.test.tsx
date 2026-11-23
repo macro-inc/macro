@@ -301,7 +301,7 @@ it('stops on the same error when a finishing step never answers', async () => {
   }
 });
 
-it('drops the shared sign-in note from Bring your AI once setup has failed', () => {
+it('shows no shared sign-in note on Bring your AI, waiting or failed', () => {
   const setup = (computer: ComputerStatus) =>
     render(() => (
       <Dialog open onOpenChange={() => {}}>
@@ -329,9 +329,10 @@ it('drops the shared sign-in note from Bring your AI once setup has failed', () 
   };
 
   const waiting = setup(settingUp);
+  expect(screen.getByText('Sign in to Claude')).toBeTruthy();
   expect(
-    screen.getByText(/Everyone using this computer can use this sign-in/)
-  ).toBeTruthy();
+    screen.queryByText(/Everyone using this computer can use this sign-in/)
+  ).toBeNull();
   waiting.unmount();
 
   setup({ ...settingUp, status: 'failed' });

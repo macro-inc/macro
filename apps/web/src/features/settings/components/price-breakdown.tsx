@@ -18,7 +18,7 @@ export function PriceBreakdown(props: {
   interval: BillingInterval;
   total: number;
   included?: boolean;
-  /** Billing uses invoice-specific copy instead of purchase proration. */
+  /** Billing's invoice-specific copy; without it, only an included total says so. */
   note?: JSX.Element;
 }) {
   const amount = (value: number) =>
@@ -63,12 +63,13 @@ export function PriceBreakdown(props: {
           {t('settingsBilling.included')}
         </p>
       </Show>
-      <p class="mt-2 text-sm leading-relaxed text-ink-muted">
-        {props.note ??
-          (props.included
-            ? t('settingsBilling.noCharge')
-            : t('settingsBilling.proration'))}
-      </p>
+      <Show
+        when={props.note ?? (props.included && t('settingsBilling.noCharge'))}
+      >
+        {(note) => (
+          <p class="mt-2 text-sm leading-relaxed text-ink-muted">{note()}</p>
+        )}
+      </Show>
     </div>
   );
 }

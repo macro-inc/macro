@@ -63,8 +63,6 @@ export default {
   completeSignIn: 'Complete sign-in',
   claudeSignedIn: 'Signed in with Claude',
   claudeNotSignedIn: 'Claude: not signed in',
-  claudeSharedAccount:
-    'Everyone using this computer can use this sign-in. Revoke it any time in claude.ai settings.',
   claudeCredits: 'Claude: Macro credits',
   buying: 'Buying',
   standard: 'Standard',
@@ -144,8 +142,6 @@ export default {
   name: 'Name',
   sizeTitle: 'Get a Macro computer',
   buy: 'Buy',
-  buyReadyHeadsUp:
-    "It's ready in a couple of seconds, on the list with the team's other computers.",
   gettingIt: 'Getting your computer…',
   tryAgainPriced: 'Try again · {{price}}',
   updateCard: 'Update card',
