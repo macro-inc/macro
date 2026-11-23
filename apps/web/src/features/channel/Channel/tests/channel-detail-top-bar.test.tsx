@@ -110,14 +110,14 @@ vi.mock('@core/constant/allBlocks', () => ({
   resolveBlockAlias: (type: string) => type,
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannel: () => () => ({ agent_dm: false }),
+  useChannel: () => () => ({
+    id: 'channel-1',
+    name: 'Design',
+    channelType: 'private',
+    agentDm: null,
+  }),
   useChannelName: () => () => 'Design',
   useChannelType: () => () => 'private',
-  useChannelsContext: () => ({
-    channelsById: () => ({
-      'channel-1': { name: 'Design', channel_type: 'private' },
-    }),
-  }),
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),
