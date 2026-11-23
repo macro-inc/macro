@@ -8,14 +8,14 @@
 use crate::domain::models::{
     messages::ContactsNodes,
     page::{ContactCursor, ContactIdPage, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
-    people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch},
+    people::{NamedPeopleQuery, PeopleSearchLimit, PeopleSearchQuery, PersonMatch},
     query::ContactLookup,
 };
 use crate::domain::ports::{
     ContactListReader, ContactsPageService, ContactsService, CorrespondentsService,
-    PeopleSearchService,
+    PeopleNamingService, PeopleSearchService,
 };
-use crate::domain::service::search_people_with;
+use crate::domain::service::{people_named_with, search_people_with};
 use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -368,30 +368,85 @@ where
                 .await
             }
             DirectorySource::Legacy => {
-                let mut people = self
+                let people = self
                     .legacy
                     .search_people(viewer.clone(), query, limit)
                     .await?;
-                let ids = people
-                    .iter()
-                    .map(|person| person.contact.user_id.clone())
-                    .collect();
-                let Some(lookup) = ContactLookup::new(ids) else {
-                    return Err(rootcause::report!("people search exceeded its limit"));
-                };
-                let mut lists: HashMap<_, _> = self
-                    .lists
-                    .contact_lists(viewer, &lookup)
-                    .await?
-                    .into_iter()
-                    .map(|listed| (listed.user_id, listed.lists))
-                    .collect();
-                for person in &mut people {
-                    if let Some(person_lists) = lists.remove(&person.contact.user_id) {
-                        person.contact.lists = person_lists;
-                    }
-                }
-                Ok(people)
+                self.with_lists(viewer, people).await
+            }
+        }
+    }
+}
+
+impl<Legacy, Lists, F> FlaggedContactReads<Legacy, Lists, F>
+where
+    Lists: ContactListReader,
+{
+    /// Gives people the legacy graph found their lists from the list-aware
+    /// tables, like the GraphQL directory's, so a person only the legacy graph
+    /// knows has none.
+    async fn with_lists(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        mut people: Vec<PersonMatch>,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let ids = people
+            .iter()
+            .map(|person| person.contact.user_id.clone())
+            .collect();
+        let Some(lookup) = ContactLookup::new(ids) else {
+            return Err(rootcause::report!("people search exceeded its limit"));
+        };
+        let mut lists: HashMap<_, _> = self
+            .lists
+            .contact_lists(viewer, &lookup)
+            .await?
+            .into_iter()
+            .map(|listed| (listed.user_id, listed.lists))
+            .collect();
+        for person in &mut people {
+            if let Some(person_lists) = lists.remove(&person.contact.user_id) {
+                person.contact.lists = person_lists;
+            }
+        }
+        Ok(people)
+    }
+}
+
+impl<Legacy, Lists, F> PeopleNamingService for FlaggedContactReads<Legacy, Lists, F>
+where
+    Legacy: PeopleNamingService,
+    Lists: ContactListReader,
+    F: FeatureFlags + 'static,
+{
+    /// The list-aware read ranks by list group and returns each match's lists;
+    /// a legacy read ranks teammates first and its matches get their lists
+    /// from the list-aware tables.
+    #[tracing::instrument(
+        name = "contacts.reads.people_named",
+        skip_all,
+        fields(source = tracing::field::Empty),
+        err
+    )]
+    async fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        match self.source_for(&viewer).await {
+            DirectorySource::Lists => {
+                people_named_with(query, limit, || {
+                    self.lists.name_listed_people(viewer, query, limit)
+                })
+                .await
+            }
+            DirectorySource::Legacy => {
+                let people = self
+                    .legacy
+                    .people_named(viewer.clone(), query, limit)
+                    .await?;
+                self.with_lists(viewer, people).await
             }
         }
     }
