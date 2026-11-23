@@ -172,8 +172,9 @@ when the native snapshot includes an unused zero-valued counter.
 
 The Apple termination callback preserves Tauri's default reload behavior and adds
 the native evidence before reloading. It does not establish why the web content
-process terminated (for example, memory pressure versus a crash); device
-crash/termination reports are needed for that distinction. Native counters
+process terminated (for example, memory pressure versus a crash); on Chromium
+macOS a renderer crash also leaves a [native crash report](#native-crash-reports)
+with the same timestamp. Native counters
 require a full app release, while the frontend remains compatible with older
 binaries.
 
@@ -301,6 +302,74 @@ UPDATE_NATIVE_DIAGNOSTIC_TYPES=1 cargo test --manifest-path apps/web/tauri/Cargo
 ```
 
 The same tests without that environment variable check for drift.
+
+## Native crash reports
+
+The desktop app reports its own crashes to PostHog as `$exception`, next to
+JavaScript errors, from the next webview start. Nothing goes to another
+service, and no crash memory leaves the machine
+(`src/crash_reports.rs`, `../../src/observability/native-crashes.ts`).
+
+- **Rust panics** (macOS and Linux): the panic hook writes the message, panic
+  location, thread name and backtrace to
+  `<app data>/crash-reports/panic-<uuid>.json` before the default hook runs.
+  The message is scrubbed first: the user's home directory and login name,
+  quoted values, backtick spans other than std's own (`Result::unwrap()`),
+  paths, URL paths, IP addresses, email addresses, credentials (`Bearer …`,
+  `password: …`, `token=…`, long random tokens) and long numbers are
+  replaced. Release builds carry no debug info, so frames have function
+  names but no files or lines. A panic on the main
+  thread is `fatal`; on another thread the app usually survives, so `error`.
+- **Chromium crashes** (macOS): `../desktop-cef/crash_reporter.cfg`, bundled
+  as `Contents/Resources/crash_reporter.cfg`, turns on CEF's Crashpad for the
+  app's own process and every helper (renderer, GPU, network, utility). It
+  names no `ServerURL`, so nothing is uploaded; the CEF fork also refuses the
+  `CEF_CRASH_REPORTER_SERVER_URL` override in release builds. Dumps land in
+  CEF's root cache path, which is also its Crashpad database:
+  `~/Library/Caches/com.macro.app.prod/cef/pending/<uuid>.dmp`. The app reads
+  only a signature from each (the `minidump` crate): Chromium's `ptype`, the
+  OS exception, and the crashing instruction as module file name, offset and
+  Mach-O UUID. The dump is deleted once its signature is sent. Crashes of the
+  app's own process still go to the macOS crash reporter as well
+  (`BrowserCrashForwardingEnabled`). A main-thread panic aborts the process and
+  also leaves a dump; that dump is deleted with the panic report instead of
+  being sent as a second crash.
+- Linux has no Chromium, so a crash of the WebKitGTK web process or a native
+  crash of the app (not a panic) is not reported.
+
+`take_native_crash_reports` offers each report once per process, at most ten
+at a time, oldest first. The frontend sends each at once, with the crash's
+time as the event timestamp and the report's UUID as the event uuid, and acks
+the ones PostHog accepted 15 seconds later; the native app then deletes their
+files. A report not yet acked (the app crashed again, or quit) returns at the
+next launch, and PostHog drops the resent copy. Delivery is best effort: the
+ack doesn't wait for PostHog's answer, so a report sent during a PostHog outage
+longer than that may be lost. The Vite dev server and builds without
+`VITE_POSTHOG_API_KEY` never start PostHog, so they leave reports on disk. A renderer
+crash is reported by the document that replaces it, without a relaunch.
+
+PostHog properties: `native_crash_kind` (`panic` or `native`),
+`native_crash_process_type` (`main` for the app's own process),
+`native_crash_version` and `native_crash_build_time_ms` of the build that
+crashed (from `crash-reports/launches.json`, so a crash before an update is
+not blamed on the update), `native_crash_os_version`, `native_crash_arch`,
+`native_crash_timestamp_ms`, and for panics `native_crash_thread` and
+`native_crash_location`, for dumps `native_crash_exception`,
+`native_crash_module` and `native_crash_module_offset`. The event's own
+`native_version` is the build that reported it. Dumps are grouped by
+`$exception_fingerprint` (process type, exception, module and offset) and
+carry `$debug_images`, so PostHog could resolve the frame if symbols for that
+build were uploaded; the release keeps no dSYMs and the codec CEF build has
+`symbol_level=0`, so for now resolve offsets by hand against the same build.
+A crash reported after the user switched accounts goes to the current
+person; the signature holds no account data.
+
+To try it, crash a renderer from DevTools with `chrome://crash` in the
+desktop-cef dev build (`../desktop-cef/AGENTS.md`), or panic in a command. A
+dev build against the Vite server only writes the report (check the files
+above). To see it reach PostHog, run a production frontend build made with
+`VITE_POSTHOG_API_KEY` set; its next webview start sends the report. The wire types are generated with the
+diagnostic types (above).
 
 ## Linux rendering diagnostics
 
@@ -696,9 +765,11 @@ event and an OTel span, sent by the frontend because the host has no exporter.
 The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 `native-update-report`. The page drains them with `take_native_update_reports`
 when it mounts and after each emit, so each report goes out once. A check
-reports `up_to_date`, `update_found` then `downloaded`, `check_failed` or
-`download_failed` (span `native.update.check`, timed by the host, with a
-`native.update.download` child; `update_found` is a PostHog event only). Failures
+reports `up_to_date`, `needs_newer_os` (a newer release whose
+`minimumSystemVersion` this Mac is below, with that minimum; not downloaded),
+`update_found` then `downloaded`, `check_failed` or `download_failed` (span
+`native.update.check`, timed by the host, with a `native.update.download`
+child; `update_found` is a PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next

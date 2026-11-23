@@ -1,8 +1,10 @@
 import { analytics } from '@app/lib/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Attributes, Telemetry } from '@macro-inc/observability';
 import type { DesktopSnapshot } from './desktop';
 import { frontendInstanceId } from './frontend-instance';
 import type { BundleStartup } from './generated/bundle-updater';
+import { reportNativeCrashes } from './native-crashes';
 import {
   nativeDiagnosticsRetired,
   recoverableNativeFrontend,
@@ -68,6 +70,8 @@ export function recordNativeWebviewStart(
   span.end();
   if (snapshot && !nativeDiagnosticsRetired())
     reportRecoveredEvents(snapshot, recoverableNativeFrontend());
+  // After `register`, so the crashes carry this launch's native attributes.
+  fireAndForget(reportNativeCrashes(), 'native-crash-reports');
 }
 
 /** How the native updater chose this launch's bundle, the same for every document in it. */
