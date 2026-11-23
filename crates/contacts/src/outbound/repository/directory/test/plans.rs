@@ -9,6 +9,7 @@ use super::*;
 use sqlx::PgConnection;
 
 const SUBJECT: &str = "macro|m@example.com";
+const IMAP_SUBJECT: &str = "macro|b1000@example.net";
 const TEAM_SIZE: i32 = 1_000;
 const BACKGROUND_USERS: i32 = 20_000;
 
@@ -230,6 +231,12 @@ async fn check(
         !plan.to_string().contains("Seq Scan"),
         "{execute} (generic={generic}): {plan}"
     );
+    if execute.starts_with("EXECUTE members_imap(") {
+        assert!(
+            plan.to_string().contains("contact_inbox_members_imap_idx"),
+            "{execute} (generic={generic}): {plan}"
+        );
+    }
     assert!(
         blocks <= max_blocks,
         "{execute} read {blocks} blocks (generic={generic}): {plan}"
@@ -250,7 +257,10 @@ fn requested() -> String {
     ids.join(",")
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("plan_imap"))
+)]
 async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: PgPool) {
     seed(&pool).await;
     let mut connection = pool.acquire().await.unwrap();
@@ -296,6 +306,7 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
         ("invited", include_str!("../list_members/invited.sql")),
         ("gmail", include_str!("../list_members/gmail.sql")),
         ("outlook", include_str!("../list_members/outlook.sql")),
+        ("imap", include_str!("../list_members/imap.sql")),
         ("teammates", include_str!("../list_members/teammates.sql")),
     ] {
         prepare(
@@ -379,6 +390,10 @@ async fn directory_reads_stay_bounded_at_100k_in_custom_and_generic_plans(pool: 
             ("invited", "macro|stranger@example.com", "NULL", 0),
             ("gmail", SUBJECT, "NULL", 501),
             ("outlook", SUBJECT, "NULL", 0),
+            ("imap", IMAP_SUBJECT, "NULL", 501),
+            ("imap", IMAP_SUBJECT, "'macro|z050000@example.net'", 501),
+            ("imap", IMAP_SUBJECT, "'macro|z099990@example.net'", 10),
+            ("imap", "macro|stranger@example.com", "NULL", 0),
         ] {
             check(
                 &mut connection,

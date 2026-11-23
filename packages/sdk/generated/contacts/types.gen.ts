@@ -19,7 +19,7 @@ export type AddContactRequest = {
  * in at least one of the owner's lists. The key (`as_ref`, parsed back with
  * `FromStr`, and the same in serde) is what storage and clients see.
  */
-export type ContactList = 'teammates' | 'interacted' | 'invited' | 'gmail' | 'outlook';
+export type ContactList = 'teammates' | 'interacted' | 'invited' | 'gmail' | 'outlook' | 'imap';
 
 /**
  * Response body for GET /contacts.

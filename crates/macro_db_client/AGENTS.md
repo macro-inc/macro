@@ -55,6 +55,8 @@ only canonical lowercase `macro|` ids in `COLLATE "C"` keys. Inbox rows cascade
 with their `email_links` row; `user_id` and `list_key` on them repeat the link's
 owner and provider on purpose, so reads never join `email_links`. List rows have no
 foreign key: the contacts worker removes them on account deletion.
+Per-list paging uses partial indexes for the literal list key; migration
+`20261123181250` adds the IMAP member-page index before the contacts route uses it.
 
 ## Boundaries
 

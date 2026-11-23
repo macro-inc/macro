@@ -420,6 +420,16 @@ impl ContactListReader for DbContactsRepository {
                 .fetch_all(&mut *transaction)
                 .await?
             }
+            ContactList::Imap => {
+                sqlx::query_file_scalar!(
+                    "src/outbound/repository/directory/list_members/imap.sql",
+                    viewer.as_ref(),
+                    after,
+                    fetch,
+                )
+                .fetch_all(&mut *transaction)
+                .await?
+            }
         };
         transaction.commit().await?;
 

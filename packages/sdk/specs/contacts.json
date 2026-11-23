@@ -268,7 +268,14 @@
       "ContactList": {
         "type": "string",
         "description": "One list in a user's directory. A person is in the directory when they are\nin at least one of the owner's lists. The key (`as_ref`, parsed back with\n`FromStr`, and the same in serde) is what storage and clients see.",
-        "enum": ["teammates", "interacted", "invited", "gmail", "outlook"]
+        "enum": [
+          "teammates",
+          "interacted",
+          "invited",
+          "gmail",
+          "outlook",
+          "imap"
+        ]
       },
       "GetContactsResponse": {
         "type": "object",

@@ -418,3 +418,33 @@ async fn list_members_hold_only_the_owners_rows(pool: PgPool) {
             .is_empty()
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory", "imap_list"))
+)]
+async fn imap_list_members_are_owner_scoped_and_paged_without_other_providers(pool: PgPool) {
+    let repository = DbContactsRepository::new(pool);
+    let members = all_pages(1, |after| {
+        let repository = &repository;
+        async move {
+            repository
+                .list_members(mid(VIEWER), ContactList::Imap, after.as_ref(), size(1))
+                .await
+        }
+    })
+    .await;
+    // a is known through two IMAP inboxes; Gmail-only c and another owner's x
+    // must not enter this list. d also belongs to Outlook, without a duplicate.
+    assert_eq!(members, ["macro|a@example.com", "macro|d@example.com"]);
+    let other_owner = repository
+        .list_members(
+            mid("macro|g@example.com"),
+            ContactList::Imap,
+            None,
+            ContactPageSize::MAX,
+        )
+        .await
+        .unwrap();
+    assert_eq!(ids(&other_owner), ["macro|x@example.com"]);
+}
