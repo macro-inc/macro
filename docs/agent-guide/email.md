@@ -36,6 +36,11 @@ credential form stay open while the list reloads, including when its capabilitie
 Cancel; closing the owning view ends the dialog. The provider chooser remains
 visible until the IMAP form is ready. Check this on desktop and phone.
 
+In **Settings → Email → Server settings**, server Drafts are labelled as not
+synced to Macro. They do not count towards the notice for included folders
+outside the latest sync. Other included folders omitted from that sync still
+show the notice. Drafts keep their role picker but have no message-sync checkbox.
+
 ## Account changes
 
 Channel and connected-inbox metadata belongs to the signed-in viewer. During a

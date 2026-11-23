@@ -2171,6 +2171,8 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   fields, and offer the catalog app-password help link. Render only whitelisted
   error guidance; a connection failure must never imply a rejected password.
 
+- Exclude folders whose effective role is Drafts from sync-limit notices, label their intentional server-only handling separately, and omit their no-op sync checkbox while keeping the role picker.
+
 - Label reconnect actions Reconnect, stack server fields at full dialog width,
   and show the same labelled port/TLS choice in the menu and selected value.
 - Keep the IMAP credential form ph-no-capture and app-password fields autocomplete off.

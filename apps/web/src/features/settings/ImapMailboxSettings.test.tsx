@@ -178,3 +178,41 @@ it('lets the owner reconnect an existing inbox when saved settings cannot be rea
   expect(reconnect).toHaveBeenCalledTimes(1);
   expect(api.update).not.toHaveBeenCalled();
 });
+
+it('explains server Drafts without reporting an omitted sync folder', async () => {
+  api.read.mockResolvedValue(
+    ok({
+      ...snapshot,
+      folders: [
+        snapshot.folders[0],
+        {
+          id: 'drafts',
+          name: 'Drafts',
+          monitored: false,
+          detectedRole: 'drafts',
+          effectiveRole: 'drafts',
+          roleOverride: null,
+          excluded: false,
+          watched: false,
+        },
+      ],
+    })
+  );
+  render(() => (
+    <ImapMailboxSettings
+      linkId="owned"
+      emailAddress="owner@example.com"
+      onReconnect={() => {}}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Server settings' }));
+  await screen.findByText('Drafts');
+  expect(
+    screen.queryByText(/included folder.*outside the last sync/)
+  ).toBeNull();
+  expect(screen.queryByText('Outside the latest sync')).toBeNull();
+  expect(screen.queryByRole('checkbox', { name: 'Sync Drafts' })).toBeNull();
+  expect(
+    screen.getByText('Server drafts are not synced to Macro.')
+  ).toBeTruthy();
+});

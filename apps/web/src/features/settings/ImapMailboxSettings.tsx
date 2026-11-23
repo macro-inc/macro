@@ -351,7 +351,9 @@ function SettingsDialog(props: {
                       when={
                         data().folders.filter(
                           (folder) =>
-                            folder.monitored === false && !folder.excluded
+                            folder.monitored === false &&
+                            !folder.excluded &&
+                            folder.effectiveRole !== 'drafts'
                         ).length
                       }
                     >
@@ -369,11 +371,18 @@ function SettingsDialog(props: {
                           </span>
                           <Show
                             when={
-                              folder.monitored === false && !folder.excluded
+                              folder.monitored === false &&
+                              !folder.excluded &&
+                              folder.effectiveRole !== 'drafts'
                             }
                           >
                             <span class="text-ink-muted">
                               {t('imap.outsideSync')}
+                            </span>
+                          </Show>
+                          <Show when={folder.effectiveRole === 'drafts'}>
+                            <span class="text-ink-muted">
+                              {t('imap.serverDraftsNotSynced')}
                             </span>
                           </Show>
                           <Show
@@ -412,35 +421,39 @@ function SettingsDialog(props: {
                                   }
                                 />
                               </div>
-                              <Checkbox
-                                disabled={saving()}
-                                checked={!excluded().includes(folder.id)}
-                                onChange={(checked) => {
-                                  if (checked)
-                                    setExcluded((previous) =>
-                                      previous.filter((id) => id !== folder.id)
-                                    );
-                                  else {
-                                    setExcluded((previous) => [
-                                      ...previous,
-                                      folder.id,
-                                    ]);
-                                    if (watch() === folder.id) setWatch('');
-                                  }
-                                }}
-                              >
-                                <Checkbox.Control />
-                                <Checkbox.Label>
-                                  <span aria-hidden="true">
-                                    {t('imap.syncFolder')}
-                                  </span>
-                                  <span class="sr-only">
-                                    {t('imap.syncNamedFolder', {
-                                      folder: folder.name,
-                                    })}
-                                  </span>
-                                </Checkbox.Label>
-                              </Checkbox>
+                              <Show when={folder.effectiveRole !== 'drafts'}>
+                                <Checkbox
+                                  disabled={saving()}
+                                  checked={!excluded().includes(folder.id)}
+                                  onChange={(checked) => {
+                                    if (checked)
+                                      setExcluded((previous) =>
+                                        previous.filter(
+                                          (id) => id !== folder.id
+                                        )
+                                      );
+                                    else {
+                                      setExcluded((previous) => [
+                                        ...previous,
+                                        folder.id,
+                                      ]);
+                                      if (watch() === folder.id) setWatch('');
+                                    }
+                                  }}
+                                >
+                                  <Checkbox.Control />
+                                  <Checkbox.Label>
+                                    <span aria-hidden="true">
+                                      {t('imap.syncFolder')}
+                                    </span>
+                                    <span class="sr-only">
+                                      {t('imap.syncNamedFolder', {
+                                        folder: folder.name,
+                                      })}
+                                    </span>
+                                  </Checkbox.Label>
+                                </Checkbox>
+                              </Show>
                             </div>
                           </Show>
                         </div>

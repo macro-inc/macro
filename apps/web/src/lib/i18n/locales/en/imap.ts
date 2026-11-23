@@ -75,6 +75,7 @@ export default {
   folders: 'Folders',
   foldersPending: 'Folders will appear after the first sync.',
   outsideSync: 'Outside the latest sync',
+  serverDraftsNotSynced: 'Server drafts are not synced to Macro.',
   credentialsUnreadableTitle: 'Reconnect your inbox',
   credentialsUnreadableDetails:
     "Macro can't read this mailbox's saved password. Reconnect to continue.",
