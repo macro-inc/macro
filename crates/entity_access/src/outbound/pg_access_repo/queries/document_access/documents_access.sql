@@ -4,9 +4,9 @@
 -- the highest level per document, as `get_document_access` does.
 --
 -- The OFFSET 0 fences keep the plan to index lookups from each requested
--- document and each of its attachments, whatever the row estimates. Without
--- them, stale statistics on the attachment tables led the planner to hash
--- whole email and discussion tables.
+-- document, attachment, and inherited grant. Fence correlated EXISTS checks too:
+-- otherwise the planner can hash every grant matching the caller's sources.
+-- Stale attachment statistics must not select whole email or discussion tables.
 --
 -- $1: document ids, $2: the caller's source ids, $3: the caller's user id.
 SELECT
@@ -31,13 +31,18 @@ CROSS JOIN LATERAL (
         UNION ALL
         -- Source 2: document link share permission
         SELECT share_permission."linkShareAccessLevel"
-        FROM "Document" document
-        JOIN "DocumentPermission" document_permission
-          ON document_permission."documentId" = document.id
-        JOIN "SharePermission" share_permission
-          ON share_permission.id = document_permission."sharePermissionId"
-        WHERE document.id = requested.document_id
-          AND share_permission."linkShareAccessLevel" IS NOT NULL
+        FROM (
+            SELECT owner FROM "Document" WHERE id = requested.document_id OFFSET 0
+        ) document
+        CROSS JOIN LATERAL (
+            SELECT "sharePermissionId" FROM "DocumentPermission"
+            WHERE "documentId" = requested.document_id OFFSET 0
+        ) document_permission
+        CROSS JOIN LATERAL (
+            SELECT "linkShare", "linkShareAccessLevel" FROM "SharePermission"
+            WHERE id = document_permission."sharePermissionId" OFFSET 0
+        ) share_permission
+        WHERE share_permission."linkShareAccessLevel" IS NOT NULL
           AND (
               share_permission."linkShare" = 'PUBLIC'
               OR (
@@ -87,6 +92,7 @@ CROSS JOIN LATERAL (
                   WHERE thread_access.entity_id = inbox.thread_id
                     AND thread_access.entity_type = 'email_thread'
                     AND thread_access.source_id = ANY($2)
+                  OFFSET 0
               )
           )
 
@@ -110,8 +116,14 @@ CROSS JOIN LATERAL (
             JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
             JOIN "Document" parent_doc
               ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id
-            LEFT JOIN "DocumentPermission" dp ON dp."documentId" = parent_doc.id
-            LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
+            LEFT JOIN LATERAL (
+                SELECT "sharePermissionId" FROM "DocumentPermission"
+                WHERE "documentId" = parent_doc.id OFFSET 0
+            ) dp ON TRUE
+            LEFT JOIN LATERAL (
+                SELECT "linkShare", "linkShareAccessLevel" FROM "SharePermission"
+                WHERE id = dp."sharePermissionId" OFFSET 0
+            ) sp ON TRUE
             WHERE m.id = a.message_id
               AND m.deleted_at IS NULL
               AND mt.deleted_at IS NULL
@@ -124,6 +136,7 @@ CROSS JOIN LATERAL (
                       WHERE pa.entity_type = 'document'
                         AND pa.entity_id::text = parent_doc.id
                         AND pa.source_id = ANY($2)
+                      OFFSET 0
                   )
                   OR (
                       sp."linkShareAccessLevel" IS NOT NULL

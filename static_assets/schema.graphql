@@ -10911,7 +10911,7 @@ type GraphqlTaskDependencyState {
 	"""
 	openBlockerIds: [ID!]!
 	"""
-	Readable prerequisite IDs, independent of completion status.
+	Prerequisite IDs confirmed readable within the read budget, independent of status.
 	"""
 	visibleBlockerIds: [ID!]!
 	"""

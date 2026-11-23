@@ -1,4 +1,5 @@
 use super::*;
+use crate::task_dependencies::BlockerVisibilityBudget;
 use entity_access::domain::models::{AccessError, AccessLevel, Entity};
 use macro_user_id::{cowlike::CowLike, lowercased::Lowercase, user_id::MacroUserId};
 use std::{
@@ -75,6 +76,7 @@ async fn authorizes_concurrently_with_a_bounded_number_of_checks() {
 struct DocumentAccess {
     granted: Vec<String>,
     bulk_fails: bool,
+    bulk_pending: bool,
     bulk_batches: Arc<std::sync::Mutex<Vec<Vec<String>>>>,
     single_checks: Arc<std::sync::Mutex<Vec<String>>>,
 }
@@ -131,6 +133,9 @@ impl EntityAccessService for DocumentAccess {
             .push(document_ids.to_vec());
         if self.bulk_fails {
             return Err(AccessError::internal("statement timeout"));
+        }
+        if self.bulk_pending {
+            std::future::pending::<()>().await;
         }
         document_ids
             .iter()
@@ -317,9 +322,10 @@ async fn blocker_visibility_uses_one_status_neutral_bulk_call() {
                 ..Default::default()
             },
         )]);
-        let visible = load_blocker_view_receipts(&access, &user, &facts)
-            .await
-            .unwrap();
+        let visible =
+            load_blocker_view_receipts(&access, &user, &facts, &BlockerVisibilityBudget::default())
+                .await
+                .unwrap();
         assert_eq!(
             visible.into_keys().collect::<HashSet<_>>(),
             blockers.iter().take(501).copied().collect()
@@ -328,7 +334,7 @@ async fn blocker_visibility_uses_one_status_neutral_bulk_call() {
     let batches = access.bulk_batches.lock().unwrap();
     assert_eq!(
         batches.iter().map(Vec::len).collect::<Vec<_>>(),
-        [1001, 1001, 1001]
+        [1000, 1000, 1000]
     );
     assert!(access.single_checks.lock().unwrap().is_empty());
 }
@@ -352,9 +358,140 @@ async fn blocker_visibility_fails_closed_when_bulk_authorization_fails() {
         },
     )]);
     assert!(
-        load_blocker_view_receipts(&access, &user, &facts)
+        load_blocker_view_receipts(&access, &user, &facts, &BlockerVisibilityBudget::default())
             .await
             .is_err()
     );
     assert!(access.single_checks.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn blocker_visibility_deadline_preserves_only_canonical_aggregate() {
+    use crate::task_dependencies::load_blocker_view_receipts;
+    use properties::domain::task_dependency_state::TaskDependencyState;
+    let access = DocumentAccess {
+        bulk_pending: true,
+        ..Default::default()
+    };
+    let user = MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap();
+    let task = Uuid::from_u128(1);
+    let facts = HashMap::from([(
+        task,
+        TaskDependencyState {
+            task_id: task,
+            blocker_ids: vec![Uuid::from_u128(2)],
+            open_blocker_ids: vec![Uuid::from_u128(2)],
+            ..Default::default()
+        },
+    )]);
+    let started = tokio::time::Instant::now();
+    let receipts =
+        load_blocker_view_receipts(&access, &user, &facts, &BlockerVisibilityBudget::default())
+            .await
+            .unwrap();
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(5));
+    assert!(receipts.is_empty());
+    let state = facts[&task].visible_state(&[]);
+    assert!(state.is_blocked);
+    assert!(state.visible_blocker_ids.is_empty());
+    assert!(state.open_blocker_ids.is_empty());
+    assert_eq!(access.bulk_batches.lock().unwrap().len(), 1);
+}
+
+#[tokio::test]
+async fn large_dependency_batches_never_expand_the_authorization_budget() {
+    use crate::task_dependencies::load_blocker_view_receipts;
+    use properties::domain::task_dependency_state::TaskDependencyState;
+    let facts = (0..500u128)
+        .map(|source| {
+            let task_id = Uuid::from_u128(source + 1);
+            let blockers = (0..1000)
+                .map(|offset| Uuid::from_u128(1000000 + source * 1000 + offset))
+                .collect::<Vec<_>>();
+            (
+                task_id,
+                TaskDependencyState {
+                    task_id,
+                    open_blocker_ids: blockers.clone(),
+                    blocker_ids: blockers,
+                    ..Default::default()
+                },
+            )
+        })
+        .collect::<HashMap<_, _>>();
+    let access = DocumentAccess {
+        granted: facts[&Uuid::from_u128(1)]
+            .blocker_ids
+            .iter()
+            .map(ToString::to_string)
+            .collect(),
+        ..Default::default()
+    };
+    let user = MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap();
+    let receipts =
+        load_blocker_view_receipts(&access, &user, &facts, &BlockerVisibilityBudget::default())
+            .await
+            .unwrap();
+    assert_eq!(receipts.len(), 1000);
+    assert_eq!(
+        access
+            .bulk_batches
+            .lock()
+            .unwrap()
+            .iter()
+            .map(Vec::len)
+            .collect::<Vec<_>>(),
+        [1000]
+    );
+    let unverified = facts[&Uuid::from_u128(500)].visible_state(&[]);
+    assert!(unverified.is_blocked);
+    assert!(unverified.open_blocker_ids.is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn visibility_quota_and_deadline_are_shared_across_loader_batches() {
+    use crate::task_dependencies::load_blocker_view_receipts;
+    use properties::domain::task_dependency_state::TaskDependencyState;
+    let task = Uuid::from_u128(1);
+    let blockers = (2..=501).map(Uuid::from_u128).collect::<Vec<_>>();
+    let facts = HashMap::from([(
+        task,
+        TaskDependencyState {
+            task_id: task,
+            blocker_ids: blockers.clone(),
+            ..Default::default()
+        },
+    )]);
+    let mut access = DocumentAccess {
+        granted: blockers.iter().map(ToString::to_string).collect(),
+        ..Default::default()
+    };
+    let user = MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap();
+    let budget = BlockerVisibilityBudget::default();
+    let first = load_blocker_view_receipts(&access, &user, &facts, &budget)
+        .await
+        .unwrap();
+    assert_eq!(first.len(), 500);
+    let second = load_blocker_view_receipts(&access, &user, &facts, &budget)
+        .await
+        .unwrap();
+    assert_eq!(second.len(), 500);
+    let exhausted = load_blocker_view_receipts(&access, &user, &facts, &budget)
+        .await
+        .unwrap();
+    assert!(exhausted.is_empty());
+    assert_eq!(access.bulk_batches.lock().unwrap().len(), 2);
+
+    let budget = BlockerVisibilityBudget::default();
+    let started = tokio::time::Instant::now();
+    load_blocker_view_receipts(&access, &user, &facts, &budget)
+        .await
+        .unwrap();
+    tokio::time::advance(std::time::Duration::from_secs(4)).await;
+    access.bulk_pending = true;
+    let timed_out = load_blocker_view_receipts(&access, &user, &facts, &budget)
+        .await
+        .unwrap();
+    assert!(timed_out.is_empty());
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(5));
 }

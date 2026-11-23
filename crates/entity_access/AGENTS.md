@@ -69,6 +69,7 @@ the entity-access domain service.
   (`queries/document_access/documents_access.sql`) and must answer each one as
   `get_document_access` does: change their sources together, and extend
   `test/documents_access.rs` and its fixture, which compare the two.
+- Fence inherited-grant EXISTS checks by attachment thread or parent document; outer fences alone do not prevent source-wide grant hashes.
 - Spans here never record a user id (a `MacroUserId` is an email): skip it.
   Checks record how many source ids they bound as `source_id_count`, through
   `user_source_ids` in the Postgres adapter and `domain::telemetry`; a caller
@@ -98,4 +99,4 @@ the entity-access domain service.
 
 - CRM company/contact receipts and audiences require current `team_user.crm_access` or an admin/owner role. Single, list and batched pipeline reads resolve fresh sharing sources so CRM denial removes only team grants; direct and channel grants remain. The email thread requester check is separate from contributor consent.
 - Source and grant lookups used by live activity checks have a local 15-second statement timeout. Keep team-bot company/contact lookups fenced by record ID before filtering team ownership; stale statistics otherwise favor team-wide scans.
-- Keep fresh pipeline channel-source lookups parameterized through the fenced viewer row; stale statistics can otherwise choose a scan of all channel memberships.
+- Parameterize shared and fresh channel-source lookups through a fenced viewer row; stale statistics can otherwise choose a scan of all channel memberships.

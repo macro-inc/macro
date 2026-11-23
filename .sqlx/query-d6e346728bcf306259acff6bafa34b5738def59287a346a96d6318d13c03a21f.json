@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH viewer AS MATERIALIZED (SELECT $1::text AS id OFFSET 0)\n            SELECT cp.channel_id::text FROM viewer\n            CROSS JOIN LATERAL (\n                SELECT channel_id FROM comms_channel_participants\n                WHERE user_id = viewer.id AND left_at IS NULL OFFSET 0\n            ) cp\n            UNION ALL\n            SELECT t.team_id::text FROM team_user t\n                WHERE t.user_id = $1\n            UNION ALL\n            SELECT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d6e346728bcf306259acff6bafa34b5738def59287a346a96d6318d13c03a21f"
+}

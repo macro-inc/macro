@@ -19,7 +19,10 @@ use properties::domain::task_dependency_state::{
 use rootcause::markers::{Cloneable, Dynamic};
 use std::{
     collections::{HashMap, HashSet},
-    sync::Arc,
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use system_properties::SystemPropertyKey;
 use tracing::Instrument;
@@ -38,7 +41,7 @@ pub struct GraphqlTaskDependencyState {
     pub is_blocked: bool,
     /// Unfinished blockers that the viewer can read.
     pub open_blocker_ids: Vec<ID>,
-    /// Readable prerequisite IDs, independent of completion status.
+    /// Prerequisite IDs confirmed readable within the read budget, independent of status.
     pub visible_blocker_ids: Vec<ID>,
     /// Canonical Status, Depends On, and Blocking assignments.
     pub properties: Vec<GraphqlProperty>,
@@ -127,6 +130,8 @@ pub struct PropertiesTaskDependencyReader<R, P, A> {
     properties: PropertiesEntityPropertyReader<P, A>,
     /// Mints document-view receipts before reading dependency facts.
     access: Arc<A>,
+    /// Shared request-wide quota and deadline, including dependent-state batches.
+    visibility_budget: BlockerVisibilityBudget,
 }
 
 impl<R: TaskDependencyStateRepository, P, A> PropertiesTaskDependencyReader<R, P, A> {
@@ -136,6 +141,7 @@ impl<R: TaskDependencyStateRepository, P, A> PropertiesTaskDependencyReader<R, P
             service: TaskDependencyStateService::new(repository),
             properties: PropertiesEntityPropertyReader::new(properties, access.clone()),
             access,
+            visibility_budget: BlockerVisibilityBudget::default(),
         }
     }
 }
@@ -167,8 +173,13 @@ where
                 .map_err(|error| rootcause::report!(error))?;
             // Authorize all prerequisites, not just unfinished ones: visibility evidence
             // must not reveal completion status. Keep canonical facts for the aggregate.
-            let blocker_receipts =
-                load_blocker_view_receipts(self.access.as_ref(), user, &facts).await?;
+            let blocker_receipts = load_blocker_view_receipts(
+                self.access.as_ref(),
+                user,
+                &facts,
+                &self.visibility_budget,
+            )
+            .await?;
             let entities = ids
                 .iter()
                 .map(|id| model_entity::EntityType::Document.with_entity_string(id.to_string()))
@@ -197,24 +208,95 @@ where
     }
 }
 
+/// Maximum additional blocker checks shared by the request's loader batches.
+const MAX_BLOCKER_VISIBILITY_CHECKS: usize = 1_000;
+/// Total read time available after the request's first visibility check.
+const BLOCKER_VISIBILITY_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Request-wide resource admission for status-neutral blocker visibility reads.
+pub(crate) struct BlockerVisibilityBudget {
+    /// Checks not yet reserved by concurrent loader batches.
+    remaining: AtomicUsize,
+    /// One shared deadline initialized by the first nonempty batch.
+    deadline: OnceLock<tokio::time::Instant>,
+}
+
+impl Default for BlockerVisibilityBudget {
+    fn default() -> Self {
+        Self {
+            remaining: AtomicUsize::new(MAX_BLOCKER_VISIBILITY_CHECKS),
+            deadline: OnceLock::new(),
+        }
+    }
+}
+
+impl BlockerVisibilityBudget {
+    /// Reserve at most the remaining request-wide quota.
+    fn reserve(&self, wanted: usize) -> usize {
+        // DataLoader batches can run concurrently. Share a finite quota across
+        // every batch rather than multiplying the budget by response fanout.
+        match self
+            .remaining
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |remaining| {
+                Some(remaining.saturating_sub(wanted))
+            }) {
+            Ok(previous) => previous.min(wanted),
+            Err(_) => 0,
+        }
+    }
+
+    /// Start the shared deadline on the first visibility read.
+    fn deadline(&self) -> tokio::time::Instant {
+        *self
+            .deadline
+            .get_or_init(|| tokio::time::Instant::now() + BLOCKER_VISIBILITY_DEADLINE)
+    }
+}
+
 /// Mint status-neutral blocker view capabilities; the repository bounds SQL statements.
 pub(crate) async fn load_blocker_view_receipts(
     access: &impl EntityAccessService,
     user: &MacroUserIdStr<'static>,
     facts: &HashMap<Uuid, TaskDependencyState>,
+    budget: &BlockerVisibilityBudget,
 ) -> Result<HashMap<Uuid, ViewReceipt>, rootcause::Report> {
-    let ids = facts
-        .values()
-        .flat_map(|state| state.blocker_ids.iter().copied())
-        .collect::<HashSet<_>>()
-        .into_iter()
-        .map(|id| id.to_string())
-        .collect::<Vec<_>>();
-    // One bulk call lets the repository load source memberships once and apply
-    // its own UUID statement cap, instead of repeating that work per outer chunk.
-    Ok(access
-        .generate_document_view_access_receipts(user, &ids)
-        .await
+    let mut states = facts.values().collect::<Vec<_>>();
+    states.sort_unstable_by_key(|state| state.task_id);
+    let mut ids = HashSet::new();
+    'references: for state in states {
+        for id in &state.blocker_ids {
+            ids.insert(*id);
+            if ids.len() == MAX_BLOCKER_VISIBILITY_CHECKS {
+                break 'references;
+            }
+        }
+    }
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    let mut ids = ids.into_iter().map(|id| id.to_string()).collect::<Vec<_>>();
+    ids.sort_unstable();
+    ids.truncate(budget.reserve(ids.len()));
+    if ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+    // One bulk call loads memberships once. The cap also bounds total work,
+    // while the deadline includes pool waits, membership lookup, and SQL.
+    let result = tokio::time::timeout_at(
+        budget.deadline(),
+        access.generate_document_view_access_receipts(user, &ids),
+    )
+    .await;
+    let Ok(receipts) = result else {
+        // No write occurs here. Canceling this read cannot misreport a commit.
+        // Keep canonical aggregates, but grant no individual visibility on timeout.
+        tracing::warn!(
+            checked = ids.len(),
+            "task blocker visibility read budget exceeded"
+        );
+        return Ok(HashMap::new());
+    };
+    Ok(receipts
         .map_err(|error| rootcause::report!(error))?
         .into_values()
         .filter_map(|receipt| {

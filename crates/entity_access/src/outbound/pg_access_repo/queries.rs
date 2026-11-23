@@ -132,10 +132,16 @@ async fn query_user_source_ids(pool: &Pool<Postgres>, user_id: &str) -> sqlx::Re
     sqlx::query!("SET LOCAL statement_timeout = '15s'")
         .execute(&mut *tx)
         .await?;
+    // Hide the bound viewer value behind a one-row fence so stale membership
+    // statistics cannot replace that viewer's index range with a table scan.
     let source_ids = sqlx::query_scalar!(
         r#"
-            SELECT cp.channel_id::text FROM comms_channel_participants cp
-                WHERE cp.user_id = $1 AND cp.left_at IS NULL
+            WITH viewer AS MATERIALIZED (SELECT $1::text AS id OFFSET 0)
+            SELECT cp.channel_id::text FROM viewer
+            CROSS JOIN LATERAL (
+                SELECT channel_id FROM comms_channel_participants
+                WHERE user_id = viewer.id AND left_at IS NULL OFFSET 0
+            ) cp
             UNION ALL
             SELECT t.team_id::text FROM team_user t
                 WHERE t.user_id = $1
