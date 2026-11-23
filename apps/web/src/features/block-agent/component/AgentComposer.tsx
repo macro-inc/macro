@@ -263,6 +263,16 @@ export function AgentComposer(props: {
       };
     });
 
+  // Each queued row offers Steer while a turn is in flight (or winding down).
+  const canSteer = () => (busy() || turn() === 'stopping') && !readOnly();
+  // Enter on an empty composer presses the top row's Steer. The list renders
+  // newest-first, so the top row is the last entry in dispatch order: the
+  // message the user just queued.
+  const steerTopRow = () => {
+    const top = queuedItems().at(-1);
+    return canSteer() && top ? () => steer(top.actionId) : undefined;
+  };
+
   return (
     <>
       <Show when={queuedItems().length > 0}>
@@ -281,11 +291,7 @@ export function AgentComposer(props: {
                 if (!readOnly())
                   fireAndForget(queue.remove(actionId), 'agent-composer');
               }}
-              onSteer={
-                (busy() || turn() === 'stopping') && !readOnly()
-                  ? (actionId) => steer(actionId)
-                  : undefined
-              }
+              onSteer={canSteer() ? (actionId) => steer(actionId) : undefined}
               onNavigateBelow={() => focusInput?.()}
               registerFocusFromBelow={(focus) => {
                 focusQueueBottom = focus;
@@ -340,6 +346,7 @@ export function AgentComposer(props: {
         onSend={(markdown, attachments) =>
           fireAndForget(send(markdown, attachments), 'agent-composer')
         }
+        onEnterEmpty={steerTopRow()}
         onStop={() =>
           fireAndForget(
             act({ type: 'stop' }, 'The agent could not be stopped'),

@@ -693,7 +693,8 @@ describe('queued prompt access', () => {
 
     const steer = screen.getAllByRole('button', { name: 'Steer' });
     expect(steer).toHaveLength(2);
-    // Newest is rendered first; "Steer this" is the second queued entry.
+    // Newest is rendered first; "Steer this" is the second queued entry. The
+    // composer's Enter-on-empty presses this same top button.
     fireEvent.click(steer[0]);
     expect(onSteer).toHaveBeenCalledWith('second');
     expect(screen.queryByRole('textbox')).toBeNull();

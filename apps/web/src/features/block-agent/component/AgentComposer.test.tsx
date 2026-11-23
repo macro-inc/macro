@@ -39,6 +39,9 @@ const mocks = vi.hoisted(() => ({
   input: undefined as AgentInputProps | undefined,
   model: undefined as UnifiedModelSelectorState | undefined,
   queued: undefined as QueuedPromptsProps | undefined,
+  queueEntries: () => [
+    { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+  ],
 }));
 
 vi.mock('@app/features/changes/context/changes-controller', () => ({
@@ -69,9 +72,7 @@ vi.mock('../context/AgentSessionContext', () => ({
     pending: () => false,
     initialInput: 'Document context',
     queue: {
-      entries: () => [
-        { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
-      ],
+      entries: () => mocks.queueEntries(),
       edit: mocks.editQueued,
       remove: mocks.removeQueued,
       steer: mocks.steerQueued,
@@ -108,6 +109,9 @@ beforeEach(() => {
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
   mocks.session = () => ({ canEdit: false });
+  mocks.queueEntries = () => [
+    { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+  ];
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
 });
@@ -193,6 +197,59 @@ describe('view-only session controls', () => {
       });
     }
   );
+});
+
+describe('Enter on an empty composer', () => {
+  it('steers the top rendered queued row once: the newest, not the next to send', () => {
+    mocks.session = () => ({ canEdit: true });
+    mocks.turn = () => 'running';
+    mocks.queueEntries = () => [
+      { actionId: 'oldest', kind: 'prompt', prompt: 'Next to send' },
+      { actionId: 'newest', kind: 'prompt', prompt: 'Just queued' },
+    ];
+    render(() => <AgentComposer />);
+
+    mocks.input?.onEnterEmpty?.();
+    expect(mocks.steer).toHaveBeenCalledOnce();
+    expect(mocks.steer).toHaveBeenCalledWith('newest');
+    expect(mocks.issue).not.toHaveBeenCalled();
+  });
+
+  it('steers a queued compact at the top like its Steer button', () => {
+    mocks.session = () => ({ canEdit: true });
+    mocks.turn = () => 'stopping';
+    mocks.queueEntries = () => [
+      { actionId: 'prompt-1', kind: 'prompt', prompt: 'Queued request' },
+      { actionId: 'compact-1', kind: 'compact' },
+    ];
+    render(() => <AgentComposer />);
+
+    mocks.input?.onEnterEmpty?.();
+    expect(mocks.steer).toHaveBeenCalledWith('compact-1');
+  });
+
+  it('does nothing without a queue, a turn to steer, or edit access', () => {
+    mocks.session = () => ({ canEdit: true });
+    mocks.turn = () => 'running';
+    mocks.queueEntries = () => [];
+    const { unmount } = render(() => <AgentComposer />);
+    expect(mocks.input?.onEnterEmpty).toBeUndefined();
+    unmount();
+
+    mocks.queueEntries = () => [
+      { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
+    ];
+    mocks.turn = () => 'idle';
+    const idle = render(() => <AgentComposer />);
+    expect(mocks.input?.onEnterEmpty).toBeUndefined();
+    idle.unmount();
+
+    mocks.turn = () => 'running';
+    mocks.session = () => ({ canEdit: false });
+    render(() => <AgentComposer />);
+    expect(mocks.input?.onEnterEmpty).toBeUndefined();
+    expect(mocks.steer).not.toHaveBeenCalled();
+  });
 });
 
 it('keeps steering queued messages while the turn transitions', () => {

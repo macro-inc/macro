@@ -114,6 +114,48 @@ test('Up edits the next-to-send message; Enter saves, Escape restores, focus ret
   await expect(editor).toBeHidden();
 });
 
+test('Enter on an empty composer steers the top queued row, once per press', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Enter is a newline on a virtual keyboard');
+  await page.goto('/queued.html?count=3');
+  await expect(queue(page).getByRole('button', { name: FIRST })).toBeVisible({
+    timeout: 30_000,
+  });
+  // The newest entry renders at the top.
+  const rows = queue(page).getByRole('button', { name: 'Steer' });
+  await expect(rows).toHaveCount(3);
+  await composer(page).click();
+
+  // Modified Enters and a typed draft never steer.
+  await page.keyboard.press('Shift+Enter');
+  await page.keyboard.press('Control+Enter');
+  await expect(log(page)).toHaveText('');
+  await expect(rows).toHaveCount(3);
+
+  await page.keyboard.press('Enter');
+  await expect(log(page).locator('li')).toHaveText(['steer queued-3']);
+  await expect(rows).toHaveCount(2);
+
+  await page.keyboard.type('a typed message');
+  await page.keyboard.press('Enter');
+  await expect(log(page).locator('li')).toHaveText([
+    'steer queued-3',
+    'send: a typed message',
+  ]);
+  await expect(rows).toHaveCount(2);
+
+  await page.keyboard.press('Enter');
+  await expect(log(page).locator('li')).toHaveText([
+    'steer queued-3',
+    'send: a typed message',
+    'steer queued-2',
+  ]);
+  await expect(rows).toHaveCount(1);
+  await expect(queue(page).getByRole('button', { name: FIRST })).toBeVisible();
+});
+
 test('Escape closes an open editor menu before it closes the row', async ({
   page,
   isMobile,

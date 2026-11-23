@@ -45,7 +45,7 @@ const editor = vi.hoisted(() => ({
   setMarkdown: vi.fn((value: string) => {
     editor.text = value;
   }),
-  enter: undefined as (() => boolean) | undefined,
+  enter: undefined as ((init?: KeyboardEventInit) => boolean) | undefined,
   change: undefined as ((markdown: string) => void) | undefined,
 }));
 
@@ -66,8 +66,14 @@ vi.mock(
         withRestoreFocus: () => builder,
         withAgentCommands: () => builder,
         withFilePaste: () => builder,
-        onEnter: (callback: () => boolean) => {
-          editor.enter = callback;
+        onEnter: (
+          callback: (event: KeyboardEvent, markdown: string) => boolean
+        ) => {
+          editor.enter = (init) =>
+            callback(
+              new KeyboardEvent('keydown', { key: 'Enter', ...init }),
+              editor.text
+            );
           return builder;
         },
         onFocusLeave: () => builder,
@@ -266,6 +272,124 @@ describe('while the agent is working', () => {
     expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
     editor.enter?.();
     expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe('Enter on an empty draft', () => {
+  it('steers through onEnterEmpty exactly once, without sending or stopping', () => {
+    const onSend = vi.fn();
+    const onStop = vi.fn();
+    const onEnterEmpty = vi.fn();
+    render(() => (
+      <AgentInput
+        busy
+        onSend={onSend}
+        onStop={onStop}
+        onEnterEmpty={onEnterEmpty}
+      />
+    ));
+
+    expect(editor.enter?.()).toBe(true);
+    expect(onEnterEmpty).toHaveBeenCalledOnce();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(onStop).not.toHaveBeenCalled();
+  });
+
+  it('sends typed text instead of steering', () => {
+    const onSend = vi.fn();
+    const onEnterEmpty = vi.fn();
+    render(() => (
+      <AgentInput busy onSend={onSend} onEnterEmpty={onEnterEmpty} />
+    ));
+
+    editor.change?.('a new message');
+    editor.enter?.();
+    expect(onSend).toHaveBeenCalledWith('a new message', []);
+    expect(onEnterEmpty).not.toHaveBeenCalled();
+  });
+
+  it('sends attachments instead of steering', () => {
+    const onSend = vi.fn();
+    const onEnterEmpty = vi.fn();
+    const uploaded = {
+      id: 'file-1',
+      name: 'notes.txt',
+      kind: 'document' as const,
+      mimeType: 'text/plain',
+      size: 12,
+    };
+    render(() => (
+      <AgentInput
+        busy
+        onSend={onSend}
+        onEnterEmpty={onEnterEmpty}
+        attachments={[uploaded]}
+        onAttachFiles={vi.fn()}
+      />
+    ));
+
+    editor.enter?.();
+    expect(onSend).toHaveBeenCalledWith('', [uploaded]);
+    expect(onEnterEmpty).not.toHaveBeenCalled();
+  });
+
+  it('leaves whitespace-only drafts, still-uploading files, and view-only sessions alone', () => {
+    const onEnterEmpty = vi.fn();
+    const { unmount } = render(() => (
+      <AgentInput
+        busy
+        onSend={vi.fn()}
+        onEnterEmpty={onEnterEmpty}
+        attachments={[
+          {
+            id: 'file-1',
+            name: 'big.zip',
+            kind: 'document',
+            mimeType: 'application/zip',
+            size: 1,
+            pending: true,
+          },
+        ]}
+        onAttachFiles={vi.fn()}
+      />
+    ));
+    editor.enter?.();
+    expect(onEnterEmpty).not.toHaveBeenCalled();
+    unmount();
+
+    render(() => (
+      <AgentInput readOnly busy onSend={vi.fn()} onEnterEmpty={onEnterEmpty} />
+    ));
+    editor.enter?.();
+    expect(onEnterEmpty).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { shiftKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { altKey: true },
+    { isComposing: true },
+    { keyCode: 229 },
+  ])('ignores a modified or composing Enter (%o)', (init) => {
+    const onEnterEmpty = vi.fn();
+    render(() => (
+      <AgentInput busy onSend={vi.fn()} onEnterEmpty={onEnterEmpty} />
+    ));
+
+    editor.enter?.(init);
+    expect(onEnterEmpty).not.toHaveBeenCalled();
+  });
+
+  it('leaves Enter to the virtual keyboard on touch', () => {
+    vi.mocked(isTouchDevice).mockReturnValue(true);
+    const onEnterEmpty = vi.fn();
+    render(() => (
+      <AgentInput busy onSend={vi.fn()} onEnterEmpty={onEnterEmpty} />
+    ));
+
+    expect(editor.enter?.()).toBe(false);
+    expect(onEnterEmpty).not.toHaveBeenCalled();
   });
 });
 
