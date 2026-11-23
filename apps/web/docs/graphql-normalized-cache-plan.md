@@ -1591,9 +1591,11 @@ whose epoch is superseded returns an error before touching storage. The worker
 owner applies the same rule by rejecting earlier queued hydration within the
 current lifecycle segment. Foreground write order is preserved. An already
 running storage transaction finishes atomically. The browser worker runs a
-hydrate in two halves (`prepareHydrate`, then `commitHydrate`) and answers
-the read-only requests that arrived in between, the ones its queue would rank
-ahead of the hydrate's write; nothing that writes runs between them.
+hydrate in steps (`prepareHydrate`, `stageHydrate`, then `commitHydrate`)
+and answers the read-only requests that arrived between them, the ones its
+queue would rank ahead of the hydrate's write; nothing that writes runs
+between them. The stage computes the write while it only reads, so the
+commit that blocks reads is short.
 
 Soup backfill treats this supersession as flow control: it refetches the same
 cursor after a short interruptible delay, preserving its checkpoint. Ordinary
