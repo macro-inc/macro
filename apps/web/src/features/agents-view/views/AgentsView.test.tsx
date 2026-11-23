@@ -18,11 +18,15 @@ import {
   Suspense,
 } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { EMPTY_CONVERSATION_FILTERS } from '../core/conversation-filters';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { AgentsView as Workspace } from './AgentsView';
 
 function AgentsView(props: ComponentProps<typeof Workspace>) {
   const panel = {
+    handle: { id: 'split', isFirst: () => true },
+    isPanelActive: () => true,
+    splitHotkeyScope: 'test-split',
     panelSize: {
       get width() {
         return state.width();
@@ -44,6 +48,7 @@ type FakeEntry = {
 
 const state = vi.hoisted(() => ({
   touch: false,
+  realShell: false,
   width: (): number => 1000,
   contentId: { current: 'agents' },
   entry: { current: undefined as (() => FakeEntry) | undefined },
@@ -86,12 +91,39 @@ vi.mock('@app/lib/split-router', async (importOriginal) => ({
     entry: () => ({ meta: { referredFrom: state.navigationSource.current() } }),
   }),
 }));
-vi.mock('@app/components/view-shell', () => ({
-  useViewShell: () => ({
-    breakpoints: { narrow: () => false },
-    aside: { isOverlay: () => false },
-  }),
-  ViewShell: { Root: state.pass, Aside: state.pass, Main: state.pass },
+vi.mock('@app/components/view-shell', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@app/components/view-shell')>();
+  return {
+    ...actual,
+    useViewShell: () =>
+      state.realShell
+        ? actual.useViewShell()
+        : {
+            breakpoints: { narrow: () => false },
+            aside: { isOverlay: () => false },
+          },
+    ViewShell: {
+      ...actual.ViewShell,
+      Root: (props: ComponentProps<typeof actual.ViewShell.Root>) =>
+        state.realShell ? <actual.ViewShell.Root {...props} /> : props.children,
+      Aside: (props: ComponentProps<typeof actual.ViewShell.Aside>) =>
+        state.realShell ? (
+          <actual.ViewShell.Aside {...props} />
+        ) : (
+          props.children
+        ),
+      Main: (props: ComponentProps<typeof actual.ViewShell.Main>) =>
+        state.realShell ? <actual.ViewShell.Main {...props} /> : props.children,
+    },
+  };
+});
+vi.mock('@app/components/view-shell/create-frame-width', () => ({
+  createFrameWidth: () => state.width,
+}));
+vi.mock('@core/hotkey/hotkeys', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/hotkey/hotkeys')>()),
+  registerHotkey: vi.fn(),
 }));
 vi.mock('@app/features/block-agent/context/pending-session', () => ({
   startPendingSession: () => 'pending',
@@ -117,7 +149,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock('@components/app/mobile/float-regions/float-region-state', () => ({
-  FloatRegions: { hostHeight: () => 0 },
+  FloatRegions: { hostHeight: () => 0, registerScope: () => () => {} },
 }));
 vi.mock('@components/app/PreviewPanel', () => ({ PreviewPanel: () => null }));
 vi.mock('@components/app/previewTarget', () => ({
@@ -135,7 +167,10 @@ vi.mock('@components/app/split-layout/layout', () => ({
     },
   }),
 }));
-vi.mock('@components/app/split-layout/layoutUtils', () => ({
+vi.mock('@components/app/split-layout/layoutUtils', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@components/app/split-layout/layoutUtils')
+  >()),
   useSplitPanelOrThrow: () => ({
     handle: {
       id: 'split',
@@ -167,9 +202,27 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     },
   }),
 }));
-vi.mock('@components/app/split-panel', () => ({
-  SplitPanel: { Root: state.pass, Body: state.pass },
-}));
+vi.mock('@components/app/split-panel', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@components/app/split-panel')>();
+  return {
+    SplitPanel: {
+      ...actual.SplitPanel,
+      Root: (props: ComponentProps<typeof actual.SplitPanel.Root>) =>
+        state.realShell ? (
+          <actual.SplitPanel.Root {...props} />
+        ) : (
+          props.children
+        ),
+      Body: (props: ComponentProps<typeof actual.SplitPanel.Body>) =>
+        state.realShell ? (
+          <actual.SplitPanel.Body {...props} />
+        ) : (
+          props.children
+        ),
+    },
+  };
+});
 vi.mock('@core/component/AI/component/message/EmptyChatState', () => ({
   ChatEmptyStateContext: { Provider: state.pass },
 }));
@@ -183,7 +236,10 @@ vi.mock(
   })
 );
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
-vi.mock('@core/constant/featureFlags', () => ({ enableAgentUpdates: {} }));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  enableAgentUpdates: {},
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => state.touch,
@@ -256,29 +312,59 @@ vi.mock('../phone-sidebar', () => ({
     </div>
   ),
 }));
-vi.mock('../phone-list', () => ({
-  PhoneAgentsList: (props: {
-    archived: boolean;
-    onOpenConversation: (conversation: {
-      id: string;
-      type: 'agent_session';
-    }) => void;
-  }) => (
-    <div>
-      <span>{props.archived ? 'Archived page' : 'Agents list'}</span>
-      <button
-        onClick={() =>
-          props.onOpenConversation({ id: 'session', type: 'agent_session' })
-        }
-      >
-        Session
-      </button>
-    </div>
-  ),
+vi.mock('../phone-list', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../phone-list')>();
+  return {
+    PhoneAgentsList: (props: ComponentProps<typeof actual.PhoneAgentsList>) =>
+      state.realShell ? (
+        <actual.PhoneAgentsList {...props} />
+      ) : (
+        <div>
+          <span>{props.archived ? 'Archived page' : 'Agents list'}</span>
+          <button
+            onClick={() =>
+              props.onOpenConversation(
+                {
+                  id: 'session',
+                  type: 'agent_session',
+                  botId: 'agent',
+                  name: 'Session',
+                  ownerId: 'user',
+                  status: 'acp_ready',
+                  turnState: 'complete',
+                },
+                new MouseEvent('click')
+              )
+            }
+          >
+            Session
+          </button>
+        </div>
+      ),
+  };
+});
+vi.mock('@queries/favorites/favorites', () => ({
+  useFavoritesData: () => () => ({ favorites: [] }),
 }));
-vi.mock('./archived-conversations/archived-conversations', () => ({
-  ArchivedConversations: () => <div data-testid="archived-list" />,
-}));
+vi.mock(
+  './archived-conversations/archived-conversations',
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import('./archived-conversations/archived-conversations')
+      >();
+    return {
+      ArchivedConversations: (
+        props: ComponentProps<typeof actual.ArchivedConversations>
+      ) =>
+        state.realShell ? (
+          <actual.ArchivedConversations {...props} />
+        ) : (
+          <div data-testid="archived-list" />
+        ),
+    };
+  }
+);
 vi.mock(
   '@app/features/block-agent/queries/change-session-archive-state',
   () => ({
@@ -311,7 +397,7 @@ vi.mock('../primitives/composer-draft', () => ({
 }));
 vi.mock('../primitives/conversation-list-view', () => ({
   createConversationListView: () => ({
-    filters: () => [],
+    filters: () => EMPTY_CONVERSATION_FILTERS,
     grouping: () => 'none',
     sort: () => 'updated',
     setSort: () => {},
@@ -403,7 +489,16 @@ function row(name: string) {
 }
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   state.touch = false;
+  state.realShell = false;
   state.width = () => 1000;
   state.contentId.current = 'agents';
   state.entry.current = undefined;
@@ -421,7 +516,40 @@ beforeEach(() => {
   state.mounts.length = 0;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+it('renders the archive route through the real workspace shell', () => {
+  state.realShell = true;
+  state.contentId.current = 'agents-archive';
+  render(() => <AgentsView />);
+  const heading = screen.getByRole('heading', { name: 'Archived' });
+  const main = heading.closest('[data-view-shell-main]');
+  const content = heading.closest('section');
+  expect(main?.firstElementChild).toBe(content);
+  expect(content?.firstElementChild).toBe(heading.closest('header'));
+  expect(
+    main?.querySelector('.main, .body, [data-split-panel-header]')
+  ).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Show navigation' })).toBeNull();
+});
+it('renders the phone archive heading in its collection without a hidden composer spacer', () => {
+  state.realShell = true;
+  state.touch = true;
+  state.width = () => 390;
+  state.contentId.current = 'agents-archive';
+  render(() => <AgentsView />);
+  const heading = screen.getByRole('heading', { name: 'Archived' });
+  const main = heading.closest('[data-view-shell-main]');
+  expect(
+    main?.querySelector('.main, .body, [data-split-panel-header]')
+  ).toBeNull();
+  expect(heading.closest('[data-mobile-list-header]')).toBeNull();
+  expect(heading.closest('[data-mobile-list-layout]')).not.toBeNull();
+  expect(screen.queryByRole('textbox', { name: 'Message' })).toBeNull();
+});
 
 it('renders Archived without a second workspace header above its content', () => {
   state.contentId.current = 'agents-archive';

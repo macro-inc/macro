@@ -750,177 +750,183 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           </ViewShell.Aside>
 
           <ViewShell.Main class="overflow-hidden">
-            <ViewTour tour={agentsTour} />
-            <main
-              class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
-              classList={{
-                hidden:
-                  mobileLayout() && (mobileList() || page() === 'archived'),
-              }}
-            >
-              <Show
-                when={selected()?.conversation}
-                keyed
-                fallback={
-                  <>
+            <Show
+              when={page() === 'archived'}
+              fallback={
+                <>
+                  <ViewTour tour={agentsTour} />
+                  <main
+                    class="main touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:[&>*]:[--mobile-content-inset-top:0px]"
+                    classList={{
+                      hidden:
+                        mobileLayout() &&
+                        (mobileList() || page() === 'archived'),
+                    }}
+                  >
                     <Show
-                      when={
-                        page() !== 'routines' &&
-                        page() !== 'archived' &&
-                        !(
-                          mobileLayout() &&
-                          (mobileList() || page() === 'archived')
-                        )
+                      when={selected()?.conversation}
+                      keyed
+                      fallback={
+                        <>
+                          <Show
+                            when={
+                              page() !== 'routines' &&
+                              page() !== 'archived' &&
+                              !(
+                                mobileLayout() &&
+                                (mobileList() || page() === 'archived')
+                              )
+                            }
+                          >
+                            <Topbar
+                              title={pageTitle()}
+                              onBack={
+                                mobileLayout() &&
+                                !(page() === 'agents' && fromWorkspaceDrawer())
+                                  ? backToPreviousPage
+                                  : undefined
+                              }
+                            />
+                          </Show>
+                          <div class="body">
+                            <Suspense fallback={<LoadingComposer />}>
+                              <Switch>
+                                <Match when={page() === 'routines'}>
+                                  <RoutinesPage />
+                                </Match>
+                                <Match when={page() === 'connections'}>
+                                  <IntegrationsPage />
+                                </Match>
+                                <Match when={page() === 'agents'}>
+                                  <AgentSettings
+                                    createKind={creatingKind()}
+                                    onCloseCreate={() =>
+                                      setCreatingKind(undefined)
+                                    }
+                                  />
+                                </Match>
+                              </Switch>
+                              <div
+                                class="contents"
+                                classList={{ hidden: page() !== 'new' }}
+                              >
+                                <NewChatPage
+                                  showUpdates={
+                                    updatesFlag().enabled && page() === 'new'
+                                  }
+                                  updateSessions={updateSessions()}
+                                  onOpenUpdateSession={(id) => {
+                                    const session = updateSessions().find(
+                                      (item) => item.id === id
+                                    );
+                                    if (session)
+                                      openConversation(
+                                        session,
+                                        false,
+                                        modeForConversation(session)
+                                      );
+                                  }}
+                                  mode={workspace.mode()}
+                                  onModeChange={workspace.setMode}
+                                  requestedAgent={requestedAgent()}
+                                  active={
+                                    !mobileLayout() ||
+                                    (!mobileList() && page() === 'new')
+                                  }
+                                  registerFocus={(focus) => {
+                                    composerFocus = focus;
+                                  }}
+                                  workspaceId={panel.handle.id}
+                                  draft={persistedDraft.draft()}
+                                  onDraftChange={persistedDraft.setDraft}
+                                  roster={rosterSource.roster()}
+                                  rosterLoading={rosterSource.loading()}
+                                  availabilityLoading={rosterSource.availabilityLoading()}
+                                  onStart={startConversation}
+                                  onOpenRoster={openRoster}
+                                  belowComposer={
+                                    <TutorialPill
+                                      tutorial="agents"
+                                      class="self-center"
+                                    />
+                                  }
+                                />
+                              </div>
+                            </Suspense>
+                          </div>
+                        </>
                       }
                     >
-                      <Topbar
-                        title={pageTitle()}
-                        onBack={
-                          mobileLayout() &&
-                          !(page() === 'agents' && fromWorkspaceDrawer())
-                            ? backToPreviousPage
-                            : undefined
-                        }
-                      />
-                    </Show>
-                    <div class="body">
-                      <Suspense fallback={<LoadingComposer />}>
-                        <Switch>
-                          <Match when={page() === 'routines'}>
-                            <RoutinesPage />
-                          </Match>
-                          <Match when={page() === 'connections'}>
-                            <IntegrationsPage />
-                          </Match>
-                          <Match when={page() === 'archived'}>
-                            <Show when={!mobileLayout()}>
-                              <TraceFlow name="agents.archived">
-                                <ArchivedConversations
-                                  conversations={allArchived()}
-                                  ownerId={userId()}
-                                  sort={conversationSort()}
-                                  modeForConversation={modeForConversation}
-                                  loading={query.isPending}
-                                  error={Boolean(query.error)}
-                                  hasNextPage={Boolean(query.hasNextPage)}
-                                  loadingNextPage={query.isFetchingNextPage}
-                                  onLoadMore={() =>
-                                    fireAndForget(
-                                      query.fetchNextPage(),
-                                      'agents-view'
-                                    )
-                                  }
-                                  onRetry={() =>
-                                    fireAndForget(
-                                      query.isFetchNextPageError
-                                        ? query.fetchNextPage()
-                                        : query.refetch(),
-                                      'agents-view'
-                                    )
-                                  }
-                                  onOpenConversation={openListedConversation}
-                                  actions={actions}
-                                />
-                              </TraceFlow>
-                            </Show>
-                          </Match>
-                          <Match when={page() === 'agents'}>
-                            <AgentSettings
-                              createKind={creatingKind()}
-                              onCloseCreate={() => setCreatingKind(undefined)}
-                            />
-                          </Match>
-                        </Switch>
-                        <div
-                          class="contents"
-                          classList={{ hidden: page() !== 'new' }}
-                        >
-                          <NewChatPage
-                            showUpdates={
-                              updatesFlag().enabled && page() === 'new'
-                            }
-                            updateSessions={updateSessions()}
-                            onOpenUpdateSession={(id) => {
-                              const session = updateSessions().find(
-                                (item) => item.id === id
-                              );
-                              if (session)
-                                openConversation(
-                                  session,
-                                  false,
-                                  modeForConversation(session)
-                                );
-                            }}
-                            mode={workspace.mode()}
-                            onModeChange={workspace.setMode}
-                            requestedAgent={requestedAgent()}
-                            active={
-                              !mobileLayout() ||
-                              (!mobileList() && page() === 'new')
-                            }
-                            registerFocus={(focus) => {
-                              composerFocus = focus;
-                            }}
-                            workspaceId={panel.handle.id}
-                            draft={persistedDraft.draft()}
-                            onDraftChange={persistedDraft.setDraft}
-                            roster={rosterSource.roster()}
-                            rosterLoading={rosterSource.loading()}
-                            availabilityLoading={rosterSource.availabilityLoading()}
-                            onStart={startConversation}
-                            onOpenRoster={openRoster}
-                            belowComposer={
-                              <TutorialPill
-                                tutorial="agents"
-                                class="self-center"
+                      {(conversation) => (
+                        // Per conversation, so one switched away from can't hold
+                        // the next in its fallback until its own load settles.
+                        <Suspense fallback={<AgentSessionSkeleton />}>
+                          <Switch>
+                            <Match when={conversation.type === 'agent_session'}>
+                              <AgentSessionPane
+                                id={conversation.id}
+                                notificationSource={notifications}
+                                onSessionId={(sessionId) =>
+                                  adoptSessionId(conversation.id, sessionId)
+                                }
+                                onDeleted={showComposer}
                               />
-                            }
-                          />
-                        </div>
-                      </Suspense>
-                    </div>
-                  </>
-                }
-              >
-                {(conversation) => (
-                  // Per conversation, so one switched away from can't hold
-                  // the next in its fallback until its own load settles.
-                  <Suspense fallback={<AgentSessionSkeleton />}>
-                    <Switch>
-                      <Match when={conversation.type === 'agent_session'}>
-                        <AgentSessionPane
-                          id={conversation.id}
-                          notificationSource={notifications}
-                          onSessionId={(sessionId) =>
-                            adoptSessionId(conversation.id, sessionId)
-                          }
-                          onDeleted={showComposer}
-                        />
-                      </Match>
-                      <Match when={true}>
-                        <div class="body">
-                          <ChatEmptyStateContext.Provider
-                            value={() => (
-                              <div class="px-4 py-16 text-center">
-                                <ComposerGreeting>
-                                  What should we work on?
-                                </ComposerGreeting>
+                            </Match>
+                            <Match when={true}>
+                              <div class="body">
+                                <ChatEmptyStateContext.Provider
+                                  value={() => (
+                                    <div class="px-4 py-16 text-center">
+                                      <ComposerGreeting>
+                                        What should we work on?
+                                      </ComposerGreeting>
+                                    </div>
+                                  )}
+                                >
+                                  <PreviewPanel
+                                    target={previewBlockTarget(conversation)}
+                                    orchestrator={orchestrator}
+                                    splitPanelContext={panel}
+                                  />
+                                </ChatEmptyStateContext.Provider>
                               </div>
-                            )}
-                          >
-                            <PreviewPanel
-                              target={previewBlockTarget(conversation)}
-                              orchestrator={orchestrator}
-                              splitPanelContext={panel}
-                            />
-                          </ChatEmptyStateContext.Provider>
-                        </div>
-                      </Match>
-                    </Switch>
-                  </Suspense>
-                )}
+                            </Match>
+                          </Switch>
+                        </Suspense>
+                      )}
+                    </Show>
+                  </main>
+                </>
+              }
+            >
+              <Show when={!mobileLayout()}>
+                <TraceFlow name="agents.archived">
+                  <ArchivedConversations
+                    conversations={allArchived()}
+                    ownerId={userId()}
+                    sort={conversationSort()}
+                    modeForConversation={modeForConversation}
+                    loading={query.isPending}
+                    error={Boolean(query.error)}
+                    hasNextPage={Boolean(query.hasNextPage)}
+                    loadingNextPage={query.isFetchingNextPage}
+                    onLoadMore={() =>
+                      fireAndForget(query.fetchNextPage(), 'agents-view')
+                    }
+                    onRetry={() =>
+                      fireAndForget(
+                        query.isFetchNextPageError
+                          ? query.fetchNextPage()
+                          : query.refetch(),
+                        'agents-view'
+                      )
+                    }
+                    onOpenConversation={openListedConversation}
+                    actions={actions}
+                  />
+                </TraceFlow>
               </Show>
-            </main>
+            </Show>
             <Show
               when={mobileLayout() && (mobileList() || page() === 'archived')}
             >

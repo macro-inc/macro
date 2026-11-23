@@ -39,7 +39,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Persist phone Archived filters separately from Conversations so an active unread filter cannot hide archived history on entry.
-- Navigate Archived through `/agents/archive` under the app base; retain shared workspace state across Back/Forward, migrate legacy in-place entries without pushing duplicates, and keep the heading inside the list's own content padding.
+- Navigate Archived through `/agents/archive` under the app base; retain shared workspace state across Back/Forward, migrate legacy in-place entries without pushing duplicates, and render the archive directly inside ViewShell.Main with its heading in the list's content padding, outside the legacy composer/Topbar wrappers.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
 - Keep archive code/date cells pointer-transparent except their actual controls; show an empty archive only after pagination is exhausted, with loading feedback while pages can still supply matches.
 - Render desktop row ages in the interface locale on a state-matched trailing fill with a 24px left fade; retain hover/focus visibility and title truncation.
