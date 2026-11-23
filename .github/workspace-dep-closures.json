@@ -2809,6 +2809,7 @@
       "crates/channels",
       "crates/client/cache-bench",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -2928,6 +2929,7 @@
     "cache-core": [
       "crates/bot_id",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/cowlike",
       "crates/database_sql",
       "crates/document_sub_type",
@@ -2944,9 +2946,13 @@
       "crates/predicate_index",
       "crates/subsequence_match"
     ],
+    "cache-schema": [
+      "crates/client/cache-schema"
+    ],
     "cache-turso": [
       "crates/bot_id",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/client/cache-turso",
       "crates/client/turso-opfs",
       "crates/cowlike",
@@ -2987,6 +2993,7 @@
       "crates/channel_sender",
       "crates/channels",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/client/cache-turso",
       "crates/client/cache-wasm",
       "crates/client/turso-opfs",
@@ -15538,6 +15545,7 @@
       "crates/channel_sender",
       "crates/channels",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/computer_id",
       "crates/connection",
       "crates/connection_gateway_client",
@@ -17847,6 +17855,7 @@
     "cache-wasm": [
       "crates/bot_id",
       "crates/client/cache-core",
+      "crates/client/cache-schema",
       "crates/client/cache-turso",
       "crates/client/cache-wasm",
       "crates/client/turso-opfs",
