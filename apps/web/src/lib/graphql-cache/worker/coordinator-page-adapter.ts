@@ -159,7 +159,6 @@ const compileProductionEngine =
     // The same asset the engine worker would load: the worker only takes a
     // module compiled from it.
     const url = new URL(cacheWasm.binaryUrl, globalThis.location.href);
-    const now = (): number => performance.now();
     // Recorded apart from the worker's own download and compile: a follower
     // tab compiles ahead too, and no engine starts from it.
     const prefetchTelemetry = {
@@ -171,7 +170,7 @@ const compileProductionEngine =
     };
     return {
       assetUrl: url.href,
-      module: await compileCacheWasm(url, prefetchTelemetry, now),
+      module: await compileCacheWasm(prefetchTelemetry),
     };
   };
 

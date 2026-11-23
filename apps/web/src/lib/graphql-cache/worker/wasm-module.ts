@@ -442,7 +442,7 @@ async function initialize(): Promise<CacheWasmModule> {
     }
   }
 
-  const compiled = await compileCacheWasm(new URL(assetUrl), telemetry, now);
+  const compiled = await compileCacheWasm(telemetry);
   compiledEngineExchange?.report({ assetUrl, module: compiled });
   const instantiateStartedAt = now();
   let started: CacheWasmModule;

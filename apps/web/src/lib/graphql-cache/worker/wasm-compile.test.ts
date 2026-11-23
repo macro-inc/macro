@@ -1,10 +1,11 @@
 // @vitest-environment node
+
+import cacheWasm from 'wasm:cache-wasm';
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { compileCacheWasm } from './wasm-compile';
 
 // The smallest valid module: the magic number and version 1.
 const EMPTY_MODULE = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0, 0, 0]);
-const url = new URL('https://app.example/assets/cache_wasm_bg-abc.wasm');
 
 function serve(response: Response | (() => Response)) {
   const fetch = vi.fn(async () =>
@@ -12,11 +13,6 @@ function serve(response: Response | (() => Response)) {
   );
   vi.stubGlobal('fetch', fetch);
   return fetch;
-}
-
-function clock() {
-  let time = 0;
-  return () => (time += 10);
 }
 
 afterEach(() => {
@@ -35,10 +31,10 @@ describe('compileCacheWasm', () => {
     const compile = vi.spyOn(WebAssembly, 'compile');
     const record = vi.fn();
 
-    const compiled = await compileCacheWasm(url, { record }, clock());
+    const compiled = await compileCacheWasm({ record });
 
     expect(compiled).toBeInstanceOf(WebAssembly.Module);
-    expect(fetch).toHaveBeenCalledExactlyOnceWith(url);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(cacheWasm.binaryUrl);
     expect(compileStreaming).toHaveBeenCalledOnce();
     expect(compile).not.toHaveBeenCalled();
     expect(record.mock.calls.map(([event]) => event)).toEqual([
@@ -47,14 +43,14 @@ describe('compileCacheWasm', () => {
         operationCategory: 'initialization',
         outcome: 'success',
         errorCode: 'none',
-        durationMs: 10,
+        durationMs: expect.any(Number),
       },
       {
         name: 'graphql_cache.wasm_compile',
         operationCategory: 'initialization',
         outcome: 'success',
         errorCode: 'none',
-        durationMs: 10,
+        durationMs: expect.any(Number),
       },
     ]);
   });
@@ -70,7 +66,7 @@ describe('compileCacheWasm', () => {
       const compileStreaming = vi.spyOn(WebAssembly, 'compileStreaming');
       const record = vi.fn();
 
-      const compiled = await compileCacheWasm(url, { record }, clock());
+      const compiled = await compileCacheWasm({ record });
 
       expect(compiled).toBeInstanceOf(WebAssembly.Module);
       expect(compileStreaming).not.toHaveBeenCalled();
@@ -114,9 +110,9 @@ describe('compileCacheWasm', () => {
     const compile = vi.spyOn(WebAssembly, 'compile');
     const record = vi.fn();
 
-    await expect(
-      compileCacheWasm(url, { record }, clock())
-    ).resolves.toBeInstanceOf(WebAssembly.Module);
+    await expect(compileCacheWasm({ record })).resolves.toBeInstanceOf(
+      WebAssembly.Module
+    );
     expect(compile).toHaveBeenCalledOnce();
     expect(record).toHaveBeenNthCalledWith(
       1,
@@ -129,8 +125,8 @@ describe('compileCacheWasm', () => {
     const compileStreaming = vi.spyOn(WebAssembly, 'compileStreaming');
     const record = vi.fn();
 
-    await expect(compileCacheWasm(url, { record }, clock())).rejects.toThrow(
-      'cache WASM download returned HTTP 404'
+    await expect(compileCacheWasm({ record })).rejects.toThrow(
+      'cache-wasm wasm download returned HTTP 404'
     );
     expect(compileStreaming).not.toHaveBeenCalled();
     expect(record.mock.calls.map(([event]) => event)).toEqual([
@@ -154,7 +150,7 @@ describe('compileCacheWasm', () => {
       .mockRejectedValueOnce(new TypeError('network error'));
     const record = vi.fn();
 
-    const compiled = await compileCacheWasm(url, { record }, clock());
+    const compiled = await compileCacheWasm({ record });
 
     expect(compiled).toBeInstanceOf(WebAssembly.Module);
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -189,9 +185,9 @@ describe('compileCacheWasm', () => {
     );
     const record = vi.fn();
 
-    await expect(
-      compileCacheWasm(url, { record }, clock())
-    ).rejects.toBeInstanceOf(WebAssembly.CompileError);
+    await expect(compileCacheWasm({ record })).rejects.toBeInstanceOf(
+      WebAssembly.CompileError
+    );
     expect(record.mock.calls.map(([event]) => event)).toEqual([
       expect.objectContaining({
         name: 'graphql_cache.wasm_download',
