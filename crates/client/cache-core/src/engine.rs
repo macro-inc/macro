@@ -72,6 +72,7 @@ use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -419,6 +420,28 @@ pub const IDENTITY_META_KEY: &str = "__meta:identity";
 pub const IDENTITY_VALUE_FIELD: &str = "identity";
 const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
+/// Prefix of the engine's own metadata keys, which no entity key can carry.
+const METADATA_KEY_PREFIX: &str = "__meta:";
+
+/// `keys` without the engine's metadata. Deleting the account witness
+/// while its records stay would let the next account bind over them, and the
+/// engine keeps the witness and authority in memory besides; only a reset or
+/// clear removes them.
+fn without_metadata<'k>(keys: &'k [EntityKey<'static>]) -> Cow<'k, [EntityKey<'static>]> {
+    if keys
+        .iter()
+        .any(|key| key.0.starts_with(METADATA_KEY_PREFIX))
+    {
+        Cow::Owned(
+            keys.iter()
+                .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
+                .cloned()
+                .collect(),
+        )
+    } else {
+        Cow::Borrowed(keys)
+    }
+}
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -3570,12 +3593,14 @@ impl<S: Storage> Engine<S> {
     /// Use this for an explicit server-provided cache-deletion effect.
     /// Cross-engine notifications for records already written to shared
     /// storage should use
-    /// [`Self::invalidate_keys`] instead.
+    /// [`Self::invalidate_keys`] instead. Engine metadata keys (`__meta:`) are
+    /// left in place.
     pub async fn delete_keys(
         &mut self,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch(keys)
@@ -3739,12 +3764,14 @@ impl<S: PredicateIndexStorage> Engine<S> {
     }
 
     /// Atomically delete records and update projections that depend on them.
+    /// Engine metadata keys (`__meta:`) are left in place.
     pub async fn delete_keys_with_projection_changes(
         &mut self,
         keys: &[EntityKey<'static>],
         projections: Vec<ProjectionMutation>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch_with_projection_changes(keys, projections)

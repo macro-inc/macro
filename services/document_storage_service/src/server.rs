@@ -1005,6 +1005,30 @@ async fn run_server() -> anyhow::Result<()> {
             (availability.clone(), availability)
         }
     };
+    // Time tracking writes need `enable-time-tracking` for the caller. A local
+    // stack has it on without a PostHog flag, as Passwords does.
+    let time_tracking_rollout: Arc<dyn time_tracking::domain::ports::TimeTrackingRollout> =
+        match config.environment {
+            Environment::Local => Arc::new(time_tracking::outbound::rollout::LocalTimeTracking),
+            _ => Arc::new(time_tracking::outbound::rollout::FlaggedTimeTracking(
+                flags.clone(),
+            )),
+        };
+    let time_tracking_state = time_tracking::inbound::axum_router::TimeTrackingRouterState::new(
+        Arc::new(
+            time_tracking::domain::service::TimeTrackingServiceImpl::new(
+                time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository::new(db.clone()),
+                entity_access_service.clone(),
+                time_tracking_rollout,
+                time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher::new(
+                    macro_event_broker.clone(),
+                ),
+            ),
+        ),
+        entity_access_service.clone(),
+        authorization_state.clone(),
+    );
+
     let passwords_repository = Arc::new(
         passwords::outbound::postgres::PgRepository::new(db.clone())
             .map_err(|_| anyhow::anyhow!("invalid Passwords database pool capacity"))?,
@@ -2708,6 +2732,7 @@ async fn run_server() -> anyhow::Result<()> {
             entity_access_service.clone(),
             authorization_state.clone(),
         ),
+        time_tracking_state,
         account_manager_state: AccountManagerRouterState::new(
             account_manager_service,
             authorization_state.clone(),

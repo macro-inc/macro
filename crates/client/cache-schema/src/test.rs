@@ -260,3 +260,47 @@ fn runtime_sdl_identity_ignores_formatting_and_definition_order() {
             .unwrap();
     assert_eq!(first.hash(), second.hash());
 }
+
+#[test]
+fn build_output_rebuilds_the_schema_it_came_from() {
+    let parsed = bundled_schema();
+    let rebuilt =
+        Schema::from_build_output(parsed.artifact().clone(), parsed.hash().to_owned()).unwrap();
+    assert_eq!(rebuilt.hash(), parsed.hash());
+    assert_eq!(
+        serde_json::to_value(rebuilt.artifact()).unwrap(),
+        serde_json::to_value(parsed.artifact()).unwrap()
+    );
+}
+
+#[test]
+fn build_output_of_another_epoch_is_rejected() {
+    let parsed = bundled_schema();
+    let mut artifact = parsed.artifact().clone();
+    artifact.compatibility_epoch += 1;
+    assert!(Schema::from_build_output(artifact, parsed.hash().to_owned()).is_err());
+}
+
+#[test]
+#[should_panic(expected = "canonical artifact and hash")]
+#[cfg(debug_assertions)]
+fn build_output_with_another_hash_fails_debug_builds() {
+    let parsed = bundled_schema();
+    let _ = Schema::from_build_output(parsed.artifact().clone(), "0".repeat(64));
+}
+
+#[test]
+#[should_panic(expected = "canonical artifact and hash")]
+#[cfg(debug_assertions)]
+fn build_output_out_of_order_fails_debug_builds() {
+    // Sorting would give the same hash, but lookups binary-search the order as given.
+    let parsed = bundled_schema();
+    let mut artifact = parsed.artifact().clone();
+    let ty = artifact
+        .types
+        .iter_mut()
+        .find(|ty| ty.fields.len() > 1)
+        .unwrap();
+    ty.fields.reverse();
+    let _ = Schema::from_build_output(artifact, parsed.hash().to_owned());
+}

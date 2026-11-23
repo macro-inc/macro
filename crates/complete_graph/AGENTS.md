@@ -113,7 +113,7 @@ cargo run -p complete_graph --bin graphql_schema -- static_assets/schema.graphql
 The exported `static_assets/schema.graphql` feeds both the client codegen
 (`apps/web && bun gen-graphql`) and the cache metadata codegen. Additive changes
 keep persisted client caches; a change that makes stored records unsafe needs a
-bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-core/src/codec.rs`.
+bump of `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-schema/src/lib.rs`.
 
 Email send admission, cancellation and status are exposed by `graphql_email`;
 `agentSessionActivityAppended` checks session view access as the log subscription does and filters correlated activity rows by the session bound in `agent_correlations`. Its first empty frame confirms listening, so clients refetch REST history to close the handoff gap. A lagging stream errors so clients refetch again.
