@@ -1,0 +1,28 @@
+apps/web/tests/native/fixtures/server.ts
+  s_1d737fa3b08a67::t_ee697d06dffd20 42-49,157
+apps/web/tests/native/fixtures/server.test.ts
+  s_1d737fa3b08a67::t_b1fb8430a7b605 14
+  s_1d737fa3b08a67::t_573868ace3109a 452-463
+  s_1d737fa3b08a67::t_a88dbb060995fe 4,441-451,464-475
+  s_1d737fa3b08a67::t_58cd4d45d5b42b 476-477
+apps/web/tests/native/README.md
+  s_1d737fa3b08a67::t_51582ef7cac415 63-65
+apps/web/tests/native/driver.ts
+  s_1d737fa3b08a67::t_3e64ab132248fe 35-36,39-41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "e655ae9203a6b97ac7c104b525cf6f7324316c29",
+  "prompts": {},
+  "sessions": {
+    "s_1d737fa3b08a67": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f75f008e-7e0d-4333-aa33-ce79870c1674",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
