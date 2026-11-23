@@ -325,7 +325,6 @@ export async function executeGraphqlRsvp(
   return settle(host, result, result.data?.respondToCalendarEvent ?? undefined);
 }
 
-/** Adds guests to the series or one occurrence through the durable queue. */
 /**
  * Sets or clears the viewer's own color for a calendar. The cache shows the
  * color on the calendar's record at once, and the server's answer replaces
@@ -355,6 +354,7 @@ export async function executeGraphqlSetCalendarColor(
   return { kind: 'committed' };
 }
 
+/** Adds guests to the series or one occurrence through the durable queue. */
 export async function executeGraphqlInviteGuests(
   host: CalendarMutationHost,
   args: InviteCalendarEventGuestsArgs,
