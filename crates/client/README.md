@@ -149,14 +149,18 @@ type:
   not validate, or applying the Types tier failed or ran out of space and
   rolled back. Every refetchable row goes.
 
-Every tier keeps the cache's identity, authority and queued mutations; the
-migration of a previous cache format, which runs before adoption, keeps only
-the queue. Types and Reset drop the storage generation record, so the backfill starts over and
+Every tier keeps the cache's identity, authority and queued mutations. The
+migration of a previous cache format, which runs before adoption, keeps them
+too, rewriting the kept records in the new format, and marks the stored schema
+unreadable so adoption resets the rest. Types and Reset drop the storage generation record, so the backfill starts over and
 refetches what went. A queued write's optimistic overlay that no longer fits is retired:
 the mutation is still sent, but its overlay adds no records and its queued
 projections go with it. Queued projections of the records that went go too,
 and every queued projection when every document is marked incomplete, so no
 optimistic list entry outlives its record or the facts it was derived from.
+A queued write whose server response no longer normalizes, because the schema
+dropped a field it selects, settles as failed: its overlay rolls back and the
+host revalidates, instead of retrying it at the head of the queue forever.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the
@@ -172,7 +176,10 @@ names what wrote its cache instead, and one that cannot be read resets it. An
 epoch bump makes every stored schema unreadable: a native file, even one at a
 previous cache format, moves to the new namespace and resets on adoption,
 keeping its queued writes, while a browser
-database's name holds the epoch, so the browser opens a new, empty file. A removed enum value or a changed
+database's name holds the epoch, so the browser opens a new, empty file, as it
+does for a cache format or storage schema bump, and the writes still queued in
+the old file are not carried over. A native build older than its file's storage
+schema cannot read it and replaces it, queue included. A removed enum value or a changed
 argument or default is not visible in the schema and leaves stale values, as a
 server change without a schema change would.
 

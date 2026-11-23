@@ -105,7 +105,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     compatibility epoch only for cache semantics the schema cannot show.
     Discard records on compatibility-epoch/format mismatch (cache is
     disposable, rebuild from network). Every schema change keeps queued
-    mutations.
+    mutations, and so does a native epoch or format change; a browser
+    database's name holds the epoch, format and storage schema, so a bump of
+    any of them opens a new, empty file without the old one's queued writes.
 
     **Key policy — presence-of-id convention**: no client-side key config.
     An output object type with `id: ID!` is keyed by `__typename:id`; no

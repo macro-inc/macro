@@ -90,8 +90,11 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - The other exception is a cache format version listed in
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
   refetchable records, search projections, index facts, and calendar ranges in
-  one transaction, keeps queued mutations, optimistic layers, and their
-  projections, and rewrites the namespace. Everything else still resets.
+  one transaction, keeps queued mutations and optimistic layers, reads the
+  identity and authority records and the queue's identity metadata in the
+  previous format and writes them back in this one, marks the stored schema
+  unreadable so adoption resets the queued projections, and rewrites the
+  namespace. Everything else still resets.
 
 ## Related
 
