@@ -20,10 +20,20 @@ own permission checks and agent attribution apply.
   operation (`op` in `entity` grouping), and `runOperation` validates, calls
   the SDK and shapes the result. One `mcp_chatgpt.tool_call` span per call
   records tool, operation, hint and outcome.
+- MCP Events (OpenAI's `events/list`, `events/subscribe`,
+  `events/unsubscribe`; the `events` capability in `initialize`): each
+  request is forwarded as the bearer to the public MCP server at
+  `AUTHORIZATION_SERVER_URL` + `/mcp` with `x-macro-events-profile: chatgpt`,
+  which keeps the subscription, answers in the draft ChatGPT follows, and has
+  document storage deliver to ChatGPT's webhook (see
+  `services/agent_harness_service`'s AGENTS.md). Person tokens in the
+  arguments are revealed first; the answer, or its error with code, message
+  and data, is relayed as is. Span: `mcp_chatgpt.events` (method, event
+  name, outcome).
 
 ## Start here
 
-- `src/app.ts`: routes, auth challenge and the MCP handlers.
+- `src/app.ts`: routes, auth challenge and the MCP handlers, events included.
 - `src/config.ts`: bindings, parsed with Zod; a missing value fails loudly.
 - `wrangler.jsonc`: per-environment vars and hosts (dev and prod on workers.dev).
 

@@ -22,6 +22,7 @@ import {
   McpError,
 } from '@modelcontextprotocol/sdk/types.js';
 import { match } from 'ts-pattern';
+import { z } from 'zod';
 import { HOSTS, type ServiceName } from '../../../packages/sdk/src/config';
 import { Macro } from '../../../packages/sdk/src/macro';
 import type { Config } from './config';
@@ -40,10 +41,65 @@ export const OPENAI_APPS_CHALLENGE_PATH = '/.well-known/openai-apps-challenge';
 
 const SERVER_INFO = { name: 'macro', title: 'Macro', version: '1.0.0' };
 
+/**
+ * Tools, and MCP Events as ChatGPT looks for it: a top-level `events`
+ * capability, which the SDK's capability type doesn't name yet (a variable,
+ * so the extra key is allowed).
+ */
+const CAPABILITIES = { tools: {}, events: {} };
+
 /** The tool that turns person tokens back into names and emails. */
 export const PEOPLE_TOOL = 'people_read';
 
 const MAX_PEOPLE = 20;
+
+/**
+ * The MCP Events methods ChatGPT calls (developers.openai.com/plugins/build/mcp-events),
+ * answered by the public MCP server, which keeps the subscriptions.
+ */
+export const EVENTS_METHODS = [
+  'events/list',
+  'events/subscribe',
+  'events/unsubscribe',
+] as const;
+
+type EventsMethod = (typeof EVENTS_METHODS)[number];
+
+/** Tells the public MCP server to answer in the draft ChatGPT follows and deliver to it as such. Grants nothing. */
+export const EVENTS_PROFILE_HEADER = 'x-macro-events-profile';
+
+/** The MCP revision whose events methods the public MCP server serves. */
+const EVENTS_PROTOCOL_VERSION = '2026-07-28';
+
+/** A JSON-RPC error relayed with its code, message and data as the public MCP server sent them. */
+class RelayedError extends Error {
+  constructor(
+    readonly code: number,
+    message: string,
+    readonly data: unknown
+  ) {
+    super(message);
+    this.name = 'RelayedError';
+  }
+}
+
+const RELAYED = z.union([
+  z.object({ result: z.record(z.string(), z.unknown()) }),
+  z.object({
+    error: z.object({
+      code: z.number().int(),
+      message: z.string(),
+      data: z.unknown().optional(),
+    }),
+  }),
+]);
+
+function eventsRequestSchema(method: EventsMethod) {
+  return z.object({
+    method: z.literal(method),
+    params: z.record(z.string(), z.unknown()).optional(),
+  });
+}
 
 const PEOPLE_LISTED = {
   name: PEOPLE_TOOL,
@@ -312,8 +368,89 @@ export function createHandler(config: Config) {
     });
   }
 
+  const eventsUrl = new URL('/mcp', config.AUTHORIZATION_SERVER_URL).href;
+
+  /**
+   * An MCP Events request, answered by the public MCP server as the bearer's
+   * user. Person tokens in its arguments go back to the ids they replaced, and
+   * any that come back are sealed again.
+   */
+  async function forwardEvents(
+    method: EventsMethod,
+    params: Record<string, unknown> | undefined,
+    token: string
+  ): Promise<Record<string, unknown>> {
+    return Telemetry.span('mcp_chatgpt.events', async (span) => {
+      span.setAttr('mcp.method', method);
+      if (typeof params?.name === 'string')
+        span.setAttr('mcp.event.name', params.name);
+      const people = personTokens(token);
+      let revealed: unknown;
+      try {
+        revealed = await people.reveal(params ?? {});
+      } catch (error) {
+        span.setAttr('mcp.outcome', 'invalid');
+        if (error instanceof PersonTokenError)
+          throw new RelayedError(
+            ErrorCode.InvalidParams,
+            error.message,
+            undefined
+          );
+        throw error;
+      }
+      const headers: Record<string, string> = {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        'mcp-protocol-version': EVENTS_PROTOCOL_VERSION,
+        [EVENTS_PROFILE_HEADER]: 'chatgpt',
+      };
+      span.injectTraceHeaders(headers);
+      const response = await fetch(eventsUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method,
+          params: revealed,
+        }),
+      });
+      span.setAttr('http.response.status_code', response.status);
+      const relayed = RELAYED.safeParse(
+        await response.json().catch(() => undefined)
+      );
+      if (!relayed.success) {
+        span.setAttr('mcp.outcome', 'upstream');
+        throw new RelayedError(
+          ErrorCode.InternalError,
+          "Macro couldn't answer the events request.",
+          undefined
+        );
+      }
+      if ('error' in relayed.data) {
+        const { code, message, data } = relayed.data.error;
+        span.setAttr('mcp.outcome', String(code));
+        throw new RelayedError(
+          code,
+          String(await people.conceal(message)),
+          await people.conceal(data)
+        );
+      }
+      span.setAttr('mcp.outcome', 'ok');
+      return (await people.conceal(relayed.data.result)) as Record<
+        string,
+        unknown
+      >;
+    });
+  }
+
   function mcpServer(token: string) {
-    const server = new Server(SERVER_INFO, { capabilities: { tools: {} } });
+    const server = new Server(SERVER_INFO, { capabilities: CAPABILITIES });
+    for (const method of EVENTS_METHODS)
+      server.setRequestHandler(eventsRequestSchema(method), (request) =>
+        forwardEvents(method, request.params, token)
+      );
     server.setRequestHandler(ListToolsRequestSchema, () => ({
       tools: [...listed, PEOPLE_LISTED],
     }));

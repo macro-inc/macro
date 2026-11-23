@@ -23,7 +23,10 @@ const CONFIG = z
     MACRO_ENV: z.enum(['local', 'dev', 'prod']),
     /** This server's MCP endpoint, the OAuth resource tokens are issued for. */
     RESOURCE_URL: z.url(),
-    /** The OAuth authorization server (the harness's MCP broker). */
+    /**
+     * The OAuth authorization server (the harness's MCP broker), whose public
+     * MCP server at `/mcp` also answers MCP Events requests.
+     */
     AUTHORIZATION_SERVER_URL: z.url(),
     /** `entity` tools (`documents_read`) or one tool per operation. */
     TOOL_GROUPING: z.enum(['entity', 'method']),
