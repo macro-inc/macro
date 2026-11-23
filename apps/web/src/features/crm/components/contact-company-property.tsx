@@ -190,11 +190,10 @@ export function ContactCompanyProperty(props: {
   const keepTouchFocus = (event: Event) => {
     if (isTouchDevice()) event.preventDefault();
   };
-  const segmentFocus =
-    'focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20';
   // A button group clips its segments, so on touch they take the group's own
   // 36px height, as a task's Project pill does, rather than a 24px face with a
-  // larger target. The reason a company can't change rides on its name.
+  // larger target. The name's tooltip gives it in full, or, when the company
+  // can't change, the reason why.
   const linkedFace = () => (
     <ButtonGroup
       variant={variant()}
@@ -204,10 +203,10 @@ export function ContactCompanyProperty(props: {
     >
       <ButtonGroup.Button
         ref={valueElement}
-        class={`group/company-link min-w-0 shrink justify-start gap-1 touch:min-w-11 ${segmentFocus}`}
+        class="group/company-link min-w-0 shrink justify-start gap-1 touch:min-w-11 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20"
         aria-label={t('entityActions.openEntityNamed', { name: name() })}
         tooltip={
-          !actionable() && props.lockedReason ? props.lockedReason : undefined
+          !actionable() && props.lockedReason ? props.lockedReason : name()
         }
         onClick={(event: MouseEvent) => props.openCompany(event)}
       >
@@ -220,7 +219,7 @@ export function ContactCompanyProperty(props: {
         <ButtonGroup.Button
           ref={triggerElement}
           size="icon-xs"
-          class={segmentFocus}
+          class="focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/20"
           aria-label={t('crm.editContactCompany')}
           aria-expanded={open()}
           aria-haspopup="dialog"
@@ -245,7 +244,8 @@ export function ContactCompanyProperty(props: {
             size: 'xs',
             readOnly: true,
             empty: true,
-            class: 'min-w-0 focus-visible:ring-2 focus-visible:ring-accent/20',
+            class:
+              'h-6 min-w-0 focus-visible:ring-2 focus-visible:ring-accent/20',
           })}
         >
           <PropertyEmpty label={t('crm.noCompany')} />

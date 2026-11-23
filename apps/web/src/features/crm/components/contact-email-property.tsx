@@ -13,12 +13,13 @@ import type { ContactEmailChange } from '../core/contact';
 import {
   type ChangeContactEmail,
   ContactEmailEditor,
+  type ContactEmailRequest,
   createContactEmailChange,
 } from './contact-email-editor';
 import { ContactEmailRow } from './contact-email-row';
 import { contactPropertyTouchTarget } from './contact-property-styles';
 
-export type ContactEmailProps = {
+type ContactEmailProps = {
   emails: string[];
   primary: string | null | undefined;
   /** Whether the server listed the addresses, so they can be managed. */
@@ -101,15 +102,34 @@ function ContactEmailHoverList(props: { emails: string[]; primary: string }) {
   );
 }
 
+/** The email editor for a host that owns its request and its open state. */
+function editor(
+  props: ContactEmailProps,
+  request: ContactEmailRequest,
+  onClose: () => void
+) {
+  return (
+    <ContactEmailEditor
+      emails={props.emails}
+      primary={props.primary}
+      manageable={props.manageable}
+      companyEmail={props.companyEmail}
+      request={request}
+      onClose={onClose}
+    />
+  );
+}
+
 /**
  * The header's Email property: one pill, like a task's Tags or Assignees,
  * showing the primary address and how many others there are. Hovering lists
  * every address; the pill opens the email editor. A blank contact shows the
- * empty property, and one element serves both, so focus returned after the
- * first address is added stays on it.
+ * empty property. The first address swaps in a new button with its hover card;
+ * `trigger` follows it, so focus still returns to the pill.
  */
 export function ContactEmailPill(props: ContactEmailProps) {
   const [open, setOpen] = createSignal(false);
+  const editing = createContactEmailChange(props.change, props.errorMessage);
   let trigger: HTMLButtonElement | undefined;
   const primary = () => props.primary ?? props.emails[0] ?? '';
   const others = () => Math.max(props.emails.length - 1, 0);
@@ -123,7 +143,10 @@ export function ContactEmailPill(props: ContactEmailProps) {
       count: others(),
     });
   };
+  // A change still saving keeps the editor open, so its outcome shows.
   const changeOpen = (next: boolean) => {
+    if (editing.saving()) return;
+    if (next) editing.clearError();
     setOpen(next);
     if (!next && !isTouchDevice()) trigger?.focus();
   };
@@ -147,7 +170,7 @@ export function ContactEmailPill(props: ContactEmailProps) {
         variant: 'secondary',
         size: 'xs',
         empty: blank(),
-        class: `min-w-0 shrink ${contactPropertyTouchTarget}`,
+        class: `ph-no-capture min-w-0 shrink ${contactPropertyTouchTarget}`,
       })}
       aria-label={label()}
       aria-haspopup="dialog"
@@ -175,7 +198,7 @@ export function ContactEmailPill(props: ContactEmailProps) {
               variant: 'secondary',
               size: 'xs',
               readOnly: true,
-              class: 'min-w-0',
+              class: 'ph-no-capture h-6 min-w-0',
             })}
             aria-label={label()}
           >
@@ -205,7 +228,7 @@ export function ContactEmailPill(props: ContactEmailProps) {
           </Show>
         }
       >
-        <ContactEmailEditor {...props} onClose={() => changeOpen(false)} />
+        {editor(props, editing, () => changeOpen(false))}
       </ContactEmailEditorSurface>
     </Show>
   );
@@ -219,21 +242,34 @@ export function ContactEmailPill(props: ContactEmailProps) {
  */
 export function ContactEmailList(props: ContactEmailProps) {
   const [open, setOpen] = createSignal(false);
+  const [anchor, setAnchor] = createSignal<HTMLElement>();
   const request = createContactEmailChange(props.change, props.errorMessage);
-  let anchor: HTMLElement | undefined;
+  const editing = createContactEmailChange(props.change, props.errorMessage);
   let addControl: HTMLButtonElement | undefined;
   const addresses = new Map<string, HTMLButtonElement>();
   const canAdd = () => props.manageable || props.emails.length === 0;
+  // An address removed in the editor takes its button with it; Add email
+  // stands in for it, as the editor's anchor and for focus.
+  const target = () => {
+    const element = anchor();
+    return element?.isConnected ? element : addControl;
+  };
+  const expandedFrom = (element: HTMLElement | undefined) =>
+    open() && !!element && anchor() === element;
 
   const openEditor = (element: HTMLElement) => {
-    anchor = element;
+    if (editing.saving()) return;
+    request.clearError();
+    editing.clearError();
+    setAnchor(element);
     setOpen(true);
   };
-  // An address removed in the editor takes its button with it.
+  // A change still saving keeps the editor open, so its outcome shows.
   const changeOpen = (next: boolean) => {
+    if (editing.saving()) return;
     setOpen(next);
     if (next || isTouchDevice()) return;
-    (anchor?.isConnected ? anchor : addControl)?.focus();
+    target()?.focus();
   };
   const run = async (email: string, kind: 'remove' | 'primary') => {
     if (!(await request.run(email, kind)) || isTouchDevice()) return;
@@ -253,6 +289,7 @@ export function ContactEmailList(props: ContactEmailProps) {
           busy={request.saving()}
           onOpen={openEditor}
           addressRef={(element) => addresses.set(email, element)}
+          expanded={expandedFrom(addresses.get(email))}
           onMakePrimary={() => fireAndForget(run(email, 'primary'), 'crm')}
           onRemove={() => fireAndForget(run(email, 'remove'), 'crm')}
         />
@@ -269,7 +306,7 @@ export function ContactEmailList(props: ContactEmailProps) {
       <ContactEmailEditorSurface
         open={open()}
         onOpenChange={changeOpen}
-        anchor={() => anchor?.getBoundingClientRect()}
+        anchor={() => target()?.getBoundingClientRect()}
         trigger={
           <>
             {rows()}
@@ -284,6 +321,7 @@ export function ContactEmailList(props: ContactEmailProps) {
                 })}
                 aria-label={t('crm.addEmail')}
                 aria-haspopup="dialog"
+                aria-expanded={expandedFrom(addControl)}
                 onClick={(event) => openEditor(event.currentTarget)}
               >
                 <PlusIcon class="size-3 shrink-0" />
@@ -293,7 +331,7 @@ export function ContactEmailList(props: ContactEmailProps) {
           </>
         }
       >
-        <ContactEmailEditor {...props} onClose={() => changeOpen(false)} />
+        {editor(props, editing, () => changeOpen(false))}
       </ContactEmailEditorSurface>
       <Show when={request.error()}>
         {(message) => (

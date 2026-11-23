@@ -16,7 +16,7 @@ export function CompanyDomainsPill(props: { domains: string[] }) {
         variant: 'secondary',
         size: 'xs',
         readOnly: true,
-        class: 'min-w-0',
+        class: 'h-6 min-w-0',
       })}
     >
       <GlobeIcon class="size-3 shrink-0" />

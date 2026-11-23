@@ -86,6 +86,9 @@ test('email add validates, retains a rejected draft and lists the address after 
       () => window.archiveFixture.snapshot().contacts[0].email
     )
   ).toBeNull();
+  // The editor stays open while the address saves, so its outcome shows.
+  await page.keyboard.press('Escape');
+  await expect(input).toBeVisible();
   await page.screenshot({
     animations: 'disabled',
     path: info.outputPath('email-pending.png'),
@@ -507,7 +510,7 @@ test('several addresses: make primary, reject a duplicate, add, remove, and keep
   await emailPill(page).click();
   const list = page.getByRole('list', { name: 'Email' });
   const rows = list.getByRole('listitem');
-  const addresses = list.locator('.ph-no-capture');
+  const addresses = list.locator('span.ph-no-capture');
   await expect(addresses).toHaveText([
     'person1@example.com',
     personal,
@@ -702,6 +705,33 @@ test('Record details shows every address in full beside Primary, actions only wh
   await expect(
     linked.getByRole('button', { name: 'Remove person1@example.net' })
   ).toHaveCount(1);
+});
+
+test('removing the address the editor opened from keeps the editor in place and focus on Add email', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop popover placement and focus');
+  await page.goto('/?several&long&independent');
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  const field = page.getByRole('group', { name: 'Email', exact: true });
+  // Measured before the editor opens, which hides the page behind it from
+  // the accessibility tree.
+  const fieldBox = (await field.boundingBox())!;
+  await field
+    .getByRole('button', { name: 'Email options for person1@example.net' })
+    .click();
+  const list = page.getByRole('list', { name: 'Email' });
+  await (await rowAction(list, 'Remove person1@example.net', isMobile)).click();
+  await expect(list.locator('span.ph-no-capture')).toHaveCount(2);
+  // The editor stays beside Record details rather than jumping to a corner.
+  const listBox = (await list.boundingBox())!;
+  expect(listBox.x).toBeGreaterThan(fieldBox.x - 400);
+  expect(listBox.y).toBeGreaterThan(fieldBox.y - 100);
+  await page.keyboard.press('Escape');
+  await expect(
+    field.getByRole('button', { name: 'Add email', exact: true })
+  ).toBeFocused();
 });
 
 test('a company header shows its domains as one pill', async ({ page }) => {

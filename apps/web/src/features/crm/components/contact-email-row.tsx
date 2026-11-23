@@ -6,7 +6,7 @@ import { Badge, Button, cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 
 /** The primary address's badge, at the size of the row it sits in. */
-export function ContactEmailPrimaryBadge() {
+function ContactEmailPrimaryBadge() {
   return (
     <Badge variant="ghost" size="xs" class="shrink-0 border-0 pl-1.5 pr-0">
       {t('crm.primaryEmail')}
@@ -35,6 +35,8 @@ export function ContactEmailRow(props: {
   onOpen?: (anchor: HTMLButtonElement) => void;
   /** The address's button, where focus goes once it becomes primary. */
   addressRef?: (element: HTMLButtonElement) => void;
+  /** Whether the email editor is open from this address. */
+  expanded?: boolean;
   onMakePrimary(): void;
   onRemove(): void;
 }) {
@@ -76,9 +78,11 @@ export function ContactEmailRow(props: {
               type="button"
               class={cn(
                 faceClass(),
-                'focus-visible:ring-2 focus-visible:ring-accent/20'
+                'ph-no-capture focus-visible:ring-2 focus-visible:ring-accent/20'
               )}
               aria-label={t('crm.manageContactEmail', { email: props.email })}
+              aria-haspopup="dialog"
+              aria-expanded={props.expanded ?? false}
               onClick={(event) => open()(event.currentTarget)}
             >
               {face()}
@@ -95,7 +99,7 @@ export function ContactEmailRow(props: {
             <Button
               variant="danger-ghost"
               size="icon-xs"
-              class="focus-visible:ring-2 focus-visible:ring-accent/20"
+              class="ph-no-capture focus-visible:ring-2 focus-visible:ring-accent/20"
               aria-label={t('crm.removeContactEmailNamed', {
                 email: props.email,
               })}
@@ -110,7 +114,7 @@ export function ContactEmailRow(props: {
             <Button
               variant="ghost"
               size="icon-xs"
-              class="text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20"
+              class="ph-no-capture text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20"
               aria-label={t('crm.makeContactEmailPrimaryNamed', {
                 email: props.email,
               })}

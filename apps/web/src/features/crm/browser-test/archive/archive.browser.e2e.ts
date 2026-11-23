@@ -235,8 +235,13 @@ test('compact record controls keep separate full-height touch targets', async ({
         ).toBeVisible();
         const company = companyNavigation;
         const bounds = (await company.boundingBox())!;
+        // The company pill's segments take its full 36px touch height, with
+        // no extension beyond it.
         if (isMobile)
-          await page.touchscreen.tap(bounds.x + bounds.width / 2, bounds.y - 9);
+          await page.touchscreen.tap(
+            bounds.x + bounds.width / 2,
+            bounds.y + bounds.height / 2
+          );
         else await company.click();
         await expect(
           page.getByRole('textbox', { name: 'Company name' })

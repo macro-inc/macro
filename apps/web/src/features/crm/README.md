@@ -151,12 +151,14 @@ contact adding its first address. A company header shows its domains the same
 way, as one read-only pill: the first domain and `+N`, every domain in a hover
 card.
 Header faces stay at 24px with 12px type/icons and reserve separate 44px touch
-targets with transparent expansion and margins (outside a split pill's frame,
-so the frame keeps its height); Record details rows take the side panel's 36px
-touch rows. Desktop uses the property popover and entity picker; touch uses the
+targets with transparent expansion and margins, except the company's split
+pill: a button group clips its segments, so on touch it takes the group's 36px
+height, as a task's Project pill does. Record details rows take the side
+panel's 36px touch rows. Desktop uses the property popover and entity picker; touch uses the
 shared dialog and picker sheet. Drafts remain visible on rejection, pending
 saves cannot be repeated, and record identity keys retire drafts when the record
-changes. After a desktop change, focus returns to the control that started it:
+changes, and an editor stays open while its change saves so the outcome shows.
+After a desktop change, focus returns to the control that started it:
 the pill, the address, or Add email once its address is gone; in Record details
 Make primary leaves focus on the address and Remove moves it to Add email.
 Property popovers are menus, which send Tab to their last control; the email

@@ -12,6 +12,12 @@ export type ChangeContactEmail = (
   change: ContactEmailChange
 ) => Promise<void>;
 
+const keepTouchFocus = (event: Event) => {
+  if (isTouchDevice()) event.preventDefault();
+};
+
+export type ContactEmailRequest = ReturnType<typeof createContactEmailChange>;
+
 /** One pending address change at a time, with the rejection kept beside it. */
 export function createContactEmailChange(
   change: ChangeContactEmail,
@@ -56,12 +62,12 @@ export function ContactEmailEditor(props: {
   primary: string | null | undefined;
   manageable: boolean;
   companyEmail: string | undefined;
-  change: ChangeContactEmail;
-  errorMessage(error: unknown, change: ContactEmailChange): string;
+  /** Owned by the editor's host, which keeps it open while a change saves. */
+  request: ContactEmailRequest;
   onClose(): void;
 }) {
   const [draft, setDraft] = createSignal('');
-  const request = createContactEmailChange(props.change, props.errorMessage);
+  const request = props.request;
   const [input, setInput] = createSignal<HTMLInputElement>();
   useSearchInputFocus(input, () => !isTouchDevice());
   const canAdd = () => props.manageable || props.emails.length === 0;
@@ -119,6 +125,10 @@ export function ContactEmailEditor(props: {
             size="sm"
             type="submit"
             disabled={request.saving()}
+            // On touch the field keeps focus, so the keyboard stays up for
+            // the next address.
+            onPointerDown={keepTouchFocus}
+            onMouseDown={keepTouchFocus}
           >
             {request.saving() ? t('crm.savingContact') : t('common.add')}
           </Button>
