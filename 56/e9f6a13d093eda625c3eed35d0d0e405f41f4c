@@ -1,0 +1,23 @@
+crates/connectors/src/outbound/macro_connect/vendor.rs
+  s_faaa49c7c59dde::t_943dacbc66cee6 28
+crates/macro_service_urls/src/lib.rs
+  s_faaa49c7c59dde::t_0c69956a9c96e6 633
+infra/packages/shared/src/service_urls.ts
+  s_faaa49c7c59dde::t_9625deeae33e76 71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "56e9f6a13d093eda625c3eed35d0d0e405f41f4c",
+  "prompts": {},
+  "sessions": {
+    "s_faaa49c7c59dde": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e19473a2-7e99-4e26-8318-c2cc8c698650",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
