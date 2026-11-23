@@ -11,6 +11,10 @@ use minidump::{
 
 use super::{Crash, CrashModule, CrashReport, Launch, NativeCrash, launch_at};
 
+/// Crashpad's `kMachExceptionSimulated` (`'CPsx'`), recorded for a dump
+/// taken without crashing.
+const SIMULATED_EXCEPTION: u32 = 0x4350_7378;
+
 /// What a report needs from one dump.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) struct Dump {
@@ -124,7 +128,10 @@ where
         crash: NativeCrash {
             process_type,
             exception: exception_name,
-            dumped_without_crashing: annotation("is-dump-process-without-crashing").is_some(),
+            dumped_without_crashing: annotation("is-dump-process-without-crashing").is_some()
+                || exception.as_ref().is_some_and(|exception| {
+                    exception.raw.exception_record.exception_code == SIMULATED_EXCEPTION
+                }),
             instruction_address: instruction.map(|address| format!("{address:#x}")),
             module,
         },

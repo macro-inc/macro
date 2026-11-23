@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use uuid::Uuid;
 
-use super::scrub::{scrub_message, short_source_path};
+use super::scrub::{Redactions, scrub_message, short_source_path};
 use super::{Launch, PANIC_PREFIX, PanicCrash, PanicFrame, StoredPanic, now_ms, write_atomically};
 
 /// Panic files kept unsent, so a panic loop cannot fill the disk.
@@ -31,6 +31,7 @@ const APP_CRATES: &[&str] = &[
 pub(super) struct Context {
     pub launch: Launch,
     pub os_version: Option<String>,
+    pub redactions: Redactions,
 }
 
 thread_local! {
@@ -56,10 +57,9 @@ fn record(dir: &Path, context: &Context, info: &PanicHookInfo<'_>) -> std::io::R
     let stored = fs::read_dir(dir)?
         .filter_map(Result::ok)
         .filter(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(PANIC_PREFIX)
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with(PANIC_PREFIX) && name.ends_with(".json")
         })
         .count();
     if stored >= MAX_STORED_PANICS {
@@ -73,7 +73,10 @@ fn record(dir: &Path, context: &Context, info: &PanicHookInfo<'_>) -> std::io::R
         arch: std::env::consts::ARCH.to_string(),
         crash: PanicCrash {
             thread: std::thread::current().name().map(str::to_string),
-            message: scrub_message(info.payload_as_str().unwrap_or("Box<dyn Any>")),
+            message: scrub_message(
+                info.payload_as_str().unwrap_or("Box<dyn Any>"),
+                &context.redactions,
+            ),
             location: info.location().map(|location| {
                 format!(
                     "{}:{}:{}",

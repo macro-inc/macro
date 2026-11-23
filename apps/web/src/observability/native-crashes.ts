@@ -1,5 +1,6 @@
 import { analytics } from '@app/lib/analytics';
 import { isDesktopPlatform } from '@core/util/platform';
+import { sleep } from '@core/util/sleep';
 import { invoke } from '@tauri-apps/api/core';
 import { ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -8,6 +9,13 @@ import type {
   NativeCrash,
   PanicCrash,
 } from './generated/native-crashes';
+
+/**
+ * How long a sent report stays on disk. PostHog sends without waiting for an
+ * answer; a crash in this window resends it at the next start, and the event's
+ * fixed uuid and timestamp let PostHog drop the copy.
+ */
+const ACK_DELAY_MS = 15_000;
 
 /**
  * Sends the desktop app's native crashes to PostHog as `$exception`: Rust
@@ -24,19 +32,29 @@ export async function reportNativeCrashes(): Promise<void> {
     () => undefined
   );
   if (reports.isErr()) return;
-  const sent = reports.value
-    .filter(
-      (report) =>
-        analytics.posthog.capture('$exception', exceptionProperties(report)) !==
-        undefined
-    )
-    .map((report) => report.id);
-  if (sent.length > 0) {
-    await invoke('ack_native_crash_reports', { ids: sent });
-  }
+  // A report PostHog dropped (a private call page) waits for the next start.
+  const sent = reports.value.filter(sendReport).map((report) => report.id);
+  if (sent.length === 0) return;
+  await sleep(ACK_DELAY_MS);
+  await invoke('ack_native_crash_reports', { ids: sent });
 }
 
-/** The PostHog `$exception` properties for one native crash. */
+function sendReport(report: CrashReport): boolean {
+  const properties = exceptionProperties(report);
+  if (!properties) return false;
+  const result = analytics.posthog.capture('$exception', properties, {
+    // Both ids end in a UUID (`panic-<uuid>`, `minidump-<crashpad uuid>`).
+    uuid: report.id.slice(report.id.indexOf('-') + 1),
+    timestamp: new Date(report.timestampMs),
+    send_instantly: true,
+  });
+  return result !== undefined;
+}
+
+/**
+ * The PostHog `$exception` properties for one native crash; undefined for a
+ * kind this bundle doesn't know (from a newer native build).
+ */
 export function exceptionProperties(report: CrashReport) {
   const common = {
     native_crash_id: report.id,
@@ -58,7 +76,7 @@ export function exceptionProperties(report: CrashReport) {
       ...common,
       ...nativeProperties(crash, report),
     }))
-    .exhaustive();
+    .exhaustive(() => undefined);
 }
 
 function panicProperties(crash: PanicCrash) {
@@ -66,7 +84,8 @@ function panicProperties(crash: PanicCrash) {
     native_crash_process_type: 'main',
     native_crash_thread: crash.thread ?? undefined,
     native_crash_location: crash.location ?? undefined,
-    $exception_level: 'fatal',
+    // The process survives a panic on another thread (a task's `JoinError`).
+    $exception_level: crash.thread === 'main' ? 'fatal' : 'error',
     $exception_list: [
       {
         type: 'Panic',

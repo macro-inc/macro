@@ -7,7 +7,7 @@ use minidump_synth::{
 use test_assembler::{Endian, Section};
 
 use super::panic::parse_backtrace;
-use super::scrub::{scrub_message, short_source_path};
+use super::scrub::{Redactions, scrub_message, short_source_path};
 use super::*;
 
 fn launch(started_at_ms: u64, version: &str) -> Launch {
@@ -39,35 +39,54 @@ fn stored_panic(timestamp_ms: u64) -> StoredPanic {
     }
 }
 
+fn scrub(message: &str) -> String {
+    scrub_message(
+        message,
+        &Redactions::new(Some("/Users/someone".to_string())),
+    )
+}
+
 #[test]
 fn scrubs_values_out_of_panic_messages() {
     assert_eq!(
-        scrub_message(
+        scrub(
             r#"called `Result::unwrap()` on an `Err` value: Error { path: "/Users/someone/Documents/q3.pdf", kind: NotFound }"#
         ),
         r#"called `Result::unwrap()` on an `Err` value: Error { path: "…", kind: NotFound }"#
     );
     assert_eq!(
-        scrub_message(
-            "byte index 3 is not a char boundary; it is inside 'é' (bytes 2..4) of `café crème`"
-        ),
+        scrub("byte index 3 is not a char boundary; it is inside 'é' (bytes 2..4) of `café crème`"),
         "byte index 3 is not a char boundary; it is inside '…' (bytes 2..4) of `…`"
     );
     assert_eq!(
-        scrub_message(
+        scrub("byte index 10 is out of bounds of `hunter2`"),
+        "byte index 10 is out of bounds of `…`"
+    );
+    assert_eq!(
+        scrub(
             "request to https://api.example.com/v1/users?token=abc failed for someone@example.com"
         ),
         "request to https://api.example.com/… failed for <email>"
     );
     assert_eq!(
-        scrub_message("can't open /home/someone/.config/app (os error 2), order 20261123"),
-        "can't open <path> (os error 2), order <number>"
+        scrub(
+            "url=https://example.com/a can't open /home/other/.config/app (os error 2), order 20261123"
+        ),
+        "url=https://example.com/… can't open <path> (os error 2), order <number>"
     );
     assert_eq!(
-        scrub_message("index out of bounds: the len is 3 but the index is 5"),
+        scrub("error:\n/Users/someone/x\tpath=/srv/data file:/tmp/My Documents/Tax 2025.pdf"),
+        "error:\n<path>\t<path> <path> <path> 2025.pdf"
+    );
+    assert_eq!(
+        scrub("failed to open '/tmp/a b.pdf' for someone, users' files"),
+        "failed to open '…' for <user>, users' files"
+    );
+    assert_eq!(
+        scrub("index out of bounds: the len is 3 but the index is 5"),
         "index out of bounds: the len is 3 but the index is 5"
     );
-    assert_eq!(scrub_message(&"x".repeat(400)).chars().count(), 301);
+    assert_eq!(scrub(&"x".repeat(400)).chars().count(), 301);
 }
 
 #[test]
@@ -142,6 +161,7 @@ fn the_hook_records_a_real_panic() {
     let context = panic::Context {
         launch: launch(1, "2026.1123.1"),
         os_version: Some("15.1.0".to_string()),
+        redactions: Redactions::default(),
     };
     panic::install(dir.clone(), context);
     let result = std::thread::Builder::new()
@@ -359,6 +379,36 @@ fn crashpad_dumps_are_reported_and_deleted_with_their_attachments() {
     assert!(!database.join("attachments/aaaa").exists());
     assert!(!database.join("completed/bbbb.dmp").exists());
     assert!(database.join("new/cccc.dmp").exists());
+    fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn a_main_thread_panic_and_its_abort_dump_are_one_report() {
+    let dir = temp_dir();
+    let database = dir.join("cef");
+    fs::create_dir_all(database.join("pending")).unwrap();
+    let endian = Endian::Little;
+    // Minidump headers carry seconds; 1_000_000 s is the panic's time below.
+    let dump = SynthMinidump::with_endian(endian)
+        .flags(0)
+        .add_crashpad_info(CrashpadInfo::new(endian).add_simple_annotation("ptype", "browser"))
+        .finish()
+        .unwrap();
+    let mut dump = dump;
+    // MINIDUMP_HEADER.time_date_stamp is at byte 20.
+    dump[20..24].copy_from_slice(&1_000_000u32.to_le_bytes());
+    fs::write(database.join("pending/abort.dmp"), dump).unwrap();
+    write_atomically(
+        &dir.join("panic-main.json"),
+        &serde_json::to_vec(&stored_panic(1_000_000_000 - 200)).unwrap(),
+    )
+    .unwrap();
+
+    let reports = CrashReports::new(dir.clone(), Some(database.clone()));
+    let ids: Vec<_> = reports.take().into_iter().map(|report| report.id).collect();
+    assert_eq!(ids, ["panic-main"]);
+    reports.ack(&["panic-main".to_string()]);
+    assert!(!database.join("pending/abort.dmp").exists());
     fs::remove_dir_all(dir).unwrap();
 }
 

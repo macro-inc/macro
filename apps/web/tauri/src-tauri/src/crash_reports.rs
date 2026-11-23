@@ -29,6 +29,8 @@ const MAX_REPORTS_PER_TAKE: usize = 10;
 /// Launch records kept to date the crashes they produced.
 const MAX_LAUNCHES: usize = 20;
 const LAUNCHES_FILE: &str = "launches.json";
+/// How long before its dump a main-thread panic counts as that crash's cause.
+const PANIC_ABORT_WINDOW_MS: u64 = 10_000;
 const PANIC_PREFIX: &str = "panic-";
 const MINIDUMP_PREFIX: &str = "minidump-";
 /// Crashpad moves a finished dump to `pending` and, after an upload, to
@@ -147,6 +149,8 @@ struct StoredPanic {
     crash: PanicCrash,
 }
 
+type Claimed = HashMap<String, Vec<PathBuf>>;
+
 /// A report found on disk, with the files the ack deletes.
 struct Found {
     report: CrashReport,
@@ -158,7 +162,7 @@ pub struct CrashReports {
     crashpad_database: Option<PathBuf>,
     /// Reports offered in this process, so a second webview or a reloaded
     /// document is not handed them again. Unacked ones return next launch.
-    claimed: Mutex<HashMap<String, Vec<PathBuf>>>,
+    claimed: Mutex<Claimed>,
 }
 
 impl CrashReports {
@@ -175,21 +179,18 @@ impl CrashReports {
             return Vec::new();
         };
         let launches = read_launches(&self.dir);
-        let mut found = self.find_panics();
-        found.extend(self.find_minidumps(&launches));
+        let mut found = self.find_panics(&claimed);
+        found.extend(self.find_minidumps(&launches, &claimed));
+        let mut found = fold_panic_aborts(found);
         found.sort_by_key(|found| found.report.timestamp_ms);
-        let mut reports = Vec::new();
-        for found in found {
-            if reports.len() == MAX_REPORTS_PER_TAKE {
-                break;
-            }
-            if claimed.contains_key(&found.report.id) {
-                continue;
-            }
-            claimed.insert(found.report.id.clone(), found.files);
-            reports.push(found.report);
-        }
-        reports
+        found.truncate(MAX_REPORTS_PER_TAKE);
+        found
+            .into_iter()
+            .map(|found| {
+                claimed.insert(found.report.id.clone(), found.files);
+                found.report
+            })
+            .collect()
     }
 
     fn ack(&self, ids: &[String]) {
@@ -213,12 +214,19 @@ impl CrashReports {
         }
     }
 
-    fn find_panics(&self) -> Vec<Found> {
+    fn find_panics(&self, claimed: &Claimed) -> Vec<Found> {
         let mut found = Vec::new();
         for path in files_in(&self.dir) {
+            if file_id(&path, PANIC_PREFIX, "partial").is_some() {
+                remove_abandoned(&path);
+                continue;
+            }
             let Some(id) = file_id(&path, PANIC_PREFIX, "json") else {
                 continue;
             };
+            if claimed.contains_key(&id) {
+                continue;
+            }
             match fs::read(&path).map(|bytes| serde_json::from_slice::<StoredPanic>(&bytes)) {
                 Ok(Ok(stored)) => found.push(Found {
                     report: CrashReport {
@@ -245,7 +253,7 @@ impl CrashReports {
     }
 
     #[cfg(any(feature = "cef", test))]
-    fn find_minidumps(&self, launches: &[Launch]) -> Vec<Found> {
+    fn find_minidumps(&self, launches: &[Launch], claimed: &Claimed) -> Vec<Found> {
         let Some(database) = &self.crashpad_database else {
             return Vec::new();
         };
@@ -260,6 +268,9 @@ impl CrashReports {
                     continue;
                 };
                 let id = format!("{MINIDUMP_PREFIX}{uuid}");
+                if claimed.contains_key(&id) {
+                    continue;
+                }
                 let attachments = database.join("attachments").join(uuid);
                 let dump = dump_signature::read(&path).unwrap_or_else(|error| {
                     tracing::warn!(%error, "Failed to read a minidump");
@@ -275,7 +286,7 @@ impl CrashReports {
     }
 
     #[cfg(not(any(feature = "cef", test)))]
-    fn find_minidumps(&self, _launches: &[Launch]) -> Vec<Found> {
+    fn find_minidumps(&self, _launches: &[Launch], _claimed: &Claimed) -> Vec<Found> {
         // Only the Chromium build writes minidumps.
         let _ = (
             &self.crashpad_database,
@@ -283,6 +294,43 @@ impl CrashReports {
             MINIDUMP_PREFIX,
         );
         Vec::new()
+    }
+}
+
+/// A panic on the main thread aborts the process when it unwinds into the
+/// event loop, and Crashpad then writes a dump of the same crash. Report the
+/// panic, which says more, and delete the dump with it.
+fn fold_panic_aborts(found: Vec<Found>) -> Vec<Found> {
+    let (mut kept, dumps): (Vec<_>, Vec<_>) = found
+        .into_iter()
+        .partition(|found| !matches!(&found.report.crash, Crash::Native(crash) if crash.process_type == "main"));
+    for dump in dumps {
+        // Minidump times have whole seconds; the panic is written first.
+        let window = dump
+            .report
+            .timestamp_ms
+            .saturating_sub(PANIC_ABORT_WINDOW_MS)
+            ..=dump.report.timestamp_ms + 1000;
+        let panic = kept.iter_mut().find(|found| {
+            matches!(found.report.crash, Crash::Panic(_))
+                && window.contains(&found.report.timestamp_ms)
+        });
+        match panic {
+            Some(panic) => panic.files.extend(dump.files),
+            None => kept.push(dump),
+        }
+    }
+    kept
+}
+
+/// A `.partial` left by a process killed between write and rename. A recent
+/// one may still be in flight on another thread.
+fn remove_abandoned(path: &Path) {
+    let abandoned = fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age.as_secs() > 60));
+    if abandoned {
+        let _ = fs::remove_file(path);
     }
 }
 
@@ -384,6 +432,7 @@ pub fn setup<R: tauri::Runtime>(app: &tauri::App<R>) {
         panic::Context {
             launch,
             os_version: Some(tauri_plugin_os::version().to_string()),
+            redactions: scrub::Redactions::for_this_user(),
         },
     );
     // The CEF runtime's default `root_cache_path`, which Chromium also uses
@@ -396,13 +445,14 @@ pub fn setup<R: tauri::Runtime>(app: &tauri::App<R>) {
 }
 
 /// Crash reports not yet sent, oldest first. Each is offered once per process.
-#[tauri::command]
+/// Off the main thread: it reads every new dump.
+#[tauri::command(async)]
 pub fn take_native_crash_reports(state: tauri::State<'_, CrashReports>) -> Vec<CrashReport> {
     state.take()
 }
 
 /// Deletes the reports the frontend sent.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn ack_native_crash_reports(state: tauri::State<'_, CrashReports>, ids: Vec<String>) {
     state.ack(&ids);
 }

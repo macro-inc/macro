@@ -11,6 +11,7 @@ vi.mock('@app/lib/analytics', () => ({
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: mocks.invoke }));
 vi.mock('@core/util/platform', () => ({ isDesktopPlatform: () => true }));
+vi.mock('@core/util/sleep', () => ({ sleep: () => Promise.resolve() }));
 
 const LAUNCH = {
   startedAtMs: 1,
@@ -19,7 +20,7 @@ const LAUNCH = {
 };
 
 const PANIC: CrashReport = {
-  id: 'panic-1',
+  id: 'panic-0193a6f0-0000-7000-8000-000000000001',
   timestampMs: 10,
   launch: LAUNCH,
   os: 'linux',
@@ -73,7 +74,8 @@ describe('exceptionProperties', () => {
       native_crash_version: '2026.1120.3',
       native_crash_process_type: 'main',
       native_crash_location: 'src/lib.rs:3:9',
-      $exception_level: 'fatal',
+      // A worker thread's panic doesn't end the process.
+      $exception_level: 'error',
       $exception_list: [
         {
           type: 'Panic',
@@ -134,6 +136,14 @@ describe('exceptionProperties', () => {
     });
   });
 
+  it('skips a crash kind from a newer native build', () => {
+    const report = {
+      ...PANIC,
+      crash: { kind: 'hang' },
+    } as unknown as CrashReport;
+    expect(exceptionProperties(report)).toBeUndefined();
+  });
+
   it('sends a dump it could not read without frames', () => {
     const properties = exceptionProperties({
       ...MINIDUMP,
@@ -147,7 +157,7 @@ describe('exceptionProperties', () => {
         module: null,
       },
     });
-    expect(properties.$exception_list[0].stacktrace).toBeUndefined();
+    expect(properties?.$exception_list[0].stacktrace).toBeUndefined();
     expect(properties).toMatchObject({ $debug_images: undefined });
   });
 });
@@ -163,11 +173,21 @@ describe('reportNativeCrashes', () => {
       1,
       'take_native_crash_reports'
     );
+    expect(mocks.posthog.capture).toHaveBeenNthCalledWith(
+      1,
+      '$exception',
+      expect.objectContaining({ native_crash_kind: 'panic' }),
+      {
+        uuid: '0193a6f0-0000-7000-8000-000000000001',
+        timestamp: new Date(10),
+        send_instantly: true,
+      }
+    );
     expect(mocks.invoke).toHaveBeenNthCalledWith(
       2,
       'ack_native_crash_reports',
       {
-        ids: ['panic-1'],
+        ids: ['panic-0193a6f0-0000-7000-8000-000000000001'],
       }
     );
   });

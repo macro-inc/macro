@@ -313,10 +313,11 @@ service, and no crash memory leaves the machine
 - **Rust panics** (macOS and Linux): the panic hook writes the message, panic
   location, thread name and backtrace to
   `<app data>/crash-reports/panic-<uuid>.json` before the default hook runs.
-  The message is scrubbed first: quoted values, `'c'` characters, backtick
-  spans that aren't code, paths, URL paths, email addresses and long numbers
-  are replaced. Release builds carry no debug info, so frames have function
-  names but no files or lines.
+  The message is scrubbed first: the user's home directory and login name,
+  quoted values, backtick spans that aren't code, paths, URL paths, email
+  addresses and long numbers are replaced. Release builds carry no debug info,
+  so frames have function names but no files or lines. A panic on the main
+  thread is `fatal`; on another thread the app usually survives, so `error`.
 - **Chromium crashes** (macOS): `../desktop-cef/crash_reporter.cfg`, bundled
   as `Contents/Resources/crash_reporter.cfg`, turns on CEF's Crashpad for the
   app's own process and every helper (renderer, GPU, network, utility). It
@@ -328,14 +329,19 @@ service, and no crash memory leaves the machine
   OS exception, and the crashing instruction as module file name, offset and
   Mach-O UUID. The dump is deleted once its signature is sent. Crashes of the
   app's own process still go to the macOS crash reporter as well
-  (`BrowserCrashForwardingEnabled`).
+  (`BrowserCrashForwardingEnabled`). A main-thread panic aborts the process and
+  also leaves a dump; that dump is deleted with the panic report instead of
+  being sent as a second crash.
 - Linux has no Chromium, so a crash of the WebKitGTK web process or a native
   crash of the app (not a panic) is not reported.
 
 `take_native_crash_reports` offers each report once per process, at most ten
-at a time, oldest first; the frontend acks the ones PostHog accepted and the
-native app deletes their files. An unacked report returns at the next launch,
-and dev builds, which never start PostHog, leave them on disk. A renderer
+at a time, oldest first. The frontend sends each at once, with the crash's
+time as the event timestamp and the report's UUID as the event uuid, and acks
+the ones PostHog accepted 15 seconds later; the native app then deletes their
+files. A report not yet acked (the app crashed again, or quit) returns at the
+next launch, and PostHog drops the resent copy. Dev builds, which never start
+PostHog, leave reports on disk. A renderer
 crash is reported by the document that replaces it, without a relaunch.
 
 PostHog properties: `native_crash_kind` (`panic` or `native`),

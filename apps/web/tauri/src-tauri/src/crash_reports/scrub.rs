@@ -4,18 +4,61 @@
 
 const MAX_MESSAGE_CHARS: usize = 300;
 const REDACTED: &str = "…";
+/// Backtick spans kept although they are a single word: std's own messages.
+const CODE_WORDS: &[&str] = &["Err", "None", "Ok", "Some"];
 
-/// The message with quoted values, `'c'` characters, non-identifier backtick
-/// spans, paths, URL paths, email addresses, and long numbers replaced.
-pub(super) fn scrub_message(message: &str) -> String {
-    let unquoted = redact_quotes(message);
-    let mut scrubbed = String::with_capacity(unquoted.len());
-    for (index, word) in unquoted.split(' ').enumerate() {
-        if index > 0 {
-            scrubbed.push(' ');
-        }
-        scrubbed.push_str(&redact_word(word));
+/// This user's home directory and login name, replaced wherever they appear.
+#[derive(Clone, Debug, Default)]
+pub(super) struct Redactions {
+    home: Option<String>,
+    user: Option<String>,
+}
+
+impl Redactions {
+    pub fn for_this_user() -> Self {
+        Self::new(std::env::home_dir().and_then(|home| home.to_str().map(str::to_string)))
     }
+
+    pub fn new(home: Option<String>) -> Self {
+        let home = home.filter(|home| home.len() > 1);
+        let user = home
+            .as_deref()
+            .and_then(|home| home.rsplit(['/', '\\']).find(|part| !part.is_empty()))
+            // A very short name would also match ordinary words.
+            .filter(|user| user.chars().count() >= 3)
+            .map(str::to_string);
+        Self { home, user }
+    }
+
+    fn apply(&self, text: &str) -> String {
+        let mut text = text.to_string();
+        if let Some(home) = &self.home {
+            text = text.replace(home.as_str(), "~");
+        }
+        if let Some(user) = &self.user {
+            text = text.replace(user.as_str(), "<user>");
+        }
+        text
+    }
+}
+
+/// The message with this user's home and name, quoted values, backtick spans
+/// that aren't code, paths, URL paths, email addresses, and long numbers
+/// replaced.
+pub(super) fn scrub_message(message: &str, redactions: &Redactions) -> String {
+    let unquoted = redact_quotes(&redactions.apply(message));
+    let mut scrubbed = String::with_capacity(unquoted.len());
+    let mut word = String::new();
+    for c in unquoted.chars() {
+        if c.is_whitespace() {
+            scrubbed.push_str(&redact_word(&word));
+            word.clear();
+            scrubbed.push(c);
+        } else {
+            word.push(c);
+        }
+    }
+    scrubbed.push_str(&redact_word(&word));
     truncate(&scrubbed, MAX_MESSAGE_CHARS)
 }
 
@@ -25,41 +68,43 @@ fn redact_quotes(message: &str) -> String {
     let mut index = 0;
     while index < chars.len() {
         let c = chars[index];
-        match c {
+        let span = match c {
+            // `Debug` of a string: up to the closing unescaped quote.
             '"' => {
-                // `Debug` of a string: skip to the closing unescaped quote.
                 let mut end = index + 1;
                 while end < chars.len() && chars[end] != '"' {
                     end += if chars[end] == '\\' { 2 } else { 1 };
                 }
-                out.push('"');
-                out.push_str(REDACTED);
-                out.push('"');
+                Some((end.min(chars.len()), false))
+            }
+            '`' => chars[index + 1..]
+                .iter()
+                .position(|&c| c == '`')
+                .map(|length| (index + 1 + length, true)),
+            // A quoted value (`'é'`, `'/tmp/x'`), not an apostrophe in prose.
+            '\'' if index == 0 || !chars[index - 1].is_alphanumeric() => chars[index + 1..]
+                .iter()
+                .enumerate()
+                .position(|(offset, &c)| {
+                    let after = chars.get(index + 2 + offset);
+                    c == '\'' && after.is_none_or(|after| !after.is_alphanumeric())
+                })
+                .map(|length| (index + 1 + length, false)),
+            _ => None,
+        };
+        match span {
+            Some((end, keep_code)) => {
+                let inner: String = chars[index + 1..end].iter().collect();
+                out.push(c);
+                out.push_str(if keep_code && is_code(&inner) {
+                    inner.as_str()
+                } else {
+                    REDACTED
+                });
+                out.push(c);
                 index = end + 1;
             }
-            '`' => match chars[index + 1..].iter().position(|&c| c == '`') {
-                Some(length) => {
-                    let span: String = chars[index + 1..index + 1 + length].iter().collect();
-                    out.push('`');
-                    // `Result::unwrap()` is code; anything else may be the
-                    // text being sliced (`is not a char boundary`).
-                    out.push_str(if is_code(&span) { &span } else { REDACTED });
-                    out.push('`');
-                    index += length + 2;
-                }
-                None => {
-                    out.push(c);
-                    index += 1;
-                }
-            },
-            // A `char` value (`'é'`), not an apostrophe in prose.
-            '\'' if chars.get(index + 2) == Some(&'\'') => {
-                out.push('\'');
-                out.push_str(REDACTED);
-                out.push('\'');
-                index += 3;
-            }
-            _ => {
+            None => {
                 out.push(c);
                 index += 1;
             }
@@ -68,32 +113,40 @@ fn redact_quotes(message: &str) -> String {
     out
 }
 
+/// `Result::unwrap()` is code; a bare word may be the text being sliced
+/// (`is not a char boundary`).
 fn is_code(span: &str) -> bool {
-    !span.is_empty()
-        && span
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "_:<>()&,".contains(c))
+    let charset = span
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "_:<>()&, ".contains(c));
+    charset && (span.contains("::") || span.contains("()") || CODE_WORDS.contains(&span))
 }
 
 fn redact_word(word: &str) -> String {
-    let core = word.trim_matches(|c: char| "()[]{},;.".contains(c));
+    let core = word.trim_matches(|c: char| "()[]{},;.'\"".contains(c));
     if core.is_empty() {
         return word.to_string();
     }
-    let replacement = if let Some((scheme, rest)) = core.split_once("://") {
+    let replacement = if let Some(url) = core.find("://") {
+        let scheme_start = core[..url]
+            .rfind(|c: char| !(c.is_ascii_alphanumeric() || "+-.".contains(c)))
+            .map_or(0, |index| index + 1);
+        let rest = &core[url + 3..];
         let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
         let host = host.rsplit('@').next().unwrap_or_default();
-        if host.len() < rest.len() {
-            format!("{scheme}://{host}/{REDACTED}")
-        } else {
-            format!("{scheme}://{host}")
-        }
+        let tail = if host.len() < rest.len() { "/…" } else { "" };
+        format!(
+            "{}{}://{host}{tail}",
+            &core[..scheme_start],
+            &core[scheme_start..url]
+        )
     } else if core
         .split_once('@')
         .is_some_and(|(_, domain)| domain.contains('.'))
     {
         "<email>".to_string()
-    } else if is_path(core) {
+    } else if core.contains('/') || core.contains('\\') {
+        // A path, or part of one split at a space; module paths use `::`.
         "<path>".to_string()
     } else if core.chars().filter(char::is_ascii_digit).count() >= 7 {
         "<number>".to_string()
@@ -101,13 +154,6 @@ fn redact_word(word: &str) -> String {
         return word.to_string();
     };
     word.replacen(core, &replacement, 1)
-}
-
-fn is_path(word: &str) -> bool {
-    let unix = (word.starts_with('/') || word.starts_with("~/")) && word.matches('/').count() >= 2;
-    let bytes = word.as_bytes();
-    let windows = bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && &bytes[1..3] == b":\\";
-    unix || windows
 }
 
 fn truncate(text: &str, max_chars: usize) -> String {
@@ -136,7 +182,7 @@ pub(super) fn short_source_path(path: &str) -> String {
                 .to_string();
         }
     }
-    if is_path(&path) {
+    if path.starts_with('/') || path.starts_with("~/") {
         // A crate in this repository, built from an absolute path.
         for marker in ["/apps/web/tauri/", "/crates/"] {
             if let Some((_, rest)) = path.rsplit_once(marker) {
