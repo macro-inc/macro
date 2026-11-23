@@ -1279,6 +1279,28 @@ action as **Individual tools**, with `Set by agent` and a remove button
 Every click saves at once (one `PUT`, queued per agent); a failure puts the
 control back and shows a toast.
 
+An agent can follow another policy instead of keeping its own. Its row's
+panel then shows the source's card (picture, name, @handle, `Personal` or
+`Team · <team>`), `This agent automatically follows permission changes made
+to @handle.` (with `@handle follows @other.` for a longer chain), and the
+component read-only: inherited exceptions listed, and the agent's own
+restrictions marked on their rows (`Restricted by the agent: Ask`) with a ✕
+(`Remove the restriction on <row>`) for people who may edit it. A deleted
+source stays followed as it was; a lost one (gone for good) makes the agent
+ask before everything; one out of scope says to pick another. The agent
+form's **Permissions** section has two tabs (radio group `Permissions`):
+**Use another agent’s permissions** (`Use same permissions as` card with
+**Set agent ⌄**: candidates with picture, @handle and scope, one that would
+loop or chain too long disabled with `Would follow itself` / `Too many agents
+in a row`; and `Show @handle’s permissions`, collapsed) and **Set my own
+permissions** (the editable component). Creating an agent follows personal
+Macro (private) or the team default (team) unless another is picked; own
+permissions start from the picked agent's and save once the agent exists
+(a failure leaves it following its default, with **Retry** on the toast).
+Editing an agent: Set agent on an agent with its own permissions asks first
+(`Follow @handle?`), and on the second tab **Use my own permissions** copies
+what it follows and stops following.
+
 Below the table, a line counts the visible saved settings by who made them
 (`2 settings changed · 1 set by <agent> itself`), and `Reset permissions`
 asks for confirmation (a drawer on phones) and puts every setting back to
