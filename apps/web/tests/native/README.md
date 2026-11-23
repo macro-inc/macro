@@ -63,7 +63,9 @@ hint exists (`user-info-gate.ts`), and reads it once at startup. Unrelated
 app-chrome reads (billing, language, system status, routines, MCP connections,
 calendars, forms, harnesses, saved views, work feed, contacts) return explicit
 empty resources, in `fixtures/bootstrap.ts` and as empty `GraphqlUser` fields in
-`fixtures/server.ts`. Unexpected requests,
+`fixtures/server.ts`. The fixture user joined no channels, so the channel
+backfill lane (`SoupChannelDirectoryBackfill`) and the directory's network
+fallback (`ChannelDirectoryPage`) read an empty directory. Unexpected requests,
 unknown cursors and GraphQL validation errors are recorded and fail the smoke
 suite; nothing forwards to hosted services. This does not test the Rust HTTP
 server's authorization, SQL, or Gmail synchronization.

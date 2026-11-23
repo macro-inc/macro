@@ -20,6 +20,7 @@ apollo-parser = { workspace = true }
 cache-schema = { path = "../cache-schema" }
 chrono = { workspace = true }
 database_sql = { path = "../../database_sql" }
+item-filter-index = { path = "../../item_filter_index" }
 lru = { workspace = true }
 macro_user_id = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
