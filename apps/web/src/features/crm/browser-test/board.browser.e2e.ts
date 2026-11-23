@@ -162,7 +162,7 @@ test('keeps lanes apart and scrolls to the end in one move with a larger text si
   await cdp.detach();
 });
 
-test('keeps the lane at the left edge when the text size changes', async ({
+test('keeps the reading position and unsaved input when the text size changes', async ({
   page,
 }) => {
   const cdp = await page.context().newCDPSession(page);
@@ -194,6 +194,30 @@ test('keeps the lane at the left edge when the text size changes', async ({
       return lanes && box ? Math.round(lanes.x - box.x) : null;
     })
     .toBe(0);
+  // At the end, the end stays in view and an unsaved group name survives.
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('16px');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await page.getByRole('button', { name: 'New group', exact: true }).click();
+  const name = page.getByLabel('New group name');
+  await name.fill('Renewals');
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('20px');
+  await expect(page.getByRole('region', { name: 'New group' })).toBeInViewport({
+    ratio: 1,
+  });
+  await expect(name).toBeFocused();
+  await expect(name).toHaveValue('Renewals');
   await cdp.detach();
 });
 
