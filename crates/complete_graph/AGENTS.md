@@ -152,5 +152,8 @@ primary-backed REST message service in `ChannelGraphqlContext`, with separate
 `GraphqlChannelMessage` identity and composed parity tests in `schema/test/channel_messages.rs`.
 `schema/test/channel_messages/changes.rs` covers change replay, reset boundaries and reading
 the sequence before each page.
+`schema/test/channel_messages/writes.rs` covers the four message mutations: replayed sends
+and deletes, the returned roots' thread summaries (a root's own, and a reply's root),
+and the personal-session gate.
 
 - Agent-session activity subscriptions recheck current entity access before emitting CRM activity. Session access alone does not disclose CRM record content after revocation.

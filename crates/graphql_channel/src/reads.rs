@@ -4,7 +4,11 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use messages::domain::{api::MessageReader, changes::ChannelMessageChange, service::MessageView};
+use messages::domain::{
+    api::{MessageCommands, MessageReader},
+    changes::ChannelMessageChange,
+    service::{MessageView, MessageWrite},
+};
 use std::{future::Future, pin::Pin, sync::Arc};
 use uuid::Uuid;
 
@@ -40,12 +44,150 @@ pub struct ChannelGraphqlContext {
     pub(crate) messages: Arc<dyn MessageReader>,
     /// Current channel access; no membership policy is duplicated here.
     access: Arc<dyn ChannelReadAccess>,
+    /// The REST message commands and their write access; absent on a schema
+    /// mounted for reads only.
+    writes: Option<ChannelWrites>,
+}
+
+/// A root read back after a write.
+enum ReadBack {
+    /// The root as the reads return it.
+    Root(crate::GraphqlChannelMessage),
+    /// No longer readable as a message root (deleted thread, activity).
+    NotRoot,
+    /// The read failed; already logged.
+    Failed,
+}
+
+/// The REST service's commands with the access boundary that guards them.
+#[derive(Clone)]
+struct ChannelWrites {
+    /// The exact messages service used by the REST router.
+    commands: Arc<dyn MessageCommands>,
+    /// Current channel write access.
+    access: Arc<dyn crate::writes::ChannelWriteAccess>,
 }
 
 impl ChannelGraphqlContext {
     /// Supply the REST messages service and its entity access boundary.
     pub fn new<S: MessageReader, A: EntityAccessService>(messages: Arc<S>, access: Arc<A>) -> Self {
-        Self { messages, access }
+        Self {
+            messages,
+            access,
+            writes: None,
+        }
+    }
+
+    /// Also serve message mutations through the REST service's commands.
+    #[must_use]
+    pub fn with_commands<S: MessageCommands, A: EntityAccessService>(
+        mut self,
+        commands: Arc<S>,
+        access: Arc<A>,
+    ) -> Self {
+        self.writes = Some(ChannelWrites { commands, access });
+        self
+    }
+
+    /// A written message as the reads return it, with the root a reply
+    /// belongs to. A root carries its thread summary and call state, so the
+    /// cached records stay whole and a reply's root counts the reply in the
+    /// same commit. A replayed write reads both back the same way.
+    ///
+    /// The write has committed by now. A reply whose root cannot be read back
+    /// is answered without it. A root that cannot be read back is answered
+    /// `SERVICE_UNAVAILABLE`, since a root without its thread summary would
+    /// erase the cached one: the client's queue replays the write under the
+    /// same id, every mutation here answers a replay without another write, and
+    /// the replay reads the root again.
+    pub(crate) async fn written(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        message: messages::domain::models::Message,
+        channel_id: Uuid,
+    ) -> async_graphql::Result<crate::GraphqlChannelMessageWrite> {
+        Ok(match message.thread_id {
+            Some(root_id) => crate::GraphqlChannelMessageWrite {
+                root: match self.read_back_root(access, root_id, channel_id).await {
+                    ReadBack::Root(root) => Some(root),
+                    ReadBack::NotRoot | ReadBack::Failed => None,
+                },
+                message: crate::GraphqlChannelMessage::from_message(message, channel_id),
+            },
+            None => crate::GraphqlChannelMessageWrite {
+                message: match self.read_back_root(access, message.id, channel_id).await {
+                    ReadBack::Root(root) => root,
+                    ReadBack::NotRoot => {
+                        crate::GraphqlChannelMessage::from_message(message, channel_id)
+                    }
+                    ReadBack::Failed => {
+                        return Err(crate::coded_error(
+                            "the written message could not be read back; retry the request",
+                            crate::code::SERVICE_UNAVAILABLE,
+                        ));
+                    }
+                },
+                root: None,
+            },
+        })
+    }
+
+    /// Read a root back after a write committed. A failure is logged and left
+    /// to the caller, which answers with less or asks for a replay, never with
+    /// an error that reads as a refusal: a resend under a new id would post
+    /// twice.
+    async fn read_back_root(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        root_id: Uuid,
+        channel_id: Uuid,
+    ) -> ReadBack {
+        use messages::domain::ports::{MessageError, MessageTimelineEntry};
+        match self.messages.get_root(access, root_id).await {
+            Ok(MessageTimelineEntry::Message { message }) => ReadBack::Root(
+                crate::GraphqlChannelMessage::from_item(*message, channel_id, None),
+            ),
+            Ok(MessageTimelineEntry::Call { message, status }) => ReadBack::Root(
+                crate::GraphqlChannelMessage::from_item(*message, channel_id, Some(status)),
+            ),
+            Ok(MessageTimelineEntry::Activity { .. }) | Err(MessageError::NotFound) => {
+                ReadBack::NotRoot
+            }
+            Err(error) => {
+                tracing::error!(error = ?error, "written channel root could not be read back");
+                ReadBack::Failed
+            }
+        }
+    }
+
+    /// Mint a write receipt with REST's capability and hand out the commands.
+    pub(crate) async fn authorize_write(
+        &self,
+        user: MacroUserIdStr<'static>,
+        organization_id: Option<i64>,
+        channel_id: Uuid,
+    ) -> async_graphql::Result<(&dyn MessageCommands, EntityAccessReceipt<MessageWrite>)> {
+        let writes = self.writes.as_ref().ok_or_else(|| {
+            crate::coded_error(
+                "channel message mutations are not configured",
+                crate::code::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+        let access = writes
+            .access
+            .authorize_write(user, organization_id, channel_id)
+            .await
+            .map_err(|error| match error {
+                AccessError::Unavailable(error) | AccessError::Internal(error) => {
+                    tracing::error!(error = ?error, "channel access is unavailable");
+                    crate::coded_error(
+                        "channel access is unavailable",
+                        crate::code::INTERNAL_SERVER_ERROR,
+                    )
+                }
+                _ => crate::forbidden(),
+            })?;
+        Ok((writes.commands.as_ref(), access))
     }
 
     /// Mint a receipt without weakening REST's authorization.
@@ -57,17 +199,15 @@ impl ChannelGraphqlContext {
         self.access
             .authorize(viewer, channel_id)
             .await
-            .map_err(|error| {
-                use async_graphql::ErrorExtensions;
-                match error {
-                    AccessError::Unavailable(error) | AccessError::Internal(error) => {
-                        tracing::error!(error = ?error, "channel access is unavailable");
-                        async_graphql::Error::new("channel access is unavailable")
-                            .extend_with(|_, e| e.set("code", "INTERNAL_SERVER_ERROR"))
-                    }
-                    _ => async_graphql::Error::new("forbidden")
-                        .extend_with(|_, e| e.set("code", "FORBIDDEN")),
+            .map_err(|error| match error {
+                AccessError::Unavailable(error) | AccessError::Internal(error) => {
+                    tracing::error!(error = ?error, "channel access is unavailable");
+                    crate::coded_error(
+                        "channel access is unavailable",
+                        crate::code::INTERNAL_SERVER_ERROR,
+                    )
                 }
+                _ => crate::forbidden(),
             })
     }
 

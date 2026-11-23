@@ -84,6 +84,37 @@ pub trait MessageCommands: Send + Sync + 'static {
         access: EntityAccessReceipt<MessageWrite>,
         input: PostMessage,
     ) -> Result<Message, MessageError>;
+    /// Post a client message once: a repeat of an id this author already
+    /// posted to the same parent and thread returns the stored message without
+    /// another write or event. Defaults to a plain post for adapters that never
+    /// retry.
+    async fn post_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        self.post(access, input).await
+    }
+    /// Delete for callers that retry: a repeat on a tombstoned message returns
+    /// the tombstone. Defaults to a plain delete.
+    async fn delete_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<Message, MessageError> {
+        self.delete(access, id, nonce).await
+    }
+    /// Edit for callers that retry: an edit the message already shows returns
+    /// it without another write or event. Defaults to a plain patch.
+    async fn patch_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        patch: MessagePatch,
+    ) -> Result<Message, MessageError> {
+        self.patch(access, id, patch).await
+    }
     /// Idempotently post a trusted server event, using its UUIDv7 as the message
     /// id without a client clock-skew limit. Replays return the original message,
     /// including tombstones, after checking its parent, author, and thread.
@@ -261,6 +292,29 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageCommands for Message
         input: PostMessage,
     ) -> Result<Message, MessageError> {
         MessageService::post(self, access, input).await
+    }
+    async fn post_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        input: PostMessage,
+    ) -> Result<Message, MessageError> {
+        MessageService::post_once(self, access, input).await
+    }
+    async fn delete_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        nonce: Option<String>,
+    ) -> Result<Message, MessageError> {
+        MessageService::delete_once(self, access, id, nonce).await
+    }
+    async fn patch_once(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        patch: MessagePatch,
+    ) -> Result<Message, MessageError> {
+        MessageService::patch_once(self, access, id, patch).await
     }
     async fn post_from_event(
         &self,
