@@ -133,6 +133,17 @@ for (const { language } of LANGUAGES) {
       expect(fits).toBe(true);
       await shot(page, `approval-${language}`, isMobile);
 
+      // What is approved, on request: the asked operations and the program.
+      await request.getByRole('button', { name: 'View program' }).click();
+      await expect(request).toContainText('Rename document');
+      await expect(request).toContainText('tools.email.send_message');
+      const source = request.locator('pre');
+      expect(
+        await source.evaluate((pre) => pre.scrollWidth <= pre.clientWidth)
+      ).toBe(true);
+      await shot(page, `approval-program-${language}`, isMobile);
+      await request.getByRole('button', { name: 'Hide program' }).click();
+
       await request.getByRole('button', { name: 'Edit permissions' }).click();
       await expect(page.locator('body')).toHaveAttribute(
         'data-opened-settings',

@@ -1,3 +1,4 @@
+export { GatedOperationList } from './components/gated-operation-list';
 export {
   describeGatedThings,
   gatedThingsTitle,

@@ -35,6 +35,10 @@ export default {
   allowOnce: 'Allow once',
   allowInSession: 'Allow in this session',
   cancelRequest: 'Cancel request',
+  viewProgram: 'View program',
+  hideProgram: 'Hide program',
+  programPart: 'Program',
+  modulePart: 'Module, with no network',
 
   runProgram: 'Run a program',
   denied: 'Denied',

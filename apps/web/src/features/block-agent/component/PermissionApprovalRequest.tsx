@@ -1,5 +1,6 @@
 import {
   describeGatedThings,
+  GatedOperationList,
   gatedFocus,
   permissionRequestParts,
   useAgentPermissionsFlag,
@@ -9,10 +10,14 @@ import {
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ToolApprovalAnswerDto } from '@service-agent-harness/generated/schemas';
-import { createMemo } from 'solid-js';
+import { Button } from '@ui';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import type { HeldToolApproval } from '../primitives/create-tool-approval-controller';
-import { parsePermissionHold } from '../state/permission-approval';
+import {
+  type PermissionHold,
+  parsePermissionHold,
+} from '../state/permission-approval';
 import { PermissionRequestCard } from '../ui/PermissionRequestCard';
 
 /**
@@ -95,6 +100,11 @@ export function PermissionApprovalRequest(props: {
       approver={approverName()}
       waitingDescription={waitingDescription()}
       canCancel={approvals()?.canCancel() === true}
+      program={
+        <Show when={hold()}>
+          {(current) => <ProgramDisclosure hold={current()} />}
+        </Show>
+      }
       canEditPermissions={view()?.canEdit === true}
       disabled={approvals()?.answering(props.request.approvalId)}
       onApproveOnce={() => answer('approve')}
@@ -103,5 +113,77 @@ export function PermissionApprovalRequest(props: {
       onEditPermissions={openSettings}
       onCancel={() => answer('cancel')}
     />
+  );
+}
+
+/**
+ * What the person allows, on request: the operations set to Ask it may
+ * call, the program, and its module. Collapsed, it is one quiet link under
+ * the sentence; open, it scrolls inside the dock so the input stays in view.
+ */
+function ProgramDisclosure(props: { hold: PermissionHold }) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <div class="-mt-1 flex min-w-0 flex-col">
+      <Button
+        type="button"
+        variant="ghost"
+        size="xs"
+        class="-ml-2 self-start"
+        aria-expanded={open()}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open()
+          ? t('agentPermissionsChat.hideProgram')
+          : t('agentPermissionsChat.viewProgram')}
+      </Button>
+      <Show when={open()}>
+        <div class="max-h-[40dvh] min-w-0 overflow-y-auto overscroll-contain">
+          <Show when={props.hold.operations.length > 0}>
+            <GatedOperationList operations={props.hold.operations} />
+          </Show>
+          <Show when={props.hold.source}>
+            {(source) => (
+              <Show
+                when={props.hold.module}
+                fallback={<ProgramText text={source()} />}
+              >
+                {(module) => (
+                  <>
+                    <ProgramPartLabel>
+                      {t('agentPermissionsChat.programPart')}
+                    </ProgramPartLabel>
+                    <ProgramText text={source()} />
+                    <ProgramPartLabel>
+                      {t('agentPermissionsChat.modulePart')}
+                    </ProgramPartLabel>
+                    <ProgramText text={module()} />
+                  </>
+                )}
+              </Show>
+            )}
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
+}
+
+/**
+ * One part of a held program. Long lines wrap: the person approves all of
+ * it, so none of it may sit past the card's edge.
+ */
+function ProgramText(props: { text: string }) {
+  return (
+    <pre class="mt-2 rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-muted [overflow-wrap:anywhere]">
+      {props.text}
+    </pre>
+  );
+}
+
+/** Names a part of a program that has two: what it runs, and its module. */
+function ProgramPartLabel(props: { children: string }) {
+  return (
+    <p class="mt-2 text-xs font-medium text-ink-muted">{props.children}</p>
   );
 }

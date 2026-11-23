@@ -1,7 +1,7 @@
 import type { PhrasePart } from '@app/features/agent-permissions';
 import { t } from '@app/lib/i18n';
 import { Button, Card } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
 
 export type PermissionRequestCardProps = {
   /** The viewer answers: approve once, for the session, or deny. */
@@ -16,6 +16,8 @@ export type PermissionRequestCardProps = {
   canCancel: boolean;
   /** Offer Edit permissions (the flag is on and the viewer may edit). */
   canEditPermissions: boolean;
+  /** What is asked, under the sentence: the View program disclosure. */
+  program?: JSX.Element;
   /** An answer is on the wire. */
   disabled?: boolean;
   onApproveOnce: () => void;
@@ -51,6 +53,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps) {
               )}
             </For>
           </p>
+          {props.program}
           <div class="mt-1 flex flex-col-reverse gap-2 @[30rem]/request:flex-row @[30rem]/request:items-center @[30rem]/request:justify-between @[30rem]/request:gap-3">
             <div class="flex flex-wrap items-center gap-1">
               <Button
@@ -106,6 +109,7 @@ export function PermissionRequestCard(props: PermissionRequestCardProps) {
               {props.waitingDescription}
             </p>
           </div>
+          {props.program}
           <Show when={props.canCancel}>
             <Button
               type="button"

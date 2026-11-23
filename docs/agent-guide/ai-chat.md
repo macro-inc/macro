@@ -1835,7 +1835,11 @@ Agents → Permissions) before it runs. The cards name no language:
   docks above the composer, outside the scrolling transcript, at the input's
   width and 8px above it (after any other held tool calls): `Allow <Agent> to
   send email and edit documents?`, with each action and entity in accent (up
-  to three, then `and N more things`). Only the approver the hold names may
+  to three, then `and N more things`). **View program**, under the sentence
+  and collapsed by default, shows the operations set to Ask it may call (by
+  group, with their action and name) and the source, plus its TypeScript
+  module under **Program** and **Module, with no network** when it has one;
+  open, it scrolls inside the dock. Only the approver the hold names may
   answer: **Deny** and **Edit permissions** on the left, **Allow once** and
   the primary **Allow in this session** (stops asking for these operations
   until the session ends) on the right; on a narrow card the Allows stack

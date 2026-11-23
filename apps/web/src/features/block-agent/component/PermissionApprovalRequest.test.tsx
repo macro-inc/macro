@@ -34,6 +34,9 @@ const REQUEST: HeldToolApproval = {
 };
 
 const viewer = vi.hoisted(() => ({ id: 'macro|dana@example.com' }));
+const SOURCE = 'await tools.email.send_message({ body: {} })';
+// The held program; a test may add a module.
+const held = vi.hoisted(() => ({ module: undefined as string | undefined }));
 const answer = vi.hoisted(() => vi.fn(() => Promise.resolve(true)));
 vi.mock('../context/AgentSessionContext', () => ({
   useOptionalAgentSession: () => ({
@@ -49,6 +52,7 @@ vi.mock('../context/AgentSessionContext', () => ({
             approvalId: 'approval-1',
             arguments: {
               source: 'await tools.email.send_message({ body: {} })',
+              module: held.module,
               permission: { language: 'js_tools', operations: [SEND] },
             },
           },
@@ -98,6 +102,7 @@ function renderRequest() {
 beforeEach(() => {
   queryClient.clear();
   viewer.id = 'macro|dana@example.com';
+  held.module = undefined;
   flags.permissions = true;
   client.session.mockResolvedValue(
     ok({ agentId: 'agent-1', canEdit: true, groups: [], rules: [] })
@@ -136,12 +141,13 @@ describe('PermissionApprovalRequest', () => {
     ]);
   });
 
-  it('keeps Deny and Edit permissions first, the Allows after', async () => {
+  it('keeps View program, then Deny and Edit permissions, then the Allows', async () => {
     renderRequest();
     await screen.findByRole('button', { name: 'Edit permissions' });
     expect(
       screen.getAllByRole('button').map((button) => button.textContent)
     ).toEqual([
+      'View program',
       'Deny',
       'Edit permissions',
       'Allow once',
@@ -186,6 +192,29 @@ describe('PermissionApprovalRequest', () => {
     expect(
       screen.queryByRole('button', { name: 'Edit permissions' })
     ).toBeNull();
+  });
+
+  it('shows the program and what it may call on request', () => {
+    renderRequest();
+    expect(screen.queryByText(SOURCE)).toBeNull();
+    const toggle = screen.getByRole('button', { name: 'View program' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByText(SOURCE)).toBeTruthy();
+    expect(screen.getByText('Send message')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Hide program' }));
+    expect(screen.queryByText(SOURCE)).toBeNull();
+  });
+
+  it('shows the program and its module, each named', () => {
+    held.module = 'export const greeting = "hello";';
+    renderRequest();
+    fireEvent.click(screen.getByRole('button', { name: 'View program' }));
+    expect(screen.getByText('Program')).toBeTruthy();
+    expect(screen.getByText(SOURCE)).toBeTruthy();
+    expect(screen.getByText('Module, with no network')).toBeTruthy();
+    expect(screen.getByText('export const greeting = "hello";')).toBeTruthy();
   });
 
   it('lets anyone else only stop waiting', () => {
