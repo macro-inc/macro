@@ -10,3 +10,12 @@ export function useStartDateEnabled(): Accessor<boolean> {
   const flag = useFeatureFlag(enableTaskStartDate);
   return () => flag().enabled;
 }
+
+/**
+ * Whether start dates are known to be off: false while the flag loads, so
+ * stored start-date settings are not dropped before the flag answers.
+ */
+export function useStartDatesOff(): Accessor<boolean> {
+  const flag = useFeatureFlag(enableTaskStartDate);
+  return () => !flag().loading && !flag().enabled;
+}

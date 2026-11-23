@@ -229,7 +229,11 @@ header, `Tabs` and list controller, in a wide and a 700px split (stand-in
 panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
-open after a click on its text.
+open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+order, and a folder's disclosure caret or a control there that opens a menu
+or a dialog chooses nothing.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -465,6 +469,18 @@ The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+Its `row-press.browser.e2e.ts` presses the real touch rows of Chat (a
+conversation and a pinned favorite), Home, a Soup list, the Notifications
+inbox, Agents (sidebar and phone list), Projects and Search on phone and
+tablet: each shows the same rendered grey at its centre and edge, holds it
+after release and through a quick tap's click, never shows it for a press that
+turns into a scroll, and drops it when a phone long press opens the row's
+action drawer (`ROW_PRESS_SCREENSHOT_DIR` saves the pressed screenshots); no
+element from a long-pressable row's owner down to its surface draws WebKit's
+tap highlight. `long-press-tap.browser.e2e.ts` long-presses a row of Mail's
+phone list (the real context menu and action drawer), dismisses the drawer and
+taps other rows, recording every press marker change: only the tapped row is
+ever pressed.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,
@@ -826,6 +842,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `display-options.browser.e2e.ts` checks that desktop Notifications has
+All and Unread and Display options in place of a settings gear, that
+Condensed turns rows into Home's one-line rows and back, and that phones have
+no Display options.
+
 Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
 row keeps its toggle in place as Hide (beside the Hide under its last
 notification), hovering a row swaps its time for Mark done without moving
@@ -1022,6 +1043,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
@@ -1270,9 +1293,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
+- Desktop native crashes (Rust panics, Chromium crash dumps on macOS) reach PostHog as `$exception` with `native_crash_*` properties from the next webview start; a dump never leaves the machine, only its signature. Keep panic messages scrubbed and send nothing else from a dump. See `tauri/src-tauri/README.md#native-crash-reports`.
 - Diagnose desktop native updates with `native_update_outcome` and the `native.update.*` spans (`observability/native-update.ts`), which the page sends from the host's reports; keep their schema closed (versions, code-defined kinds), never error text or paths. See [update telemetry](tauri/src-tauri/README.md#update-telemetry).
 - Pass `$APPLOCALDATA` (Application Support on Apple platforms) as the native HTTP cookie storage directory; the plugin owns the `.cookies` filename. Never use purgeable caches. The location change intentionally requires one new sign-in, without migration. See `tauri/src-tauri/README.md#native-authentication-cookies`.
-- Store iOS OTA bundles and markers in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup; ignore legacy cache contents rather than migrating them. Other platforms keep the updater's existing cache location. See `tauri/src-tauri/README.md#ota-bundle-storage`.
+- Store mobile OTA bundles and markers outside purgeable caches: iOS in `Application Support/<bundle-identifier>/bundle-updates`, excluded from backup, and Android in `<app data>/bundle-updates`; ignore legacy cache contents rather than migrating them. Desktop keeps the updater's existing cache location. Startup serves a saved bundle only when every file its completion record lists is present. See `tauri/src-tauri/README.md#ota-bundle-storage`.
 - Inline agent steps reuse the session code-execution query for live SDK operation
   names; completed step snapshots come from the shared fold of the tool receipt.
   Session `ExecuteCode` calls join their segment's tool group as their SDK

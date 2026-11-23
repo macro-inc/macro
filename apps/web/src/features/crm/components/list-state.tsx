@@ -5,7 +5,7 @@ import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
 import EmptyStateNoAccessGraphic from '@design/empty-state-no-access.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import { Button, EmptyStatePanel } from '@ui';
+import { Button, cn, EmptyStatePanel } from '@ui';
 import { type Component, For, type JSX } from 'solid-js';
 
 /** Presentational states for CRM lists; the caller owns the query and actions. */
@@ -103,17 +103,27 @@ export function CrmListSkeleton(props: { label?: string; count?: number }) {
   );
 }
 
-/** A failed request, kept distinct from an empty list, with a retry. */
+/**
+ * A failed request, kept distinct from an empty list, with a retry. `inline`
+ * sets it at a side panel section's text edge, like the panel's other alerts.
+ */
 export function CrmListRetry(props: {
   message: string;
   onRetry: () => Promise<unknown>;
+  inline?: boolean;
 }) {
   return (
-    <div class="flex items-center justify-center gap-2 p-3 text-center text-xs text-ink-muted">
+    <div
+      role={props.inline ? 'alert' : undefined}
+      class={cn(
+        'flex items-center gap-2 text-xs text-ink-muted',
+        props.inline ? 'justify-between' : 'justify-center p-3 text-center'
+      )}
+    >
       <span>{props.message}</span>
       <Button
         variant="ghost"
-        size="sm"
+        size={props.inline ? 'xs' : 'sm'}
         onClick={() => fireAndForget(props.onRetry(), 'crm')}
       >
         Retry

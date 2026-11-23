@@ -20,6 +20,7 @@ import { bookingLinksSearch } from './booking-links-search';
 import { SchedulingProvider } from './context/scheduling-context';
 import { bookingLinkAgentSeed } from './core/booking-agent';
 import type { SchedulingProfile, SchedulingScope } from './core/types';
+import { useBookingAccounts } from './queries/booking-accounts';
 import {
   createSchedulingSource,
   useManageBookingMutation,
@@ -39,6 +40,7 @@ function SchedulingHost(props: ParentProps) {
   const user = useUserContext();
   const team = useCurrentTeamQuery();
   const settings = useSettingsState();
+  const bookingAccounts = useBookingAccounts();
   const currentTeam = () => (team.isSuccess ? team.data : undefined);
   const members = () => {
     const result = (currentTeam()?.members ?? []).map((member) => {
@@ -92,6 +94,7 @@ function SchedulingHost(props: ParentProps) {
         },
         scopes,
         members,
+        bookingAccounts,
         userId: () => user.userId() ?? '',
         createBookingLinkWithAgent: async (scope) => {
           const seed = bookingLinkAgentSeed(scope);

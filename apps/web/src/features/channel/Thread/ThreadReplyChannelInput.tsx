@@ -44,6 +44,8 @@ type ThreadReplyChannelInputProps = {
   placeholder?: string;
   /** Observe the mounted input's handle (e.g. for entity drops). */
   onReady?: (handle: InputHandle) => void;
+  /** Offer voice memos; defaults to channel threads, not email discussions. */
+  voiceMemos?: boolean;
 };
 
 /**
@@ -122,6 +124,11 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         host: props.host,
       }}
       collapsible={props.collapsible}
+      // Channel threads take voice memos; email-thread discussions and a
+      // call's own thread do not.
+      features={{
+        voiceMemos: props.voiceMemos ?? props.parent.type === 'channel',
+      }}
       autofocus={false}
       bots={channelBotMentionUsers}
       attachmentTracker={tracker}

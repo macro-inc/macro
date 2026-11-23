@@ -1,8 +1,11 @@
+import { t } from '@app/lib/i18n';
 import {
   type MediaItem,
   mapMediaItems,
   partitionAttachments,
 } from '@channel/Media/media-items';
+import { VoiceMemoPlayer } from '@channel/Media/VoiceMemoPlayer';
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { getDocumentMentions } from '@core/util/documentMentions';
 import { cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
@@ -42,6 +45,7 @@ export function Attachments(props: AttachmentsProps) {
   const hasAttachments = createMemo(
     () =>
       buckets().mediaAttachments.length > 0 ||
+      buckets().audioAttachments.length > 0 ||
       buckets().documentAttachments.length > 0
   );
   const shouldRender = createMemo(
@@ -53,6 +57,19 @@ export function Attachments(props: AttachmentsProps) {
       <div class={cn('mb-2', props.class)} data-message-attachments>
         <Show when={mediaItems().length > 0}>
           <MediaPreview items={mediaItems()} />
+        </Show>
+
+        <Show when={buckets().audioAttachments.length > 0}>
+          <div class="flex flex-col gap-2" data-message-voice-memos>
+            <For each={buckets().audioAttachments}>
+              {(attachment) => (
+                <VoiceMemoPlayer
+                  src={staticFileIdEndpoint(attachment.entity_id)}
+                  label={t('channelComposer.voiceMemo')}
+                />
+              )}
+            </For>
+          </div>
         </Show>
 
         <For each={documentIds()}>

@@ -20,10 +20,15 @@ function outcomeAttributes(outcome: Outcome): Attributes {
     .with({ kind: 'update_found' }, (found) => ({
       native_update_target_version: found.target_version,
     }))
+    .with({ kind: 'needs_newer_os' }, (skipped) => ({
+      native_update_target_version: skipped.target_version,
+      native_update_minimum_system_version: skipped.minimum_system_version,
+    }))
     .with({ kind: 'downloaded' }, (downloaded) => ({
       native_update_target_version: downloaded.target_version,
       native_update_download_ms: downloaded.download_ms,
       native_update_download_bytes: downloaded.download_bytes,
+      native_update_resumed_bytes: downloaded.resumed_bytes,
     }))
     .with({ kind: 'check_failed' }, (failed) => ({
       ...failureAttributes(failed.failure),

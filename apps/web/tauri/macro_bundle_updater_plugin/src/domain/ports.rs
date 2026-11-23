@@ -2,6 +2,7 @@ use rootcause::Report;
 
 use crate::domain::{
     asset_service::{BundleAssetPath, BundleAssetReadError},
+    completion::BundleFile,
     models::{
         AppInfo, BundleAction, DownloadBundleError, DownloadBundleRequest, NativeAppInfo,
         UnzipError, UnzipRequest, UpdateError, UpdateStatus,
@@ -85,6 +86,20 @@ pub trait FsRepo: Clone + Send + Sync + 'static {
 
     /// Remove a file. Returns `Ok(())` if the file does not exist.
     fn remove_file(&self, path: &Path) -> impl Future<Output = Result<(), std::io::Error>> + Send;
+
+    /// List every regular file under `dir`, recursively, relative to `dir`.
+    fn list_files(
+        &self,
+        dir: &Path,
+    ) -> impl Future<Output = Result<Vec<BundleFile>, std::io::Error>> + Send;
+
+    /// Return the size of each of `paths`, relative to `root`, in the same
+    /// order, or the I/O error kind that reading its metadata failed with.
+    fn file_sizes(
+        &self,
+        root: &Path,
+        paths: Vec<PathBuf>,
+    ) -> impl Future<Output = Vec<Result<u64, std::io::ErrorKind>>> + Send;
 }
 
 /// Port for querying native system metadata and bundle storage directories.

@@ -58,6 +58,7 @@ it('reports a downloaded update with its check and download timing', () => {
       target_version: '2026.1119.1',
       download_ms: 300,
       download_bytes: 4096,
+      resumed_bytes: 1024,
     })
   );
   const attributes = {
@@ -69,6 +70,7 @@ it('reports a downloaded update with its check and download timing', () => {
     native_update_target_version: '2026.1119.1',
     native_update_download_ms: 300,
     native_update_download_bytes: 4096,
+    native_update_resumed_bytes: 1024,
   };
   expect(telemetry.track).toHaveBeenCalledWith(NATIVE_UPDATE_EVENT, attributes);
   const [check, download] = telemetry.spans;
@@ -169,4 +171,27 @@ it('keeps up-to-date checks free of version targets and failures', () => {
     native_update_started_at_ms: 1_000,
     native_update_duration_ms: 500,
   });
+});
+
+it('reports an update this OS cannot run as a check with its minimum', () => {
+  reportNativeUpdate(
+    report({
+      kind: 'needs_newer_os',
+      target_version: '2026.1119.1',
+      minimum_system_version: '14.0',
+    })
+  );
+  const [check] = telemetry.spans;
+  expect(telemetry.spans).toHaveLength(1);
+  expect(check?.name).toBe('native.update.check');
+  expect(check?.error).not.toHaveBeenCalled();
+  expect(check?.end).toHaveBeenCalledWith(1_500);
+  expect(telemetry.track).toHaveBeenCalledWith(
+    NATIVE_UPDATE_EVENT,
+    expect.objectContaining({
+      native_update_outcome: 'needs_newer_os',
+      native_update_target_version: '2026.1119.1',
+      native_update_minimum_system_version: '14.0',
+    })
+  );
 });
