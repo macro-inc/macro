@@ -256,9 +256,13 @@ describe('createChannelWrites', () => {
     );
     let done = false;
 
-    const sending = writes.send(send(stored.id)).finally(() => {
-      done = true;
-    });
+    const sending = (async () => {
+      try {
+        return await writes.send(send(stored.id));
+      } finally {
+        done = true;
+      }
+    })();
     expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
     const [shown] = writes.unstoredRoots(CHANNEL_ID);
     expect(shown?.key).toBe(channelMessageKey(stored.id));
