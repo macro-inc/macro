@@ -183,6 +183,74 @@ fn thread_id_keeps_its_old_value_for_routines_that_read_it() {
     assert_eq!(message_json(&reply)["thread_id"], json!(root.id));
 }
 
+fn channel() -> ChannelMetadata {
+    ChannelMetadata {
+        channel_type: ChannelType::Public,
+        channel_name: "design-feedback".into(),
+        named: true,
+    }
+}
+
+fn thread(root: &Message) -> MessageThread {
+    MessageThread {
+        state: messages::domain::models::ThreadState {
+            root_id: root.id,
+            user_id: "macro|sender@example.com".into(),
+            resolved: false,
+            anchor: None,
+            created_at: root.created_at,
+            updated_at: root.created_at,
+            deleted_at: None,
+        },
+        root: root.clone(),
+        replies: Vec::new(),
+    }
+}
+
+#[test]
+fn a_reply_carries_the_post_that_started_its_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    let event = event("channel.message_posted", Some(reply.id));
+    let content = |thread| EventContent::Channel {
+        channel: channel(),
+        message: Some(ChannelMessage {
+            message: reply.clone(),
+            thread,
+        }),
+    };
+
+    let value = content_json(&event, &content(Some(thread(&root))));
+    assert_eq!(value["message"]["is_reply"], true);
+    assert_eq!(value["thread_parent"]["text"], "Launch plan");
+    assert_eq!(value["thread_parent"]["is_reply"], false);
+    assert_eq!(value["thread_parent"]["root_id"], json!(root.id));
+
+    // Once the post that started the thread is deleted, the reply still says it is one.
+    root.deleted_at = Some(root.created_at);
+    let value = content_json(&event, &content(Some(thread(&root))));
+    assert!(value.get("thread_parent").is_none());
+    assert_eq!(value["message"]["is_reply"], true);
+}
+
+#[test]
+fn a_deleted_message_says_only_that_it_is_unavailable() {
+    let event = event("channel.message_posted", Some(Uuid::now_v7()));
+    let value = content_json(
+        &event,
+        &EventContent::Channel {
+            channel: channel(),
+            message: None,
+        },
+    );
+    assert!(value["message"]["unavailable"].is_string());
+    assert!(value["message"].get("is_reply").is_none());
+    assert!(value.get("thread_parent").is_none());
+}
+
 #[test]
 fn every_message_names_its_sender() {
     let mut guest = message("Joining from the lobby");
