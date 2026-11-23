@@ -62,6 +62,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import { Telemetry } from '@macro-inc/observability';
+import {
+  AGENTS_ARCHIVE_VIEW_ID,
+  agentsArchiveContent,
+} from '../archive-navigation';
 import { AgentSessionPane } from '../components/AgentSessionPane';
 import { AgentSessionSkeleton } from '../components/AgentSessionSkeleton';
 import { AgentsSidebar } from '../components/AgentsSidebar';
@@ -156,11 +160,13 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
     isTouchDevice() ? ('updated' as const) : listView.sort();
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
   const [localPage, setPage] = createSignal<AgentsPage>('new');
-  const isRoutinesPage = () => {
+  const routedPage = () => {
     const content = panel.handle.content();
-    return content.type === 'component' && content.id === 'routines';
+    if (content.type !== 'component') return;
+    if (content.id === 'routines') return 'routines';
+    if (content.id === AGENTS_ARCHIVE_VIEW_ID) return 'archived';
   };
-  const page = () => (isRoutinesPage() ? 'routines' : localPage());
+  const page = () => routedPage() ?? localPage();
   const [selected, setSelected] = createSignal<
     SelectedConversation | undefined
   >(
@@ -207,7 +213,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   );
   const dataMode = () => dataModeFor(selected() ? mode() : workspace.mode());
   const [mobileList, setMobileList] = createSignal(
-    !isRoutinesPage() && !props.route
+    routedPage() !== 'routines' && !props.route
   );
   const persistedDraft = createPersistedComposerDraft(undefined, userId);
   const [search, setSearch] = createSignal('');
@@ -328,6 +334,15 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   ) => {
     setCreatingKind(createKind);
     setMobileList(false);
+    if (next === 'archived') {
+      layout.openWithSplit(agentsArchiveContent(), {
+        handle: panel.handle,
+        activate: true,
+        search: {},
+        referredFrom: navigationSource,
+      });
+      return;
+    }
     if (next === 'routines') {
       layout.openWithSplit(routineContent(), {
         handle: panel.handle,
@@ -357,7 +372,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       });
       return;
     }
-    if (isRoutinesPage()) {
+    if (routedPage()) {
       layout.openWithSplit(
         {
           type: 'component',
@@ -381,9 +396,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
         const next =
           content.type === 'component' && content.id === 'routines'
             ? 'routines'
-            : content.type === 'component' && content.id === 'agents'
-              ? (parseAgentsPage(content.params?.agentPage) ?? 'new')
-              : 'new';
+            : content.type === 'component' &&
+                content.id === AGENTS_ARCHIVE_VIEW_ID
+              ? 'archived'
+              : content.type === 'component' && content.id === 'agents'
+                ? (parseAgentsPage(content.params?.agentPage) ?? 'new')
+                : 'new';
         setSelected(undefined);
         setPage(next);
         setMobileList(
@@ -748,6 +766,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     <Show
                       when={
                         page() !== 'routines' &&
+                        page() !== 'archived' &&
                         !(
                           mobileLayout() &&
                           (mobileList() || page() === 'archived')

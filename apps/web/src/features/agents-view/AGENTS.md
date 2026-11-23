@@ -15,6 +15,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - `primitives/mobile-agent-request.ts`: selection handoff to the mounted accessory composer.
 - `views/agents-sidebar/agents-sidebar.tsx`: redesigned desktop list composition.
 - `views/archived-conversations/archived-conversations.tsx`: archived conversations in the main pane.
+- `archive-navigation.ts`: durable `/agents/archive` route identity and migration from legacy in-place Archived state.
 - `core/conversation-list.ts` and `primitives/conversation-list-view.ts`: sorting, waiting partition, and user-scoped preferences.
 - `views/shared/conversation-row/`: new row composition; shared status/code presentation is under `components/`.
 - `core/model-selection.ts`, `primitives/model-selector-navigation.ts`, and `model-selector.tsx`: shared selector logic and platform entry; trigger parts live under `views/shared/`.
@@ -38,9 +39,11 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep the `connections` page routable even though the redesigned navigation omits it.
 - Preserve `agents-conversation-list-view-v1` filters when changing sort; legacy grouping does not determine the redesigned list.
 - Persist phone Archived filters separately from Conversations so an active unread filter cannot hide archived history on entry.
+- Navigate Archived through `/agents/archive` under the app base; retain shared workspace state across Back/Forward, migrate legacy in-place entries without pushing duplicates, and keep the heading inside the list's own content padding.
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
 - Keep archive code/date cells pointer-transparent except their actual controls; show an empty archive only after pagination is exhausted, with loading feedback while pages can still supply matches.
 - Render desktop row ages in the interface locale on a state-matched trailing fill with a 24px left fade; retain hover/focus visibility and title truncation.
+- Show conversation-name tooltips only when their rendered label is truncated; measure `scrollWidth > clientWidth` for each open request rather than caching a mount-time width.
 - Use the shared soup touch highlight and full-width square phone rows; clear it on drawer open/close and cancellation, and keep button press fills off the title-only hit target.
 - Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups. Reuse catalog search focus ownership on desktop; let ArrowDown/ArrowUp enter filtered models and ArrowLeft return to the parent menu.

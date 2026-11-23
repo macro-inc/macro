@@ -491,7 +491,7 @@ the shimmer.
   cannot receive their MCP callbacks. Check the runtime error before retrying, and
   start a new session after correcting its gateway network configuration.
 
-- Open **Go to Agents** → `/app/component/agents`. The workspace uses one
+- Open **Go to Agents** → `/app/agents` (`/app/component/agents` remains a compatibility link). The workspace uses one
   sidebar for Chat and Code.
   The desktop footer contains **Agents**, **Routines**, and **Archived**.
   **Agents** opens the same roster as the composer’s **Create agent** action.
@@ -579,14 +579,15 @@ the shimmer.
   not remount it.
   Right-click (or long-press on mobile) opens the same entity menu as Home:
   Rename, Favorite, Copy link, Share, Archive, Delete, and the other session
-  actions. On desktop, **Archived** in the footer opens a searchable main-pane
-  list with the loaded count, code identity, and archive date. Hover or focus a
+  actions. On desktop, **Archived** in the footer opens `/app/agents/archive`, a searchable main-pane
+  list with the loaded count, code identity, and archive date. Its single heading stays inside the list content padding, not in a separate workspace header. The phone drawer opens the same durable route with the normal collection heading and independent archive filters. Reload, direct links, and Back/Forward retain the destination; old in-place archive entries migrate without adding a history step. Hover or focus a
   row for **Unarchive** and **More actions**; right-click offers the same actions.
   Unarchive restores the row to the sidebar. Non-action code/date cells open the
   conversation while icons and action buttons retain their own behavior. The
   archived page reads more pages while fewer than 20 matching rows are loaded,
   then pages near the scroll end. Empty results appear only after paging finishes;
   counts describe loaded rows, not a server total. Phone has its own Archived view.
+  Conversation-name tooltips appear only when the rendered label is clipped. Each open request checks its current width, so resizing before reopening updates whether the tooltip appears; phone rows do not show hover tooltips.
   Runs of routines with **Show runs in Home and Agents** off (the default) are
   left out until **Show hidden routine runs** is checked in the **Filter
   conversations** menu, which adds it to the count in the filter button and unchecks it with

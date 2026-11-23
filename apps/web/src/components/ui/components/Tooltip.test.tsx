@@ -202,3 +202,73 @@ it('keeps owned tooltip portals inside the fullscreen element', async () => {
     Reflect.deleteProperty(document, 'fullscreenElement');
   }
 });
+
+it('measures the target on every attempt to open without changing default tooltips', () => {
+  device.isTouch = () => false;
+  let width = 40;
+  let target!: HTMLSpanElement;
+  render(() => (
+    <>
+      <Tooltip.Root measureTarget={() => target}>
+        <Tooltip.Trigger>Measured</Tooltip.Trigger>
+        <span ref={target}>Title</span>
+        <Tooltip.Portal>
+          <Tooltip.Content>Full title</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+      <Tooltip.Root>
+        <Tooltip.Trigger>Default</Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>Default hint</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </>
+  ));
+  vi.spyOn(target, 'clientWidth', 'get').mockReturnValue(60);
+  vi.spyOn(target, 'scrollWidth', 'get').mockImplementation(() => width);
+  const measured = screen.getByRole('button', { name: 'Measured' });
+  measured.focus();
+  expect(screen.queryByText('Full title')).toBeNull();
+  measured.blur();
+  screen.getByRole('button', { name: 'Default' }).focus();
+  expect(screen.getByRole('tooltip').textContent).toContain('Default hint');
+  measured.focus();
+  width = 100;
+  measured.blur();
+  measured.focus();
+  expect(screen.getByRole('tooltip').textContent).toContain('Full title');
+  measured.blur();
+  width = 40;
+  measured.focus();
+  expect(screen.queryByText('Full title')).toBeNull();
+});
+
+it.each([
+  { controlled: true, width: 40, visible: false },
+  { controlled: false, width: 40, visible: false },
+  { controlled: true, width: 100, visible: true },
+  { controlled: false, width: 100, visible: true },
+])(
+  'gates initially open measured tooltips: %j',
+  ({ controlled, width, visible }) => {
+    device.isTouch = () => false;
+    const target = document.createElement('span');
+    target.textContent = 'Measured title';
+    vi.spyOn(target, 'clientWidth', 'get').mockReturnValue(60);
+    vi.spyOn(target, 'scrollWidth', 'get').mockReturnValue(width);
+    render(() => (
+      <Tooltip.Root
+        measureTarget={() => target}
+        open={controlled ? true : undefined}
+        defaultOpen={!controlled}
+      >
+        <Tooltip.Trigger>Initially open</Tooltip.Trigger>
+        {target}
+        <Tooltip.Portal>
+          <Tooltip.Content>Full measured title</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    ));
+    expect(Boolean(screen.queryByRole('tooltip'))).toBe(visible);
+  }
+);

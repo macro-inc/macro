@@ -4,6 +4,7 @@ import { pressHandlers, Tooltip } from '@ui';
 import { ConversationRowContext, type ConversationRowProps } from './context';
 
 export function ConversationRowRoot(props: ConversationRowProps) {
+  let titleElement: HTMLSpanElement | undefined;
   const description = () => {
     const labels: string[] = [];
     if (props.failed) labels.push(t('agentWork.rowFailed'));
@@ -15,7 +16,14 @@ export function ConversationRowRoot(props: ConversationRowProps) {
   };
 
   return (
-    <ConversationRowContext.Provider value={props}>
+    <ConversationRowContext.Provider
+      value={{
+        row: props,
+        setTitleElement: (element) => {
+          titleElement = element;
+        },
+      }}
+    >
       <ViewSidebar.Item
         as="div"
         active={props.active}
@@ -24,7 +32,7 @@ export function ConversationRowRoot(props: ConversationRowProps) {
         data-kind={props.kind}
         data-session-state={props.state}
       >
-        <Tooltip.Root placement="right">
+        <Tooltip.Root placement="right" measureTarget={() => titleElement}>
           <Tooltip.Trigger
             as="button"
             type="button"

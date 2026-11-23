@@ -41,7 +41,10 @@ const TooltipContext = createContext<{
   close: () => void;
 }>();
 
-type TooltipRootProps = ComponentProps<typeof KobalteTooltip>;
+type TooltipRootProps = ComponentProps<typeof KobalteTooltip> & {
+  /** Only open when this measured element overflows horizontally. */
+  measureTarget?: () => HTMLElement | undefined;
+};
 
 function TooltipRoot(props: TooltipRootProps) {
   const [local, rest] = splitProps(props, [
@@ -50,16 +53,27 @@ function TooltipRoot(props: TooltipRootProps) {
     'open',
     'defaultOpen',
     'onOpenChange',
+    'measureTarget',
   ]);
   const [open, setOpen] = createSignal(local.defaultOpen ?? false);
+  const [mounted, setMounted] = createSignal(false);
+  onMount(() => setMounted(true));
+  const allowsOpen = () => {
+    if (!local.measureTarget) return true;
+    const target = local.measureTarget();
+    return !!target && target.scrollWidth > target.clientWidth;
+  };
   const enabled = () =>
     import.meta.env.MODE !== 'test' &&
     !local.disabled &&
     !isTouchDevice() &&
     tooltipsEnabled();
-  const visible = () => enabled() && (local.open ?? open());
+  const visible = () =>
+    enabled() &&
+    (local.open ?? open()) &&
+    (!local.measureTarget || (mounted() && allowsOpen()));
   const changeOpen = (value: boolean) => {
-    const next = value && enabled();
+    const next = value && enabled() && allowsOpen();
     setOpen(next);
     local.onOpenChange?.(next);
   };

@@ -1,10 +1,26 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ConversationRowRoot } from './root';
 import { ConversationRowTitle } from './title';
 import { ConversationRowTrailing } from './trailing';
 
-afterEach(cleanup);
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => false,
+}));
+
+beforeEach(() => {
+  vi.stubEnv('MODE', 'development');
+  const rects = [new DOMRect(0, 0, 40, 40)];
+  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue(
+    Object.assign(rects, { item: (index: number) => rects[index] ?? null })
+  );
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 it.each([false, true])(
   'keeps the title truncated under a separately masked timestamp surface (active: %s)',
@@ -44,3 +60,35 @@ it.each([false, true])(
     ).toBe(true);
   }
 );
+
+it('shows the conversation tooltip only while the title is truncated', () => {
+  let width = 40;
+  const { container } = render(() => (
+    <ConversationRowRoot
+      id="session"
+      title="Conversation name"
+      kind="chat"
+      state="dormant"
+    >
+      <ConversationRowTitle />
+    </ConversationRowRoot>
+  ));
+  const title = screen.getByText('Conversation name');
+  vi.spyOn(title, 'clientWidth', 'get').mockReturnValue(60);
+  vi.spyOn(title, 'scrollWidth', 'get').mockImplementation(() => width);
+  const trigger = container.querySelector<HTMLButtonElement>('button');
+  expect(trigger).not.toBeNull();
+  trigger?.focus();
+  expect(screen.queryByRole('tooltip')).toBeNull();
+  trigger?.blur();
+  width = 100;
+  trigger?.focus();
+  expect(screen.getByRole('tooltip').textContent).toContain(
+    'Conversation name'
+  );
+  trigger?.blur();
+  width = 40;
+  trigger?.focus();
+  expect(screen.queryByRole('tooltip')).toBeNull();
+  expect(title.classList.contains('font-normal')).toBe(true);
+});

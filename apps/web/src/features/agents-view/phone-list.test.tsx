@@ -274,6 +274,16 @@ describe('phone Agents list', () => {
   it('shows the archived empty panel without bubbles, an action, or Back', () => {
     render(() => <Harness archived />);
     expect(screen.getByRole('heading', { name: 'Archived' })).toBeTruthy();
+    const heading = screen.getByRole('heading', { name: 'Archived' });
+    const header = heading.closest('header');
+    expect(header?.classList.contains('px-3')).toBe(true);
+    expect(header?.parentElement?.className).toContain(
+      'pt-(--mobile-content-inset-top)'
+    );
+    expect(header?.closest('[data-mobile-list-header]')).toBeNull();
+    expect(screen.getAllByRole('heading', { name: 'Archived' })).toHaveLength(
+      1
+    );
     expect(screen.getByText('No archived conversations')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'New agent' })).toBeNull();
     expect(

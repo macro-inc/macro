@@ -277,7 +277,7 @@ vi.mock('../phone-list', () => ({
   ),
 }));
 vi.mock('./archived-conversations/archived-conversations', () => ({
-  ArchivedConversations: () => null,
+  ArchivedConversations: () => <div data-testid="archived-list" />,
 }));
 vi.mock(
   '@app/features/block-agent/queries/change-session-archive-state',
@@ -423,6 +423,13 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+it('renders Archived without a second workspace header above its content', () => {
+  state.contentId.current = 'agents-archive';
+  render(() => <AgentsView />);
+  expect(screen.getByTestId('archived-list')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Show navigation' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Page back' })).toBeNull();
+});
 it('selects the conversation and shows a skeleton before its load resolves', async () => {
   await openLoadedConversation();
 
@@ -633,6 +640,8 @@ it('returns from an agent page to Archived without pushing a restoration entry',
     history.push(item);
     setEntry(item);
   };
+  state.open.current = (next, source) =>
+    state.replace.current({ type: 'component', ...next }, source);
   state.back.current = () => {
     history.pop();
     setEntry(history.at(-1)!);
@@ -662,13 +671,14 @@ it('opens a session from Archived with its previous page still in the stack', ()
   state.open.current = (next) => {
     const item = { content: { type: 'component' as const, ...next } };
     history.push(item);
+    if (next.id === 'agents-archive') setEntry(item);
   };
   render(() => <AgentsView />);
   fireEvent.click(screen.getByRole('button', { name: 'Archived' }));
   fireEvent.click(screen.getByRole('button', { name: 'Session' }));
   expect(history.map((item) => item.content.id)).toEqual([
     'agents',
-    'agents',
+    'agents-archive',
     'session',
   ]);
   // The phone stack returns to the still-mounted Archived pane.
@@ -694,8 +704,7 @@ it('opens Conversations from the drawer on a direct Archived entry', () => {
   const [entry, setEntry] = createSignal<FakeEntry>({
     content: {
       type: 'component',
-      id: 'agents',
-      params: { agentPage: 'archived' },
+      id: 'agents-archive',
     },
   });
   state.entry.current = entry;
