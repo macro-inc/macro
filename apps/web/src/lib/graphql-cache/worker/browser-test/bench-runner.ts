@@ -2,7 +2,7 @@
  * Runs the cache engine benchmark (`bench.html`) in a real browser on OPFS.
  *
  * Usage, from apps/web. Build the bench page first:
- *   just build-cache-wasm
+ *   just build-wasm cache-wasm
  *   bunx --bun vite build --config src/lib/graphql-cache/worker/browser-test/bench.vite.config.ts
  *   bun scripts/cache-wasm/cli.ts package-dist --dist src/lib/graphql-cache/worker/browser-test/.dist-bench
  * then run:
