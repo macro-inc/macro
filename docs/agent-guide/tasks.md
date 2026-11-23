@@ -1135,6 +1135,9 @@ controls on the right. Built-in scopes and saved views stay in the shared Tasks
 sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
 and name; its actions share, copy the link, or rename when editing is allowed.
 Phone detail stays one page rather than switching Overview and Tasks.
+On desktop, Tab, Shift+Tab, `1` and `2` switch Overview and Tasks while the
+keyboard is on the project (its task list, or nothing focused); in a field,
+the description or on a button, Tab is focus order.
 Projects use the same list rows, property cells, selection, group headers, and
 keyboard navigation as Tasks. On touch devices, where the list fills a phone or
 a tablet's narrow list pane, there are no column headings and no checkbox
