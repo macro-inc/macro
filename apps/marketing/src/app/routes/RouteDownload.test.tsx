@@ -9,7 +9,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ANDROID_PLAY_STORE_URL,
-  FALLBACK_DOWNLOAD_URLS,
   IOS_APP_STORE_URL,
 } from '../../features/marketing/core/desktopDownloads';
 import { analytics } from '../utils/utilAnalytic';
@@ -18,11 +17,6 @@ import { RouteDownload } from './RouteDownload';
 vi.mock('../utils/utilAnalytic', () => ({
   analytics: { trackPosthog: vi.fn() },
 }));
-
-const latest = {
-  macos: 'https://example.com/Macro-latest-aarch64-darwin.dmg',
-  linux: 'https://example.com/Macro-latest-x86_64-linux.AppImage',
-};
 
 function visitWith(userAgent: string) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
@@ -47,25 +41,6 @@ beforeEach(() => {
       disconnect() {}
     }
   );
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () =>
-      Response.json([
-        {
-          assets: [
-            {
-              name: 'Macro-latest-aarch64-darwin.dmg',
-              browser_download_url: latest.macos,
-            },
-            {
-              name: 'Macro-latest-x86_64-linux.AppImage',
-              browser_download_url: latest.linux,
-            },
-          ],
-        },
-      ])
-    )
-  );
 });
 
 afterEach(() => {
@@ -76,18 +51,22 @@ afterEach(() => {
 });
 
 describe('RouteDownload', () => {
-  it('offers the Linux installer first on Linux', async () => {
+  it('offers the Linux installer first on Linux', () => {
     visitWith('Mozilla/5.0 (X11; Linux x86_64)');
     expect(downloadLinks()).toEqual([
-      ['Download for Linux', FALLBACK_DOWNLOAD_URLS.linux],
-      ['Download for macOS', FALLBACK_DOWNLOAD_URLS.macos],
+      ['Download for Linux', '/download/linux'],
+      ['Download for macOS', '/download/mac'],
     ]);
-    await vi.waitFor(() =>
-      expect(downloadLinks()).toEqual([
-        ['Download for Linux', latest.linux],
-        ['Download for macOS', latest.macos],
-      ])
-    );
+  });
+
+  it('leaves installer clicks to the browser, not the router', () => {
+    visitWith('Mozilla/5.0 (X11; Linux x86_64)');
+    for (const link of within(
+      screen.getByRole('list', { name: 'Desktop installers' })
+    ).getAllByRole('link')) {
+      // The router cancels the clicks it handles; the edge serves these paths.
+      expect(fireEvent.click(link)).toBe(true);
+    }
   });
 
   it('offers the Mac installer first on macOS and other computers', () => {

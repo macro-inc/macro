@@ -4,24 +4,14 @@
 
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FALLBACK_DOWNLOAD_URLS } from './core/desktop-downloads';
 import { Downloads } from './Downloads';
 
 const host = vi.hoisted(() => ({ desktopApp: false }));
-const installers = vi.hoisted(() => ({
-  current: { isPending: true, data: undefined } as {
-    isPending: boolean;
-    data: { macos: string; linux: string } | undefined;
-  },
-}));
 const track = vi.hoisted(() => vi.fn());
 
 vi.mock('@core/util/platform', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/util/platform')>()),
   isPlatform: (target: string) => target === 'desktop' && host.desktopApp,
-}));
-vi.mock('./queries/desktop-installers', () => ({
-  useDesktopInstallersQuery: () => installers.current,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track }),
@@ -72,7 +62,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   host.desktopApp = false;
-  installers.current = { isPending: true, data: undefined };
   Reflect.deleteProperty(navigator, 'userAgent');
   motionStyles.remove();
   vi.unstubAllGlobals();
@@ -95,8 +84,8 @@ describe('Downloads desktop installers', () => {
     render(() => <Downloads />);
 
     expect(downloadLinks()).toEqual([
-      ['Download for macOS', FALLBACK_DOWNLOAD_URLS.macos],
-      ['Download for Linux', FALLBACK_DOWNLOAD_URLS.linux],
+      ['Download for macOS', 'https://macro.com/download/mac'],
+      ['Download for Linux', 'https://macro.com/download/linux'],
     ]);
   });
 
@@ -117,23 +106,6 @@ describe('Downloads desktop installers', () => {
     expect(downloadLinks().map(([label]) => label)).toEqual([
       'Download for macOS',
       'Download for Linux',
-    ]);
-  });
-
-  it('links the newest installers once GitHub answers', () => {
-    setUserAgent(MAC_UA);
-    installers.current = {
-      isPending: false,
-      data: {
-        macos: 'https://example.com/new.dmg',
-        linux: 'https://example.com/new.AppImage',
-      },
-    };
-    render(() => <Downloads />);
-
-    expect(downloadLinks()).toEqual([
-      ['Download for macOS', 'https://example.com/new.dmg'],
-      ['Download for Linux', 'https://example.com/new.AppImage'],
     ]);
   });
 

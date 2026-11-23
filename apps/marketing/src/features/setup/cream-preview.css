@@ -320,7 +320,7 @@ html[data-palette='cream'] :is(.homepage-demo-titlebar h2, .homepage-demo-titleb
   color: var(--color-ink-muted);
 }
 html[data-palette='cream'] .downloads-header p { color: var(--color-ink-muted); }
-html[data-palette='cream'] :is(.downloads-release a, .downloads-page .downloads-version) {
+html[data-palette='cream'] .downloads-release a {
   color: var(--color-ink-subtle);
 }
 html[data-palette='cream'] .downloads-release a:hover { color: var(--color-ink); }
