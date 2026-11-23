@@ -1476,8 +1476,10 @@ async fn a_dropped_read_of_known_items_leaves_no_transaction_open(
 
     // Drop the read after one poll, two, … until it finishes, yielding to the
     // runtime between polls, so the drops land at every await it reaches:
-    // waiting for the connection, with BEGIN on the wire, and after.
-    for polls in 1..=200usize {
+    // waiting for the connection, with BEGIN on the wire, and after. The sweep
+    // must reach a read that finishes, or it never covered every await.
+    let mut finished_after = None;
+    for polls in 1..=5_000usize {
         let mut recompute = req(WORK, &link_ids, &sources);
         recompute.only = Some(&only);
         let finished = drop_after_polls(attention_soup_page(&single, recompute), polls).await;
@@ -1487,9 +1489,12 @@ async fn a_dropped_read_of_known_items_leaves_no_transaction_open(
             "a read dropped after {polls} polls left its connection {state}"
         );
         if finished {
+            finished_after = Some(polls);
             break;
         }
     }
+    let polls = finished_after.ok_or_else(|| anyhow::anyhow!("no read finished in 5,000 polls"))?;
+    eprintln!("a read of known items finished after {polls} polls");
     // The connection still serves a read that runs to the end.
     let mut recompute = req(WORK, &link_ids, &sources);
     recompute.only = Some(&only);

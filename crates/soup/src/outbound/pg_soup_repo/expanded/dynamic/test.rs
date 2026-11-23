@@ -882,15 +882,27 @@ async fn a_begin_dropped_mid_flight_leaves_the_connection_clean(
         .max_connections(1)
         .connect_with((*pool.connect_options()).clone())
         .await?;
+    // Connect it first, so the begin below goes straight to the wire.
+    let pid = backend_pid(&single).await?;
     // The server is still running this BEGIN when the timeout drops the future.
     let dropped = tokio::time::timeout(
         std::time::Duration::from_millis(200),
-        single.begin_with("BEGIN; SELECT pg_sleep(1)"),
+        single.begin_with("BEGIN; SELECT pg_sleep(2)"),
     )
     .await;
     assert!(
         dropped.is_err(),
         "the begin finished before it could be dropped"
+    );
+    // A drop before the BEGIN reached the server would prove nothing.
+    let state: Option<String> =
+        sqlx::query_scalar!("SELECT state FROM pg_stat_activity WHERE pid = $1", pid)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        state.as_deref(),
+        Some("active"),
+        "the begin was dropped before its BEGIN reached the server"
     );
 
     let mut snapshot = begin_dynamic_query(&single).await?;
@@ -910,15 +922,27 @@ async fn a_begin_dropped_mid_flight_leaves_the_connection_clean(
 async fn idle_state(pool: &PgPool, single: &PgPool) -> anyhow::Result<String> {
     // Holding it waits for the pool to finish taking it back, and keeps it idle.
     let mut held = single.acquire().await?;
-    let pid: i32 = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
-        .fetch_one(&mut *held)
-        .await?;
+    let pid = held_backend_pid(&mut held).await?;
     let state: Option<String> =
         sqlx::query_scalar!("SELECT state FROM pg_stat_activity WHERE pid = $1", pid)
             .fetch_one(pool)
             .await?;
     drop(held);
     Ok(state.unwrap_or_default())
+}
+
+/// The server process behind `single`'s one connection, opening it if needed.
+async fn backend_pid(single: &PgPool) -> anyhow::Result<i32> {
+    let mut held = single.acquire().await?;
+    held_backend_pid(&mut held).await
+}
+
+async fn held_backend_pid(
+    held: &mut sqlx::pool::PoolConnection<sqlx::Postgres>,
+) -> anyhow::Result<i32> {
+    Ok(sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut **held)
+        .await?)
 }
 
 /// A nested begin the server refuses (its transaction already aborted) opens

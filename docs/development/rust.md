@@ -86,7 +86,9 @@ The workspace patches `sqlx-postgres` to
 [`vendor/sqlx-postgres`](../../vendor/sqlx-postgres/README-MACRO.md), the
 published 0.8.6 with upstream's fix for a transaction begin dropped
 mid-flight. Without it the pool hands out a connection still inside a
-transaction. Drop the copy once the workspace is on sqlx 0.9.1 or later.
+transaction. Drop the copy once the workspace is on sqlx 0.9.1 or later and
+upstream also handles a SAVEPOINT the server refuses; the README names the
+tests that tell.
 
 ## Test the affected packages
 
