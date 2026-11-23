@@ -9,6 +9,7 @@ base64 = { workspace = true }
 hex = { workspace = true }
 hmac = { workspace = true }
 sha2 = { workspace = true }
+subtle = { workspace = true }
 thiserror = { workspace = true }
 zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
