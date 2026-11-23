@@ -16,16 +16,21 @@ import {
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { NotificationRow } from '@app/features/notifications-inbox/components/notification-row';
 import { ProjectRowMenu } from '@app/features/projects/components/project-row-menu';
+import {
+  type ProjectsContext,
+  ProjectsProvider,
+} from '@app/features/projects/context/projects-context';
 import { ProjectRow } from '@app/features/projects/project-row';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, EntityProvider, ListEntity } from '@entity';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
@@ -70,6 +75,21 @@ const project = {
     access: 'view' as const,
   },
   properties: [],
+};
+
+const unavailable = (): never => {
+  throw new Error('Capability unavailable in the row press fixture');
+};
+
+// The project rows read only the start-date switch; left unset, they show the
+// due date alone.
+const projects: ProjectsContext = {
+  userId: () => 'macro|viewer@example.test',
+  createCollectionSource: unavailable,
+  createProjectSource: unavailable,
+  createProjectIdentitySource: unavailable,
+  createPropertyDefinitionsSource: unavailable,
+  createCommands: unavailable,
 };
 
 function Fixture() {
@@ -231,15 +251,19 @@ render(
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <EmailLinksContextProvider>
                   <StaticMarkdownContext>
-                    <MemoryRouter>
-                      <Route path="*" component={Fixture} />
-                    </MemoryRouter>
+                    <ProjectsProvider context={projects}>
+                      <MemoryRouter>
+                        <Route path="*" component={Fixture} />
+                      </MemoryRouter>
+                    </ProjectsProvider>
                   </StaticMarkdownContext>
                 </EmailLinksContextProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

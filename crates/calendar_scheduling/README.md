@@ -22,7 +22,12 @@ successful sync; for a calendar Macro syncs daily, such as holidays from Google
 or an Outlook mailbox's own read-only calendars, a day after it), while a
 permanent or reauthorization failure, a calendar or inbox still on its first
 sync, or a failure past that window refuses availability. A calendar with Busy
-off never blocks booking, whatever its sync state. Busy time comes from every connected calendar
+off never blocks booking, whatever its sync state. A personal link can name one of the host's
+connected inboxes (`emailLinkId`): its bookings are created on that inbox's primary calendar, so the
+invitation comes from that address, and the link offers no time while that calendar cannot take a
+booking (removed, read-only, failing permanently or needing reauthorization). It never falls back to another inbox. A
+link without one books on the primary inbox, as before; team links always do, on each host's. Each
+booking pins its calendar, so changing a link's account moves only later bookings. Busy time comes from every connected calendar
 the host has not turned off (the Busy switch in Settings → Calendar, stored in
 `calendar_availability_preferences` and read in process, never through the
 calendar service's HTTP listing), plus meetings the host is in on any calendar
@@ -33,7 +38,8 @@ The web entry points are Settings → Calendar, the calendar header shortcuts,
 `/app/book/:profile/:slug?`, and `/app/booking/:id#token`. Existing Macro team
 owners/admins can manage team scheduling; members have read access. Current
 membership is checked again when booking or approving. Booking capabilities travel
-in request headers/bodies, and scheduling responses disable caching.
+in request headers/bodies, and scheduling responses disable caching. Responses to the booker (book,
+receipt, reschedule, cancel) carry no hosts: a Macro user identity holds the host's sign-in address.
 
 Event types start paused. Public pages show enabled types only. Team availability
 uses the selected shared weekly schedule plus every selected host's busy calendar

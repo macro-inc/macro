@@ -17,11 +17,21 @@ import {
   slugify,
 } from '../core/types';
 
+function accountIssues(
+  step: EventEditorStep,
+  message: string | undefined
+): EventValidationIssue[] {
+  if (step !== 'location' || !message) return [];
+  return [{ field: 'emailLinkId', message }];
+}
+
 /** Owns the draft and steps; only final submission writes. */
 export function createEventEditor(options: {
   event: EventType;
   events: Accessor<EventType[]>;
   missingHosts: (event: EventType) => string[];
+  /** Why the link cannot book on the connected account it names, if it cannot. */
+  accountIssue: (event: EventType) => string | undefined;
   hasSchedule: (id: string) => boolean;
   createActive: Accessor<boolean>;
   defaultHosts?: Accessor<string[]>;
@@ -107,6 +117,7 @@ export function createEventEditor(options: {
           },
         ]
       : []),
+    ...accountIssues(current, options.accountIssue(event)),
   ];
   const setDraft = (update: (current: EventType) => EventType) => {
     const next = setDraftValue(update);
