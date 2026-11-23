@@ -34,7 +34,7 @@ import {
 } from './timeline';
 
 /** Where a channel's timeline is read from for this mount. */
-export type ChannelTimelineMode = 'local' | 'rest' | 'pending';
+export type ChannelTimelineMode = 'local' | 'rest';
 
 /**
  * A parent's message timeline, whichever path reads it: the device for
@@ -112,24 +112,6 @@ function restSource(
   };
 }
 
-const PENDING: Omit<ChannelTimelineSource, 'mode'> = {
-  data: () => undefined,
-  latestEntry: () => undefined,
-  isLoading: () => true,
-  isPending: () => true,
-  isReady: () => false,
-  loadError: () => undefined,
-  isMissingTarget: () => false,
-  hasOlder: () => false,
-  hasNewer: () => false,
-  isLoadingOlder: () => false,
-  isLoadingNewer: () => false,
-  loadOlder: async () => {},
-  loadNewer: async () => {},
-  retry: async () => {},
-  toLatest: async () => {},
-};
-
 function localSource(
   timeline: LocalChannelTimeline
 ): Omit<ChannelTimelineSource, 'mode'> {
@@ -161,8 +143,7 @@ function localSource(
 /**
  * Which path reads a parent's messages, chosen once per mount: the device
  * when the flag is on and the cache host serves channel timelines; REST for
- * everything else, and from the moment the host turns out unable. While the
- * flag is still loading on a device with a cache, `pending`.
+ * everything else, and from the moment the host turns out unable.
  */
 export function useChannelReadPath(parent: Accessor<MessageParent>) {
   const flag = useFeatureFlag(enableChannelLocalSync);
@@ -174,22 +155,20 @@ export function useChannelReadPath(parent: Accessor<MessageParent>) {
     if (!current || !graphqlCacheEnabled()) return undefined;
     return channelCacheSupported(current) ? current : undefined;
   });
-  // Latched: a flag refresh never moves an open channel between paths.
-  const mode = createMemo<ChannelTimelineMode>((previous) => {
+  // Latched: a flag refresh never moves an open channel between paths. A flag
+  // PostHog has not answered yet reads as off, so REST never waits for it; a
+  // device it turns on reads from the device from the next mount.
+  const mode = createMemo<ChannelTimelineMode, undefined>((previous) => {
     if (!host()) return 'rest';
-    if (previous === 'local' || previous === 'rest') return previous;
-    const answer = flag();
-    if (answer.loading) return 'pending';
-    return answer.enabled ? 'local' : 'rest';
-  }, 'pending');
+    return previous ?? (flag().enabled ? 'local' : 'rest');
+  }, undefined);
   return { host, mode, setUnsupported: () => setUnsupported(true) };
 }
 
 /**
  * Picks the path once per mount: channels read from the device when the flag
  * is on and the cache host serves channel timelines; everything else, and a
- * host found unable mid-way, stays on REST. While the flag is still loading
- * on a device with a cache, nothing loads.
+ * host found unable mid-way, stays on REST.
  */
 export function useChannelTimelineSource(
   parent: Accessor<MessageParent>,
@@ -215,7 +194,7 @@ export function useChannelTimelineSource(
       )
     );
   });
-  const active = () => local() ?? (mode() === 'pending' ? PENDING : rest);
+  const active = () => local() ?? rest;
 
   return {
     mode,

@@ -125,7 +125,7 @@ export function useThreadRepliesQuery(
     get isPending() {
       const thread = local();
       if (thread) return thread.isPending();
-      return mode() === 'pending' || rest.isPending;
+      return rest.isPending;
     },
     get error() {
       const thread = local();
