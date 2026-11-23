@@ -10,8 +10,8 @@ use crate::domain::models::query::ContactLookup;
 use crate::domain::ports::{
     ContactListIngress, ContactListRepository, ContactsBackfillOutboxRepo, ContactsIngress,
     ContactsIngressQueue, ContactsNotifier, ContactsOutboxService, ContactsPageRepository,
-    ContactsPageService, ContactsRepository, ContactsService, PeopleSearchRepository,
-    PeopleSearchService,
+    ContactsPageService, ContactsRepository, ContactsService, CorrespondentsService,
+    PeopleSearchRepository, PeopleSearchService,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -167,27 +167,13 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             return Ok(Vec::new());
         }
 
-        let named: HashSet<_> = added
-            .iter()
-            .flat_map(|(owner, contact)| [owner.clone(), contact.clone()])
-            .collect();
-        let named: Vec<_> = named.into_iter().collect();
-        let deleted: HashSet<_> = self
-            .repository
-            .missing_profiles(&named)
-            .await?
-            .into_iter()
-            .collect();
+        let (deleted, lost_one) = remove_deleted_accounts(&self.repository, &added).await?;
         if deleted.is_empty() {
             return Ok(invalidations_by_owner(added));
         }
 
         // Owners who lost a deleted account re-read everything, like any
         // removal; everyone else is told only what they gained.
-        let mut lost_one = HashSet::new();
-        for user in &deleted {
-            lost_one.extend(self.repository.delete_user_lists(user).await?);
-        }
         let kept = added
             .into_iter()
             .filter(|(owner, contact)| {
@@ -345,50 +331,77 @@ impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService
 impl<R: PeopleSearchRepository, N: ContactsNotifier> PeopleSearchService
     for ContactsDomainService<R, N>
 {
-    #[tracing::instrument(
-        name = "contacts.directory.people_search",
-        skip_all,
-        fields(
-            limit = i64::from(limit.get()),
-            query_bytes = query.byte_len() as i64,
-            result_count = tracing::field::Empty,
-            outcome = tracing::field::Empty,
-        ),
-        err
-    )]
     async fn search_people(
         &self,
         viewer: MacroUserIdStr<'_>,
         query: &PeopleSearchQuery,
         limit: PeopleSearchLimit,
     ) -> Result<Vec<PersonMatch>, Report> {
-        let span = tracing::Span::current();
-        let Some(needle) = query.searchable() else {
-            span.record("result_count", 0_i64);
-            span.record("outcome", "query_too_short");
-            return Ok(Vec::new());
-        };
-        let people = self
-            .repository
-            .search_people(viewer, needle, limit)
-            .await
-            .inspect_err(|_| {
-                span.record("outcome", "error");
-            })?;
-        if people.len() > usize::from(limit.get()) {
-            span.record("outcome", "error");
-            return Err(rootcause::report!("people search exceeded its limit"));
-        }
-        span.record("result_count", people.len() as i64);
-        span.record(
-            "outcome",
-            if people.is_empty() {
-                "no_match"
-            } else {
-                "match"
-            },
-        );
-        Ok(people)
+        search_people_with(query, limit, |needle| {
+            self.repository.search_people(viewer, needle, limit)
+        })
+        .await
+    }
+}
+
+/// Runs one ranked people search through `read`: a query too short to search
+/// returns no people without reading, and a read that returns more than
+/// `limit` people is an error.
+#[tracing::instrument(
+    name = "contacts.directory.people_search",
+    skip_all,
+    fields(
+        limit = i64::from(limit.get()),
+        query_bytes = query.byte_len() as i64,
+        result_count = tracing::field::Empty,
+        outcome = tracing::field::Empty,
+    ),
+    err
+)]
+pub(crate) async fn search_people_with<'q, Read, Fut>(
+    query: &'q PeopleSearchQuery,
+    limit: PeopleSearchLimit,
+    read: Read,
+) -> Result<Vec<PersonMatch>, Report>
+where
+    Read: FnOnce(&'q str) -> Fut,
+    Fut: Future<Output = Result<Vec<PersonMatch>, Report>>,
+{
+    let span = tracing::Span::current();
+    let Some(needle) = query.searchable() else {
+        span.record("result_count", 0_i64);
+        span.record("outcome", "query_too_short");
+        return Ok(Vec::new());
+    };
+    let people = read(needle).await.inspect_err(|_| {
+        span.record("outcome", "error");
+    })?;
+    if people.len() > usize::from(limit.get()) {
+        span.record("outcome", "error");
+        return Err(rootcause::report!("people search exceeded its limit"));
+    }
+    span.record("result_count", people.len() as i64);
+    span.record(
+        "outcome",
+        if people.is_empty() {
+            "no_match"
+        } else {
+            "match"
+        },
+    );
+    Ok(people)
+}
+
+impl<R: ContactsRepository, N: ContactsNotifier> CorrespondentsService
+    for ContactsDomainService<R, N>
+{
+    /// The legacy graph cannot tell an email correspondent from anyone else,
+    /// so this is the whole directory without the user.
+    async fn correspondents(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.repository.get_contacts(user_id).await
     }
 }
 
@@ -532,4 +545,40 @@ where
         }
         Ok(())
     }
+}
+
+/// Finds the accounts among the ids `added` names that no longer have a
+/// profile, and removes every list row for them. Returns those accounts and
+/// the other owners who lost them. Used after each interaction write, by the
+/// worker and the backfill, because a write can commit after the deletion
+/// that should have removed its rows.
+pub(crate) async fn remove_deleted_accounts<R: ContactListRepository>(
+    repository: &R,
+    added: &[(MacroUserIdStr<'static>, MacroUserIdStr<'static>)],
+) -> Result<
+    (
+        HashSet<MacroUserIdStr<'static>>,
+        HashSet<MacroUserIdStr<'static>>,
+    ),
+    Report,
+> {
+    let mut lost_one = HashSet::new();
+    if added.is_empty() {
+        return Ok((HashSet::new(), lost_one));
+    }
+
+    let named: HashSet<_> = added
+        .iter()
+        .flat_map(|(owner, contact)| [owner.clone(), contact.clone()])
+        .collect();
+    let named: Vec<_> = named.into_iter().collect();
+    let deleted: HashSet<_> = repository
+        .missing_profiles(&named)
+        .await?
+        .into_iter()
+        .collect();
+    for user in &deleted {
+        lost_one.extend(repository.delete_user_lists(user).await?);
+    }
+    Ok((deleted, lost_one))
 }

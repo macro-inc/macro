@@ -69,14 +69,13 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript on web. For an
-overlaid app (one with its own MCP server, see Settings → Integrations) it
-opens that server's OAuth consent in a new tab instead, and the session
-continues once the server is authorized; the agent then reaches the app
-through that server rather than Pipedream. In
+it asks the server how to connect (`POST /connectors/app/{slug}/connect`) and
+follows the answer: the embedded connect dialog over the agent transcript on
+web, or a consent page in a new tab, and the session continues once the server
+records the connection. In
 native apps, consent opens in the system browser, which returns to Macro on its
 own after authorization (**Return to Macro** is the fallback link). The waiting
-dialog's **Done** checks Pipedream for an account the flow created, and callbacks
+dialog's **Done** asks the server to record an account the flow created, and callbacks
 from canceled or expired attempts cannot resume the agent. After the
 backend verifies and registers the connection, the agent session sends a visible
 continuation message in the same conversation. Before that message reaches the
@@ -547,6 +546,9 @@ the shimmer.
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
+  The phone list's **Group conversations** offers Status (default) and None:
+  Needs you and Working show counts above an uncounted Recent, a list that is
+  all Recent has no heading, and Archived shows no count.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
   Conversations, showing non-waiting active coding sessions with open or draft
   PRs. Each session appears in only one section; disabling Open PRs returns its
@@ -1392,8 +1394,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
+tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.
