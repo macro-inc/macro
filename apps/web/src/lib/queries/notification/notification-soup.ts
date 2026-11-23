@@ -2,6 +2,7 @@ import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
+import type { SoupUpdatesSubscription } from '@service-storage/graphql/generated/graphql';
 import { match, P } from 'ts-pattern';
 import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
 import {
@@ -149,12 +150,34 @@ const rereadAfterReplicaLag = debounce(
  * grouped query by update time for its first page and each loaded
  * continuation page, as every write to it already does. Every notification
  * patch (new, updated or deleted; the notification source calls this for the
- * last two) marks the lists for a read, and so does the replica lag timer
- * after the last one;
+ * last two) and every Soup deletion of a channel marks the lists for a read,
+ * and so does the replica lag timer after the last one;
  * a read starts at once unless one started within the interval or is still
  * running, and then after it. A hidden tab keeps the mark and reads when shown.
  */
 export function revalidateNotifiedGraphqlSoupLists(): void {
   notifiedListRereader().markDirty();
   rereadAfterReplicaLag();
+}
+
+type SoupPatch = SoupUpdatesSubscription['soupUpdates'][number];
+
+/**
+ * A Soup deletion of a channel tells a viewer they are no longer in it. The
+ * cache drops the channel, but a notified list's rows of its threads, and of
+ * documents the viewer read only through it, keep the notifications they were
+ * read with, so Home would keep showing them. Read those lists again: the
+ * server no longer lists them.
+ */
+export function revalidateNotifiedListsForSoupUpdates(
+  patches: readonly SoupPatch[]
+): void {
+  if (
+    patches.some(
+      (patch) =>
+        patch.__typename === 'GraphqlCacheDeletion' &&
+        patch.graphqlTypeName === 'GraphqlSoupChannel'
+    )
+  )
+    revalidateNotifiedGraphqlSoupLists();
 }

@@ -26,7 +26,8 @@ opening the conversation, then send a DM from the other account. The row should
 move into **Last few minutes** and show unread without reloading, whether Home's
 notified-at list is served by REST or by GraphQL Soup (which re-reads it, and
 grouped notified-at lists, after every notification patch: a new
-notification, or one marked seen, done or deleted elsewhere; and again three
+notification, or one marked seen, done or deleted elsewhere, or the viewer
+leaving a private channel; and again three
 seconds after the last one; reads start at least two seconds apart, never two at once,
 and a hidden tab reads when shown; that sort has no local projection).
 Read the DM,
