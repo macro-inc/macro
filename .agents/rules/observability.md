@@ -22,10 +22,10 @@ through them and the per-runtime APIs.
   use `genai_telemetry::propagation`. A new transport (queue message, websocket
   frame, worker call) needs inject on send and extract on receive. If a hop
   can't carry context, record the upstream trace id as a span field.
-- In Rust, set an extracted parent before the span is first entered: build it
-  with `info_span!(parent: None, ..)`, set the parent, then `.instrument(span)`.
-  `set_parent` on an entered span (`Span::current()` inside
-  `#[tracing::instrument]`) does nothing, so the work starts its own trace.
+- In Rust, set an extracted parent before the span starts: before it is
+  entered, read with `.context()`, or given a child. Build it by hand, set the
+  parent, then `.instrument(span)`. On a started span (`Span::current()` inside
+  `#[tracing::instrument]`), `set_parent` fails and the work starts its own trace.
 - Web and Cloudflare Workers use the `@macro-inc/observability` `Telemetry`
   facade (`Telemetry.span`); don't import OpenTelemetry
   directly and don't add a second telemetry path (ast-grep
