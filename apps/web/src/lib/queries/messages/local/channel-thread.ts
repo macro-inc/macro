@@ -236,6 +236,9 @@ async function fetchServerThread(
     try {
       const failed = (await Promise.all(stored)).find(Boolean);
       if (failed) throw failed.error;
+      // Closed while the cache stored the pages: nothing more to send.
+      if (signal?.aborted)
+        return { thread, seq: null, readSeq: seq, sessionChanged: false };
       // A delete in another tab came first, or the hold ran past its limit,
       // which a reset stops waiting for: coverage would show records that
       // may be gone, and the thread reads again after the delete. Deleted

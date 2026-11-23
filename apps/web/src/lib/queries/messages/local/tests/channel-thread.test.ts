@@ -230,6 +230,36 @@ describe('loadChannelThread', () => {
     expect(host.commits).toEqual([]);
   });
 
+  it('commits no coverage when the load is aborted while its pages are stored', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const abort = new AbortController();
+    let store: () => void = () => undefined;
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => ({
+      page: {
+        root,
+        replies: [first],
+        olderCursor: null,
+        newerCursor: null,
+        seq: '9',
+      },
+      cached: new Promise<void>((resolve) => {
+        store = resolve;
+      }),
+    }));
+
+    const loading = loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
+      fetchPage,
+      signal: abort.signal,
+    });
+    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
+    // The person closes the thread before the cache has stored the page.
+    abort.abort();
+    store();
+
+    await expect(loading).resolves.toMatchObject({ seq: null });
+    expect(host.commits).toEqual([]);
+  });
+
   it('reads over REST on a host that cannot serve channels', async () => {
     const host = fakeHost([{ kind: 'unsupported' }]);
 

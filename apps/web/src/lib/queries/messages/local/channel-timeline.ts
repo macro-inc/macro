@@ -451,38 +451,84 @@ export function createLocalChannelTimeline(
   };
   onCleanup(deps.runtime.onChanged(channelId, scheduleReread));
 
+  /** Fetches the page past `cursor` and merges it into the window. */
+  const fetchMore = async (
+    direction: 'older' | 'newer',
+    cursor: string,
+    token: number
+  ) => {
+    const epoch = deps.runtime.epoch();
+    const loaded = await loadChannelPage(deps, {
+      channelId,
+      limit: CHANNEL_PAGE_LIMIT,
+      ...(direction === 'older' ? { before: cursor } : { after: cursor }),
+    });
+    if (token !== loadToken) return 'stale';
+    if (loaded === 'unsupported') {
+      onUnsupported();
+      return 'stale';
+    }
+    merges += 1;
+    setState(
+      produce((draft) => {
+        draft.entries = mergeEntries(draft.entries, loaded.page.entries);
+        if (direction === 'older') {
+          draft.olderCursor = loaded.page.olderCursor;
+        } else {
+          draft.newerCursor = loaded.page.newerCursor;
+        }
+      })
+    );
+    const settled = await settle(loaded, epoch, token);
+    return token === loadToken ? settled : 'stale';
+  };
+
+  /**
+   * Reads a page of a held window again that the device did not take, as a
+   * window load does: the new session can store what the old one could not,
+   * and a read after the delete can hold what it reads. Held again, the
+   * window follows the device and rereads what changed meanwhile.
+   */
+  const fetchMoreAgain = async (
+    direction: 'older' | 'newer',
+    cursor: string,
+    token: number,
+    signal: AbortSignal,
+    first: 'session-changed' | 'yielded'
+  ) => {
+    let settled: Awaited<ReturnType<typeof fetchMore>> = first;
+    for (let reloads = 0; reloads < SESSION_CHANGE_RELOADS; reloads += 1) {
+      if (settled === 'yielded' && !(await afterDeletes(signal))) return;
+      if (token !== loadToken) return;
+      settled = await fetchMore(direction, cursor, token);
+      if (settled === 'held') {
+        held = true;
+        scheduleReread();
+        return;
+      }
+      if (settled !== 'yielded' && settled !== 'session-changed') return;
+    }
+  };
+
   const loadMore = async (direction: 'older' | 'newer') => {
     const cursor =
       direction === 'older' ? state.olderCursor : state.newerCursor;
     const flag = direction === 'older' ? 'loadingOlder' : 'loadingNewer';
     if (cursor === null || state[flag] || state.phase !== 'ready') return;
     const token = loadToken;
+    const signal = (abort ??= new AbortController()).signal;
     setState(flag, true);
-    const epoch = deps.runtime.epoch();
     try {
-      const loaded = await loadChannelPage(deps, {
-        channelId,
-        limit: CHANNEL_PAGE_LIMIT,
-        ...(direction === 'older' ? { before: cursor } : { after: cursor }),
-      });
-      if (token !== loadToken) return;
-      if (loaded === 'unsupported') {
-        onUnsupported();
-        return;
+      const settled = await fetchMore(direction, cursor, token);
+      if (settled === 'stale' || settled === 'held') return;
+      const wasHeld = held;
+      held = false;
+      if (wasHeld && settled !== 'unheld') {
+        fireAndForget(
+          fetchMoreAgain(direction, cursor, token, signal, settled),
+          'channel-local-sync'
+        );
       }
-      merges += 1;
-      setState(
-        produce((draft) => {
-          draft.entries = mergeEntries(draft.entries, loaded.page.entries);
-          if (direction === 'older') {
-            draft.olderCursor = loaded.page.olderCursor;
-          } else {
-            draft.newerCursor = loaded.page.newerCursor;
-          }
-        })
-      );
-      const settled = await settle(loaded, epoch, token);
-      if (token === loadToken && settled !== 'held') held = false;
     } catch (error) {
       // The window keeps what it shows; the next scroll asks again.
       Telemetry.error(error, { surface: 'channel-local-sync' });

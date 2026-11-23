@@ -490,6 +490,53 @@ describe('createLocalChannelTimeline', () => {
     }
   });
 
+  it('reads an older page again once a delete in another tab is done, holding it then', async () => {
+    vi.stubGlobal('navigator', { locks: fakeLocks() });
+    try {
+      const rows = messages(70);
+      const older = rows.slice(0, 20).reverse();
+      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: older,
+          olderCursor: null,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: Promise.resolve(),
+      }));
+      const mounted = mount({ rows, fetchPage });
+      await waitFor(() => !mounted.timeline.isLoading());
+      // The device no longer holds the older entries.
+      mounted.setHeld(false);
+      let finishDelete!: () => void;
+      const deleting = whileNoFills(
+        () =>
+          new Promise<void>((resolve) => {
+            finishDelete = resolve;
+          }),
+        { waitMs: 60_000 }
+      );
+
+      await mounted.timeline.loadOlder();
+      // Shown, but not covered while the delete may take it.
+      expect(mounted.timeline.entries()).toHaveLength(70);
+      const covered = () =>
+        mounted.host.commits.filter((commit) => commit.coverage);
+      expect(covered()).toEqual([]);
+
+      finishDelete();
+      await deleting;
+      await waitFor(() => covered().length > 0);
+      // The same older page, read again and covered this time.
+      expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+      expect(fetchPage.mock.calls[0]?.[0]).toHaveProperty('before');
+      mounted.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reports a missing target from the server', async () => {
     const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
       throw new CombinedError({
