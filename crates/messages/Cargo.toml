@@ -8,6 +8,7 @@ version = "0.1.0"
 ai_tools = ["dep:ai_toolset", "dep:schemars", "ports"]
 annotations = ["dep:model", "ports"]
 broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
+consumer = ["broker", "realtime", "dep:kafka_util", "dep:rdkafka", "macro_event_broker/outbound"]
 default = []
 delivery = [
   "dep:properties",
@@ -32,6 +33,7 @@ inbound = [
 json-schema = ["dep:schemars"]
 outbound = ["dep:message_write_gate", "dep:channel_change_db_utils", "dep:initiative", "dep:macro_uuid", "dep:sqlx", "ports"]
 ports = ["dep:async-trait", "dep:entity_access", "dep:futures", "dep:rootcause", "entity_access/ports"]
+realtime = ["dep:broadcast", "ports"]
 schema = ["channel_sender/schema", "dep:utoipa", "activity/schema"]
 test-utils = ["dep:mockall", "ports"]
 
@@ -43,6 +45,7 @@ axum = { workspace = true, optional = true }
 ip_extractor = { path = "../ip_extractor", optional = true }
 rate_limit = { path = "../rate_limit", features = ["axum"], optional = true }
 futures = { workspace = true, optional = true }
+broadcast = { path = "../broadcast", optional = true }
 bot_id = { path = "../bot_id" }
 channel_sender = { path = "../channel_sender" }
 channel_change_db_utils = { path = "../channel_change_db_utils", optional = true }
@@ -50,6 +53,7 @@ chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", default-features = false, optional = true }
 initiative = { path = "../initiative", default-features = false, features = ["ports"], optional = true }
+kafka_util = { path = "../kafka_util", optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = [
   "axum",
 ], optional = true }
@@ -66,6 +70,7 @@ model_notifications = { path = "../model_notifications", optional = true }
 model_owner = { path = "../model_owner", optional = true }
 models_pagination = { path = "../models_pagination" }
 models_properties = { path = "../models_properties", optional = true }
+rdkafka = { workspace = true, optional = true }
 properties = { path = "../properties", default-features = false, features = ["ports"], optional = true }
 notification = { path = "../notification", optional = true }
 rootcause = { workspace = true, optional = true }
