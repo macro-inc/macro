@@ -28,8 +28,8 @@ and never advances under reduced motion. A phone shows the window's left part
 at a readable size, and the tab strip fades at the edge where more tabs
 continue. Below the tour, two faded vertical rules separate the backing, security,
 and GitHub badges. The GitHub badge links to the repository and refreshes its
-star count on mount above the August trending caption. `HomepageSections` opens
-with the agent builder capture, followed by Home. Each product gets one
+star count on mount above the August trending caption. `HomepageSections`
+then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
 graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and two or three sentences above
 the capture, with a “Learn about [feature] →” link where the product has a page.

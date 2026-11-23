@@ -93,7 +93,7 @@ export async function verifyHomepage(
             `Homepage SSR root height is ${rootHeight}, expected viewport height ${viewport.height} (${label})`
           );
 
-        await expect(page.locator('.feature-page-section')).toHaveCount(12);
+        await expect(page.locator('.feature-page-section')).toHaveCount(11);
         if (viewport.width < 768) {
           await expect(page.locator('#pricing')).toBeVisible();
           await expect(page.locator('.homepage-modules a[href]')).toHaveCount(

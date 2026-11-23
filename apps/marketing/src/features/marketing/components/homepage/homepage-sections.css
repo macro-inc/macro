@@ -36,14 +36,6 @@
   padding-block: 0;
 }
 
-.homepage-agent-builder-screen {
-  display: block;
-  width: min(720px, 100%);
-  height: auto;
-  margin-inline: auto;
-  border-radius: 16px;
-}
-
 .homepage-shortcuts {
   display: flex;
   flex-wrap: wrap;
