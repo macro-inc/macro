@@ -100,6 +100,44 @@ beforeEach(() => {
 });
 
 describe('event composer metadata writes', () => {
+  it('writes an explicit Busy/Free selection using the existing create API', async () => {
+    const { editor, dispose } = editorFor();
+    try {
+      await editor.save(VALUES, undefined, { transparency: 'transparent' });
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ transparency: 'transparent' })
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('writes an explicit Busy/Free selection using the existing update API', async () => {
+    const { editor, dispose } = editorFor({ ...EVENT, transparency: 'opaque' });
+    try {
+      await editor.save(VALUES, 'all', { transparency: 'transparent' });
+      expect(mocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ patch: { transparency: 'transparent' } })
+      );
+    } finally {
+      dispose();
+    }
+  });
+
+  it('preserves the saved availability when a legacy caller omits metadata', async () => {
+    const { editor, dispose } = editorFor({
+      ...EVENT,
+      transparency: 'transparent',
+    });
+    try {
+      await editor.save({ ...VALUES, title: 'Updated planning' });
+      expect(mocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({ patch: { title: 'Updated planning' } })
+      );
+    } finally {
+      dispose();
+    }
+  });
   it('does not send an occurrence visibility change whose readback is unavailable', async () => {
     const { editor, dispose } = editorFor(EVENT);
     try {
@@ -145,7 +183,7 @@ describe('event composer metadata writes', () => {
     }
   });
 
-  it('does not let a guest without detail rights write visibility or time zone', async () => {
+  it('does not let a guest without detail rights write visibility, time zone, or availability', async () => {
     const { editor, dispose } = editorFor({
       ...EVENT,
       viewerCan: {
@@ -162,6 +200,7 @@ describe('event composer metadata writes', () => {
       await editor.save(VALUES, 'all', {
         timeZoneChanged: true,
         visibility: 'private',
+        transparency: 'transparent',
       });
       expect(mocks.update).not.toHaveBeenCalled();
       expect(mocks.create).not.toHaveBeenCalled();

@@ -1,4 +1,5 @@
 import type { DateTimeRangeValue } from '@app/components/date-time-range/time-range';
+import type { EventTransparency } from '@service-calendar/generated/schemas/eventTransparency';
 import type { EventVisibility } from '@service-calendar/generated/schemas/eventVisibility';
 import type { Accessor } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -21,19 +22,24 @@ export function createComposerMetadata(options: {
   const initialTimeZone = options.initial?.timeZone ?? localTimeZone;
   const initialVisibility =
     options.initial?.visibility ?? (options.isEdit ? undefined : 'default');
+  const initialTransparency = options.initial?.transparency;
   const [state, setState] = createStore<{
     timeZone: string;
     visibility: EventVisibility | undefined;
+    transparency: EventTransparency | undefined;
   }>({
     timeZone: initialTimeZone,
     visibility: initialVisibility,
+    transparency: initialTransparency,
   });
   const timeZoneChanged = () =>
     options.timeZoneRelevant() && state.timeZone !== initialTimeZone;
   const visibilityChanged = () => state.visibility !== initialVisibility;
+  const transparencyChanged = () => state.transparency !== initialTransparency;
   return {
     state,
-    isDirty: () => timeZoneChanged() || visibilityChanged(),
+    isDirty: () =>
+      timeZoneChanged() || visibilityChanged() || transparencyChanged(),
     setTimeZone: (timeZone: string) => {
       if (!isValidComposerTimeZone(timeZone)) return false;
       setState('timeZone', timeZone);
@@ -41,8 +47,14 @@ export function createComposerMetadata(options: {
     },
     setVisibility: (visibility: EventVisibility) =>
       setState('visibility', visibility),
+    setTransparency: (transparency: EventTransparency) =>
+      setState('transparency', transparency),
     reset: () =>
-      setState({ timeZone: initialTimeZone, visibility: initialVisibility }),
+      setState({
+        timeZone: initialTimeZone,
+        visibility: initialVisibility,
+        transparency: initialTransparency,
+      }),
     resetVisibility: () => setState('visibility', initialVisibility),
     submission: (
       values: EventEditorSubmitValues,
@@ -54,6 +66,7 @@ export function createComposerMetadata(options: {
         (!options.isEdit && state.visibility !== 'default')
       )
         changes.visibility = state.visibility;
+      if (transparencyChanged()) changes.transparency = state.transparency;
       let time = values.time;
       const convertsWallClock =
         timeZoneChanged() || state.timeZone !== localTimeZone;

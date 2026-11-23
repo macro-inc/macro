@@ -65,7 +65,10 @@ export function createStandaloneComposerSetup(
         return preferences.timeFormat;
       },
       // The existing form's wall-clock fields use the viewer's local zone.
-      initialMetadata: { visibility: props.event?.visibility },
+      initialMetadata: {
+        visibility: props.event?.visibility,
+        transparency: props.event?.transparency,
+      },
       get disabledFields() {
         return editor.disabledFields();
       },

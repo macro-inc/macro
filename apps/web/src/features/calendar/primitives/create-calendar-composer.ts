@@ -1,3 +1,4 @@
+import type { EventTransparency } from '@service-calendar/generated/schemas/eventTransparency';
 import type { EventVisibility } from '@service-calendar/generated/schemas/eventVisibility';
 import type { CalendarUpdateScope } from '@service-email/client';
 import {
@@ -95,6 +96,13 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     options.visibilityReadOnlyReason !== undefined;
   const setVisibility = (visibility: EventVisibility) => {
     if (!visibilityIsDisabled()) metadata.setVisibility(visibility);
+  };
+  const transparencyIsDisabled = () =>
+    metadataIsDisabled() ||
+    isOutOfOffice() ||
+    (isEdit() && metadata.state.transparency === undefined);
+  const setTransparency = (value: EventTransparency) => {
+    if (!transparencyIsDisabled()) metadata.setTransparency(value);
   };
   const resetDetails = () =>
     batch(() => {
@@ -242,6 +250,10 @@ export function createCalendarComposer(options: CalendarComposerOptions) {
     timeZoneIsDisabled,
     timeZone: () => metadata.state.timeZone,
     visibility: () => metadata.state.visibility,
+    transparency: () =>
+      metadata.state.transparency ?? (isEdit() ? undefined : 'opaque'),
+    transparencyIsDisabled,
+    setTransparency,
     setTimeZone,
     setVisibility,
     resetDetails,

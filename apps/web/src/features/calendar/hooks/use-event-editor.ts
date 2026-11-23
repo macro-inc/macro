@@ -405,6 +405,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       ...(conference ? { conference } : {}),
       ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
       ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+      ...(metadata.transparency ? { transparency: metadata.transparency } : {}),
     };
     const updateArgs = {
       eventId: event.eventId,
@@ -521,6 +522,9 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
           ...(values.guestPolicy ? { guestPolicy: values.guestPolicy } : {}),
           ...(metadata.visibility ? { visibility: metadata.visibility } : {}),
+          ...(metadata.transparency
+            ? { transparency: metadata.transparency }
+            : {}),
         });
         if (created)
           props.onCreated?.({ eventId: created.id, time: values.time });
