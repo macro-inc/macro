@@ -70,7 +70,7 @@ impl Schema {
         }
         Self::from_artifact(SchemaArtifact {
             format_version: 1,
-            compatibility_epoch: crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+            compatibility_epoch: CACHE_SCHEMA_COMPATIBILITY_EPOCH,
             query_root,
             mutation_root: schema
                 .schema_definition

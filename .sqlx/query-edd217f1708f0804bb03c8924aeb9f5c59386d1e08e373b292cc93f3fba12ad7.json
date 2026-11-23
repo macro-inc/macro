@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT property_definition_id, values\n            FROM entity_properties\n            WHERE entity_id = $1\n              AND entity_type = 'TASK'\n              AND property_definition_id <> $2\n            ",
+  "query": "\n            SELECT property_definition_id, values\n            FROM entity_properties\n            WHERE entity_id = $1\n              AND entity_type = 'TASK'\n              AND property_definition_id NOT IN ($2, $3)\n            ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Uuid",
         "Uuid"
       ]
     },
@@ -25,5 +26,5 @@
       true
     ]
   },
-  "hash": "cc81ad7d6ba51ef03b127349e145a241b3789e1c27738e4eedb0d81a5344d16f"
+  "hash": "edd217f1708f0804bb03c8924aeb9f5c59386d1e08e373b292cc93f3fba12ad7"
 }
