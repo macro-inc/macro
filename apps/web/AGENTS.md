@@ -224,7 +224,12 @@ its icon, its caret when it opens a menu, its name and its tooltip, as header
 actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
 as a second split across 720px: the list docks beside the empty preview above it
 and fills the split below it, never leaving an empty preview behind Show
-navigation.
+navigation. `view-tabs.browser.e2e.ts` holds the Tab rule over the real hotkey engine,
+header, `Tabs` and list controller, in a wide and a 700px split (stand-in
+panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
+header's tabs from its list, are focus order on a header button, leave an
+open item that replaced the list open, and leave a thread beside the list
+open after a click on its text.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing

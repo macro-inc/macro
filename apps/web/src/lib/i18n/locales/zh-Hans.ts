@@ -725,7 +725,6 @@ export default {
     searchNoResults: '未找到设置。试试“签名”“主题”或“日历”。',
     backToSettings: '返回设置',
     closeSettings: '关闭设置',
-    goToTab: '前往设置标签页 {{number}}',
     editProfile: '编辑个人资料',
     logOut: '退出登录',
     yourAccount: '我的账号',
