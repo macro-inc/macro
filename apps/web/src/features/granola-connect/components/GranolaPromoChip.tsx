@@ -1,4 +1,4 @@
-import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { ConnectorIcon } from '@core/connectors/ConnectorIcon';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Show } from 'solid-js';
@@ -17,7 +17,7 @@ export function GranolaPromoChip(props: {
       class="group flex w-full items-center gap-2.5 rounded-lg border border-accent/25 bg-linear-to-r from-accent/15 via-accent/5 to-success/10 px-2.5 py-2 text-left outline-none transition-colors hover:border-accent/45 hover:from-accent/20 focus-visible:border-edge-focus disabled:opacity-60"
     >
       <span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-panel shadow-xs">
-        <PipedreamConnectorIcon
+        <ConnectorIcon
           appSlug={GRANOLA_APP_SLUG}
           iconUrl={GRANOLA_ICON_URL}
           class="size-4"

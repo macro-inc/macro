@@ -810,7 +810,6 @@ export default {
       'Aucun paramètre trouvé. Essayez « signature », « thème » ou « agenda ».',
     backToSettings: 'Retour aux paramètres',
     closeSettings: 'Fermer les paramètres',
-    goToTab: 'Aller à l’onglet de paramètres {{number}}',
     editProfile: 'Modifier le profil',
     logOut: 'Se déconnecter',
     yourAccount: 'Votre compte',

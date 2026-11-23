@@ -17,7 +17,7 @@ fn sql(count: usize) -> String {
 }
 
 pub(super) fn read(
-    connection: &Arc<Connection>,
+    connection: &Db,
     keys: &[RecordKey],
 ) -> Result<Vec<Option<Record>>, TursoStorageError> {
     if let [key] = keys {

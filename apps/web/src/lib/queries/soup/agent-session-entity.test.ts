@@ -5,7 +5,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: () => 'Untitled',
   itemToSafeName: (item: { name: string }) => item.name,
 }));
-vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
+vi.mock('@core/context/channels', () => ({ useChannelDirectory: vi.fn() }));
 
 import {
   isDisplayableSoupItem,
