@@ -1,5 +1,7 @@
 //! Fail-closed ordering for the durable part of account deletion.
 
+use std::collections::HashSet;
+
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use uuid::Uuid;
@@ -74,7 +76,13 @@ pub async fn delete_user_data(
     account: &Uuid,
     users: &[MacroUserIdStr<'static>],
 ) -> Result<(), Report> {
+    // Two stored profiles whose ids differ only in case share one canonical
+    // id, and deleting it removes both rows, so each canonical id runs once.
+    let mut deleted = HashSet::new();
     for user in users {
+        if !deleted.insert(user.as_ref()) {
+            continue;
+        }
         gateway.delete_scheduled_actions(user).await?;
         tracing::info!(%user, "deleted scheduled actions");
         gateway.delete_agent_sessions(user).await?;
