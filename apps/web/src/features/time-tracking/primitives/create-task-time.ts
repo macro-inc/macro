@@ -119,7 +119,10 @@ export function createTaskTime(taskId: Accessor<string | undefined>) {
     entries: allEntries,
     pending: entries.pending,
     /** More entries exist past the ones shown. */
-    hasOlder: () => nextCursor() !== undefined,
+    // A page still loading may have more after it, and the control that
+    // asked for it stays in place meanwhile.
+    hasOlder: () =>
+      nextCursor() !== undefined || olderPages().some((page) => page.pending()),
     olderPending: () => olderPages().some((page) => page.pending()),
     showOlder() {
       const id = taskId();
