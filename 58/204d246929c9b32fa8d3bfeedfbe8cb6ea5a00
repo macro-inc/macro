@@ -1,0 +1,21 @@
+apps/web/src/features/channels-view/queries.test.ts
+  s_d6ca1450289ae1::t_0200dd0b39afcd 790-807
+apps/web/src/features/channels-view/queries.ts
+  s_d6ca1450289ae1::t_37bb255c6472f1 442-444,447-450
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "58204d246929c9b32fa8d3bfeedfbe8cb6ea5a00",
+  "prompts": {},
+  "sessions": {
+    "s_d6ca1450289ae1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1e4fd97-bfbb-4edd-ab80-8a980b6e5e81",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
