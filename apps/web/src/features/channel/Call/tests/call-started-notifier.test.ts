@@ -1,3 +1,6 @@
+import type { PlatformNotificationState } from '@app/features/notifications/components/PlatformNotificationProvider';
+import { DefaultUserNameResolver } from '@notifications/notification-resolvers';
+import { setActiveCallStartedCache } from '@queries/call/call';
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -5,13 +8,28 @@ import {
   startCallRinger,
   stopCallRinger,
 } from '../CallStartedNotifier';
+import { createCallEventsEffect } from '../call-events';
 import { publishCallResolution } from '../call-resolution';
 
+const platform = vi.hoisted(() => ({
+  showNotification: vi
+    .fn<PlatformNotificationState['showNotification']>()
+    .mockResolvedValue('not-granted'),
+}));
+
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
-vi.mock('@core/context/channels', () => ({ useChannelDirectory: () => ({}) }));
+vi.mock('@core/context/channels', () => ({
+  useChannelDirectory: () => ({ lookup: () => ({ status: 'missing' }) }),
+  loadedChannel: () => undefined,
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'local-user' }));
 vi.mock('@notifications', () => ({
-  usePlatformNotificationState: () => 'not-supported',
+  usePlatformNotificationState: () => ({
+    permission: () => 'granted',
+    requestPermission: async () => 'granted',
+    unregisterNotification: async () => undefined,
+    showNotification: platform.showNotification,
+  }),
 }));
 vi.mock('@notifications/notification-resolvers', () => ({
   DefaultUserNameResolver: vi.fn(),
@@ -36,6 +54,7 @@ let callNumber = 0;
 
 class TestAudioContext {
   currentTime = 0;
+  state = 'running';
   destination = {};
   close = vi.fn(async () => undefined);
 
@@ -67,6 +86,7 @@ class TestAudioContext {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  vi.clearAllMocks();
   vi.stubGlobal('AudioContext', TestAudioContext);
   contexts.length = 0;
   callNumber += 1;
@@ -134,4 +154,100 @@ describe('incoming call sound lifecycle', () => {
       expect(contexts).toHaveLength(1);
     }
   );
+
+  it.each(['answered', 'declined', 'ended'] as const)(
+    'does not create a system notification for a start after %s',
+    async (type) => {
+      const callId = `call-${callNumber}`;
+      disposals.push(
+        createRoot((dispose) => {
+          CallStartedNotifier();
+          return dispose;
+        })
+      );
+      if (type === 'answered') {
+        publishCallResolution({ type, callId, answeredBy: 'local-user' });
+      } else if (type === 'declined') {
+        publishCallResolution({ type, callId, declinedBy: 'local-user' });
+      } else {
+        publishCallResolution({ type, callId, channelId: 'channel-1' });
+        publishCallResolution({
+          type: 'answered',
+          callId,
+          answeredBy: 'local-user',
+        });
+      }
+      const handlers = vi.mocked(createCallEventsEffect).mock.calls[0][0];
+      handlers.onCallStarted?.({
+        callId,
+        channelId: 'channel-1',
+        createdBy: null,
+        isFromSelf: false,
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(platform.showNotification).not.toHaveBeenCalled();
+      expect(contexts).toHaveLength(0);
+      expect(setActiveCallStartedCache).toHaveBeenCalledTimes(
+        type === 'ended' ? 0 : 1
+      );
+    }
+  );
+
+  it('does not show a delayed notification when resolution arrives during name lookup', async () => {
+    const callId = `call-${callNumber}`;
+    let finishName!: (name: string) => void;
+    vi.mocked(DefaultUserNameResolver).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishName = resolve;
+      })
+    );
+    disposals.push(
+      createRoot((dispose) => {
+        CallStartedNotifier();
+        return dispose;
+      })
+    );
+    const handlers = vi.mocked(createCallEventsEffect).mock.calls[0][0];
+    handlers.onCallStarted?.({
+      callId,
+      channelId: 'channel-1',
+      createdBy: 'remote-user',
+      isFromSelf: false,
+    });
+    publishCallResolution({
+      type: 'answered',
+      callId,
+      answeredBy: 'local-user',
+    });
+    finishName('Caller');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(platform.showNotification).not.toHaveBeenCalled();
+    expect(contexts[0].close).toHaveBeenCalledOnce();
+  });
+
+  it('still notifies when a different participant answers the active call', async () => {
+    const callId = `call-${callNumber}`;
+    disposals.push(
+      createRoot((dispose) => {
+        CallStartedNotifier();
+        return dispose;
+      })
+    );
+    publishCallResolution({
+      type: 'answered',
+      callId,
+      answeredBy: 'another-user',
+    });
+    const handlers = vi.mocked(createCallEventsEffect).mock.calls[0][0];
+    handlers.onCallStarted?.({
+      callId,
+      channelId: 'channel-1',
+      createdBy: null,
+      isFromSelf: false,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(platform.showNotification).toHaveBeenCalledOnce();
+    expect(contexts).toHaveLength(1);
+    expect(setActiveCallStartedCache).toHaveBeenCalledOnce();
+  });
 });

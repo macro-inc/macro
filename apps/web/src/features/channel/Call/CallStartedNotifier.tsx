@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { evictOldest } from '@core/util/evictOldest';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { usePlatformNotificationState } from '@notifications';
@@ -14,6 +15,7 @@ import { invalidateMessageTimeline } from '@queries/messages/timeline';
 import { useCallContext } from './CallContext';
 import { createCallEventsEffect } from './call-events';
 import {
+  type CallResolution,
   createCallResolutionsEffect,
   publishCallResolution,
   resolvesRingFor,
@@ -43,6 +45,7 @@ const RING_INTERVAL_MS = 4_000;
  * call store so its auto-dismiss stays in lockstep with the ringer.
  */
 export const MAX_RING_DURATION_MS = 30_000;
+const MAX_REMEMBERED_RESOLUTIONS = 100;
 
 type WebkitWindow = Window & { webkitAudioContext?: typeof AudioContext };
 type RingSound = { durationMs: number; stop: () => void };
@@ -119,11 +122,6 @@ function playRingSound(callId: string): RingSound | undefined {
     return undefined;
   }
 
-  const span = Telemetry.span('call.sound.play');
-  span.setAttr('call.id', callId);
-  span.setAttr('call.sound.kind', 'ring');
-  span.setAttr('call.sound.count', 1);
-  span.end();
   const playNote = (start: number, freq: number, volume: number) => {
     const gain = ctx.createGain();
     gain.connect(ctx.destination);
@@ -155,6 +153,15 @@ function playRingSound(callId: string): RingSound | undefined {
   const t0 = ctx.currentTime;
   playPhrase(t0, RING_VOLUME);
   playPhrase(t0 + phraseDuration + RING_PHRASE_GAP_S, RING_VOLUME * 0.75);
+
+  // Scheduling is not proof of audible playback, especially under autoplay.
+  const span = Telemetry.span('call.sound.play');
+  span.setAttr('call.id', callId);
+  span.setAttr('call.sound.kind', 'ring');
+  span.setAttr('call.sound.count', 1);
+  span.setAttr('call.sound.outcome', 'scheduled');
+  span.setAttr('call.sound.context_state', ctx.state);
+  span.end();
 
   const totalMs =
     (phraseDuration * 2 + RING_PHRASE_GAP_S + RING_FADE_S) * 1000 + 200;
@@ -238,6 +245,7 @@ export function CallStartedNotifier() {
   const directory = useChannelDirectory();
   const notif = usePlatformNotificationState();
   const userId = useUserId();
+  const resolvedCalls = new Map<string, CallResolution>();
 
   // Attach up front so sibling tabs' ring claims are already recorded when
   // this tab's own `call_started` event arrives (event delivery across tabs
@@ -246,6 +254,13 @@ export function CallStartedNotifier() {
 
   createCallResolutionsEffect((resolution) => {
     if (!resolvesRingFor(resolution, userId())) return;
+
+    // Keep terminal state for late starts, not only for audio already playing.
+    // An out-of-order answer must never downgrade an ended call.
+    if (resolvedCalls.get(resolution.callId)?.type !== 'ended') {
+      resolvedCalls.set(resolution.callId, resolution);
+      evictOldest(resolvedCalls, MAX_REMEMBERED_RESOLUTIONS);
+    }
 
     // A delayed start can arrive after an answer on another device. Remember
     // resolution in the existing cross-tab silence state, even without a ringer.
@@ -309,6 +324,9 @@ export function CallStartedNotifier() {
     },
 
     onCallStarted: ({ channelId, callId, createdBy, isFromSelf }) => {
+      const resolution = resolvedCalls.get(callId);
+      if (resolution?.type === 'ended') return;
+
       const createdAt = new Date().toISOString();
       setActiveCallStartedCache({
         channelId,
@@ -322,6 +340,7 @@ export function CallStartedNotifier() {
       // ring and the toast are skipped when we're already in it or started it.
       if (callCtx.activeCallId() === callId) return;
       if (isFromSelf) return;
+      if (resolution && resolvesRingFor(resolution, userId())) return;
 
       fireAndForget(
         emitCallStartedNotification({
@@ -383,6 +402,11 @@ async function emitCallStartedNotification(args: {
     const callerName =
       (createdBy ? await DefaultUserNameResolver(createdBy) : undefined) ??
       'Someone';
+
+    // Name lookup can outlive an answer. Do not emit even a short-lived OS
+    // alert after resolution, since creating the alert can itself make sound.
+    if (pending.cancelled || isJoined()) return;
+
     const target = channelName ? ` in ${channelName}` : '';
 
     const handle = await notif.showNotification({
