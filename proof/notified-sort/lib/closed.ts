@@ -205,6 +205,16 @@ export const CLOSURES: Closure[] = [
     outcome:
       "Fixed in 0a63dfa296a (fix(home): label notified mail rows from their own read), 407d498ea34 (fix(home): keep each notified page's mail times through a partial refresh), 46c55570ce7 (fix(home): keep notified mail times from a result replayed on subscribe) and 54df1202765 (fix(home): count an unmounted incoming page in the mail time bound): the Soup live query keeps the updatedAt each NOTIFIED_AT page's own latest network response gave its email threads, by input and page cursor (create-soup-live-query.ts recordNetworkEmailTimes, fetchedEmailUpdatedAt) and the item projection labels those rows with it (items.ts mapItem); a page's data cannot hold it, because its snapshot follows cache writes (graphql-cache/exchange/live-query.ts LiveQuery.replace). Tests (items.test.ts, \"email thread updatedAt on notified pages\"): \"labels a thread by its own page's updatedAt, not the shared record's\" fails on 215ea768c45 (expected 2026-11-21T09:00:00Z, received the cache write's 2026-11-17T08:00:00Z); \"keeps a later page's time while a refresh of the chain fails on it\" fails on 215ea768c45 and on 0a63dfa296a (expected 2026-11-20T09:00:00Z, received 2026-11-17T08:00:00Z: a page-1 response cleared page 2's capture); \"keeps the time of a result replayed while the list subscribes\" fails on 407d498ea34 (ReferenceError: Cannot access 'query' before initialization, caught by the observer, then the cache write's time); all three pass on 46c55570ce7 and later heads. Repro: dbg-email-label.ts on lane v7 with DBG_STEPS=move:v7-doc0,rename:v7-doc0,role:v7-doc11,move:v7-doc0 showed main 3025h, branch 3021d after the Mail backfill on 215ea768c45, and main and branch 3026h at every step and after reload with the fix. Runs on the fixed head must not reach this closure; one that does is a new difference.",
   },
+  {
+    id: 'P2',
+    match: /(^|\s)field-order:channel\.participantIds$/,
+    title: 'A channel lists the same participants in another order',
+    cause:
+      "Both transports read channels through ChannelListService::get_channels (crates/channels/src/domain/list_service.rs:78), whose CHANNEL_LIST_SELECT aggregates participants with ARRAY_AGG(json_build_object(...)) FROM comms_channel_participants and no ORDER BY (crates/channels/src/outbound/pg_channels_repo.rs:694-706), so the order is whatever the plan reads them in. The PR does not touch the channels crate. compare.ts unorderedParticipants compares the ids as a set: a different member still shows as a field difference and stays open.",
+    outcome:
+      'Invisible: every caller that reads a channel row\'s participantIds looks for the one id that is not the viewer, whatever the order: features/channel/channel-icon.tsx:28-29 (ids.find(id => id !== userId()) ?? ids[0], DMs only; other channels draw ChannelAvatar, which reads no participants), features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx:708, features/command/contact-items.ts:22 and features/agent-work/core/work-visibility.ts:15 (filters). Ordered avatar rows read call participants, not channel ones. ' +
+      DOM_EVIDENCE,
+  },
 ];
 
 export function closureOf(cls: string): Closure | undefined {

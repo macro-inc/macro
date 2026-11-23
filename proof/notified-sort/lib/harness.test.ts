@@ -100,6 +100,27 @@ describe('comparison', () => {
     );
   });
 
+  it("compares a channel's participants as a set, naming another order apart from another member", () => {
+    const channel = (participantIds: string[], name = 'c') => ({ type: 'channel', id: 'c1', name, notifiedAt: '2026-11-20T09:00:00.000Z', participantIds });
+    const open = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      compareSnapshots(snap([a]), snap([b]), { label: 'raw spec0' })
+        .map(classify)
+        .filter((d) => !closureOf(d.cls))
+        .map((d) => d.cls);
+    const sigs = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+      compareSnapshots(snap([a]), snap([b]), { label: 'raw spec0' }).map((d) => d.signature);
+    expect(sigs(channel(['u1', 'u2', 'u3']), channel(['u3', 'u1', 'u2']))).toEqual(['raw spec0 field-order:channel.participantIds']);
+    expect(open(channel(['u1', 'u2', 'u3']), channel(['u3', 'u1', 'u2']))).toEqual([]);
+    expect(sigs(channel(['u1', 'u2']), channel(['u1', 'u2']))).toEqual([]);
+    // Another member, a missing one, or another field beside a reorder stays open.
+    expect(open(channel(['u1', 'u2']), channel(['u1', 'u9']))).toEqual(['raw spec0 field:channel.participantIds[]']);
+    expect(open(channel(['u1', 'u2']), channel(['u2']))).toContain('raw spec0 field:channel.participantIds.length');
+    expect(open(channel(['u1', 'u2']), channel(['u2', 'u1'], 'd'))).toEqual(['raw spec0 field:channel.name']);
+    // Only a channel's participants: another entity's array order still counts.
+    const reordered = (ids: string[]) => ({ ...doc('a', '2026-11-20T09:00:00.000Z'), participantIds: ids });
+    expect(open(reordered(['u1', 'u2']), reordered(['u2', 'u1']))).toEqual(['raw spec0 field:document.participantIds[]', 'raw spec0 field:document.participantIds[]']);
+  });
+
   it("names main's request deadline apart from every other error, and compares no rows past an error", () => {
     const failed = (error: string, transport = 'rest'): Snapshot => ({ ...snap([]), error, transport });
     const sigs = (a: Snapshot, b: Snapshot) => compareSnapshots(a, b, { label: 'reload spec0' }).map((d) => d.signature);

@@ -98,6 +98,25 @@ export function authRefreshTimeoutClass(cls: string, details: readonly string[])
   return details.every((d) => AUTH_REFRESH_TIMEOUT.test(d)) ? `${cls}:auth-refresh-timeout` : cls;
 }
 
+/**
+ * A channel's participantIds compared as a set: the channels repo aggregates
+ * them with no ORDER BY (closure P2), so their order is the plan's. Returns
+ * both entities with the ids sorted when the two hold the same members in
+ * another order, and whether they did; any other difference still shows.
+ */
+export function unorderedParticipants(a: unknown, b: unknown): [unknown, unknown, boolean] {
+  const ids = (v: unknown) => (isObj(v) && Array.isArray(v.participantIds) ? (v.participantIds as unknown[]) : null);
+  const x = ids(a);
+  const y = ids(b);
+  if (!x || !y || x.length !== y.length) return [a, b, false];
+  const sort = (list: unknown[]) => [...list].map(String).sort();
+  const sx = sort(x);
+  const sy = sort(y);
+  if (sx.some((id, i) => id !== sy[i])) return [a, b, false];
+  const reordered = x.some((id, i) => id !== y[i]);
+  return [{ ...(a as Obj), participantIds: sx }, { ...(b as Obj), participantIds: sy }, reordered];
+}
+
 export function compareSnapshots(
   oldSnap: Snapshot,
   newSnap: Snapshot,
@@ -197,7 +216,18 @@ export function compareSnapshots(
     const previous = oldByKey.get(key);
     if (previous === undefined) continue;
     const fields: { path: string; old: unknown; new: unknown }[] = [];
-    diffValues(previous, entity, '', fields);
+    const [a, b, reordered] = typeOf(key) === 'channel' ? unorderedParticipants(previous, entity) : [previous, entity, false];
+    if (reordered)
+      diffs.push({
+        signature: `${label}field-order:${typeOf(key)}.participantIds`,
+        kind: 'field',
+        entity: key,
+        path: '.participantIds',
+        old: (previous as Obj).participantIds,
+        new: (entity as Obj).participantIds,
+        detail: `${key}.participantIds same members, another order`,
+      });
+    diffValues(a, b, '', fields);
     for (const field of fields) {
       diffs.push({
         signature: `${label}field:${typeOf(key)}${erase(field.path)}`,
