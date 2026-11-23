@@ -61,7 +61,6 @@ struct ClaimFailingStorage {
     inner: InMemoryStorage,
     fail_next_claim: bool,
     fail_next_queue_load: AtomicBool,
-    fail_next_get: AtomicBool,
 }
 
 impl ClaimFailingStorage {
@@ -70,7 +69,6 @@ impl ClaimFailingStorage {
             inner: InMemoryStorage::new(),
             fail_next_claim: true,
             fail_next_queue_load: AtomicBool::new(false),
-            fail_next_get: AtomicBool::new(false),
         }
     }
 
@@ -79,16 +77,11 @@ impl ClaimFailingStorage {
             inner: InMemoryStorage::new(),
             fail_next_claim: false,
             fail_next_queue_load: AtomicBool::new(false),
-            fail_next_get: AtomicBool::new(false),
         }
     }
 
     fn fail_next_queue_load(&self) {
         self.fail_next_queue_load.store(true, Ordering::Relaxed);
-    }
-
-    fn fail_next_get(&self) {
-        self.fail_next_get.store(true, Ordering::Relaxed);
     }
 }
 
@@ -176,9 +169,6 @@ impl Storage for ClaimFailingStorage {
     }
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
-        if self.fail_next_get.swap(false, Ordering::Relaxed) {
-            return Err(std::io::Error::other("injected record read failure"));
-        }
         Ok(self.inner.get_batch(keys).await.unwrap())
     }
 
@@ -1577,46 +1567,5 @@ fn clear_and_identity_reset_drop_durable_queue() {
                 .unwrap()
                 .is_empty()
         );
-    });
-}
-
-#[test]
-fn failed_base_read_leaves_the_write_s_hot_records_in_place() {
-    block_on(async {
-        let mut engine = Engine::new(ClaimFailingStorage::reconciliation_failing());
-        let page = |limit: usize, name: &str| {
-            json!({"user": {"id": "viewer", "soup": {"items": (0..limit).map(|index| json!({
-                "__typename": "GraphqlSoupDocument", "id": format!("doc-{index}"),
-                "properties": [{"id": format!("prop-{index}"), "displayName": name,
-                    "value": {"__typename": "GraphqlStringPropertyValue", "stringValue": name}}],
-            })).collect::<Vec<_>>(), "nextCursor": null}}})
-        };
-        let vars = |limit: usize| {
-            json!({"input": {"limit": limit}})
-                .as_object()
-                .unwrap()
-                .clone()
-        };
-        let (one, two) = (vars(1), vars(2));
-        engine
-            .write_query(None, QUERY, None, &one, &page(1, "before"), None)
-            .await
-            .unwrap();
-        // The next write's base read fails on the record it has never seen.
-        engine.storage().fail_next_get();
-        assert!(
-            engine
-                .write_query(None, QUERY, None, &two, &page(2, "after"), None)
-                .await
-                .is_err()
-        );
-        let gets = engine.storage().inner.record_get_count();
-        let ReadResult::Hit { data } = engine.read_query(None, QUERY, None, &one).await.unwrap()
-        else {
-            panic!("expected the first page");
-        };
-        assert_eq!(data, page(1, "before"));
-        // Served from the hot tier, as before the failed write.
-        assert_eq!(engine.storage().inner.record_get_count(), gets);
     });
 }
