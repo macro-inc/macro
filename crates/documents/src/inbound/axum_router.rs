@@ -66,6 +66,8 @@ pub mod get_text;
 #[cfg(feature = "ai_tools")]
 pub mod markdown_body;
 #[cfg(feature = "ai_tools")]
+pub mod markdown_edits;
+#[cfg(feature = "ai_tools")]
 pub mod presentation;
 pub mod put_interaction;
 pub mod put_snapshot;
@@ -520,11 +522,20 @@ where
         );
 
     #[cfg(feature = "ai_tools")]
-    let document_id_routes = document_id_routes.route(
-        "/{document_id}/markdown",
-        axum::routing::get(markdown_body::get_markdown_handler::<T, Svc, Auth>)
-            .put(markdown_body::write_markdown_handler::<T, Svc, Auth>),
-    );
+    let document_id_routes = document_id_routes
+        .route(
+            "/{document_id}/markdown",
+            axum::routing::get(markdown_body::get_markdown_handler::<T, Svc, Auth>)
+                .put(markdown_body::write_markdown_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/markdown/blocks",
+            axum::routing::get(markdown_edits::get_markdown_blocks_handler::<T, Svc, Auth>),
+        )
+        .route(
+            "/{document_id}/markdown/edits",
+            axum::routing::post(markdown_edits::edit_markdown_handler::<T, Svc, Auth>),
+        );
 
     let document_id_routes = document_id_routes.layer(middleware::from_fn_with_state(
         state.clone(),

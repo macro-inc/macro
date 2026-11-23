@@ -6195,13 +6195,82 @@ export const EditCommentResponse = z.object({
 
 export const EditDocument = z.object({
   document_id: z.string(),
-  instructions: z.string(),
+  instructions: z.string().optional(),
+  edits: z
+    .array(
+      z.union([
+        z
+          .object({
+            block_id: z.union([z.string(), z.null()]).optional(),
+            old: z.string(),
+            'new': z.string(),
+            replace_all: z.boolean().optional(),
+          })
+          .strict(),
+        z.object({ insert_after: z.string(), markdown: z.string() }).strict(),
+        z.object({ insert_before: z.string(), markdown: z.string() }).strict(),
+        z.object({ delete: z.string() }).strict(),
+        z.object({ move: z.string(), after: z.string() }).strict(),
+        z.object({ move: z.string(), before: z.string() }).strict(),
+      ])
+    )
+    .optional(),
+  dry_run: z.boolean().optional(),
+  allow_deleting_content: z.boolean().optional(),
   fast: z.boolean().optional(),
 });
 
 export const EditDocumentResponse = z.object({
   summary: z.string(),
   clarification: z.union([z.string(), z.null()]).optional(),
+  changes: z
+    .union([
+      z.array(
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.object({
+              blockId: z.string(),
+              before: z.string(),
+              after: z.string(),
+              kind: z.literal('edited'),
+            }),
+            z.object({
+              blockId: z.string(),
+              afterBlockId: z.union([z.string(), z.null()]).optional(),
+              markdown: z.string(),
+              kind: z.literal('inserted'),
+            }),
+            z.object({
+              blockId: z.string(),
+              markdown: z.string(),
+              kind: z.literal('deleted'),
+            }),
+            z.object({
+              blockId: z.string(),
+              afterBlockId: z.union([z.string(), z.null()]).optional(),
+              kind: z.literal('moved'),
+            }),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const EditForm = z.object({

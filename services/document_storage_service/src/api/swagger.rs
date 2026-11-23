@@ -324,6 +324,8 @@ use email_policy::EmailPolicySchemas;
         documents_hex::inbound::axum_router::ai_edit::ai_edit_handler,
         documents_hex::inbound::axum_router::markdown_body::get_markdown_handler,
         documents_hex::inbound::axum_router::markdown_body::write_markdown_handler,
+        documents_hex::inbound::axum_router::markdown_edits::get_markdown_blocks_handler,
+        documents_hex::inbound::axum_router::markdown_edits::edit_markdown_handler,
         documents_hex::inbound::axum_router::comment_on_text::comment_on_text_handler,
         documents_hex::inbound::axum_router::canvas::canvas_scene_handler,
         documents_hex::inbound::axum_router::canvas::render_canvas_handler,

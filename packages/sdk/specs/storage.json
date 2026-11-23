@@ -16861,6 +16861,154 @@
         }
       }
     },
+    "/documents/{document_id}/markdown/blocks": {
+      "get": {
+        "tags": ["document"],
+        "summary": "Read a markdown document's or task's top-level blocks, each with its id and\ninternal markdown, and the revision they were read at: what direct edits\nmatch against.",
+        "operationId": "get_document_markdown_blocks",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentMarkdownBlocks"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "502": {
+            "description": "The blocks could not be read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownEditFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents/{document_id}/markdown/edits": {
+      "post": {
+        "tags": ["document"],
+        "summary": "Apply a batch of direct edits to a markdown document's or task's body, with\nno model: exact `old`/`new` replacements and insert, delete and move by\nblock id. Edited blocks keep their ids and comments; the batch merges with\nedits made since `baseRevision`. Applied whole or not at all.",
+        "operationId": "edit_document_markdown",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Document identity",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkdownEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownEdited"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a markdown document, or an invalid batch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Document edit access denied"
+          },
+          "404": {
+            "description": "Document not found"
+          },
+          "409": {
+            "description": "Nothing was written. `conflict: changed`: an edit no longer applies to the document as it is now; read the blocks again and redo it. `conflict: busy`: others kept editing while it committed; retry the same batch as is",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownEditFailure"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The batch was refused; nothing was written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownEditFailure"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The edit failed and may have applied. A batch with `baseRevision` is safe to resend (it answers `already_applied` if it committed); one without it is not: read the blocks first, or its inserts may land twice",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkdownEditFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents/{document_id}/permanent": {
       "delete": {
         "tags": ["document"],
@@ -34512,6 +34660,10 @@
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
       },
+      "BlockId": {
+        "type": "string",
+        "description": "A top-level block's durable id, or `start` / `end` where an edit takes a\nposition."
+      },
       "BodyPatch": {
         "type": "object",
         "description": "Text box (body) changes.",
@@ -41922,6 +42074,18 @@
           "startsOnOrBefore"
         ]
       },
+      "DeleteEdit": {
+        "type": "object",
+        "description": "Delete a block.",
+        "required": ["delete"],
+        "properties": {
+          "delete": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "The block to delete."
+          }
+        },
+        "additionalProperties": false
+      },
       "DeleteEntityMentionResponse": {
         "type": "object",
         "description": "Response body for `DELETE /channels/mentions/{mention_id}`.",
@@ -42490,6 +42654,24 @@
           "revision": {
             "type": "string",
             "description": "The document's version, as sync-service encodes it. Pass it back to\nwrite the body only if nobody has changed the document since."
+          }
+        }
+      },
+      "DocumentMarkdownBlocks": {
+        "type": "object",
+        "description": "A markdown document's blocks with the revision they were read at.",
+        "required": ["revision", "blocks"],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarkdownBlock"
+            },
+            "description": "Top-level blocks in document order."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's version; pass it as `baseRevision` with edits."
           }
         }
       },
@@ -53954,6 +54136,38 @@
           }
         }
       },
+      "InsertAfterEdit": {
+        "type": "object",
+        "description": "Insert new blocks after a block, or after `start` / at `end`.",
+        "required": ["insert_after", "markdown"],
+        "properties": {
+          "insert_after": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "A block id, `start` or `end`."
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Internal markdown of the new blocks."
+          }
+        },
+        "additionalProperties": false
+      },
+      "InsertBeforeEdit": {
+        "type": "object",
+        "description": "Insert new blocks before a block, or at `start` / before `end`.",
+        "required": ["insert_before", "markdown"],
+        "properties": {
+          "insert_before": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "A block id, `start` or `end`."
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Internal markdown of the new blocks."
+          }
+        },
+        "additionalProperties": false
+      },
       "InteractionReason": {
         "type": "string",
         "description": "Why a document interaction was reported.",
@@ -54779,6 +54993,352 @@
             "type": "string",
             "format": "uuid",
             "description": "Message in the addressed group."
+          }
+        }
+      },
+      "MarkdownBlock": {
+        "type": "object",
+        "description": "One top-level block as edits address it.",
+        "required": ["id", "type", "markdown"],
+        "properties": {
+          "id": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "The block's durable id."
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Its internal markdown; an opaque block shows `<!-- keep:ID -->`."
+          },
+          "opaque": {
+            "type": "boolean",
+            "description": "Markdown cannot show this block: it can be moved or deleted, not edited."
+          },
+          "type": {
+            "type": "string",
+            "description": "The editor node type: paragraph, heading, table…"
+          }
+        }
+      },
+      "MarkdownBlockChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The block's markdown changed; its id stayed.",
+            "required": ["blockId", "before", "after", "kind"],
+            "properties": {
+              "after": {
+                "type": "string",
+                "description": "Its markdown after."
+              },
+              "before": {
+                "type": "string",
+                "description": "Its markdown before."
+              },
+              "blockId": {
+                "$ref": "#/components/schemas/BlockId",
+                "description": "The block."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new block.",
+            "required": ["blockId", "markdown", "kind"],
+            "properties": {
+              "afterBlockId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BlockId",
+                    "description": "The block now before it; none at the start."
+                  }
+                ]
+              },
+              "blockId": {
+                "$ref": "#/components/schemas/BlockId",
+                "description": "The new block's id."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["inserted"]
+              },
+              "markdown": {
+                "type": "string",
+                "description": "Its markdown."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A deleted block.",
+            "required": ["blockId", "markdown", "kind"],
+            "properties": {
+              "blockId": {
+                "$ref": "#/components/schemas/BlockId",
+                "description": "The block."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["deleted"]
+              },
+              "markdown": {
+                "type": "string",
+                "description": "Its markdown before the delete."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A block moved, keeping its id.",
+            "required": ["blockId", "kind"],
+            "properties": {
+              "afterBlockId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/BlockId",
+                    "description": "The block now before it; none at the start."
+                  }
+                ]
+              },
+              "blockId": {
+                "$ref": "#/components/schemas/BlockId",
+                "description": "The block."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["moved"]
+              }
+            }
+          }
+        ],
+        "description": "What a batch did to one block."
+      },
+      "MarkdownEdit": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ReplaceEdit",
+            "description": "`{old, new, block_id?, replace_all?}`"
+          },
+          {
+            "$ref": "#/components/schemas/InsertAfterEdit",
+            "description": "`{insert_after, markdown}`"
+          },
+          {
+            "$ref": "#/components/schemas/InsertBeforeEdit",
+            "description": "`{insert_before, markdown}`"
+          },
+          {
+            "$ref": "#/components/schemas/DeleteEdit",
+            "description": "`{delete}`"
+          },
+          {
+            "$ref": "#/components/schemas/MoveAfterEdit",
+            "description": "`{move, after}`"
+          },
+          {
+            "$ref": "#/components/schemas/MoveBeforeEdit",
+            "description": "`{move, before}`"
+          }
+        ],
+        "description": "One edit of a batch. The shapes mirror `str_replace`-style editing tools,\ntold apart by their fields, so the input is untagged."
+      },
+      "MarkdownEditConflictReason": {
+        "type": "string",
+        "description": "Why a batch conflicts with the document as it is now.",
+        "enum": ["changed", "busy"]
+      },
+      "MarkdownEditFailure": {
+        "type": "object",
+        "description": "Why a direct-edit request did not complete.",
+        "required": ["error", "message"],
+        "properties": {
+          "conflict": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkdownEditConflictReason",
+                "description": "Why, for `revision_conflict`."
+              }
+            ]
+          },
+          "error": {
+            "$ref": "#/components/schemas/MarkdownEditFailureCode",
+            "description": "What went wrong."
+          },
+          "message": {
+            "type": "string",
+            "description": "What to do next."
+          },
+          "refusal": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkdownEditRefusal",
+                "description": "The refusal, for `edit_refused`."
+              }
+            ]
+          }
+        }
+      },
+      "MarkdownEditFailureCode": {
+        "type": "string",
+        "description": "Error code of a direct-edit request that did not complete.",
+        "enum": [
+          "edit_refused",
+          "revision_conflict",
+          "read_failed",
+          "edit_failed"
+        ]
+      },
+      "MarkdownEditMatchingBlock": {
+        "type": "object",
+        "description": "A block a missing or ambiguous `old` was found in, or is nearest to.",
+        "required": ["blockId", "occurrences", "markdown"],
+        "properties": {
+          "blockId": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "The block."
+          },
+          "markdown": {
+            "type": "string",
+            "description": "Its markdown as the batch saw it."
+          },
+          "occurrences": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How often `old` occurs in it (0 for a no-match suggestion).",
+            "minimum": 0
+          }
+        }
+      },
+      "MarkdownEditMerge": {
+        "type": "string",
+        "description": "How the batch was placed on the document as it is now.",
+        "enum": ["current", "base", "rebased"]
+      },
+      "MarkdownEditOutcomeKind": {
+        "type": "string",
+        "description": "Whether the batch was written.",
+        "enum": ["committed", "unchanged", "dry_run", "already_applied"]
+      },
+      "MarkdownEditRefusal": {
+        "type": "object",
+        "description": "A refused batch: what was wrong and where.",
+        "required": ["code", "message"],
+        "properties": {
+          "blocks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarkdownEditMatchingBlock"
+            },
+            "description": "For `no_match` and `ambiguous_match`, the blocks `old` was found in or\nis nearest to."
+          },
+          "code": {
+            "$ref": "#/components/schemas/MarkdownEditRefusalCode",
+            "description": "What was wrong."
+          },
+          "edit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The 1-based edit it concerns, when one.",
+            "minimum": 0
+          },
+          "message": {
+            "type": "string",
+            "description": "What to change; may quote the document."
+          }
+        }
+      },
+      "MarkdownEditRefusalCode": {
+        "type": "string",
+        "description": "Why a batch was refused; the document is untouched.",
+        "enum": [
+          "no_match",
+          "ambiguous_match",
+          "unknown_block",
+          "empty_edit",
+          "unparseable",
+          "opaque_edit",
+          "comment_loss",
+          "mass_delete",
+          "markup_leak",
+          "frozen_media",
+          "too_large",
+          "verify_failed"
+        ]
+      },
+      "MarkdownEditRequest": {
+        "type": "object",
+        "description": "A batch of direct edits, applied whole or not at all.",
+        "required": ["edits"],
+        "properties": {
+          "allowDeletingContent": {
+            "type": "boolean",
+            "description": "The batch means to delete blocks holding comments or content\nmarkdown cannot show, or most of the document."
+          },
+          "baseRevision": {
+            "type": ["string", "null"],
+            "description": "The `revision` the edits were written against. Changes made since\nmerge with the batch; absent means the current revision."
+          },
+          "dryRun": {
+            "type": "boolean",
+            "description": "Compute and verify the batch, return its changes, write nothing."
+          },
+          "edits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarkdownEdit"
+            },
+            "description": "The edits, applied in order: 1 to 200.",
+            "maxItems": 200,
+            "minItems": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "MarkdownEdited": {
+        "type": "object",
+        "description": "A batch that applied, or a dry run that would.",
+        "required": ["outcome", "revision", "changes"],
+        "properties": {
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MarkdownBlockChange"
+            },
+            "description": "What changed, block by block; empty for `unchanged` and\n`already_applied` (read the blocks again for inserted ids then)."
+          },
+          "merge": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MarkdownEditMerge",
+                "description": "How the batch was placed; absent for `already_applied`."
+              }
+            ]
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/MarkdownEditOutcomeKind",
+            "description": "Written, unchanged, or a dry run."
+          },
+          "revision": {
+            "type": "string",
+            "description": "The document's revision after the write (the current one otherwise)."
           }
         }
       },
@@ -56076,6 +56636,38 @@
             "description": "The select column containing the currency code."
           }
         }
+      },
+      "MoveAfterEdit": {
+        "type": "object",
+        "description": "Move a block after another (or after `start`), keeping its ids.",
+        "required": ["move", "after"],
+        "properties": {
+          "after": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "A block id, `start` or `end`."
+          },
+          "move": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "The block to move."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MoveBeforeEdit": {
+        "type": "object",
+        "description": "Move a block before another (or before `end`), keeping its ids.",
+        "required": ["move", "before"],
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "A block id, `start` or `end`."
+          },
+          "move": {
+            "$ref": "#/components/schemas/BlockId",
+            "description": "The block to move."
+          }
+        },
+        "additionalProperties": false
       },
       "MyResponse": {
         "oneOf": [
@@ -61257,6 +61849,37 @@
             "description": "Stages first to last."
           }
         }
+      },
+      "ReplaceEdit": {
+        "type": "object",
+        "description": "Replace exact text: `old` must occur once (in `block_id` when given, else\nanywhere) unless `replace_all` is set.",
+        "required": ["old", "new"],
+        "properties": {
+          "block_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BlockId",
+                "description": "Limit the match to this block."
+              }
+            ]
+          },
+          "new": {
+            "type": "string",
+            "description": "Its replacement. Empty deletes it."
+          },
+          "old": {
+            "type": "string",
+            "description": "Exact internal markdown to find, copied from the block's content."
+          },
+          "replace_all": {
+            "type": "boolean",
+            "description": "Replace every occurrence within blocks instead of requiring exactly\none. An `old` spanning blocks must still occur once: `replace_all`\ndoes not apply to matches across blocks."
+          }
+        },
+        "additionalProperties": false
       },
       "RequestAccess": {
         "type": "object",

@@ -34,6 +34,14 @@ import type { Channel } from '../channels/channel';
 import { shareWithChannel } from '../channels/share';
 import { PropertiedEntity } from '../entity';
 import {
+  applyEdits,
+  type DocumentBlocks,
+  type MarkdownEditOperation,
+  type MarkdownEditOptions,
+  type MarkdownEditResult,
+  readBlocks,
+} from '../markdown-edits/markdown-edits';
+import {
   MessageThread,
   type TimelineOptions,
   timeline,
@@ -529,8 +537,9 @@ export class Document
   /**
    * Replace a markdown document's or task body's text with `markdown`, only
    * if the document is still at `expectedRevision`, the revision from
-   * `contentWithRevision()`. Use it when you already have the exact new
-   * Markdown; to describe a change in words, use `edit`.
+   * `contentWithRevision()`. Use it when you already have the whole new
+   * Markdown; for a few exact changes use `applyMarkdownEdits`, and to describe a
+   * change in words, `edit`.
    *
    * Nobody's edits are overwritten: if anyone changed the document since your
    * read, nothing is written and it throws `DocumentChangedError`; read again,
@@ -567,6 +576,84 @@ export class Document
     const written = await writeMarkdown(this.client, this, markdown, options);
     this.detail.clear();
     return written;
+  }
+
+  /**
+   * Top-level blocks with ids and internal markdown, and their revision.
+   *
+   * Works on a markdown document or task body: it is what `applyMarkdownEdits`
+   * matches against. Pass the whole read as `base`.
+   *
+   * @readonly
+   */
+  markdownBlocks(): Promise<DocumentBlocks> {
+    return readBlocks(this.client, this);
+  }
+
+  /**
+   * Apply exact markdown edits without AI; prefer it to `edit`.
+   *
+   * Works on a markdown document's or task body's text: use it whenever you
+   * know the exact change, and `edit` only to describe a change in words. The
+   * batch applies whole or not at all, much faster than `edit`, and nothing is
+   * billed.
+   *
+   * Edits, applied in order:
+   * - `{ replace, with, in?, all? }` replaces exact internal markdown, copied
+   *   from `markdownBlocks()` or `content()` with its `**`, list markers and `<m-*>`
+   *   tags. It must occur exactly once in the document, or in block `in`,
+   *   unless `all` is set; it may span adjacent blocks joined by one blank line.
+   * - `{ insert, after }` / `{ insert, before }` adds new blocks of markdown at
+   *   a block, `'start'` or `'end'`.
+   * - `{ remove: block }` deletes a block; `{ move: block, after | before }`
+   *   moves one.
+   *
+   * Blocks are `DocumentBlock` handles from `markdownBlocks()`, a result's
+   * `changes` or a refusal's `blocks`. Edited blocks keep their ids,
+   * comments and formatting. Pass the read as `base`: edits people made since
+   * merge with yours, and a retry of a batch that committed is not applied
+   * twice.
+   *
+   * Throws `MarkdownEditsRefusedError` (nothing written) with `code`, the
+   * 1-based `edit` and, for `no_match` and `ambiguous_match`, the `blocks`
+   * it may have meant; `DocumentChangedError` when text an edit matched was
+   * changed since `base` (read again and redo it); `DocumentBusyError` when
+   * others kept editing while it committed (retry as is); and
+   * `EditOutcomeUnknownError` when the outcome is unknown (read first).
+   *
+   * @example Fix a date and add a step after the intro.
+   * ```js
+   * const read = await document.markdownBlocks();
+   * const intro = read.blocks.find((block) => block.markdown?.startsWith('Intro'));
+   * const { changes } = await document.applyMarkdownEdits(
+   *   [
+   *     { replace: 'ships in Q3', with: 'ships in Q4' },
+   *     { insert: '- Review the launch checklist.', after: intro },
+   *   ],
+   *   { base: read },
+   * );
+   * return { data: { changes, url: document.webUrl() } };
+   * ```
+   *
+   * @example Recover from an ambiguous match.
+   * ```js
+   * try {
+   *   await document.applyMarkdownEdits([{ replace: 'TBD', with: 'Friday' }]);
+   * } catch (error) {
+   *   if (error.name !== 'MarkdownEditsRefusedError') throw error;
+   *   return { data: { code: error.code, blocks: error.blocks } };
+   * }
+   * ```
+   *
+   * @write
+   */
+  async applyMarkdownEdits(
+    edits: MarkdownEditOperation[],
+    options: MarkdownEditOptions = {},
+  ): Promise<MarkdownEditResult> {
+    const result = await applyEdits(this.client, this, edits, options);
+    this.detail.clear();
+    return { ...result, webUrl: this.webUrl() };
   }
 
   /**
@@ -616,7 +703,8 @@ export class Document
   /**
    * Change a markdown document's or task body's text in place: pass
    * natural-language instructions and an AI editor applies them, merging with
-   * concurrent edits.
+   * concurrent edits. When you know the exact change, `applyMarkdownEdits` does it
+   * without AI, faster and unbilled.
    *
    * Write instructions like a precise request to a careful editor:
    * - Say where: name the section or heading, or quote the text to change.
