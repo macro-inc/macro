@@ -2,8 +2,9 @@
 
 ## Scope
 
-Type-checks a bounded TypeScript program against the SDK, then runs it in a
-fresh Deno process inside the calling service. Session authentication, token
+Type-checks a bounded TypeScript program against the SDK, then runs it, or
+runs a JS tools program in `@opencode/codemode`'s interpreter, in a fresh
+Deno process inside the calling service. Session authentication, token
 issuance and execution storage belong to `crates/agent_code_mode` and its
 composition root.
 
@@ -30,11 +31,24 @@ composition root.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
+- JS tools programs: `runJsTools` and `callTool` in `bootstrap.mjs`;
+  `src/outbound/deno/js_tools_analyze.mjs`, the analyzer as a process for the
+  permission gate (interface in its header), run by `JsToolsAnalyzer`
+  (`src/outbound/deno/analyze.rs`); tests in
+  `src/outbound/deno/test/js_tools.rs` and `src/outbound/deno/analyze/test.rs`.
+- A JS tools program's module (`ExecuteRequest::module`): its own Deno
+  process with no network, SDK or token (`src/outbound/deno/module.rs`,
+  `compute.mjs`), read through `get`/`call` frames the bridge relays; README
+  "The module". Tests in `src/outbound/deno/test/module.rs`.
+- `src/outbound/analysis.rs`: the analyzers' shared JSON answer
+  (`macro_sdk_calls --json`'s shape plus `diagnostics`).
 
 ## Gotchas
 
 The bundled public SDK makes ordinary HTTP requests. There is no tool-name
-proxy or host-call bridge. Cancellation stops the process; it does not roll back
+proxy or host-call bridge; the only relay is a JS tools program's `get` and
+`call` to its module, which carries copied JSON and nothing that reaches
+Macro. Cancellation stops the process; it does not roll back
 completed API writes. SDK and Handlebars bundles, the operation catalog and
 the SDK's type declarations come from `crates/code_mode_assets`, generated from
 the public SDK at build time by `packages/code-mode-sdk`. A POST that only reads
@@ -42,9 +56,11 @@ must be listed in the generator's `postReads`, or dry runs skip it.
 The SDK adds `x-macro-sdk-verb` to each generated call from the hand-assigned
 registry; the header is attached to that call's options before request dispatch.
 
-Every request to an SDK origin carries `x-macro-code-execution: 1`, whatever
-credential it carries. A program can drop it with a raw `fetch`, so a refusal
-that must hold reads the credential's signed claims too: every code-mode
+Every request to an SDK origin carries `x-macro-code-execution`, whatever
+credential it carries: `1`, or `js_tools` from a JavaScript tools program
+(`egress::code_execution_marker`, set by the bootstrap and, in a proxied run,
+by the forwarder), so a refusal can name the dialect's operations. A program
+can drop it with a raw `fetch`, so a refusal that must hold reads the credential's signed claims too: every code-mode
 credential, public MCP's included, signs an agent or a routine
 (`macro_authorization::is_program_run`), and the header never overrides a
 signed claim. The calendar mutation routes demand the copy's `inbox` from
@@ -110,7 +126,32 @@ the same fields with `process.killed = true` (its status is the runner's
 kill). A child that ends on its own without exit code 0 after its terminal
 frame logs one `Deno child ended abnormally` warning with the same fields.
 
+`RunEnvironment::allowed_operations` (set by the permission gate, JS tools
+only; a JavaScript run carrying it fails) makes the bootstrap refuse any JS
+tools request whose `macroSdkOperation` service, raw `operationId`, method,
+host and route don't match one of them, or whose path a more specific rival
+route also matches (a parameter equal to a sibling's literal segment,
+`/documents/{}` reaching `/documents/system_skills`; the analyzer lists each
+call's `rivals`, from the SDK's routes only: a route a service serves outside
+its OpenAPI spec is not one), reporting it as `refused` activity. A JS tools
+run without it never starts (`DenoRunner` refuses it, and the bootstrap
+again).
+
+A JS tools run analyzes `main.js` again with the same `js-tools.mjs` the gate
+used and refuses one that may call outside `allowed_operations` before it
+starts; the interpreter's `tool.before` hook admits only what the analysis
+found. Its Deno flags are a JavaScript run's, exactly
+(`js_tools_runs_get_exactly_a_javascript_runs_deno_flags`): keep them so.
+The bootstrap bans timers for JavaScript but gives them back to a JS tools
+run, whose interpreter (Effect) schedules with them; the program has none.
+`callTool` calls the generated SDK method from the client's prototype, not
+the SDK's observed wrapper (which demands a display verb that unwrapped
+operations lack), so `fetch` reports and gates it as a named request.
+
 ## Checks
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository
   root with Deno available; real-process tests exercise permissions and cleanup.
+  Every isolation test of the JavaScript path has a JS tools twin in
+  `src/outbound/deno/test/js_tools.rs`, or is listed as not applying in that
+  file's header; add one with each new one.

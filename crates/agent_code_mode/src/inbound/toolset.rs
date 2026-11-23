@@ -1,6 +1,6 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
+    CodeModeError, CodeModeKind, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
     TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
     with_attached_skill,
 };
@@ -10,7 +10,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution::domain::{ExecuteRequest, Language};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -21,6 +21,12 @@ use tokio_util::sync::CancellationToken;
 #[cfg(test)]
 mod test;
 
+mod dialect;
+pub use dialect::{
+    DescribeDialect, DialectDescription, DialectGuide, DialectGuidePage, DialectGuides,
+    ReadDialectDocs,
+};
+
 /// Session facts supplied by the authenticated MCP adapter.
 #[derive(Clone)]
 pub struct CodeModeToolContext {
@@ -30,6 +36,10 @@ pub struct CodeModeToolContext {
     pub session: AgentSession,
     /// Jev, for selecting documentation by task; absent falls back to the catalog.
     pub cognition: Option<Arc<dyn Cognition>>,
+    /// The code-mode kind of the session's current turn
+    /// ([`CodeModeKinds`](crate::domain::CodeModeKinds)), resolved once by
+    /// the adapter; the tools read it instead of the flag.
+    pub kind: CodeModeKind,
 }
 
 /// Tools advertised only when a runner is configured.
@@ -38,6 +48,26 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ExecuteCode, CodeModeToolContext>()
         .add_tool::<DescribeCodeTools, CodeModeToolContext>()
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// [`toolset`] for a turn of [`CodeModeKind::Dialect`], whose programs the
+/// agent's permissions always gate: its `ExecuteCode` says how.
+///
+/// Its `DescribeCodeTools` and `ReadCodeDocs` serve the dialect's guides
+/// ([`DescribeDialect`], [`ReadDialectDocs`]), never the TypeScript SDK's.
+pub fn toolset_with_js_tools() -> AsyncToolCollection<CodeModeToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<ExecuteCodeWithJsTools, CodeModeToolContext>()
+        .add_tool::<DescribeDialect, CodeModeToolContext>()
+        .add_tool::<ReadDialectDocs, CodeModeToolContext>()
+}
+
+/// The code-mode tools of a turn of `kind`.
+pub fn session_toolset(kind: CodeModeKind) -> AsyncToolCollection<CodeModeToolContext> {
+    match kind {
+        CodeModeKind::TypeScript => toolset(),
+        CodeModeKind::Dialect => toolset_with_js_tools(),
+    }
 }
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
@@ -151,21 +181,138 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
         context: ServiceContext<CodeModeToolContext>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
-        context
-            .service
-            .execute(
-                &context.session,
-                self.execution_id.unwrap_or_else(ExecutionId::mint),
-                self.acting_as,
-                self.turn_id,
-                ExecuteRequest {
-                    source: self.source.clone(),
-                    timeout_ms: self.timeout_ms,
-                },
-                request.cancel,
-            )
-            .await
-            .map_err(tool_error)
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: Language::Javascript,
+                module: None,
+            },
+        )
+        .await
+    }
+}
+
+async fn execute_in_session(
+    context: &CodeModeToolContext,
+    request: RequestContext,
+    execution_id: Option<ExecutionId>,
+    acting_as: ai_toolset::actor::ToolActor,
+    turn_id: macro_uuid::Uuid,
+    program: ExecuteRequest,
+) -> ToolResult<ExecutionReceipt> {
+    context
+        .service
+        .execute(
+            &context.session,
+            execution_id.unwrap_or_else(ExecutionId::mint),
+            acting_as,
+            turn_id,
+            program,
+            request.cancel,
+        )
+        .await
+        .map_err(tool_error)
+}
+
+/// `ExecuteCode` in a [`CodeModeKind::Dialect`] turn: the program (`source`)
+/// is always a JS tools program, analyzed and gated by the agent's
+/// permissions; an optional TypeScript `module` computes beside it with no
+/// network, SDK or token. It has no `language`: the agent never chooses
+/// whether its permissions apply. Nothing in its text teaches the
+/// TypeScript SDK.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ExecuteCode",
+    description = format!(
+        "{}\n{}\nPresentView schema; tools.agent_harness.present_session_view takes it as body.view:\n{}\n",
+        include_str!("toolset/session/js_tools.md"),
+        include_str!("toolset/session/js_tools_permissions.md").trim_end(),
+        dialect_view_schema(),
+    )
+)]
+pub struct ExecuteCodeWithJsTools {
+    /// As [`ExecuteCode::execution_id`].
+    #[serde(default)]
+    #[schemars(
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source and module returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
+    )]
+    pub execution_id: Option<ExecutionId>,
+    /// Choose whose account authenticates every operation in this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
+    /// Copy the current server-issued turn_id from the prompt's execution context.
+    /// Never reuse an ID from another turn or discover a replacement for a stale call.
+    pub turn_id: macro_uuid::Uuid,
+    /// A JavaScript tools program.
+    #[schemars(
+        description = "The program, at most 64 KiB: plain JavaScript run as one script that reaches Macro only through await tools.<service>.<operation>({path, query, body}) and returns its result, as the description shows. Every operation it names is checked against this agent's permissions before it runs."
+    )]
+    pub source: String,
+    /// TypeScript the program reads with `get` and `call`.
+    #[serde(default)]
+    #[schemars(
+        description = "Optional TypeScript module, at most 64 KiB, type-checked before anything runs, with no network and no Macro access, for this run only. Export values and functions with export const and export function; source reads one with await get(\"name\") and calls one with await call(\"name\", ...args). It may import Handlebars from \"handlebars\". Omit it when the program needs no computation or library."
+    )]
+    pub module: Option<String>,
+    /// Deadline including queueing and API calls.
+    #[serde(default = "default_timeout")]
+    #[schemars(
+        description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
+    )]
+    pub timeout_ms: u64,
+}
+
+/// The PresentView schema in the dialect's terms: the SDK calls its
+/// guidance names become the operations that do the same.
+fn dialect_view_schema() -> String {
+    dynamic_ui::present_view_schema()
+        .replace(
+            "`await execution.views.present(view)`",
+            "`await tools.agent_harness.present_session_view` with `view` in its body",
+        )
+        .replace(
+            "macro.agentSessions.updates()",
+            "tools.agent_harness.list_agent_session_updates",
+        )
+        .replace(
+            "give the table's or view's webUrl() in the lead-in",
+            "link the table or view in the lead-in",
+        )
+}
+
+impl ToolAnnotated for ExecuteCodeWithJsTools {
+    const ANNOTATIONS: ToolAnnotations = ExecuteCode::ANNOTATIONS;
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithJsTools {
+    type Output = ExecutionReceipt;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: Language::JsTools,
+                module: self.module.clone(),
+            },
+        )
+        .await
     }
 }
 
@@ -221,6 +368,8 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
+                    language: Language::Javascript,
+                    module: None,
                 },
                 request.cancel,
             )

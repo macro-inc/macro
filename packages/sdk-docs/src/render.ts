@@ -37,6 +37,14 @@ const MCP_MODIFIER_TAGS: readonly `@${string}`[] = [
 ];
 const MCP_BLOCK_TAGS: readonly `@${string}`[] = ['@mcp-exclude'];
 
+/**
+ * `@flag <feature-flag>`: a declaration behind a feature flag, whose routes
+ * answer 404 for everyone the flag is off for. It is left out of every
+ * output (the public reference and code mode's docs), as `packages/sdk-mcp`
+ * leaves it out of the MCP tools, until the flag ships and the tag goes.
+ */
+const FLAG_TAG = '@flag';
+
 export async function renderSdkDocs(
   root: string,
   output: string
@@ -46,7 +54,7 @@ export async function renderSdkDocs(
   const plugin = createRequire(import.meta.url).resolve(
     'typedoc-plugin-markdown'
   );
-  const { Application, Comment, OptionDefaults, ReflectionKind } =
+  const { Application, Comment, Converter, OptionDefaults, ReflectionKind } =
     (await import(createRequire(plugin).resolve('typedoc'))) as typeof TypeDoc;
 
   const sdk = join(root, 'packages/sdk');
@@ -74,7 +82,12 @@ export async function renderSdkDocs(
     basePath: sdk,
     tsconfig: join(sdk, 'tsconfig.json'),
     plugin: ['typedoc-plugin-markdown'],
-    blockTags: [...OptionDefaults.blockTags, ...AGENT_TAGS, ...MCP_BLOCK_TAGS],
+    blockTags: [
+      ...OptionDefaults.blockTags,
+      ...AGENT_TAGS,
+      ...MCP_BLOCK_TAGS,
+      FLAG_TAG,
+    ],
     modifierTags: [...OptionDefaults.modifierTags, ...MCP_MODIFIER_TAGS],
     name: 'Macro SDK',
     readme: join(root, 'packages/sdk-docs/pages/home.md'),
@@ -102,6 +115,10 @@ export async function renderSdkDocs(
     ],
   } satisfies TypeDoc.TypeDocOptions & Partial<PluginOptions>;
   const app = await Application.bootstrapWithPlugins(options);
+  // Before TypeDoc groups the members, so no group keeps a removed one.
+  app.converter.on(Converter.EVENT_RESOLVE_BEGIN, (context) =>
+    removeFlagged(context.project, ReflectionKind)
+  );
   const project = await app.convert();
   if (!project) throw new Error('TypeDoc could not convert the public SDK.');
   const notes = takeAgentNotes(project, Comment, ReflectionKind);
@@ -112,6 +129,34 @@ export async function renderSdkDocs(
   await app.generateOutputs(project);
   if (app.logger.hasErrors()) throw new Error('TypeDoc generation failed.');
   return notes;
+}
+
+/**
+ * Remove every `@flag`ged declaration (a module's tag removes the module).
+ * A method's, function's or accessor's comment sits on its signature, so the
+ * whole member goes; TypeDoc removes the re-exports of whatever goes.
+ */
+function removeFlagged(
+  project: TypeDoc.ProjectReflection,
+  kinds: typeof TypeDoc.ReflectionKind
+) {
+  const flagged = new Set<TypeDoc.Reflection>();
+  for (const reflection of Object.values(project.reflections)) {
+    const tag = reflection.comment?.getTag(FLAG_TAG);
+    if (!tag) continue;
+    if (!tag.content.some((part) => part.text.trim()))
+      throw new Error(
+        `${reflection.getFullName()}: @flag needs the flag's name`
+      );
+    flagged.add(
+      reflection.kindOf(
+        kinds.CallSignature | kinds.GetSignature | kinds.SetSignature
+      ) && reflection.parent
+        ? reflection.parent
+        : reflection
+    );
+  }
+  for (const reflection of flagged) project.removeReflection(reflection);
 }
 
 /** Remove the MCP hint tags from every comment. */

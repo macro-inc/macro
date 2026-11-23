@@ -4,7 +4,8 @@
 type-checks it against the SDK, then starts a fresh Deno 2.9.6 child for each
 execution; there is no separate runner service. Macro SDK and Handlebars
 imports are bundled ahead of time, with no per-run package download; Deno
-strips the types.
+strips the types. This crate also runs JS tools programs (below);
+`ExecuteCode` offers them to sessions whose owner has agent permissions.
 
 ```ts
 import Handlebars from 'handlebars';
@@ -27,8 +28,9 @@ from `@macro-inc/sdk`. `webAppUrl` is the deployment's web app origin, so
 `webUrl()` links point at the environment the run is in.
 `session` and `execution` are handles supplied by the authenticated host.
 SDK methods perform normal authenticated HTTP requests. Promise concurrency is
-ordinary JavaScript concurrency: there is no per-call Rust tool dispatch or
-stdin/stdout request/reply bridge.
+ordinary JavaScript concurrency: there is no per-call Rust tool dispatch. The
+only stdin/stdout request/reply bridge is a JS tools program's to its module
+(below).
 
 `ExecutionService` owns process admission, type checking, queueing, deadlines,
 cancellation, and shutdown. The Deno adapters implement its process and
@@ -81,6 +83,136 @@ The result is untrusted program output, not proof that an external write occurre
 Review cards load their separately saved records. Code completion does not wait
 for a user to submit those reviews.
 
+## JS tools programs
+
+`ExecuteRequest::language` is `Javascript` by default or `JsTools`.
+`Language::JsTools` (`js_tools`) runs a script in the JavaScript dialect of
+`@opencode/codemode` (pinned 2.3.2): plain JavaScript with top-level `await`
+and `return`, no classes, getters, imports or `require`, and no `fetch`,
+`Deno`, `globalThis`, timers or `eval`. Its only way out is a tool call,
+`tools.<service>.<operationId>({ path?, query?, body? })`: the spec name with
+`-` written `_`, then the raw operationId, so the path is the permission
+registry's key. The return value becomes the result's `data`, unless it is
+code mode's result shape, `{data, reviews?, images?}` with no other keys: then
+it is the result, as a TypeScript program's would be, so its reviews become
+review cards and its images reach the model. `context` holds `sessionId`,
+`executionId` and `webAppUrl`:
+
+```js
+const task = await tools.storage.create_task_handler({
+  body: { taskName: "Fix login redirect loop", markdown: "Signing in from a deep link returns to the login page." },
+});
+const doc = await tools.storage.get_document_markdown({ path: { document_id: task.documentId } });
+return { taskId: task.documentId, markdown: doc.markdown };
+```
+
+`search("create task")` inside a program lists operations and their
+signatures; it calls nothing. The interpreter, the analyzer and the catalog
+(`js-tools.mjs`, `js-tools.json`) come from `crates/code_mode_assets`, built
+by `packages/code-mode-sdk` (its README covers the catalog and the analyzer's
+rules). They are written into the run's scratch beside the SDK, and the run
+gets exactly a JavaScript run's Deno flags (a test pins it).
+
+Every run, in the bootstrap:
+
+1. analyzes `main.js` with the bundle's `analyze`: a program that doesn't
+   parse, or reaches operations the analysis can't see (aliasing `tools`,
+   `require`, `import`, an unknown operation), fails with
+   `FailureCode::Compile` and `main.js:<line>:<column>: <reason>`. With
+   `RunEnvironment::allowed_operations` (the permission gate), every
+   operation found must be one of them, or the run fails the same way
+   before anything is sent;
+2. runs it with one tool per catalog operation, of which only those found
+   may run: the interpreter's `tool.before` hook refuses the rest;
+3. sends each call through the generated SDK method itself (only the
+   program's `path`, `query` and `body` reach it, and each path parameter
+   must be one segment: no object, `.` or `..`), naming its operation to
+   `fetch`, which adds the usual headers and the operation's verb, reports
+   progress and applies the `allowed_operations` backstop (operation,
+   method, host, route and route rivals).
+
+The token stays in the bootstrap: no value the program can reach holds it,
+and tool results cross back as JSON. An error response throws
+`HTTP <status>: <body>` to the program. The interpreter stops at the run's
+deadline less 500 ms, so its logs still arrive and the run ends `TimedOut`;
+it allows 256 tool calls and keeps at most a frame's worth of result and
+logs. A JS tools program can't run unattended. The bootstrap gives the
+interpreter back the timers it schedules with; the program has none.
+
+### The module
+
+`ExecuteRequest::module` (JS tools only; admission refuses it with any other
+program, empty or over the source limit: `AdmissionError::InvalidModule`) is
+a TypeScript module the program reads with two globals, `await get(name)`
+(an export's value) and `await call(name, ...args)` (an exported function's
+result). It is for computation and libraries, such as rendering with
+Handlebars, never for reaching Macro:
+
+```js
+// source
+const doc = await tools.storage.get_document_markdown({ path: { document_id: "..." } });
+return await call("summary", doc.markdown);
+```
+
+```ts
+// module
+import Handlebars from "handlebars";
+const template = Handlebars.compile("{{lines}} lines, first: {{first}}");
+export function summary(markdown: string): string {
+  const lines = markdown.split("\n");
+  return template({ lines: lines.length, first: lines[0] });
+}
+```
+
+- It is type-checked first like a TypeScript program (`module.ts`, no
+  context, `ProgramImports::Handlebars`: no `@macro-inc/sdk`), and the
+  precheck covers it the same way.
+- `DenoRunner` starts it at the run's start, in its own Deno process
+  (`src/outbound/deno/module.rs`, bootstrap `compute.mjs`): the run's deny
+  flags plus `--deny-net`, `--allow-read` of its own scratch only, and an
+  import map with Handlebars and the allowed Node built-ins but no SDK. Its
+  environment and stdin carry no token. It gets the run's CPU limit and
+  heap (so a run with a module may use twice a run's memory: admission
+  counts runs, not processes), its timers are banned like a TypeScript
+  program's, and it is killed and reaped when the run ends, however it ends.
+- `get` and `call` are `@opencode/codemode` extension globals. Each writes a
+  `{"type":"module",...}` frame on the program's stdout; the bridge relays
+  them one at a time, in order, to the module's stdin and writes each reply
+  on the program's stdin, which stays open for them. Values cross as JSON
+  copies of at most the frame limit less 1 KiB each way; an error in the
+  module, an unknown export or an oversized value rejects the program's
+  promise with the message. A module that stops or breaks the protocol
+  rejects every later request, so the module cuts its own log lines and
+  error messages to 32K characters. What the two exchange has its own
+  16 MiB budget per run; the module's logs share the run's output budget,
+  prefixed `module: `. Replies reach the program's stdin through their own
+  writer, and a request reaches the module while its output is read, so
+  neither side waits on a full pipe.
+- The analysis ignores `get` and `call` (they reach no SDK); passing `tools`
+  or an operation to them is refused like any other aliasing.
+- Span `code_execution.module` per module process (`execution_id`,
+  `module_bytes`, `requests`, `relayed_bytes` and the `process.*` exit
+  fields), with a `code_execution.module.relay` child per request (`op`,
+  `request_bytes`, `reply_bytes`, `outcome`); never names or values.
+
+`src/outbound/deno/js_tools_analyze.mjs` is the analyzer as a process, for
+the permission gate: beside `js-tools.mjs` and `js-tools.json`, run with
+the deny flags plus `--deny-net` and `--allow-read=<its directory>`, it reads
+the source on stdin and prints one line of JSON in `macro_sdk_calls --json`'s
+shape, plus a `diagnostics` status (its header has the interface). Analysis
+takes about 0.1 s in a fresh process; a run adds about 0.1 s to load the
+bundle and catalog.
+
+`JsToolsAnalyzer` (`src/outbound/deno/analyze.rs`) is the `ProgramAnalyzer`
+that runs it: it writes the three files once under its scratch directory,
+runs at most `concurrency` analyses at once with one 10 s deadline for the
+wait and the analysis (`CheckError::Busy` past it), reads at most 256 KiB of
+answer, and treats a nonzero exit or any other answer as
+`CheckError::Internal`. Its span is `code_execution.analyze` with
+`language = "js_tools"`, `outcome` (`calls`, `cannot_analyze`,
+`diagnostics`, `busy` waiting for a slot, `timed_out`, `internal`) and
+`operations`, never the source.
+
 ## Unattended programs
 
 A host can run a program with nobody watching (a routine step) by setting
@@ -127,7 +259,8 @@ fingerprint stays valid until it changes.
 | Concurrent Deno executions per harness replica | 8 (public MCP: 4 more) |
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
-| Program source | 64 KiB |
+| Program source (TypeScript or JS tools) | 64 KiB |
+| Tool calls per JS tools run | 256 |
 | Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
@@ -167,8 +300,9 @@ child before deleting scratch. API writes already accepted by a service may
 complete afterward and must not be blindly retried. SDK operation events carry only an operation name, request identity and status.
 They are bounded diagnostics, not proof of a committed action. Console output
 and progress are program-authored and may be incomplete. W3C trace context and
-`x-macro-code-execution: 1` are sent on every request to a configured service
-origin, whatever credential the request carries. That header is how an API tells a program's
+`x-macro-code-execution` (`1`, or `js_tools` for a JavaScript tools program) are
+sent on every request to a configured service origin, whatever credential the
+request carries. That header is how an API tells a program's
 request from the person's, so in every run `fetch` is the only way out. Raw
 sockets, listeners and servers (`Deno.connect`, `listen`, `serve` and the like),
 WebSocket and EventSource, `Deno[Deno.internal]` and `process`'s
@@ -203,4 +337,6 @@ The suite covers actual SDK HTTP authentication and concurrency, prebundled
 Handlebars, TypeScript and plain JavaScript entry modules, type checking before
 a run, filesystem/import/process/network
 restrictions including redirects, output bounds, cancellation, deadlines,
-backpressure, and cleanup. It makes no model-provider calls.
+backpressure, and cleanup, and the same for JS tools programs plus their
+analysis, the gate's backstops and the analyzer process. It makes no
+model-provider calls.

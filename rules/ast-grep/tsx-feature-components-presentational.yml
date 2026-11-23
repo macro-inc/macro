@@ -16,6 +16,7 @@ files:
   - apps/web/src/features/task-templates/components/**
   - apps/web/src/features/entity-appearance/components/**
   - apps/web/src/features/passwords/components/**
+  - apps/web/src/features/agent-permissions/components/**
   - apps/web/src/features/notifications-inbox/components/**
   - apps/web/src/features/channel-notification-stacks/components/**
   - apps/web/src/features/new-home/components/**

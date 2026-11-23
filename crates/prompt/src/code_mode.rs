@@ -21,3 +21,19 @@ view without being asked, never telling the user it works in code.";
 
 /// The code-mode section, for hosts that offer `ExecuteCode`.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+/// [`PROMPT`] for the dialect: programs reach Macro only through
+/// `tools.<service>.<operation>(...)`, gated by the agent's permissions.
+static DIALECT_INSTRUCTIONS: &str = include_str!("code_mode/dialect.md");
+
+static DIALECT_INTENT: &str = "The model does Macro work in as few ExecuteCode programs as \
+possible, calling operations as tools.<service>.<operation> after finding their signatures \
+with search() instead of guessing them, respects ask and never permissions without working \
+around them, returns ids and URLs, keeps library work in the optional TypeScript module, \
+and presents what matters as a view without being asked, never telling the user it works in \
+code.";
+
+/// The code-mode section for sessions that run the dialect, in place of
+/// [`PROMPT`].
+pub static DIALECT_PROMPT: StaticPrompt<'static> =
+    StaticPrompt::borrowed(TITLE, DIALECT_INSTRUCTIONS, DIALECT_INTENT);

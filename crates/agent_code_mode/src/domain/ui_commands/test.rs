@@ -150,12 +150,16 @@ fn record(execution: ExecutionId, turn: Uuid) -> ExecutionRecord {
         acting_as: Some(ToolActor::Owner),
         turn_id: Some(turn),
         source: "export async function main() {}".into(),
+        module: None,
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        permission: None,
     }
 }
 

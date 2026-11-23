@@ -125,4 +125,38 @@ describe('CodeExecutionToolCall', () => {
       view.container.querySelectorAll('[data-tool-status="failed"]')
     ).toHaveLength(1);
   });
+
+  it('marks a step the permission backstop refused as blocked, not failed', () => {
+    const view = render(() => (
+      <CodeExecutionToolCall
+        common={{
+          id: 'execute-code',
+          label: 'ExecuteCode',
+          status: 'completed',
+          muted: false,
+          stopped: false,
+          trailing: undefined,
+        }}
+        context={{
+          sessionId: 'session',
+          messageId: 'session:turn-1',
+          partIndex: 0,
+          inFlight: false,
+          followedBy: () => false,
+        }}
+        record={{
+          executionId: 'execution-3',
+          source: 'let () = ()',
+          status: 'succeeded',
+          calls: [],
+          activity: [{ id: 0, label: 'Delete label', status: 'refused' }],
+        }}
+        loading={false}
+        unavailable={false}
+      />
+    ));
+    expect(view.container.textContent).toContain('Delete label');
+    expect(view.container.textContent).toContain('Blocked');
+    expect(view.container.textContent).not.toContain('Failed');
+  });
 });

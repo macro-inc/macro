@@ -10,7 +10,8 @@
  * `src/__snapshots__/` are what review sees. Generation fails on an untagged method, a method with two hint classes, a
  * parameter type MCP's JSON can't carry, or a class with tagged methods that
  * no operation can address; `@mcp-exclude <reason>` opts a method or a whole
- * class out.
+ * class out, and `@flag <feature-flag>` opts out a method behind a flag (the
+ * catalog's `flagged` lists those).
  */
 
 import { dirname, relative } from 'node:path';
@@ -113,8 +114,44 @@ function description(symbol: ts.Symbol | undefined) {
     .trim();
 }
 
-function excludedReason(node: ts.Node) {
+/**
+ * The feature flag a `@flag <name>` declaration is behind: its routes answer
+ * 404 for everyone the flag is off for, so it is no MCP operation.
+ */
+function flagOf(node: ts.Node) {
+  const match = /@flag\b(?:[ \t]+([\w-]+))?/.exec(docText(node));
+  if (match && !match[1]) {
+    const { line } = node
+      .getSourceFile()
+      .getLineAndCharacterOfPosition(node.getStart());
+    errors.add(
+      `${relative(sdkRoot, node.getSourceFile().fileName)}:${line + 1}: @flag needs the flag's name`
+    );
+  }
+  return match?.[1];
+}
+
+function mcpExcludeReason(node: ts.Node) {
   return /@mcp-exclude\s+([^\n*]+)/.exec(docText(node))?.[1]?.trim();
+}
+
+function excludedReason(node: ts.Node) {
+  const flag = flagOf(node);
+  return flag ? `behind the ${flag} flag` : mcpExcludeReason(node);
+}
+
+/**
+ * Whether `method`, operation `name`, is left out: `@flag`ged (itself or by
+ * its class's `classFlag`, and recorded in `flagged`) or `@mcp-exclude`d.
+ */
+function leftOut(
+  method: ts.MethodDeclaration,
+  name: string,
+  classFlag: string | undefined
+) {
+  const flag = flagOf(method) ?? classFlag;
+  if (flag) flagged.set(flag, (flagged.get(flag) ?? new Set()).add(name));
+  return flag !== undefined || mcpExcludeReason(method) !== undefined;
 }
 
 type Hints = { hint: HintClass; openWorld: boolean; idempotent: boolean };
@@ -674,6 +711,8 @@ function groupOf(declaration: ts.ClassDeclaration) {
 }
 
 const operations: Operation[] = [];
+/** The methods left out because they are `@flag`ged, by flag. */
+const flagged = new Map<string, Set<string>>();
 const reached = new Set<ts.ClassDeclaration>();
 const RESERVED_INPUTS = new Set(['op', 'maxItems']);
 
@@ -684,16 +723,18 @@ function addOperations(
   group: string
 ) {
   reached.add(declaration);
-  if (excludedReason(declaration)) return;
+  if (mcpExcludeReason(declaration)) return;
+  // A flagged class's methods are each flagged.
+  const classFlag = flagOf(declaration);
   const navigation = new Set(
     stepsOf(declaration)
       .filter(({ step }) => step.call)
       .map(({ step }) => step.name)
   );
   for (const method of methodsOf(declaration)) {
-    if (excludedReason(method)) continue;
     const methodName = method.name.getText();
     const name = `${prefix}.${methodName}`;
+    if (leftOut(method, name, classFlag)) continue;
     const owner = method.parent;
     const where = `${ts.isClassDeclaration(owner) ? className(owner) : prefix}.${methodName}`;
     const hints = hintsOf(where, method);
@@ -942,6 +983,17 @@ ${[...handleDeclarations.keys()]
 };
 
 export const catalog: Catalog = ${JSON.stringify(catalog, null, 2)};
+
+/** The SDK methods left out because they are behind a flag, by flag. */
+export const flagged: Readonly<Record<string, readonly string[]>> = ${JSON.stringify(
+  Object.fromEntries(
+    [...flagged]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([flag, names]) => [flag, [...names].sort()])
+  ),
+  null,
+  2
+)};
 `;
 
 await Bun.write(outputPath, output);

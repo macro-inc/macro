@@ -58,8 +58,13 @@ export function sectionSteps(options: {
       return observed.map((operation) => ({
         id: `${part.id}:${operation.id}`,
         label: operation.label,
+        // A request the permission gate refused never ran: it failed.
         status:
-          operation.status === 'unknown' ? 'interrupted' : operation.status,
+          operation.status === 'unknown'
+            ? 'interrupted'
+            : operation.status === 'refused'
+              ? 'failed'
+              : operation.status,
       }));
     }
     return options.rows

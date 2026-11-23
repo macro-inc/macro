@@ -174,7 +174,7 @@ async fn an_approved_call_goes_through_and_its_answer_comes_back_on_the_stream()
     assert_eq!(pending.request_id, serde_json::json!(7));
 
     let approved = service
-        .answer(session, pending.id, ApprovalAnswer::Approve, &owner())
+        .answer(session, pending.id, ApprovalAnswer::Approve, &owner(), true)
         .await
         .unwrap();
     assert_eq!(approved.resolved_by, Some(owner()));
@@ -205,7 +205,13 @@ async fn a_declined_call_never_runs_and_says_who_declined() {
     next_event(&mut body).await;
 
     service
-        .answer(session, store.only().id, ApprovalAnswer::Deny, &owner())
+        .answer(
+            session,
+            store.only().id,
+            ApprovalAnswer::Deny,
+            &owner(),
+            true,
+        )
         .await
         .unwrap();
 
@@ -227,14 +233,20 @@ async fn only_the_owner_approves_but_an_editor_may_cancel() {
 
     for answer in [ApprovalAnswer::Approve, ApprovalAnswer::Deny] {
         assert!(matches!(
-            service.answer(session, id, answer, &asker()).await,
+            service.answer(session, id, answer, &asker(), true).await,
             Err(ToolApprovalError::NotOwner)
         ));
     }
     assert!(
         matches!(
             service
-                .answer(AgentSessionId::new(), id, ApprovalAnswer::Cancel, &asker())
+                .answer(
+                    AgentSessionId::new(),
+                    id,
+                    ApprovalAnswer::Cancel,
+                    &asker(),
+                    true
+                )
                 .await,
             Err(ToolApprovalError::NotFound)
         ),
@@ -242,7 +254,7 @@ async fn only_the_owner_approves_but_an_editor_may_cancel() {
     );
 
     service
-        .answer(session, id, ApprovalAnswer::Cancel, &asker())
+        .answer(session, id, ApprovalAnswer::Cancel, &asker(), true)
         .await
         .unwrap();
     let answer = message(&next_event(&mut body).await);
@@ -250,7 +262,7 @@ async fn only_the_owner_approves_but_an_editor_may_cancel() {
     assert!(
         matches!(
             service
-                .answer(session, id, ApprovalAnswer::Approve, &owner())
+                .answer(session, id, ApprovalAnswer::Approve, &owner(), true)
                 .await,
             Err(ToolApprovalError::NotPending)
         ),
@@ -445,7 +457,7 @@ async fn an_in_process_call_waits_for_the_owner_and_says_how_it_ended() {
     announcer.requested.notified().await;
     let id = store.only().id;
     service
-        .answer(session, id, ApprovalAnswer::Deny, &owner())
+        .answer(session, id, ApprovalAnswer::Deny, &owner(), true)
         .await
         .unwrap();
     assert_eq!(waiting.await.unwrap().unwrap(), ToolApprovalStatus::Denied);
@@ -562,7 +574,13 @@ async fn approving_for_good_lets_that_person_use_that_macro_tool_without_asking_
     let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
 
     let approved = service
-        .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+        .answer(
+            session,
+            id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+            true,
+        )
         .await
         .unwrap();
     assert_eq!(approved.status, ToolApprovalStatus::Approved);
@@ -597,7 +615,13 @@ async fn approving_one_macro_tool_for_good_still_asks_about_anything_else() {
     let session = AgentSessionId::new();
     let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
     service
-        .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+        .answer(
+            session,
+            id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+            true,
+        )
         .await
         .unwrap();
     waiting.await.unwrap().unwrap();
@@ -657,6 +681,7 @@ async fn approving_a_connected_app_for_good_covers_all_of_its_tools() {
             store.only().id,
             ApprovalAnswer::ApproveAndRemember,
             &owner(),
+            true,
         )
         .await
         .unwrap();
@@ -697,6 +722,7 @@ async fn approving_for_good_also_approves_what_that_person_is_already_waiting_on
             first_id,
             ApprovalAnswer::ApproveAndRemember,
             &owner(),
+            true,
         )
         .await
         .unwrap();
@@ -725,7 +751,13 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
     let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
     assert!(matches!(
         service
-            .answer(session, id, ApprovalAnswer::ApproveAndRemember, &asker())
+            .answer(
+                session,
+                id,
+                ApprovalAnswer::ApproveAndRemember,
+                &asker(),
+                true
+            )
             .await,
         Err(ToolApprovalError::NotOwner)
     ));
@@ -744,7 +776,13 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
     assert!(
         matches!(
             service
-                .answer(session, id, ApprovalAnswer::ApproveAndRemember, &owner())
+                .answer(
+                    session,
+                    id,
+                    ApprovalAnswer::ApproveAndRemember,
+                    &owner(),
+                    true
+                )
                 .await,
             Err(ToolApprovalError::NobodyToRemember)
         ),
@@ -756,4 +794,343 @@ async fn only_the_owner_approves_for_good_and_never_for_a_bot() {
         "and the call still waits for a plain answer"
     );
     waiting.abort();
+}
+
+/// A program held on the agent's permissions for `operations`; the run acts
+/// as `owner()`, and nobody prompted the turn (a routine or a bot).
+fn permission_hold(session: AgentSessionId, operations: &[&str]) -> PermissionHold {
+    PermissionHold {
+        session,
+        approver: owner(),
+        prompter: TurnPrompter {
+            kind: agent_session::domain::model::PrompterKind::User,
+            action_id: AgentActionId::mint(),
+            user: None,
+            client: None,
+        },
+        operations: operations
+            .iter()
+            .map(|&operation| operation.to_owned())
+            .collect(),
+        arguments: serde_json::json!({
+            "source": "return null",
+            "permission": {
+                "language": "js_tools",
+                "operations": operations.iter().map(|operation| {
+                    let (service, operation) = operation.split_once('.').unwrap();
+                    serde_json::json!({"service": service, "operation": operation})
+                }).collect::<Vec<_>>(),
+            },
+        }),
+    }
+}
+
+/// Start holding `hold` and wait until it is announced.
+async fn waiting_on_permissions(
+    service: &Service,
+    store: &MemoryStore,
+    announcer: &RecordingAnnouncer,
+    hold: PermissionHold,
+) -> (
+    tokio::task::JoinHandle<Result<ToolApprovalStatus, EgressError>>,
+    ToolApprovalId,
+) {
+    let before: Vec<ToolApprovalId> = store.all().iter().map(|approval| approval.id).collect();
+    let waiting = tokio::spawn({
+        let service = service.clone();
+        async move { service.hold_permissions(hold).await }
+    });
+    announcer.requested.notified().await;
+    let id = store
+        .all()
+        .into_iter()
+        .find(|approval| !before.contains(&approval.id))
+        .expect("the program was held")
+        .id;
+    (waiting, id)
+}
+
+#[tokio::test]
+async fn a_permission_hold_waits_for_the_account_the_program_acts_as() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    let held = store.only();
+    assert_eq!(held.owner, owner());
+    assert_eq!(held.server_slug, SDK_PERMISSION_SLUG);
+    assert_eq!(held.tool_name, "ExecuteCode");
+    assert_eq!(held.permission_operations(), ["email.send_message"]);
+    assert_eq!(
+        held.notice().approver.as_deref(),
+        Some("macro|owner@macro.com")
+    );
+    assert!(matches!(
+        service
+            .answer(session, id, ApprovalAnswer::Approve, &asker(), true)
+            .await,
+        Err(ToolApprovalError::NotOwner)
+    ));
+    service
+        .answer(session, id, ApprovalAnswer::Approve, &owner(), true)
+        .await
+        .unwrap();
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        ToolApprovalStatus::Approved
+    );
+
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    service
+        .answer(session, id, ApprovalAnswer::Deny, &owner(), true)
+        .await
+        .unwrap();
+    assert_eq!(waiting.await.unwrap().unwrap(), ToolApprovalStatus::Denied);
+}
+
+#[tokio::test]
+async fn only_a_person_in_macro_answers_a_permission_hold() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    for answer in [
+        ApprovalAnswer::Approve,
+        ApprovalAnswer::ApproveAndRemember,
+        ApprovalAnswer::Deny,
+    ] {
+        assert!(
+            matches!(
+                service.answer(session, id, answer, &owner(), false).await,
+                Err(ToolApprovalError::NeedsPerson)
+            ),
+            "{answer:?} from an agent's credential"
+        );
+    }
+    // Cancelling is still anyone's with edit access.
+    service
+        .answer(session, id, ApprovalAnswer::Cancel, &owner(), false)
+        .await
+        .unwrap();
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        ToolApprovalStatus::Cancelled
+    );
+
+    // Other holds take any credential's answer, as before.
+    let (waiting, id) = waiting_in_process(&service, &store, &announcer, in_process(session)).await;
+    service
+        .answer(session, id, ApprovalAnswer::Approve, &owner(), false)
+        .await
+        .unwrap();
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        ToolApprovalStatus::Approved
+    );
+}
+
+#[tokio::test]
+async fn always_allowing_remembers_each_operation_for_the_approver() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let both = ["email.send_message", "storage.delete_document"];
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &both),
+    )
+    .await;
+    // Another program waiting on one of them, and one on something else.
+    let (covered, _) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["storage.delete_document"]),
+    )
+    .await;
+    let (uncovered, uncovered_id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message", "calendar.delete_event"]),
+    )
+    .await;
+
+    // Nobody prompted the turn, and the approver is still remembered.
+    let approved = service
+        .answer(
+            session,
+            id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+            true,
+        )
+        .await
+        .unwrap();
+    assert!(approved.remembered);
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        ToolApprovalStatus::Approved
+    );
+    assert_eq!(
+        covered.await.unwrap().unwrap(),
+        ToolApprovalStatus::Approved,
+        "a waiting program whose operations are now all allowed runs"
+    );
+    assert_eq!(
+        store.get(uncovered_id).await.unwrap().unwrap().status,
+        ToolApprovalStatus::Pending,
+        "one that also needs another operation still waits"
+    );
+    uncovered.abort();
+
+    let held_before = store.all().len();
+    assert_eq!(
+        service
+            .hold_permissions(permission_hold(session, &["email.send_message"]))
+            .await
+            .unwrap(),
+        ToolApprovalStatus::Approved,
+        "a later program asking only for remembered operations runs at once"
+    );
+    assert_eq!(store.all().len(), held_before, "without being held");
+}
+
+#[tokio::test]
+async fn a_remembered_permission_holds_only_in_its_session() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    service
+        .answer(
+            session,
+            id,
+            ApprovalAnswer::ApproveAndRemember,
+            &owner(),
+            true,
+        )
+        .await
+        .unwrap();
+    waiting.await.unwrap().unwrap();
+    let (elsewhere, _) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(AgentSessionId::new(), &["email.send_message"]),
+    )
+    .await;
+    elsewhere.abort();
+}
+
+#[tokio::test]
+async fn without_a_way_to_ask_a_permission_hold_expires() {
+    assert_eq!(
+        RefuseHeldCalls
+            .hold_permissions(permission_hold(AgentSessionId::new(), &["a.b"]))
+            .await
+            .unwrap(),
+        ToolApprovalStatus::Expired
+    );
+}
+
+#[test]
+fn only_a_permission_hold_names_its_approver() {
+    let approval = ToolApproval {
+        id: ToolApprovalId::from_uuid(macro_uuid::Uuid::nil()),
+        session: AgentSessionId::new_from_uuid(macro_uuid::Uuid::nil()),
+        turn_action_id: AgentActionId::mint(),
+        request_id: serde_json::json!(1),
+        owner: owner(),
+        requested_by: Some(asker()),
+        server_slug: MACRO_SERVER_SLUG.to_owned(),
+        server_name: "Macro".to_owned(),
+        tool_name: "ListEmails".to_owned(),
+        arguments: serde_json::json!({}),
+        status: ToolApprovalStatus::Pending,
+        resolved_by: None,
+        remembered: false,
+    };
+    let mut frame = serde_json::to_value(approval.notice()).unwrap();
+    frame.as_object_mut().unwrap().remove("approvalId");
+    // An ordinary hold's frame is exactly what it was before permissions.
+    assert_eq!(
+        frame,
+        serde_json::json!({
+            "serverSlug": "macro",
+            "serverName": "Macro",
+            "toolName": "ListEmails",
+            "arguments": {},
+            "requestedBy": "macro|asker@macro.com",
+            "status": "pending",
+        })
+    );
+    let permission = ToolApproval {
+        server_slug: SDK_PERMISSION_SLUG.to_owned(),
+        ..approval
+    };
+    assert_eq!(
+        serde_json::to_value(permission.notice()).unwrap()["approver"],
+        "macro|owner@macro.com"
+    );
+}
+
+#[tokio::test]
+async fn always_allowing_a_hold_that_already_ended_remembers_nothing() {
+    let (service, store, announcer) = service();
+    let session = AgentSessionId::new();
+    let (waiting, id) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    service
+        .answer(session, id, ApprovalAnswer::Cancel, &owner(), true)
+        .await
+        .unwrap();
+    waiting.await.unwrap().unwrap();
+    assert!(matches!(
+        service
+            .answer(
+                session,
+                id,
+                ApprovalAnswer::ApproveAndRemember,
+                &owner(),
+                true
+            )
+            .await,
+        Err(ToolApprovalError::NotPending)
+    ));
+    let (later, _) = waiting_on_permissions(
+        &service,
+        &store,
+        &announcer,
+        permission_hold(session, &["email.send_message"]),
+    )
+    .await;
+    later.abort();
 }

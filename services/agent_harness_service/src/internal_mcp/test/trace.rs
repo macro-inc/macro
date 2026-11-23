@@ -16,6 +16,17 @@ struct SpanRecordingCodeMode {
 }
 
 #[async_trait]
+impl agent_code_mode::domain::CodeModeKinds for SpanRecordingCodeMode {
+    async fn code_mode_kind(
+        &self,
+        _: AgentSessionId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> agent_code_mode::domain::CodeModeKind {
+        agent_code_mode::domain::CodeModeKind::TypeScript
+    }
+}
+
+#[async_trait]
 impl SessionCodeMode for SpanRecordingCodeMode {
     async fn execute(
         &self,
@@ -93,6 +104,7 @@ async fn an_execution_joins_the_trace_of_the_turn_that_called_it() {
             reviews: Arc::new(OnceLock::new()),
             gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
             app_url: "https://macro.com".into(),
+            permissions: None,
         },
     );
     use agent_inmem::domain::mcp::McpToolConnector as _;

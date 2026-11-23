@@ -579,8 +579,11 @@ async fn complete(
     // Its own token, so a call stopped for overrunning stops alone.
     let call = cancel.child_token();
     let _stop = call.clone().drop_guard();
+    // A summary offers no tools; its turn's kind still goes with it.
+    let code_mode_kind = super::turn_code_mode_kind(state).await;
     let mut parts = state.engine.run_turn(TurnRequest {
         purpose: TurnPurpose::Summary,
+        code_mode_kind,
         delivery: state.delivery,
         session_id: state.session_id,
         awaiting: Arc::new(AwaitingUser::default()),

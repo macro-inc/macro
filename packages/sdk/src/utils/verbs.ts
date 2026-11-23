@@ -54,20 +54,21 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getAgentAutoArchivePreferences getAgentCodingPreferences getAgentSandboxSize getAgentSession
       getAgentSessionAutoArchive getAgentSessionChanges getAgentSessionChangesPatch getCodeExecution
       getAgentSessionLog getAgentSessionFoldedLog getAgentSessionPermissions getSessionReview
+      getAgentToolPermissions getAgentSessionToolPermissions
     `,
     listed: `
       listAgentConversations listAgentRepositories listAgentRepositoryBranches
       agentSessionsForPullRequest getAgentSessionActivity listExecutionConnectedApps
       listConnectedAppTools listExecutionReviews listAgentSessionPullRequests getAgentSessionQueue
       listAgentWorkRegistrations
-      listAgentSessionUpdates listCodingAgents
+      listAgentSessionUpdates listCodingAgents getAgentToolPermissionCatalog
     `,
     searched: 'discoverConnectedApps searchConnectedAppTools',
     created: 'createAgentSession createSessionReview',
     edited: `
       putAgentAutoArchivePreferences putAgentCodingPreferences putAgentSandboxSize chooseAgentMode
       putAgentSessionAutoArchive updateAgentSessionPermissions editQueuedAction
-      putAgentSessionSandboxSize
+      putAgentSessionSandboxSize tightenAgentToolPermissions
     `,
     renamed: 'renameAgentSession',
     archived: 'setAgentSessionArchived',

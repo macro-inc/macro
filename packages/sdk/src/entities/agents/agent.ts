@@ -11,6 +11,12 @@ import { Channel } from '../channels/channel';
 import { MacroEntity } from '../entity';
 import { Harness } from '../harnesses/harness';
 import type { Team } from '../teams/team';
+import {
+  type TightenedToolPermissions,
+  type ToolPermissionChanges,
+  type ToolPermissions,
+  toolPermissions,
+} from './tool-permissions';
 
 /**
  * The settings {@link Agent.update} changes; each one left out keeps its
@@ -187,6 +193,48 @@ export class Agent extends MacroEntity<AgentRecord> {
         body: agentPatchBody(patch),
       }),
     );
+  }
+
+  /**
+   * Which Macro SDK operations this agent's programs may call: always, ask
+   * (only after a person approves) or never, per group and action and per
+   * operation. For a built-in persona, your own settings for it; when the
+   * agent itself reads them in a session, that session's restrictions too.
+   *
+   * @readonly
+   * @flag enable-agent-permissions
+   */
+  async toolPermissions(): Promise<ToolPermissions> {
+    const view = unwrap(
+      await this.client.agentHarness.getAgentToolPermissions({
+        path: { agent_id: this.id },
+      }),
+    );
+    return toolPermissions(this, view);
+  }
+
+  /**
+   * Make this agent's tool permissions stricter: set a group's action or an
+   * operation to `ask` or `never`. It can never loosen them; a change that
+   * would let any operation run more freely is refused with the operations
+   * it would loosen, and nothing changes. To get a permission loosened, ask
+   * the person to change it in Macro. It is saved to the agent when the
+   * person the agent acts for may edit it, otherwise for this session only.
+   *
+   * @write
+   * @idempotent
+   * @flag enable-agent-permissions
+   */
+  async tightenToolPermissions(
+    changes: ToolPermissionChanges,
+  ): Promise<TightenedToolPermissions> {
+    const { appliedTo, permissions } = unwrap(
+      await this.client.agentHarness.tightenAgentToolPermissions({
+        path: { agent_id: this.id },
+        body: { changes },
+      }),
+    );
+    return { appliedTo, permissions: toolPermissions(this, permissions) };
   }
 
   /**

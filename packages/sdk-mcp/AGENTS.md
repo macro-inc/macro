@@ -32,7 +32,10 @@ an email; a call that can also edit or delete is `@destructive`; its
 own `<entity>_send` tool, not destructive, always open-world) or
 `@destructive` (deletes, overwrites, cancels), plus `@openworld` and
 `@idempotent` when true.
-`@mcp-exclude <reason>` on a method or class leaves it out. Generation fails
+`@mcp-exclude <reason>` on a method or class leaves it out, and so does
+`@flag <flag-name>` on a method or class behind a feature flag (a bare
+`@flag` fails generation); the generated
+`flagged` lists those, and `tools.test.ts` pins it. Generation fails
 on an untagged method, a parameter JSON can't carry (callbacks, bytes,
 streams; optional ones are dropped), or a class with methods no operation
 can reach (add a `static byId` or exclude it).

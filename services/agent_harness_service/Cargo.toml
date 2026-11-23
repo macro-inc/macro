@@ -40,6 +40,7 @@ agent = { path = "../../crates/agent", features = ["debug-messages"] }
 agent-client-protocol = { workspace = true }
 agent_changes = { path = "../../crates/agent_changes" }
 agent_code_mode = { path = "../../crates/agent_code_mode" }
+agent_permissions = { path = "../../crates/agent_permissions" }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_git = { path = "../../crates/agent_git" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
@@ -218,6 +219,7 @@ zeroize = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent_permission_registry = { path = "../../crates/agent_permission_registry" }
 agent = { path = "../../crates/agent" }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
 ai_tools = { path = "../../crates/ai_tools", features = ["test-support"] }

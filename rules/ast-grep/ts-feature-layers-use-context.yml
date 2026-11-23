@@ -30,6 +30,11 @@ files:
   - apps/web/src/features/passwords/components/**
   - apps/web/src/features/passwords/views/**
   - apps/web/src/features/passwords/context/**
+  - apps/web/src/features/agent-permissions/queries/**
+  - apps/web/src/features/agent-permissions/primitives/**
+  - apps/web/src/features/agent-permissions/components/**
+  - apps/web/src/features/agent-permissions/views/**
+  - apps/web/src/features/agent-permissions/context/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
   - apps/web/src/features/channel-notification-stacks/primitives/**

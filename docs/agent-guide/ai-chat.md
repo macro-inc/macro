@@ -1398,6 +1398,19 @@ they remain discoverable through `DescribeCodeTools`. User-review
 tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
+When the session owner has `enable-agent-permissions` (no other flag; every
+build with Deno can run them), `ExecuteCode` takes `language: "js_tools"`: a
+JavaScript tools script (opencode's dialect) that calls SDK operations as
+`await tools.<service>.<operation>({path, query, body})` and returns its data,
+which the agent's permissions check before it runs (below). Its description
+then carries the JS tools contract, an example (create a task, read its
+markdown) and the permissions paragraph. With the flag off, `ExecuteCode`'s schema and description are exactly as
+above and a `js_tools` call is refused unrun. A JS tools run renders like a
+JavaScript one, and its record carries `language: "js_tools"` and the
+interpreter and catalog's `sdkFingerprint`. Locally, the flag is on for
+the web app under HMR; for the harness, answer it on from a PostHog stand-in
+(`POSTHOG_HOST` in `--env-file`).
+
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user
@@ -1812,6 +1825,58 @@ reviews without an acting account use the session owner. Draft confirmation stil
 applies even when no extra cross-account approval was needed. Changing tool
 credentials does not remove private results already in the conversation; the
 agent is instructed not to disclose another person’s earlier private results.
+
+## Agent permissions in a session
+
+Behind `enable-agent-permissions`, a JS tools (`language: "js_tools"`)
+`ExecuteCode` program is checked against the agent's permissions (Settings →
+Agents → Permissions) before it runs. The cards name no language:
+
+- **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
+  appears above the composer as **Approval needed**: `<Agent> wants to run a
+  program that may:` and the operations set to Ask, by group, each with its
+  action, name and (on a wide card) `service.operation`; more than six fold
+  behind **Show N more**. A note links `<Agent>'s permissions` (for people who
+  can edit the agent) and **View program** reveals the source; a program sent
+  with a TypeScript module shows both, under **Program** and **Module, with no
+  network**. Only the
+  approver the hold names may answer: **Decline**, **Allow for this session**
+  (stops asking for these operations until the session ends) or **Approve**.
+  Anyone else sees `Waiting for <name> to approve` and, with edit access,
+  **Cancel**. Answered holds become a row such as `Run a program that may send
+  email and edit documents · Allowed for this session by you`.
+- **Never**: nothing runs. The call renders as its own **Blocked by
+  permissions** card (outside the tool group) naming what the program could
+  have done and the refused operations, with **Review permissions** (opens the
+  agent's permissions page beside the chat, at the first refused group, action
+  or tool) for people who can edit the agent and `Only people who can edit
+  <Agent> can change this.` for others.
+- A declined, cancelled or expired hold leaves a quiet row in the tool group,
+  `Didn't run a program that may … · Declined`, not counted as a failure. A
+  step the bootstrap backstop refused mid-run reads **Blocked**.
+
+With `enable-agent-permissions` off for the session's owner nothing here
+happens: no `js_tools`, no `ShowPermissions`, no holds, and runs go as before.
+With it off for the viewer (on in local stacks, PostHog elsewhere) the cards
+read nothing from the permissions API: `ShowPermissions` is a plain **Show
+permissions** row, the blocked card has no **Review permissions**, and a hold
+is still answered (approve, allow for the session, decline) without the link
+to the agent's permissions. Every surface and its flag:
+`crates/agent_permissions/AGENTS.md`.
+
+When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
+permissions**: its one-line reason, then the asked groups' actions and tools
+with the same `Allow · Ask · Never` controls as the settings page, reading the
+session's view (the agent's own limits for the session carry a **This
+session** badge). A click saves to the agent at once; **All permissions** opens
+the page. People who can't edit the agent see the controls disabled and `Only
+people who can edit <Agent> can change these.`
+
+Backend-free check (desktop and phone), with the blocked and approval cards
+for JS tools programs and the permissions page:
+`bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
+from `apps/web`; set `PERMISSIONS_SCREENSHOT_DIR` to keep its screenshots and
+`PERMISSIONS_THEME=light` for Macro Light.
 
 ## Forms authoring and sharing
 

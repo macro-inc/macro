@@ -8,14 +8,50 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A TypeScript ES module exporting an async `main` function.
+/// A program to run: a JavaScript ES module exporting an async `main`
+/// function, or a JS tools script.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// Complete TypeScript module, including imports and `export async function main`.
+    /// The complete program: a JavaScript module, including imports and
+    /// `export async function main`, or a JS tools script.
     pub source: String,
-    /// Total budget including queueing and API requests.
+    /// Total budget including queueing, compiling and API requests.
     pub timeout_ms: u64,
+    /// The language `source` is written in.
+    #[serde(default)]
+    pub language: Language,
+    /// JS tools only: a TypeScript module the program reads with
+    /// `get(name)` and calls with `call(name, ...args)`. It runs in its own
+    /// process with no network, no SDK and no token, for this run only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub module: Option<String>,
+}
+
+/// The language a program is written in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Language {
+    /// A JavaScript ES module (TypeScript for an unattended program), run by
+    /// Deno directly.
+    #[default]
+    Javascript,
+    /// A script in `@opencode/codemode`'s JavaScript dialect, run by its
+    /// interpreter inside Deno: it calls SDK operations as
+    /// `tools.<service>.<operation>(input)` and nothing else reaches the
+    /// network. Every run analyzes it first and runs only what the analysis
+    /// found.
+    JsTools,
+}
+
+impl Language {
+    /// Its name in spans and the bootstrap's context.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Javascript => "javascript",
+            Self::JsTools => "js_tools",
+        }
+    }
 }
 
 /// Run-only credentials and destinations supplied by the authenticated host.
@@ -42,6 +78,14 @@ pub struct RunEnvironment {
     /// sees only the hosts it may reach.
     #[serde(skip)]
     pub egress: Egress,
+    /// JS tools only: the only requests the program may send, as the
+    /// permission gate admitted them. The bootstrap refuses any other SDK
+    /// request, and any authenticated request that doesn't name its
+    /// operation; a JS tools program that may call anything outside them
+    /// doesn't start, and a JS tools run without them is refused, so it fails
+    /// closed. `None` for JavaScript, which the gate doesn't check.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_operations: Option<Vec<SdkCall>>,
 }
 
 /// The handles an attended program's `main` receives besides the SDK, which
@@ -188,6 +232,12 @@ pub enum AdmissionError {
     /// Empty or oversized source.
     #[error("source must be nonempty and within the configured size limit")]
     InvalidSource,
+    /// An empty or oversized module, or one sent with a program that
+    /// isn't a JS tools program.
+    #[error(
+        "module must be nonempty, within the configured size limit and sent with a JS tools program"
+    )]
+    InvalidModule,
     /// A caller cannot raise the server's deadline.
     #[error("timeout must be positive and within the configured limit")]
     InvalidTimeout,
@@ -203,7 +253,8 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// The program didn't type-check against the SDK, so it never ran.
+    /// The program didn't type-check against the SDK (JavaScript), or didn't
+    /// parse or pass the analysis (JS tools), so it never ran.
     Compile,
     /// Program threw or exited without a result.
     Runtime,
@@ -340,6 +391,9 @@ pub enum ProgramImports {
     Sdk,
     /// `@macro-inc/sdk` and `handlebars`, as an attended program runs with.
     SdkAndHandlebars,
+    /// Only `handlebars`, as a JS tools program's module runs with: it never
+    /// reaches the SDK.
+    Handlebars,
 }
 
 /// The checker couldn't decide whether a program checks.
@@ -354,4 +408,74 @@ pub enum CheckError {
     /// The checker process failed or ran out of time.
     #[error("type checking failed to run")]
     Internal,
+}
+
+/// One Macro SDK operation, by the OpenAPI spec it comes from and its raw
+/// `operationId`: the key the permission registry uses.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkOperation {
+    /// The spec's name, such as `storage`.
+    pub service: String,
+    /// The raw `operationId`, such as `create_task_handler`.
+    pub operation_id: String,
+}
+
+impl std::fmt::Display for SdkOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.service, self.operation_id)
+    }
+}
+
+/// One request a program may send: its operation and the route the SDK
+/// sends it to. Two SDK values can share an `operationId` on different routes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkCall {
+    /// The operation, by service and raw `operationId`.
+    #[serde(flatten)]
+    pub operation: SdkOperation,
+    /// HTTP method, uppercase.
+    pub method: String,
+    /// The path below the service's host, `{}` for each parameter segment,
+    /// such as `/documents/{}/markdown`.
+    pub route: String,
+    /// Other operations' routes with this method that a request on `route`
+    /// could also match (`/documents/system_skills` for `/documents/{}`).
+    /// The backstop refuses a request that a more specific one of them
+    /// matches, since the server would route it there.
+    #[serde(default)]
+    pub rivals: Vec<SdkRoute>,
+}
+
+/// A route of a service, `{}` for each parameter segment.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SdkRoute {
+    /// The service's spec name.
+    pub service: String,
+    /// The path below the service's host.
+    pub route: String,
+}
+
+/// Where a program reaches SDK operations the analysis cannot see.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalysisReason {
+    /// What the program does there.
+    pub message: String,
+    /// 1-based line in the program.
+    pub line: u32,
+    /// 1-based column in the program.
+    pub column: u32,
+}
+
+/// Which SDK operations a program may call, read from it without running it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Analysis {
+    /// Every operation the program names, in any branch. May be empty.
+    Calls(std::collections::BTreeSet<SdkCall>),
+    /// The program can reach operations the analysis cannot see; it must be
+    /// rewritten before it can run.
+    CannotAnalyze(Vec<AnalysisReason>),
+    /// The program does not compile, or the policy check refuses it.
+    Diagnostics(Vec<Diagnostic>),
 }

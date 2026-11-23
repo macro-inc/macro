@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT kind, target, state, via_agent, restriction_only, updated_at\n            FROM persona_tool_permission\n            WHERE user_id = $1 AND persona_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "target",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "via_agent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "restriction_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eb56091c8ac73f7675e3525e2f75edbfb1c063d0d79572fbd8c570fc38008530"
+}

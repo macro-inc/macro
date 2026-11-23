@@ -37,6 +37,9 @@ pub struct AgentIdentity {
 pub struct TurnRequest {
     /// Whether the turn answers the user or condenses their conversation.
     pub purpose: TurnPurpose,
+    /// The turn's code-mode kind, read once when it started: the system
+    /// prompt and the code-mode tools it offers follow it.
+    pub code_mode_kind: agent_code_mode::domain::CodeModeKind,
     /// How the session's reader receives the reply.
     pub delivery: ReplyDelivery,
     /// The session the turn belongs to.

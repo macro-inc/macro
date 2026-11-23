@@ -14,10 +14,13 @@ const GENERATOR: &str = "packages/code-mode-sdk/scripts/generate.ts";
 
 /// Everything the generator reads, relative to the repository root. TypeDoc
 /// compiles every file `packages/sdk/tsconfig.json` includes, and the SDK's
-/// declarations are emitted with `tsconfig.build.json`.
-const GENERATOR_INPUTS: [&str; 18] = [
+/// declarations are emitted with `tsconfig.build.json`. The JS tools catalog
+/// reads the specs and the permission registry.
+const GENERATOR_INPUTS: [&str; 21] = [
     "bun.lock",
+    "crates/agent_permission_registry/registry.json",
     "package.json",
+    "packages/code-mode-sdk/licenses",
     "packages/code-mode-sdk/package.json",
     "packages/code-mode-sdk/scripts",
     "packages/code-mode-sdk/src",
@@ -30,6 +33,7 @@ const GENERATOR_INPUTS: [&str; 18] = [
     "packages/sdk/package.json",
     "packages/sdk/scripts",
     "packages/sdk/services.ts",
+    "packages/sdk/specs",
     "packages/sdk/src",
     "packages/sdk/tests",
     "packages/sdk/tsconfig.build.json",

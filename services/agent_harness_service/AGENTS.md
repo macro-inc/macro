@@ -48,7 +48,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   Each call runs in an `internal_mcp.call_tool` span parented from the
   request's `_meta` trace context, which the in-process agent sends
   (`mcp_toolset::TraceContext::Propagate`), so `code_mode.execution` and the
-  sandbox's SDK calls join the session's trace.
+  sandbox's SDK calls join the session's trace. Both handshakes
+  (`initialize`, and the 2026-07-28 revision's `server/discover`, private
+  to the caller) answer `caller_instructions`: the code tools described as
+  the session's turn kind defines them (`TYPESCRIPT_CODE_TOOLS` or
+  `DIALECT_CODE_TOOLS`).
 - `src/anthropic_gateway.rs` + `src/anthropic_gateway/`: `/anthropic/v1/messages`
   and `/anthropic/v1/messages/count_tokens` on the egress listener, for runtimes
   on Macro credits (Claude Code on a Macro computer). Both values come from
@@ -78,6 +82,36 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   agent's own account; a deleted creator falls back to the team owner; no
   provider, no one to follow or a failed load refuses with
   403). Agent git and agent MCP keys share the same check.
+- `src/tool_permissions.rs`: the adapters `crates/agent_permissions` needs
+  (who may edit an agent from `BotService::manageable_agent`, a session's
+  agent and owner from the session repo); its routes
+  (`/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`,
+  `/agent-sessions/{id}/tool-permissions`) answer 404 unless the caller has
+  `enable-agent-permissions` (`code_mode::PermissionsFlag`; off without
+  PostHog).
+  The same service gates checked `ExecuteCode` programs
+  (`src/code_mode/permissions.rs`, `PermissionGate`, wired into
+  `RunCredentials` where the build can analyze JavaScript tools programs:
+  `JsToolsAnalyzer`, on every Deno build; one that can't start is logged
+  and left out, so startup goes on without JS tools; `Analyzers`). For an
+  owner with `enable-agent-permissions` (`LanguageRollout`) it analyzes the program, refuses it on any `never`
+  operation or when it can't be analyzed, holds it for the run's account on
+  any `ask` (`macro-sdk` approval), then runs it limited to every analyzed
+  call (`allowed_operations`). Flags off, a language without an analyzer, or
+  plain JavaScript: nothing changes. `ShowPermissions` is offered by the
+  internal MCP only then. A turn of such an owner is a dialect turn
+  (`CodeModeKind`, resolved once per turn): its `ExecuteCode` runs only JS
+  tools programs, with an optional TypeScript module that has no network,
+  SDK or token, and refuses TypeScript; `lib.rs` wires
+  `CodeModeService::with_js_tools` beside the `JsToolsAnalyzer`, with
+  `code_mode::JsToolsRollout` (`enable-agent-permissions` alone; there is no
+  separate JS tools flag), and hands the same service to the in-process
+  agent (`with_code_mode_kinds`). Both approval holds (the owner gate's and
+  the permission hold) carry the module beside the source.
+  `RunCredentials` fails closed: a JS tools program the gate returned
+  nothing for (its flag read off at issue time) is refused unrun. Every
+  surface behind the flag, with its flag-off test, is listed in
+  `crates/agent_permissions/AGENTS.md` (Rollout: one flag).
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -197,6 +231,15 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   supported protocol revisions are capped at `NEWEST_PROTOCOL_VERSION`;
   raising it requires teaching `every_handshake_describes_the_listed_tools`
   the new revision's handshake.
+  A call carrying an agent session's provenance (`ManagedAgentSession`, a
+  sandboxed runtime's `macro` server) in a dialect turn
+  (`CodeModeSurface::kinds`: `OwnerCodeModeKinds`, the session code mode's
+  `CodeModeKinds` with the session owner's flag, never the caller's; an
+  unreadable session counts as gated) gets none of the three code tools, and
+  its instructions say so: they are left off `tools/list` and refused,
+  pointing at `macro_internal.ExecuteCode`, so a session with agent
+  permissions has no ungated TypeScript path. Calls without session
+  provenance stay TypeScript.
   `src/code_mode/ui_commands.rs` carries `macro.ui.open`: turn facts from
   the session repo, Redis budgets and
   the gateway `ui_command` send.

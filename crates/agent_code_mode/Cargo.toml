@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+agent_permissions = { path = "../agent_permissions" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
 chrono = { workspace = true }
 cognition = { path = "../cognition" }
@@ -49,12 +50,14 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+agent_permission_registry = { path = "../agent_permission_registry" }
 jev = { path = "../jev", features = ["outbound"] }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "process", "io-util"] }
+tempfile = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 agent_session = { path = "../agent_session", default-features = false, features = ["test-utils", "outbound"] }
 entity_access = { path = "../entity_access", features = ["outbound"] }
+prompt = { path = "../prompt" }
 
 [package.metadata.cargo-shear]
 # Named only in `#[sqlx::test(migrator = "...")]` strings.

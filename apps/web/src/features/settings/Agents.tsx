@@ -1,5 +1,12 @@
 import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import {
+  AgentPermissionsPage,
+  AgentPermissionsSection,
+  type PermissionFocus,
+  useAgentPermissionsAvailable,
+  useAgentPermissionsFlag,
+} from '@app/features/agent-permissions';
+import {
   type AgentKind,
   isCoderHarness,
 } from '@app/features/agents-view/core/agent-kind';
@@ -29,6 +36,7 @@ import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import ShieldCheckIcon from '@icon/system/regular/shield-check.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
 import TerminalIcon from '@icon/system/regular/terminal-window.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
@@ -200,6 +208,28 @@ export function Agents(props: {
     }
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
+  const permissionsFlag = useAgentPermissionsFlag();
+  // Macro's shield shows only when the API has its permissions (not on a 404).
+  const macroPermissions = useAgentPermissionsAvailable(() => MACRO_NEW_BOT_ID);
+  // An agent's permissions page opened from the list (Macro's shield) or a
+  // link; Back returns to the list.
+  const [permissionsFor, setPermissionsFor] = createSignal<{
+    agentId: string;
+    name: string;
+    persona: boolean;
+    focus?: PermissionFocus;
+  }>();
+  // The page shows only while the flag is on: off, the list comes back.
+  const shownPermissions = () =>
+    permissionsFlag() ? permissionsFor() : undefined;
+  const openMacroPermissions = (focus?: PermissionFocus) =>
+    setPermissionsFor({
+      // The Macro persona's agent is the new Macro bot.
+      agentId: MACRO_NEW_BOT_ID,
+      name: MACRO_AGENT.name,
+      persona: true,
+      focus,
+    });
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
   const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
@@ -330,6 +360,7 @@ export function Agents(props: {
     on(agentSettingsRequest, (request) => {
       if (request?.type !== 'create') return;
       setEditingAgent(undefined);
+      setPermissionsFor(undefined);
       setCreateHarnessId(request.harnessId);
       setCreating(true);
       consumeAgentSettingsRequest(request.id);
@@ -346,10 +377,47 @@ export function Agents(props: {
       );
       if (agent?.editable && agent.persistedAgent) {
         setCreating(false);
+        setPermissionsFor(undefined);
         setEditingAgent(agent.persistedAgent);
       }
       consumeAgentSettingsRequest(request.id);
     })
+  );
+
+  // A permissions link: wait for the list, then open the page for Macro or
+  // an agent the viewer manages; anything else stays on the list.
+  createEffect(
+    on(
+      [agentSettingsRequest, () => agentsQuery.isPending, permissionsFlag],
+      ([request]) => {
+        // Waits for the flag too: still loading is not off.
+        if (request?.type !== 'permissions' || agentsQuery.isPending) return;
+        if (!permissionsFlag()) return;
+        consumeAgentSettingsRequest(request.id);
+        setCreating(false);
+        setEditingAgent(undefined);
+        if (
+          request.agentId === MACRO_NEW_BOT_ID ||
+          request.agentId === MACRO_AGENT_BOT_ID
+        ) {
+          openMacroPermissions(request.focus);
+          return;
+        }
+        const agent = agents().find(
+          (candidate) => candidate.id === request.agentId
+        );
+        setPermissionsFor(
+          agent?.editable
+            ? {
+                agentId: agent.id,
+                name: agent.name,
+                persona: false,
+                focus: request.focus,
+              }
+            : undefined
+        );
+      }
+    )
   );
 
   const createAgent = async (agent: CreateAgentParams) => {
@@ -407,7 +475,8 @@ export function Agents(props: {
           !creating() &&
           !creatingFromLink() &&
           !props.createKind &&
-          !editingAgent()
+          !editingAgent() &&
+          !shownPermissions()
         }
       >
         <SettingsPage
@@ -452,6 +521,11 @@ export function Agents(props: {
                           : undefined
                       }
                       messagePending={agentDm?.pending()}
+                      onPermissions={
+                        macroPermissions() && agent.id === MACRO_AGENT_BOT_ID
+                          ? () => openMacroPermissions()
+                          : undefined
+                      }
                       onEdit={
                         agent.editable && agent.persistedAgent
                           ? () => setEditingAgent(agent.persistedAgent)
@@ -513,6 +587,18 @@ export function Agents(props: {
             onDelete={
               canDeleteAgent(agent) ? () => setDeletingAgent(agent) : undefined
             }
+          />
+        )}
+      </Show>
+      <Show when={!props.createKind && shownPermissions()} keyed>
+        {(target) => (
+          <AgentPermissionsPage
+            agentId={target.agentId}
+            agentName={target.name}
+            persona={target.persona}
+            backLabel={t('nav.agents')}
+            focus={target.focus}
+            onBack={() => setPermissionsFor(undefined)}
           />
         )}
       </Show>
@@ -583,6 +669,7 @@ function AgentRow(props: {
   onDelete?: () => void;
   onMessage?: () => void;
   messagePending?: boolean;
+  onPermissions?: () => void;
 }) {
   return (
     <div class="flex items-center gap-4 px-6 py-4 mobile:items-start touch:px-4">
@@ -617,6 +704,24 @@ function AgentRow(props: {
             >
               <ChatIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Message
+            </Button>
+          )}
+        </Show>
+        <Show when={props.onPermissions}>
+          {(onPermissions) => (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={t('agentPermissions.agentPermissions', {
+                agent: props.agent.name,
+              })}
+              tooltip={t('agentPermissions.agentPermissions', {
+                agent: props.agent.name,
+              })}
+              onClick={onPermissions()}
+            >
+              <ShieldCheckIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Show>
@@ -900,6 +1005,10 @@ function AgentEditorPage(props: {
   let pageContentRef: HTMLDivElement | undefined;
 
   const [setup, setSetup] = createSignal<'cursor' | 'pairing'>();
+  // Permissions open as a subpage; the form's unsaved edits stay in these
+  // signals meanwhile.
+  const [permissionsOpen, setPermissionsOpen] = createSignal(false);
+  const permissionsFlag = useAgentPermissionsFlag();
   const [advancedOpen, setAdvancedOpen] = createSignal(false);
   const cursorHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === 'cursor');
@@ -1249,7 +1358,10 @@ function AgentEditorPage(props: {
     useSplitBackInterceptor(() => {
       if (panel && !panel.isPanelActive()) return false;
       if (busy()) return true;
-      if (setup()) finishSetup();
+      // The permissions subpage closes first, back to the unsaved form.
+      if (permissionsFlag() && permissionsOpen() && props.agent) {
+        setPermissionsOpen(false);
+      } else if (setup()) finishSetup();
       else close();
       return true;
     });
@@ -1261,6 +1373,16 @@ function AgentEditorPage(props: {
       </Match>
       <Match when={setup() === 'pairing'}>
         <RuntimePairingPage onClose={finishSetup} />
+      </Match>
+      <Match when={permissionsFlag() && permissionsOpen() && props.agent}>
+        {(agent) => (
+          <AgentPermissionsPage
+            agentId={agent().bot.id}
+            agentName={agent().bot.name}
+            backLabel={agent().bot.name}
+            onBack={() => setPermissionsOpen(false)}
+          />
+        )}
       </Match>
       <Match when={!setup()}>
         <SettingsPage
@@ -1557,6 +1679,15 @@ function AgentEditorPage(props: {
                   </p>
                 </Show>
               </AgentFormSection>
+
+              <Show when={permissionsFlag() && props.agent}>
+                {(agent) => (
+                  <AgentPermissionsSection
+                    agentId={agent().bot.id}
+                    onManage={() => setPermissionsOpen(true)}
+                  />
+                )}
+              </Show>
 
               <AgentFormSection
                 title="Advanced"

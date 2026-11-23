@@ -141,6 +141,20 @@ export const enableEntityAppearance = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Per-agent permissions for what its code-mode programs may call (Settings →
+ * Agents → an agent → Permissions, and their chat cards). The one flag on
+ * them: the harness reads the same key, offers JS tools programs (which they
+ * gate) with it, and answers 404 while it is off. On only under local HMR or
+ * a `just stack` bundle; dev.macro.com and production follow PostHog alone,
+ * and an unreadable flag is off.
+ */
+export const enableAgentPermissions = defineFlag({
+  key: 'enable-agent-permissions',
+  env: 'ENABLE_AGENT_PERMISSIONS',
+  default: LOCAL_ONLY || undefined,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

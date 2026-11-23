@@ -62,9 +62,9 @@ fn an_agents_program_sends_only_with_the_users_quoted_approval() {
     use macro_authorization::{CODE_EXECUTION_HEADER, CredentialAttribution};
 
     let refused = |result: Result<(), ApiError>| {
-        result
-            .err()
-            .is_some_and(|ApiError(error)| error == ExternalChatError::ConfirmationRequired)
+        result.err().is_some_and(|ApiError(error)| {
+            error == ExternalChatError::ConfirmationRequired { dialect: false }
+        })
     };
     let plain = HeaderMap::new();
     let mut program = HeaderMap::new();
@@ -115,15 +115,29 @@ fn an_agents_program_sends_only_with_the_users_quoted_approval() {
 
 #[test]
 fn a_refused_program_send_says_how_to_proceed() {
-    let response = ApiError(ExternalChatError::ConfirmationRequired).into_response();
+    let refused = ExternalChatError::ConfirmationRequired { dialect: false };
+    let response = ApiError(refused.clone()).into_response();
     assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(refused.code(), "confirmation_required");
+    assert_eq!(refused.to_string(), PROGRAM_SEND_REFUSAL);
+}
+
+/// A dialect program's refusal names the dialect's operation.
+#[test]
+fn a_dialect_programs_refusal_names_its_operation() {
+    use axum::http::HeaderMap;
+    use macro_authorization::{CODE_EXECUTION_HEADER, CredentialAttribution, DIALECT_PROGRAM};
+
+    let mut dialect = HeaderMap::new();
+    dialect.insert(CODE_EXECUTION_HEADER, DIALECT_PROGRAM.parse().unwrap());
+    let Err(ApiError(refused)) =
+        refuse_unconfirmed_program_send(CredentialAttribution::Agent, &dialect, None)
+    else {
+        panic!("a dialect program without a quote is refused");
+    };
     assert_eq!(
-        ExternalChatError::ConfirmationRequired.code(),
-        "confirmation_required"
+        refused,
+        ExternalChatError::ConfirmationRequired { dialect: true }
     );
-    assert!(
-        ExternalChatError::ConfirmationRequired
-            .to_string()
-            .contains("userConfirmation")
-    );
+    assert_eq!(refused.to_string(), DIALECT_PROGRAM_SEND_REFUSAL);
 }

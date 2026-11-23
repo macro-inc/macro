@@ -12,11 +12,11 @@ fn a_program_cannot_send_without_the_users_quoted_approval() {
     assert_eq!(refusal.into_response().status(), StatusCode::FORBIDDEN);
     assert!(matches!(
         refuse_program_send(CredentialAttribution::Agent, &browser, None),
-        Err(SendMessageError::ConfirmationRequired)
+        Err(SendMessageError::ConfirmationRequired { dialect: false })
     ));
     assert!(matches!(
         refuse_program_send(CredentialAttribution::Person, &program, Some("  ")),
-        Err(SendMessageError::ConfirmationRequired)
+        Err(SendMessageError::ConfirmationRequired { dialect: false })
     ));
     assert!(
         refuse_program_send(
@@ -27,6 +27,27 @@ fn a_program_cannot_send_without_the_users_quoted_approval() {
         .is_ok()
     );
     assert!(refuse_program_send(CredentialAttribution::Person, &browser, None).is_ok());
+}
+
+/// A dialect program is refused in the dialect's terms; every other program
+/// with today's text.
+#[test]
+fn a_refusal_names_the_operations_of_the_programs_code_mode() {
+    let mut dialect = HeaderMap::new();
+    dialect.insert(
+        CODE_EXECUTION_HEADER,
+        macro_authorization::DIALECT_PROGRAM.parse().unwrap(),
+    );
+    let mut typescript = HeaderMap::new();
+    typescript.insert(CODE_EXECUTION_HEADER, "1".parse().unwrap());
+
+    let refusal = refuse_program_send(CredentialAttribution::Agent, &dialect, None).unwrap_err();
+    assert_eq!(refusal.to_string(), DIALECT_PROGRAM_SEND_REFUSAL);
+    for headers in [typescript, HeaderMap::new()] {
+        let refusal =
+            refuse_program_send(CredentialAttribution::Agent, &headers, None).unwrap_err();
+        assert_eq!(refusal.to_string(), PROGRAM_SEND_REFUSAL);
+    }
 }
 
 /// Owner routines send email on a schedule: a signed owner routine token is

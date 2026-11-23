@@ -288,3 +288,37 @@ async fn the_sdk_declarations_type_check() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_module_checks_with_handlebars_and_without_the_sdk() {
+    let (_root, checker) = checker().await;
+    let module = |source: &str| {
+        [SourceFile {
+            name: "module.ts".into(),
+            source: source.into(),
+        }]
+    };
+    let renders = module(
+        "import Handlebars from 'handlebars';\nexport function render(data: { name: string }): string {\n  return Handlebars.compile('Hello {{name}}')(data);\n}\n",
+    );
+    assert_eq!(
+        checker
+            .check_files(&renders, "export {};\n", ProgramImports::Handlebars)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
+    let imports_sdk =
+        module("import { Macro } from '@macro-inc/sdk';\nexport const sdk: unknown = Macro;\n");
+    let diagnostics = checker
+        .check_files(&imports_sdk, "export {};\n", ProgramImports::Handlebars)
+        .await
+        .unwrap();
+    assert!(
+        diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.message.contains("@macro-inc/sdk")),
+        "{diagnostics:?}"
+    );
+}

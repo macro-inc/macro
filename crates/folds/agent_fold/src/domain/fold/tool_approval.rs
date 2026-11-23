@@ -41,6 +41,7 @@ impl FoldState {
             status: notice.status,
             resolved_by: None,
             remembered: false,
+            approver: notice.approver.clone(),
         })?;
         self.pending_tool_approvals.insert(
             notice.approval_id.clone(),
@@ -58,6 +59,7 @@ impl FoldState {
                 server_name: notice.server_name,
                 tool_name: notice.tool_name,
                 requested_by: notice.requested_by,
+                approver: notice.approver,
             }));
         Some((changed, true))
     }

@@ -195,6 +195,9 @@ impl IntoResponse for ToolApprovalApiError {
                 "a call a bot made on nobody's behalf cannot be approved for good",
             )
                 .into_response(),
+            ToolApprovalError::NeedsPerson => {
+                (StatusCode::FORBIDDEN, "a person must answer this in Macro").into_response()
+            }
             ToolApprovalError::Egress(error) => {
                 tracing::error!(error = ?error, "answering a tool approval failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
@@ -237,7 +240,7 @@ fn refuse_program_approval(
     responses(
         (status = 200, body = AnswerToolApprovalResponse),
         (status = 401, body = String),
-        (status = 403, body = String, description = "Agent run approving, not the owner for approve or deny, or no edit access"),
+        (status = 403, body = String, description = "Agent run approving, not the owner for approve or deny, or no edit access; or, for a hold on the agent's permissions, not a person's own session"),
         (status = 404, body = String),
         (status = 409, body = String, description = "Already resolved"),
         (status = 422, body = String, description = "Approve for good, for a call no person asked for"),
@@ -269,6 +272,10 @@ where
         .get_authenticated_user()
         .map_err(|_| (StatusCode::FORBIDDEN, "a person must answer").into_response())?
         .clone();
+    // A person in their own session, not an agent's or a program's
+    // credential: only one may answer a hold on an agent's permissions.
+    let by_person = caller.authorization.is_human_session()
+        && !is_program_run(caller.authorization.attribution(), &headers);
     let approval = state
         .approvals
         .answer(
@@ -276,6 +283,7 @@ where
             ToolApprovalId::from_uuid(approval_id),
             request.answer.into(),
             &by,
+            by_person,
         )
         .await
         .map_err(|error| ToolApprovalApiError(error).into_response())?;

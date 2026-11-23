@@ -12,6 +12,8 @@ use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
+
+use crate::domain::Language;
 use futures::TryStreamExt;
 use opentelemetry::trace::TraceContextExt;
 use tokio::net::TcpListener;
@@ -22,6 +24,16 @@ use tracing_opentelemetry::OpenTelemetrySpanExt;
 /// Marks a request as a program's, as the in-realm fetch wrapper does; the
 /// same name as `macro_authorization::CODE_EXECUTION_HEADER`.
 const CODE_EXECUTION_HEADER: &str = "x-macro-code-execution";
+
+/// [`CODE_EXECUTION_HEADER`]'s value for a run: `js_tools` for a JavaScript
+/// tools program (`macro_authorization::DIALECT_PROGRAM`), so a refusal can
+/// name its operations, and `1` for any other.
+pub(crate) fn code_execution_marker(language: Language) -> &'static str {
+    match language {
+        Language::JsTools => "js_tools",
+        Language::Javascript => "1",
+    }
+}
 
 /// One run's forwarder, listening until it is stopped or dropped.
 pub(crate) struct RunEgress {
@@ -37,6 +49,7 @@ impl RunEgress {
         client: reqwest::Client,
         hosts: &BTreeMap<String, String>,
         trace_headers: &BTreeMap<String, String>,
+        marker: &'static str,
     ) -> std::io::Result<Self> {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let port = listener.local_addr()?.port();
@@ -54,6 +67,7 @@ impl RunEgress {
             client,
             upstreams,
             run,
+            marker,
         });
         let app = axum::Router::new().fallback(forward).with_state(routes);
         // Owned by the run, not a tracker: it is aborted when the run ends
@@ -103,6 +117,8 @@ struct Routes {
     upstreams: HashMap<String, String>,
     /// The run's trace context, each request's parent.
     run: opentelemetry::Context,
+    /// [`CODE_EXECUTION_HEADER`]'s value ([`code_execution_marker`]).
+    marker: &'static str,
 }
 
 /// The headers of `headers` that cross the forwarder: not the ones that
@@ -177,7 +193,10 @@ async fn forward(State(routes): State<Arc<Routes>>, request: Request) -> Respons
     }
     let method = request.method().clone();
     let mut headers = end_to_end(request.headers());
-    headers.insert(CODE_EXECUTION_HEADER, HeaderValue::from_static("1"));
+    headers.insert(
+        CODE_EXECUTION_HEADER,
+        HeaderValue::from_static(routes.marker),
+    );
     let body = reqwest::Body::wrap_stream(request.into_body().into_data_stream());
     async move {
         macro_tower_layers::inject_trace_headers(&mut headers);

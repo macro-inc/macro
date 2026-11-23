@@ -92,6 +92,7 @@ async fn turn(
         handle: "macro".to_owned(),
     };
     let system_prompt = system_prompt(
+        agent_code_mode::domain::CodeModeKind::TypeScript,
         &native.prompt,
         agent_session::domain::model::AgentSessionId::new(),
         ReplyDelivery::Streamed,
@@ -260,6 +261,7 @@ async fn measure_prompt_cache_turns() {
                 .repeat(60 * (index + 1))
         );
         let system_prompt = system_prompt(
+            agent_code_mode::domain::CodeModeKind::TypeScript,
             &native.prompt,
             session_id,
             ReplyDelivery::Streamed,

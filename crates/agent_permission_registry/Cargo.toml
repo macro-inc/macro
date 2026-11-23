@@ -1,0 +1,19 @@
+[package]
+name = "agent_permission_registry"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Every SDK operation's permission group, action and label: the checked-in registry agent permissions resolve against."
+
+[features]
+# `utoipa::ToSchema` and `schemars::JsonSchema` on `Action`, for the HTTP API
+# that serves it and the tool results that carry it.
+openapi = ["dep:utoipa", "dep:schemars"]
+
+[dependencies]
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+utoipa = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }

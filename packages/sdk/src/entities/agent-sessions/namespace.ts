@@ -91,8 +91,8 @@ export class AgentSessionNamespace {
   }
 
   /**
-   * The GitHub repositories the caller can hand a managed session, with the
-   * branch each one's sessions start on by default.
+   * The GitHub repositories the caller can hand a managed session. Each has
+   * the branch its sessions start on by default.
    *
    * @readonly
    * @openworld

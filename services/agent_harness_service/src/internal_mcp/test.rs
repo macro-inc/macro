@@ -159,6 +159,39 @@ async fn rpc_host(
     (status, serde_json::from_slice(&bytes).unwrap_or_default())
 }
 
+/// A `server/discover` handshake, as a 2026-07-28 client opens with.
+async fn discover(app: Router, token: &str) -> serde_json::Value {
+    let version = rmcp::model::ProtocolVersion::V_2026_07_28.to_string();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/mcp/internal")
+                .header("host", "localhost")
+                .header("authorization", format!("Bearer {token}"))
+                .header("content-type", "application/json")
+                .header("accept", "application/json, text/event-stream")
+                .header("mcp-protocol-version", &version)
+                .header("mcp-method", "server/discover")
+                .body(Body::from(
+                    serde_json::json!({
+                        "jsonrpc": "2.0", "id": 1, "method": "server/discover",
+                        "params": {"_meta": {
+                            "io.modelcontextprotocol/protocolVersion": version,
+                            "io.modelcontextprotocol/clientInfo": {"name": "test", "version": "1"},
+                            "io.modelcontextprotocol/clientCapabilities": {},
+                        }},
+                    })
+                    .to_string(),
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let bytes = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+    serde_json::from_slice(&bytes).unwrap_or_default()
+}
+
 #[tokio::test]
 async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
     for harness in ["cursor", "claude-code", "macrod"] {
@@ -193,6 +226,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
                 app_url: "https://macro.com".into(),
+                permissions: None,
             },
         );
         for (host, expected) in [
@@ -429,4 +463,372 @@ fn code_results_send_pixels_as_images_and_keep_the_receipt_structured() {
         ("iVBORw0KGgo=", "image/png")
     );
     assert_eq!(result.content.len(), 2);
+}
+
+/// Code mode whose JS tools rollout is fixed, recording each run's
+/// language.
+struct OwnerRollout {
+    js_tools: bool,
+    languages: std::sync::Mutex<Vec<code_execution::domain::Language>>,
+}
+
+#[async_trait::async_trait]
+impl SessionCodeMode for OwnerRollout {
+    async fn execute(
+        &self,
+        _: &agent_session::domain::model::AgentSession,
+        execution: agent_code_mode::domain::ExecutionId,
+        _: ai_toolset::actor::ToolActor,
+        _: macro_uuid::Uuid,
+        request: code_execution::domain::ExecuteRequest,
+        _: tokio_util::sync::CancellationToken,
+    ) -> Result<agent_code_mode::domain::ExecutionReceipt, agent_code_mode::domain::CodeModeError>
+    {
+        self.languages.lock().unwrap().push(request.language);
+        Ok(agent_code_mode::domain::ExecutionReceipt {
+            execution_id: execution,
+            status: agent_code_mode::domain::ExecutionStatus::Succeeded,
+            activity: Vec::new(),
+            result: None,
+            error: None,
+            model_media: Vec::new(),
+            permission: None,
+        })
+    }
+    async fn read(
+        &self,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+        _: agent_code_mode::domain::ExecutionId,
+    ) -> Result<agent_code_mode::domain::ExecutionRecord, agent_code_mode::domain::CodeModeError>
+    {
+        Err(agent_code_mode::domain::CodeModeError::NotFound)
+    }
+}
+
+#[async_trait::async_trait]
+impl agent_code_mode::domain::CodeModeKinds for OwnerRollout {
+    async fn code_mode_kind(
+        &self,
+        _: AgentSessionId,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> agent_code_mode::domain::CodeModeKind {
+        if self.js_tools {
+            agent_code_mode::domain::CodeModeKind::Dialect
+        } else {
+            agent_code_mode::domain::CodeModeKind::TypeScript
+        }
+    }
+}
+
+/// JavaScript tools programs are offered, with ShowPermissions, only to a
+/// session whose owner has agent permissions, which gate them.
+#[tokio::test]
+async fn execute_code_offers_and_accepts_js_tools_only_with_permissions() {
+    for js_tools in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let code_mode = Arc::new(OwnerRollout {
+            js_tools,
+            languages: Default::default(),
+        });
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(code_mode.clone()),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: Some(Arc::new(Unrestricted)),
+            },
+        );
+        // The server's instructions describe the turn's kind of code.
+        let (_, initialized) = rpc(
+            app.clone(),
+            Some("secret"),
+            "initialize",
+            serde_json::json!({
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            }),
+        )
+        .await;
+        let instructions = initialized["result"]["instructions"].as_str().unwrap();
+        assert_eq!(
+            instructions.contains("tools.<service>.<operation>"),
+            js_tools
+        );
+        assert_eq!(instructions.contains("TypeScript main module"), !js_tools);
+        // So do the 2026-07-28 lifecycle's, which skip `initialize`.
+        let discovered = discover(app.clone(), "secret").await;
+        let instructions = discovered["result"]["instructions"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{discovered}"));
+        assert_eq!(instructions.contains(DIALECT_CODE_TOOLS), js_tools);
+        assert_eq!(instructions.contains(TYPESCRIPT_CODE_TOOLS), !js_tools);
+        let (status, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{listed}");
+        let tools = listed["result"]["tools"].as_array().unwrap();
+        let execute = tools
+            .iter()
+            .find(|tool| tool["name"] == "ExecuteCode")
+            .unwrap();
+        // A dialect turn's ExecuteCode takes a module, and no language.
+        assert_eq!(
+            execute["inputSchema"]["properties"].get("module").is_some(),
+            js_tools
+        );
+        assert!(
+            execute["inputSchema"]["properties"]
+                .get("language")
+                .is_none()
+        );
+        assert_eq!(
+            execute["description"]
+                .as_str()
+                .unwrap()
+                .contains("tools.<service>.<operation>"),
+            js_tools
+        );
+        assert_eq!(
+            tools.iter().any(|tool| tool["name"] == "ShowPermissions"),
+            js_tools
+        );
+        // Off, ShowPermissions is refused even when named directly.
+        let (_, shown) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ShowPermissions",
+                "arguments": {"groups": [{"group": "email"}]},
+            }),
+        )
+        .await;
+        assert_eq!(
+            shown.to_string().contains("not available in this session"),
+            !js_tools,
+            "{shown}"
+        );
+        let (_, called) = rpc(
+            app,
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ExecuteCode",
+                "arguments": {
+                    "turn_id": "00000000-0000-0000-0000-000000000001",
+                    "source": "return await tools.storage.get_document_markdown({path: {document_id: \"d\"}})",
+                    "module": "export const x = 1;",
+                },
+            }),
+        )
+        .await;
+        if js_tools {
+            assert!(called.get("error").is_none(), "{called}");
+            assert_eq!(
+                *code_mode.languages.lock().unwrap(),
+                [code_execution::domain::Language::JsTools]
+            );
+        } else {
+            // A TypeScript turn's ExecuteCode takes no module: refused unrun.
+            assert!(called.get("error").is_some(), "{called}");
+            assert!(code_mode.languages.lock().unwrap().is_empty());
+        }
+    }
+}
+
+/// Permissions whose view is the registry with nothing set.
+struct Unrestricted;
+
+#[async_trait::async_trait]
+impl agent_permissions::domain::service::AgentPermissions for Unrestricted {
+    async fn catalog(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+    ) -> Result<
+        agent_permissions::domain::model::ToolPermissionCatalog,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn view_agent(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        agent: bot_id::BotId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Ok(agent_permissions::domain::resolve::view(
+            &agent_permissions::outbound::registry::registry_catalog(),
+            agent,
+            agent_permissions::domain::model::PolicyKind::Agent,
+            agent_permissions::domain::resolve::ViewAccess {
+                can_edit: false,
+                can_tighten: true,
+            },
+            Vec::new(),
+            None,
+        ))
+    }
+    async fn view_session(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn set(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn tighten(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::Tightened,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn reset(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn resolve_calls(
+        &self,
+        _: &agent_permissions::domain::model::SessionPolicy,
+        _: &[agent_permissions::domain::model::OperationKey],
+    ) -> Result<
+        Vec<agent_permissions::domain::model::ResolvedCall>,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+}
+
+#[tokio::test]
+async fn show_permissions_is_offered_only_where_permissions_gate_js_tools() {
+    for js_tools in [false, true] {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_agent_session(AgentSessionId::new());
+        repo.insert_session(session.clone());
+        repo.set_egress_token_hash(session.id, &SessionToken::new("secret").hash())
+            .await
+            .unwrap();
+        let tasks = FixedTasks::default();
+        let app = router(
+            Arc::new(repo.clone()),
+            configured_hosts(&["http://agent-harness-service:8102"]).unwrap(),
+            InternalTools {
+                service: Arc::new(SessionPullRequestService::new(
+                    repo.clone(),
+                    RecordingRealtime::new(),
+                    Arc::new(tasks.clone()),
+                )),
+                tasks: Arc::new(tasks),
+                code_mode: Some(Arc::new(OwnerRollout {
+                    js_tools,
+                    languages: Default::default(),
+                })),
+                cognition: None,
+                reviews: Arc::new(OnceLock::new()),
+                gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
+                permissions: Some(Arc::new(Unrestricted)),
+            },
+        );
+        let offered = js_tools;
+        let (_, listed) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/list",
+            serde_json::json!({}),
+        )
+        .await;
+        let show = listed["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|tool| tool["name"] == "ShowPermissions")
+            .cloned();
+        assert_eq!(show.is_some(), offered, "{listed}");
+        if let Some(show) = show {
+            assert_eq!(show["annotations"]["readOnlyHint"], true);
+            // It spends nobody's access, so it takes no acting_as.
+            assert!(show["inputSchema"]["properties"].get("acting_as").is_none());
+        }
+        let (_, called) = rpc(
+            app.clone(),
+            Some("secret"),
+            "tools/call",
+            serde_json::json!({
+                "name": "ShowPermissions",
+                "arguments": {"groups": [{"group": "email", "actions": ["send"]}]},
+            }),
+        )
+        .await;
+        if offered {
+            let result = &called["result"];
+            assert_ne!(result["isError"], true, "{called}");
+            let content = &result["structuredContent"];
+            assert_eq!(content["sessionId"], session.id.to_string(), "{called}");
+            assert_eq!(content["current"][0]["state"], "always");
+            let (_, refused) = rpc(
+                app,
+                Some("secret"),
+                "tools/call",
+                serde_json::json!({
+                    "name": "ShowPermissions",
+                    "arguments": {"groups": [{"group": "spaceships"}]},
+                }),
+            )
+            .await;
+            assert_eq!(refused["result"]["isError"], true, "{refused}");
+        } else {
+            assert_eq!(called["result"]["isError"], true, "{called}");
+        }
+    }
 }

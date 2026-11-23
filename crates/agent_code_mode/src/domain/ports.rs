@@ -1,5 +1,6 @@
 use super::{
-    CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord, ModelImage, StaticFileId,
+    CodeModeError, ExecutionId, ExecutionIdentity, ExecutionRecord, ModelImage, ProgramLanguage,
+    StaticFileId,
 };
 use agent_session::domain::model::AgentSessionId;
 use async_trait::async_trait;
@@ -22,10 +23,14 @@ pub trait ExecutionTurns: Send + Sync + 'static {
 pub trait ExecutionCredentials: Send + Sync + 'static {
     /// Identity comes from the session, never from generated code. Implementations
     /// apply owner approval before minting and never persist the credential.
+    /// `language` is the language `source` is written in, and `module` a JS
+    /// tools program's TypeScript module, both for the approver to see.
     async fn issue(
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        module: Option<&str>,
+        language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError>;
 }
@@ -72,4 +77,43 @@ pub trait ModelImages: Send + Sync + 'static {
         file: &StaticFileId,
         owner: &MacroUserIdStr<'_>,
     ) -> anyhow::Result<ModelImage>;
+}
+
+/// A per-owner backend rollout flag, such as whether a session owner may run
+/// JS tools programs.
+// Object-safe: code mode holds it as `Arc<dyn OwnerRollout>`.
+#[async_trait]
+pub trait OwnerRollout: Send + Sync + 'static {
+    /// On for `owner`. A flag that cannot be read counts as off.
+    async fn enabled(&self, owner: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool;
+}
+
+/// The code-mode kind of a session's current turn.
+// Object-safe: the in-process agent and the internal MCP hold it as
+// `Arc<dyn CodeModeKinds>`.
+#[async_trait]
+pub trait CodeModeKinds: Send + Sync + 'static {
+    /// The kind `session`'s current turn runs, read from `owner`'s flag the
+    /// first time it is asked for that turn and the same for the rest of it.
+    /// Asked with no turn running, it reads the flag afresh.
+    async fn code_mode_kind(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+    ) -> super::CodeModeKind;
+}
+
+/// Always [`CodeModeKind::TypeScript`](super::CodeModeKind::TypeScript): for
+/// hosts without the agent permissions rollout.
+pub struct TypeScriptOnly;
+
+#[async_trait]
+impl CodeModeKinds for TypeScriptOnly {
+    async fn code_mode_kind(
+        &self,
+        _session: AgentSessionId,
+        _owner: &MacroUserIdStr<'static>,
+    ) -> super::CodeModeKind {
+        super::CodeModeKind::TypeScript
+    }
 }

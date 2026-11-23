@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -100,12 +101,18 @@ function ActivityRow(props: { item: ExecutionActivity; turnActive: boolean }) {
   const uncertain = () =>
     props.item.status === 'unknown' ||
     (props.item.status === 'running' && !props.turnActive);
+  // The permission backstop refused it: nothing broke, it never ran.
+  const refused = () => props.item.status === 'refused';
+  const trailing = () => {
+    if (refused()) return t('agentPermissionsChat.blockedStep');
+    return uncertain() ? 'Outcome unknown' : undefined;
+  };
   return (
     <ToolCard
       title={props.item.label}
       status={status()}
-      muted={uncertain()}
-      trailing={uncertain() ? 'Outcome unknown' : undefined}
+      muted={uncertain() || refused()}
+      trailing={trailing()}
     />
   );
 }

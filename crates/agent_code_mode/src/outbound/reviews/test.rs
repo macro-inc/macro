@@ -22,12 +22,16 @@ async fn review_revision_claim_is_atomic_and_session_deletion_removes_reviews(po
                 turn_id: None,
                 execution_id: execution,
                 source: String::new(),
+                module: None,
+                language: Default::default(),
+                sdk_fingerprint: None,
                 status: ExecutionStatus::Running,
                 result: None,
                 error: None,
                 calls: vec![],
                 activity: Vec::new(),
                 activity_truncated: false,
+                permission: None,
             },
         )
         .await

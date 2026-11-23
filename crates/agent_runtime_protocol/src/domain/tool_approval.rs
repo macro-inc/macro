@@ -99,6 +99,11 @@ pub struct ToolApprovalNotice {
     /// in this session without the owner being asked again.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub remembered: bool,
+    /// For a hold on the agent's permissions (`macro-sdk`), the only person
+    /// who may approve or decline it: the account the program acts as.
+    /// Absent on every other hold, whose approver is the session's owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub approver: Option<String>,
 }
 
 impl ToolApprovalNotice {

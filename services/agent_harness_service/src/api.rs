@@ -91,6 +91,7 @@ pub struct ApiStates<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes
     auto_archive: Router,
     work_registrations: Router,
     tool_approvals: Router,
+    agent_tool_permissions: Router,
     app_connections: Router,
     code_executions: Router,
     activity: Router,
@@ -149,6 +150,7 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
             auto_archive: Router::new(),
             work_registrations: Router::new(),
             tool_approvals: Router::new(),
+            agent_tool_permissions: Router::new(),
             app_connections: Router::new(),
             code_executions: Router::new(),
             activity: Router::new(),
@@ -299,6 +301,12 @@ impl<T, R, Opener, Bots, Requests, Access, Auth, Models, Changes>
     /// Attach the routes answering tool calls held for the owner's approval.
     pub fn with_tool_approvals(mut self, router: Router) -> Self {
         self.tool_approvals = router;
+        self
+    }
+
+    /// Attach agents' and sessions' tool permissions (`agent_permissions`).
+    pub fn with_agent_tool_permissions(mut self, router: Router) -> Self {
+        self.agent_tool_permissions = router;
         self
     }
 
@@ -469,6 +477,7 @@ where
         .merge(states.voices)
         .merge(states.mode_choice)
         .merge(states.conversations)
+        .merge(states.agent_tool_permissions)
         .nest("/universal_input", states.universal_input)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }

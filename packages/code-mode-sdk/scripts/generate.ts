@@ -1,17 +1,23 @@
 /**
  * Build the code-mode assets the Rust crates embed: the Deno SDK and Handlebars
- * bundles, the agent documentation catalog, the operation catalog and the SDK
- * declarations routine code is type-checked against.
+ * bundles, the agent documentation catalog, the operation catalog, the SDK
+ * declarations routine code is type-checked against, and the JS tools
+ * interpreter bundle with its catalog.
  *
  * Usage: bun scripts/generate.ts <output-directory>
  */
 
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { join, relative, resolve } from 'node:path';
+import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSdkDocs } from '@macro-inc/sdk-docs/render';
 import ts from 'typescript';
+import {
+  buildCatalog,
+  type Registry,
+  type Spec,
+} from '../src/js-tools/catalog';
 import { entityDirectories } from './catalog';
 import { packageEntityDocs, readMarkdownPages } from './typedoc';
 
@@ -134,8 +140,10 @@ const labels: Record<string, string> = {
   'storage.getUserDocumentsHandler': 'List documents',
   'storage.postItemsSoupAstGrouped': 'Browse workspace',
 };
-for (const [service, directory] of Object.entries({
-  'agent-harness': 'agent-harness',
+// The services `MacroClient` holds, by spec name, with the property it holds
+// each one in.
+const clients: Record<string, string> = {
+  'agent-harness': 'agentHarness',
   auth: 'auth',
   calendar: 'calendar',
   cognition: 'cognition',
@@ -144,12 +152,13 @@ for (const [service, directory] of Object.entries({
   notification: 'notification',
   properties: 'properties',
   search: 'search',
-  'scheduled-action': 'scheduled-action',
+  'scheduled-action': 'scheduledAction',
   unfurl: 'unfurl',
   storage: 'storage',
-})) {
+};
+for (const service of Object.keys(clients)) {
   const { Sdk } = await import(
-    `${root}packages/sdk/generated/${directory}/sdk.gen.ts`
+    `${root}packages/sdk/generated/${service}/sdk.gen.ts`
   );
   for (const name of Object.getOwnPropertyNames(Sdk.prototype)) {
     if (name === 'constructor') continue;
@@ -215,4 +224,128 @@ const handlebars = await Bun.file(
 await artifact(
   'sdk-types.json',
   `${JSON.stringify({ fingerprint: `${version}+${hash}`, files, handlebars })}\n`
+);
+
+// The JS tools interpreter (`@opencode/codemode` with our analyzer and tool
+// adapter) for Deno, and the catalog of operations its programs call. The
+// bundle carries no SDK: the bootstrap sends each call.
+const specs: Record<string, Spec> = {};
+for (const file of (await readdir(join(root, 'packages/sdk/specs'))).sort()) {
+  if (file.endsWith('.json'))
+    specs[file.slice(0, -'.json'.length)] = await Bun.file(
+      join(root, 'packages/sdk/specs', file)
+    ).json();
+}
+const { sdkVerbs } = await import(`${root}packages/sdk/src/utils/verbs.ts`);
+const skippedLists: Record<string, readonly string[]> = await import(
+  `${root}packages/sdk/src/coverage/skipped.ts`
+);
+// Every client has an Excluded list, empty or not: a renamed export must not
+// quietly let its excluded operations back into the catalog.
+const excluded = Object.fromEntries(
+  Object.entries(clients).map(([service, client]) => {
+    const list = skippedLists[`${client}Excluded`];
+    if (!list) {
+      throw new Error(
+        `packages/sdk/src/coverage/skipped.ts exports no ${client}Excluded for ${service}`
+      );
+    }
+    return [service, list];
+  })
+);
+const registry: Registry = await Bun.file(
+  join(root, 'crates/agent_permission_registry/registry.json')
+).json();
+const jsToolsCatalog = `${JSON.stringify(
+  buildCatalog({
+    specs,
+    generated: operations,
+    clients,
+    verbs: sdkVerbs,
+    excluded,
+    registry,
+  })
+)}\n`;
+const codemodeDirectory = dirname(
+  Bun.resolveSync(
+    '@opencode/codemode/package.json',
+    join(root, 'packages/code-mode-sdk')
+  )
+);
+const jsTools = await Bun.build({
+  entrypoints: [`${root}packages/code-mode-sdk/src/js-tools/index.ts`],
+  target: 'browser',
+  format: 'esm',
+  minify: true,
+  define: { 'process.env': '{}' },
+  plugins: [
+    {
+      name: 'one-effect',
+      setup(build) {
+        // Our modules import effect as `codemode-effect` (the root
+        // workspace's `effect` is another version); bundle the copy
+        // @opencode/codemode resolves, so the bundle has one Effect.
+        build.onResolve({ filter: /^codemode-effect(\/.*)?$/ }, (args) => ({
+          path: Bun.resolveSync(
+            args.path.replace(/^codemode-effect/, 'effect'),
+            codemodeDirectory
+          ),
+        }));
+      },
+    },
+  ],
+});
+if (!jsTools.success)
+  throw new AggregateError(jsTools.logs, 'JS tools build failed');
+const jsToolsBundle = jsTools.outputs[0];
+if (!jsToolsBundle) throw new Error('No JS tools bundle produced');
+// The bundle names what it includes and carries their licenses. The npm
+// tarball of @opencode/codemode has no LICENSE file, so its MIT notice is
+// kept in licenses/.
+const packageOf = (name: string) =>
+  dirname(Bun.resolveSync(`${name}/package.json`, codemodeDirectory));
+const bundled = [
+  {
+    name: '@opencode/codemode',
+    directory: codemodeDirectory,
+    license: join(
+      root,
+      'packages/code-mode-sdk/licenses/opencode-codemode.LICENSE'
+    ),
+  },
+  {
+    name: 'effect',
+    directory: packageOf('effect'),
+    license: join(packageOf('effect'), 'LICENSE'),
+  },
+  {
+    name: 'acorn',
+    directory: packageOf('acorn'),
+    license: join(packageOf('acorn'), 'LICENSE'),
+  },
+];
+const notices: string[] = [];
+const versions: Record<string, string> = {};
+for (const { name, directory, license } of bundled) {
+  const { version, license: kind } = await Bun.file(
+    join(directory, 'package.json')
+  ).json();
+  versions[name] = version;
+  notices.push(
+    `${name} ${version} (${kind})\n\n${await Bun.file(license).text()}`
+  );
+}
+const jsToolsSource = `// Generated by packages/code-mode-sdk/scripts/generate.ts.\n/*\n${notices.join('\n').replaceAll('*/', '* /')}*/\n${await jsToolsBundle.text()}`;
+await artifact('js-tools.mjs', jsToolsSource);
+await artifact('js-tools.json', jsToolsCatalog);
+// What a run records as its SDK fingerprint: the interpreter's version and a
+// hash of everything a program is analyzed and run against.
+const jsToolsHash = new Bun.CryptoHasher('sha256')
+  .update(jsToolsSource)
+  .update(jsToolsCatalog)
+  .digest('hex')
+  .slice(0, 12);
+await artifact(
+  'js-tools.fingerprint',
+  `@opencode/codemode@${versions['@opencode/codemode']}+${jsToolsHash}`
 );

@@ -55,11 +55,56 @@ bun run --cwd packages/code-mode-sdk type-check
 bun run --cwd packages/code-mode-sdk test
 ```
 
+## JS tools
+
+`js-tools.mjs` runs JS tools programs (`crates/code_execution`,
+`Language::JsTools`) in `@opencode/codemode`'s interpreter, pinned to exactly
+2.3.2 with the acorn it parses with. Its catalog, `js-tools.json`, has one
+tool per spec operation the TypeScript SDK exposes and can send, at
+`tools.<service>.<operationId>`: the spec name with `-` written `_`, then the
+raw operationId, so the path is the permission registry's key. A service
+that declares one operationId on two routes gets `<operationId>_2` for the
+second. Each tool's input is its generated method's `{ path?, query?, body? }`;
+its description starts with its registry group, action and label. Operations
+on the SDK's `Excluded` lists (`packages/sdk/src/coverage/skipped.ts`), and
+those a tool can't send or read (no TypeScript client, a required header, a
+non-JSON body or response), are listed in `skipped` with the reason. `js-tools.fingerprint` is
+`@opencode/codemode@<version>+<hash of the bundle and catalog>`.
+
+`analyze(source, toolsByPath(catalog))` answers what a program may call, in
+`macro_sdk_calls --json`'s shape (`ok` with operations, each with its route
+and route rivals; `cannot_analyze` with located reasons; `diagnostics` for a
+parse failure). Upstream's `scanTools` misses calls (an aliased `require`,
+a parameter default beside a body `var`), so the analyzer has its own rules:
+
+- module loading is refused: `import` in every form and `require` anywhere
+  it is a reference or binding;
+- `tools` is never bound or shadowed, and every reference is two static
+  member accesses (`.name` or `["name"]`, optional chaining allowed) naming
+  a catalog operation, called directly; its result is JSON;
+- `search(...)` is free: it returns data and calls nothing;
+- upstream's scan must agree: a parse only one parser accepts, or a path it
+  finds that we don't, is refused.
+
+That is sound because the interpreter has no global object, `eval`,
+`Function` (it throws), `Proxy`, `Reflect` or getters, and its one extension
+(`ModuleBridge`: `get` and `call`, given only for a run's module) reaches a
+separate process with no SDK: its only way to an SDK call is the `tools`
+namespace, reached by name or loaded by `require`/`import`. `get` and `call`
+are plain globals to the analysis, and passing `tools` or an operation to
+them is aliasing, refused like any other. `makeRuntime` gives the interpreter every tool and a
+`tool.before` hook that refuses any outside the analyzed set; the bootstrap
+supplies the function that sends each call. `analyze.test.ts` runs every
+corpus program in the real interpreter and checks it calls nothing the
+analysis didn't report; `pins.test.ts` fails an upgrade that changes the
+interpreter's globals or versions.
+
 The generated `sdk.mjs`, `handlebars.mjs`, `documentation.json`,
 `operations.json` (each SDK operation's label, method, path and whether it
 writes), `hosts.json` (every service the SDK can reach, with its host in each
 environment) and `sdk-types.json` (the SDK's declarations routine code is
-type-checked against, with their fingerprint) are build outputs, never
+type-checked against, with their fingerprint), `js-tools.mjs`,
+`js-tools.json` and `js-tools.fingerprint` are build outputs, never
 committed. `crates/code_mode_assets`
 builds them when it compiles: local cargo runs `scripts/generate.ts` with bun,
 and Nix builds and Rust CI use the `code-mode-assets` flake package through
