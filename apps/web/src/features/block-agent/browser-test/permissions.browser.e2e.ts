@@ -87,13 +87,14 @@ for (const { language } of LANGUAGES) {
         name: 'Permission approval request',
       });
       await expect(request).toContainText(
-        'Allow Scout to send email and edit documents?'
+        'Allow Scout to send email and edit documents and projects?'
       );
       await expect(request.locator('.text-accent')).toHaveText([
         'send',
         'email',
         'edit',
         'documents',
+        'projects',
       ]);
       // Docked right above the composer, at its width, 8px apart.
       const card = await request.boundingBox();
@@ -271,7 +272,7 @@ test('someone else sees the cards read-only and can only stop waiting', async ({
   });
   await expect(request).toContainText('Waiting for Dana to approve');
   await expect(request).toContainText(
-    'Scout wants to send email and edit documents with Dana’s access.'
+    'Scout wants to send email and edit documents and projects with Dana’s access.'
   );
   await expect(request.getByRole('button', { name: 'Allow once' })).toHaveCount(
     0

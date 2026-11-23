@@ -1834,8 +1834,9 @@ Agents → Permissions) before it runs. The cards name no language:
 - **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
   docks above the composer, outside the scrolling transcript, at the input's
   width and 8px above it (after any other held tool calls): `Allow <Agent> to
-  send email and edit documents?`, with each action and entity in accent (up
-  to three, then `and N more things`). **View program**, under the sentence
+  send messages in channels and create, edit, and delete tasks?`, each entity
+  said as people say it (`gated-thing-phrases.ts`), with each verb and noun in
+  accent (up to three phrases, then `and N more things`). **View program**, under the sentence
   and collapsed by default, shows the operations set to Ask it may call (by
   group, with their action and name) and the source, plus its TypeScript
   module under **Program** and **Module, with no network** when it has one;

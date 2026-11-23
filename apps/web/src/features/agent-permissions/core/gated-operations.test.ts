@@ -44,8 +44,8 @@ describe('gatedThings', () => {
   it('says each action of each group once, however many tools it covers', () => {
     expect(gatedThings([SEND_MESSAGE, EDIT_DOCUMENT, RENAME_DOCUMENT])).toEqual(
       [
-        { action: 'send', groupName: 'Email' },
-        { action: 'update', groupName: 'Documents' },
+        { action: 'send', group: 'email', groupName: 'Email' },
+        { action: 'update', group: 'documents', groupName: 'Documents' },
       ]
     );
   });

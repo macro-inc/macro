@@ -25,7 +25,8 @@ changes.
   off for the caller) reads as `null`: hide the UI.
 - Chat: `components/gated-phrases.ts` (what held or refused operations would
   do, as a phrase, a row title, or the request card's sentence with its
-  verbs and entities marked), `components/gated-operation-list.tsx` and
+  verbs and entities marked; the words per entity and action are in
+  `gated-thing-phrases.ts`), `components/gated-operation-list.tsx` and
   `blocked-by-permissions-card.tsx` (refused operations),
   `views/show-permissions-card.tsx` (the ShowPermissions card),
   `views/open-agent-permissions.ts` (opens Settings → Agents beside the chat
@@ -70,6 +71,10 @@ changes.
   program reaches Macro only that way; its TypeScript module has no network
   at all). Its other tools and connected apps are not covered, even on
   Never; never word it so a person could think they are.
+- Every registry group needs an entity phrase in `gated-thing-phrases.ts`
+  (and a pair phrase where its verb would misname the tools):
+  `gated-phrases.test.ts` reads `registry.json` and fails on a pair it
+  doesn't list.
 - Color is on glyphs only (Ask amber hand, Never failure prohibit); text stays
   ink. The one exception is the pending request's sentence (block-agent's
   `PermissionRequestCard`), which accents each action and entity; the agent's
