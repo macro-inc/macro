@@ -13,7 +13,7 @@ import {
   LexicalWrapperContext,
 } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type {
@@ -23,6 +23,7 @@ import type {
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -95,7 +96,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <LexicalWrapperContext.Provider
                     value={{ ...wrapper, skipPreviewFetch: true }}
                   >
@@ -166,7 +169,7 @@ function Fixture() {
                       </QuickAccessContextProvider>
                     </StaticMarkdownContext>
                   </LexicalWrapperContext.Provider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

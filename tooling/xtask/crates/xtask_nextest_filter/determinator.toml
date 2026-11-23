@@ -3,7 +3,8 @@ use-default-rules = false
 [[path-rule]]
 globs = ["static_assets/**"]
 mark-changed = [
-  "cache-core",
+  "cache-schema",
+  "cache-wasm",
   "collab_surface",
   "complete_graph",
   "documents",

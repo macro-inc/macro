@@ -23,7 +23,6 @@ export {
   githubLinkAuthorizationUrl,
   invalidateGithubLinkStatus,
   readGithubLinkStatus,
-  useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
   useReauthenticateGithubMutation,
