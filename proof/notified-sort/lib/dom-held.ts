@@ -132,6 +132,10 @@ export function heldApartFromShared(input: CompactDom): { newHeld: boolean; oldH
   const shared = new Set<string>();
   for (const k of keys) {
     if (om.get(k) === nm.get(k) && or.get(k) === nr.get(k) && om.get(k) !== or.get(k)) shared.add(k);
+    // Both mounted sides still list a row both reloads dropped: both kept it,
+    // whatever text each last rendered it with, so neither is behind the other
+    // on it (S1). A row only one side kept still counts.
+    else if (om.has(k) && nm.has(k) && !or.has(k) && !nr.has(k)) shared.add(k);
   }
   const same = (a: string[], b: string[]) => JSON.stringify(a) === JSON.stringify(b);
   return {

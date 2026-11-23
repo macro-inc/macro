@@ -282,6 +282,17 @@ describe('heldApartFromShared', () => {
     const renamed = { ...e, newMounted: [base.header, 'calendar_event/z/today/u Zeta Event 3 now', base.a] };
     expect(heldApartFromShared(renamed).newHeld).toBe(false);
   });
+  it('sets aside a row both mounted sides kept after both reloads dropped it, whatever its text', () => {
+    const e = {
+      oldMounted: [base.header, 'document/d/today/u Old name 3m', base.a],
+      newMounted: [base.header, 'document/d/today/u New name 3m', base.a],
+      oldReload: [base.header, base.a],
+      newReload: [base.header, base.a],
+    };
+    expect(heldApartFromShared(e)).toEqual({ newHeld: true, oldHeld: true, shared: ['document/d'] });
+    // Kept by the branch alone, it still counts.
+    expect(heldApartFromShared({ ...e, oldMounted: [base.header, base.a] }).newHeld).toBe(false);
+  });
 });
 
 describe('onlyStaleTimeLabels', () => {
