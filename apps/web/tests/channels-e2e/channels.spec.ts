@@ -285,25 +285,18 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   ada,
   people,
 }) => {
-  // Defect, in some runs: the deleted channel leaves "All channels" but its
-  // row stays under Favorites, opening "Conversation unavailable", until the
-  // page is reloaded.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['a message']);
   await new ChannelView(page, channel.id).open();
   await chooseChannelAction(page, 'Favorite');
   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
 
+  const confirm = page.getByRole('dialog', { name: 'Delete item?' });
   await chooseChannelAction(page, 'Delete');
-  await page
-    .getByRole('dialog', { name: 'Delete item?' })
-    .getByRole('button', { name: 'Delete item' })
-    .click();
+  await confirm.getByRole('button', { name: 'Delete item' }).click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
-  await failsSometimes(async () => {
-    await expect(favoriteRow(page, channel.id)).toHaveCount(0);
-  });
+  await expect(favoriteRow(page, channel.id)).toHaveCount(0);
 });
 
 // If this fails, any member can delete a channel that is not theirs.
@@ -442,9 +435,6 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
   ada,
   people,
 }) => {
-  // Defect, in some runs: when nothing else reaches the person around the
-  // deletion, their open page keeps the channel and its composer until a
-  // reload.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['soon gone']);
   const view = new ChannelView(page, channel.id);
@@ -453,10 +443,11 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
 
   await deleteChannel('ada', channel.id);
 
-  await failsSometimes(async () => {
-    await expect(view.composer).toHaveCount(0);
-    await expect(page.getByText('soon gone')).toHaveCount(0);
-  });
+  await expect(view.composer).toHaveCount(0);
+  await expect(page.getByText('soon gone')).toHaveCount(0);
+  await page.reload();
+  await expect(view.composer).toHaveCount(0);
+  await expect(page.getByText('soon gone')).toHaveCount(0);
 });
 
 test('CHN-16 a rename saved while the list of channels is still being read shows in the header', async ({

@@ -333,16 +333,7 @@ test('UNR-08 a channel I am added to appears in my list at once, and opens', asy
   });
   await ada.post(added.id, 'welcome');
 
-  // Known defect, in some runs: the rows shown
-  // while "Search conversations" is open do not take in a new channel (the
-  // defect UNR-10 is about), so it is missing until the search is run again.
-  await failsSometimes(async () => {
-    await expect(row).toBeVisible();
-  });
-  if (!(await row.isVisible())) {
-    await benPage.reload();
-    await findConversations(benPage, made.tag);
-  }
+  await expect(row).toBeVisible();
   await row.click();
   const view = new ChannelView(benPage, added.id);
   await view.shown();
@@ -363,6 +354,7 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
   await findConversations(page, made.tag);
   const fresh = conversationRow(page, `${made.tag}-fresh`);
   await expect(fresh).toBeVisible();
+  await expect(unreadDot(fresh)).toHaveCount(0);
 
   await ben.post(made.fresh, 'first ever');
   await ben.post(made.used, 'later than the first');
@@ -371,11 +363,7 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
   await expect(
     unreadDot(conversationRow(page, `${made.tag}-used`))
   ).toBeVisible();
-  // Product defect, on some machines only: the first message ever posted in
-  // a channel puts no unread mark on the other member's row; the second does.
-  await failsSometimes(async () => {
-    await expect(unreadDot(fresh)).toBeVisible({ timeout: 5_000 });
-  });
+  await expect(unreadDot(fresh)).toBeVisible({ timeout: 5_000 });
 });
 
 // If this fails, a person who has narrowed the list with "Search
