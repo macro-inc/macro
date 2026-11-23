@@ -178,3 +178,16 @@ for (const key of ['Enter', 'Tab']) {
     ).toHaveCount(1);
   });
 }
+
+// When this fails, a list that closes and clears its text opens again.
+test('Alt+ArrowUp closes the list with someone already added', async ({
+  page,
+}) => {
+  await open(page, 'reply');
+  await field(page, 'To').click();
+  await page.keyboard.type('ann');
+  await expect(page.getByRole('listbox')).toHaveCount(1);
+  await page.keyboard.press('Alt+ArrowUp');
+  await expect(field(page, 'To')).toHaveValue('');
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+});

@@ -807,7 +807,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     if (next !== previous) {
       setSuppressOpenUntilInputChange(false);
     }
-    openBeforeKobalte();
     if (next.length === 0) return;
 
     setIsOpen(true);
@@ -1044,6 +1043,15 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         setDisabled(true);
                         queueMicrotask(() => setDisabled(false));
                       }
+                    }}
+                    // Non-delegated, so it runs before Kobalte's handler: an
+                    // edit lifts Escape's hold on opening, as onInputChange
+                    // does, and opens the list first. Only the user's edits:
+                    // Kobalte also clears the text as it closes, which must
+                    // not reopen the list.
+                    on:input={() => {
+                      setSuppressOpenUntilInputChange(false);
+                      openBeforeKobalte();
                     }}
                     // use a non-delegated event here so that we can process it before Kobalte
                     on:keydown={(e: KeyboardEvent) => {
