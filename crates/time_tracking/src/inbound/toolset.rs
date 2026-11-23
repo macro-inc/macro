@@ -15,7 +15,7 @@ use std::sync::Arc;
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError, ToolResult};
 use chrono::NaiveDate;
 use entity_access::domain::{
-    models::{EntityAccessReceipt, EntityType, RequiredPermission},
+    models::{AccessError, EntityAccessReceipt, EntityType, RequiredPermission},
     ports::EntityAccessService,
 };
 use schemars::JsonSchema;
@@ -61,9 +61,25 @@ impl<S, A: EntityAccessService> TimeTrackingToolContext<S, A> {
                 EntityType::Document,
             )
             .await
-            .map_err(|error| ToolCallError {
-                description: refusal.to_string(),
-                internal_error: error.into(),
+            .map_err(|error| {
+                let description = match &error {
+                    AccessError::Unauthorized
+                    | AccessError::UnauthorizedWithMessage(_)
+                    | AccessError::NotFound(_) => refusal.to_string(),
+                    AccessError::BadRequest(_) => {
+                        "That is not a valid task id; pass the task's document id.".to_string()
+                    }
+                    AccessError::Unavailable(_) => {
+                        "The access check is briefly unavailable; try again.".to_string()
+                    }
+                    AccessError::Internal(_) => {
+                        "Time tracking failed; try again later.".to_string()
+                    }
+                };
+                ToolCallError {
+                    description,
+                    internal_error: error.into(),
+                }
             })
     }
 }
@@ -124,9 +140,8 @@ fn length(minutes: u32) -> String {
 fn tool_error(error: TimeTrackingError) -> ToolCallError {
     let description = match &error {
         TimeTrackingError::NotFound(TIME_TRACKING_OFF) => {
-            "Time tracking is not turned on for this person yet, so nothing was logged. The task \
-             exists: tell them time tracking isn't available to them yet, and don't retry or look \
-             for the task."
+            "Time tracking is not turned on for this person yet, so nothing was logged. Tell them \
+             time tracking isn't available to them yet; don't retry or look for the task."
                 .to_string()
         }
         TimeTrackingError::NotFound(_) => {

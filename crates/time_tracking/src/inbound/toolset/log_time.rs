@@ -30,7 +30,7 @@ pub struct LogTime {
     pub minutes: u16,
     /// The day the work was done.
     #[schemars(
-        description = "The day the work was done, YYYY-MM-DD, in the user's own calendar. For today, use the date in the current time block, not UTC's."
+        description = "The day the work was done, YYYY-MM-DD, in the user's own calendar. For today, use the user's current date where they are (the current time block when there is one), not UTC's."
     )]
     pub date: NaiveDate,
     /// What the time was spent on.
@@ -73,7 +73,7 @@ where
             .task_receipt::<EditAccessLevel>(
                 &request_context,
                 &self.task_id,
-                "You need edit access to the task to log time on it.",
+                "The task was not found, or you need edit access to it to log time on it.",
             )
             .await?;
         let logged = service_context

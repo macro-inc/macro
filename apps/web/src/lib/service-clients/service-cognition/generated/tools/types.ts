@@ -12880,7 +12880,7 @@ export interface LogTime {
    */
   minutes: number;
   /**
-   * The day the work was done, YYYY-MM-DD, in the user's own calendar. For today, use the date in the current time block, not UTC's.
+   * The day the work was done, YYYY-MM-DD, in the user's own calendar. For today, use the user's current date where they are (the current time block when there is one), not UTC's.
    */
   date: string;
   /**
@@ -15071,7 +15071,7 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Read the time logged on a task: its Time logged total and its 50 most recent entries, newest day first, each with who logged it, the day, the length in minutes and the note. Everyone who can view the task sees everyone's entries. Use it to answer how much time was spent on a task or by whom; LogTime adds time.
+ * Read the time logged on a task: its Time logged total and its 50 most recent entries, newest day first, each with who logged it, the day, the length in minutes and the note. Everyone who can view the task sees everyone's entries. Use it to answer how much time was spent on a task and by whom; when truncated is true, sums per person cover only the entries returned, so say so. LogTime adds time.
  */
 export interface ReadTimeEntries {
   /**

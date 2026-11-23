@@ -123,7 +123,7 @@ async fn a_viewer_cannot_log_time() {
 
     assert_eq!(
         error.description,
-        "You need edit access to the task to log time on it."
+        "The task was not found, or you need edit access to it to log time on it."
     );
     assert_eq!(tools.repo.entry_count(), 0);
 }
@@ -141,8 +141,11 @@ async fn logging_is_refused_while_time_tracking_is_off_for_the_user() {
         "{}",
         error.description
     );
-    assert!(error.description.contains("The task exists"));
-    assert!(error.description.contains("don't retry"));
+    assert!(
+        error
+            .description
+            .contains("don't retry or look for the task")
+    );
     assert!(!error.description.contains("not found"));
     assert_eq!(tools.repo.entry_count(), 0);
 }
@@ -197,6 +200,7 @@ async fn a_long_history_returns_the_newest_entries_and_says_so() {
     assert!(read.truncated);
     assert_eq!(read.total_minutes, u32::from(RECENT) + 1);
     assert!(read.summary.contains("showing the 50 most recent"));
+    assert!(read.summary.contains("totals per person are partial"));
 }
 
 #[tokio::test]
