@@ -13,6 +13,7 @@ import {
   LOOK_BACK_HOURS,
   message,
   missingInstallers,
+  readMore,
   type Release,
   type Run,
   windowStart,
@@ -37,6 +38,7 @@ const release = (tag: string, published: Date | null, assets: string[] = COMPLET
   html_url: `https://github.com/o/r/releases/tag/${tag}`,
   draft: false,
   prerelease: false,
+  created_at: (published ?? NOW).toISOString(),
   published_at: published?.toISOString() ?? null,
   assets: assets.map((name) => ({ name })),
   ...rest,
@@ -131,8 +133,37 @@ describe('windowStart', () => {
     assert.deepEqual(windowStart(run(hoursAgo(LOOK_BACK_HOURS * 3)), NOW), hoursAgo(LOOK_BACK_HOURS));
   });
 
-  test('covers the last hour without a previous successful run', () => {
-    assert.deepEqual(windowStart(undefined, NOW), hoursAgo(1));
+  test('looks back LOOK_BACK_HOURS without a previous successful run', () => {
+    // A first run whose post failed leaves no successful run; the next run
+    // must still check the release it missed.
+    const missed = release('v2026.11.23.0', hoursAgo(DEADLINE_HOURS + 1.5), []);
+    const since = windowStart(undefined, NOW);
+    assert.deepEqual(since, hoursAgo(LOOK_BACK_HOURS));
+    assert.deepEqual(
+      due([missed], since, NOW).map((each) => each.tag_name),
+      ['v2026.11.23.0'],
+    );
+  });
+});
+
+describe('readMore', () => {
+  const since = hoursAgo(3);
+  const page = (oldestHoursAgo: number, size = 3) =>
+    Array.from({ length: size }, (_, index) =>
+      release(`v1.0.${index}`, hoursAgo(oldestHoursAgo - (size - 1 - index) * 0.1)),
+    );
+
+  test('reads the next page while its oldest release may still be due', () => {
+    // Unrelated releases can fill a page ahead of a due production release.
+    assert.equal(readMore(page(DEADLINE_HOURS + 2), 3, since), true);
+  });
+
+  test('stops once the oldest release was created before any due deadline', () => {
+    assert.equal(readMore(page(DEADLINE_HOURS + 4), 3, since), false);
+  });
+
+  test('stops at a short page, the last one', () => {
+    assert.equal(readMore(page(DEADLINE_HOURS + 2, 2), 3, since), false);
   });
 });
 

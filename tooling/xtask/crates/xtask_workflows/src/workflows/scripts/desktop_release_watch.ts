@@ -52,6 +52,7 @@ export type Release = {
   html_url: string;
   draft: boolean;
   prerelease: boolean;
+  created_at: string;
   published_at: string | null;
   assets: { name: string }[];
 };
@@ -100,14 +101,32 @@ export function missingInstallers(release: Release): string[] {
 /**
  * Where this run's window starts: when the previous successful run started,
  * which checked every deadline before then, but no more than LOOK_BACK_HOURS
- * ago. Without one, the last hour, the cron's interval.
+ * ago. Without one, LOOK_BACK_HOURS ago, so a release whose first post failed
+ * is still checked.
  */
 export function windowStart(previous: Run | undefined, now: Date): Date {
   const earliest = now.getTime() - LOOK_BACK_HOURS * HOUR;
   if (!previous) {
-    return new Date(now.getTime() - HOUR);
+    return new Date(earliest);
   }
   return new Date(Math.max(earliest, Date.parse(previous.run_started_at ?? previous.created_at)));
+}
+
+/** The most pages of releases a run reads. */
+export const MAX_PAGES = 10;
+
+/**
+ * Whether releases after this page can still be due: the list is newest
+ * first by creation, and a release published at or before `since` minus
+ * DEADLINE_HOURS, so created before then, is not due. A full page whose
+ * oldest release was created after that point has more to read.
+ */
+export function readMore(page: Release[], perPage: number, since: Date): boolean {
+  const oldest = page.at(-1);
+  if (page.length < perPage || !oldest) {
+    return false;
+  }
+  return Date.parse(oldest.created_at) > since.getTime() - DEADLINE_HOURS * HOUR;
 }
 
 /** The names of the jobs that did not finish their work. */
@@ -191,8 +210,15 @@ async function github(path: string): Promise<any> {
 
 /** The findings for the production releases whose deadline is in `(since, now]`. */
 export async function findings(repo: string, since: Date, now: Date): Promise<Finding[]> {
-  // Newest first; LOOK_BACK_HOURS of releases fit in a page of 30.
-  const releases: Release[] = await github(`/repos/${repo}/releases?per_page=30`);
+  const perPage = 30;
+  const releases: Release[] = [];
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const batch: Release[] = await github(`/repos/${repo}/releases?per_page=${perPage}&page=${page}`);
+    releases.push(...batch);
+    if (!readMore(batch, perPage, since)) {
+      break;
+    }
+  }
   const found: Finding[] = [];
   for (const release of due(releases, since, now)) {
     const missing = missingInstallers(release);
