@@ -83,7 +83,7 @@ async fn backfill_retries_later_batch_contention_on_the_same_connection(pool: Pg
         ..Migrator::DEFAULT
     };
     before_call.run(&pool).await.unwrap();
-    sqlx::raw_sql(
+    sqlx::query!(
         "INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)
         SELECT lpad(to_hex(n), 32, '0')::uuid, md5('source-' || n)::uuid::text,
             'TASK', '00000001-0000-0000-0000-000000000007'
@@ -110,6 +110,8 @@ async fn backfill_retries_later_batch_contention_on_the_same_connection(pool: Pg
     });
     barrier.wait().await;
     let mut migration = pool.acquire().await.unwrap();
+    // The compiler database has the final schema, which drops this temporary
+    // procedure. Execute its historical-schema CALL at runtime instead.
     let error = sqlx::raw_sql("CALL backfill_task_dependency_edges()")
         .execute(&mut *migration)
         .await

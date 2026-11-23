@@ -28,6 +28,7 @@ Migration files belong in `../macro_db_client/migrations/`.
   may already contain all migrations.
 - Use SQL fixtures for statements that target a historical schema; current-schema
   SQLx macros cannot validate columns that have since been removed or added.
+- Document runtime CALLs to temporary migration procedures that the final compiler schema has already dropped; keep ordinary fixture DML macro-checked.
 - Backfill locks signed endpoint keys before source rows, uses NOWAIT for row-first contention, and revalidates discovery; test contention with barriers and 40001 retry.
 - Exercise concurrent indexes through SQLx's migrator, outside explicit transactions.
 - Keep the migrations fingerprint `build.rs` passes as a cfg: sccache keys this
