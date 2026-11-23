@@ -21,6 +21,10 @@ export function MicrophoneAction(props: {
   showMemo: boolean;
 }) {
   const startMemo = () => fireAndForget(props.memo.start(), 'voice-memo');
+  // A phone tap on Send hides it as the draft empties, and the tap's click
+  // then lands on this button in its place: record only for a press that
+  // began here, or for the keyboard (a click with no pointer, `detail` 0).
+  let pressedHere = false;
   // Dictation is unavailable on touch devices, whose keyboards dictate.
   const canDictate = () =>
     props.showDictation && props.dictation.phase() !== 'unavailable';
@@ -36,10 +40,18 @@ export function MicrophoneAction(props: {
           class="text-composer-ink"
           disabled={props.memo.disabled() || props.dictation.active()}
           // Keep the editor focused so the draft and caret stay put.
+          onPointerDown={() => {
+            pressedHere = true;
+          }}
           onMouseDown={(event: MouseEvent) => {
             if (event.button === 0) event.preventDefault();
           }}
-          onClick={startMemo}
+          onClick={(event: MouseEvent) => {
+            const pressed = pressedHere;
+            pressedHere = false;
+            if (event.detail > 0 && !pressed) return;
+            startMemo();
+          }}
         >
           <MicrophoneIcon class="size-5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
