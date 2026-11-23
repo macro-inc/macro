@@ -18,6 +18,8 @@ type EntryFormProps = {
   submitLabel: string;
   onSubmit: (values: TimeEntryValues) => void;
   onCancel: () => void;
+  /** Delete the entry being edited, from the form itself. */
+  onDelete?: () => void;
 };
 
 function timeOf(instant: string | null | undefined): string {
@@ -139,6 +141,19 @@ export function EntryForm(props: EntryFormProps): JSX.Element {
         />
       </label>
       <div class="flex justify-end gap-2">
+        <Show when={props.onDelete}>
+          {(onDelete) => (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              class="mr-auto text-failure"
+              onClick={() => onDelete()()}
+            >
+              {t('timeTracking.deleteEntry')}
+            </Button>
+          )}
+        </Show>
         <Button
           type="button"
           variant="ghost"

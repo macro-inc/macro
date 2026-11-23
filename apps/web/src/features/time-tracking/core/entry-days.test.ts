@@ -22,4 +22,16 @@ describe('entry days', () => {
     ]);
     expect(groupByDay([])).toEqual([]);
   });
+
+  it('keeps each day together when an edited entry is still in its old place', () => {
+    const entries = [
+      { id: 'moved', date: '2026-11-18', minutes: 30 },
+      { id: 'b', date: '2026-11-19', minutes: 60 },
+      { id: 'c', date: '2026-11-18', minutes: 15 },
+    ];
+    expect(groupByDay(entries).map((day) => [day.day, day.minutes])).toEqual([
+      ['2026-11-19', 60],
+      ['2026-11-18', 45],
+    ]);
+  });
 });

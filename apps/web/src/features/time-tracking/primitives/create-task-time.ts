@@ -1,10 +1,11 @@
 import { beginInteraction } from '@app/observability/flow';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { err } from 'neverthrow';
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal, mapArray } from 'solid-js';
 import { useTimeTracking } from '../context/time-tracking-context';
 import type { TimeEntryValues } from '../core/entry-values';
 import {
+  createTaskTimeEntriesAfterQuery,
   createTaskTimeEntriesQuery,
   deleteTimeEntry,
   logTime,
@@ -40,6 +41,38 @@ async function traced(
 export function createTaskTime(taskId: Accessor<string | undefined>) {
   const { client, cacheHost, viewerId } = useTimeTracking();
   const entries = createTaskTimeEntriesQuery(taskId, client);
+  // Older pages the person asked for, kept only for the task they were read on.
+  const [older, setOlder] = createSignal<{
+    taskId: string;
+    cursors: string[];
+  }>();
+  const cursors = () => {
+    const read = older();
+    return read && read.taskId === taskId() ? read.cursors : [];
+  };
+  const olderPages = mapArray(cursors, (cursor) =>
+    createTaskTimeEntriesAfterQuery(taskId, () => cursor, client)
+  );
+  const nextCursor = () => {
+    const pages = olderPages();
+    const last = pages.at(-1);
+    return last ? last.nextCursor() : entries.nextCursor();
+  };
+  // A new entry can push one from the first page onto the next one read.
+  const allEntries = () => {
+    const seen = new Set<string>();
+    const unique: TimeEntryFieldsFragment[] = [];
+    const read = [
+      ...entries.entries(),
+      ...olderPages().flatMap((page) => page.entries()),
+    ];
+    for (const entry of read) {
+      if (seen.has(entry.id)) continue;
+      seen.add(entry.id);
+      unique.push(entry);
+    }
+    return unique;
+  };
   const dependencies = () => ({ client: client(), host: cacheHost() });
   refreshOnTimeTrackingChanges(
     async (change) => {
@@ -52,8 +85,17 @@ export function createTaskTime(taskId: Accessor<string | undefined>) {
   );
 
   return {
-    entries: entries.entries,
+    entries: allEntries,
     pending: entries.pending,
+    /** More entries exist past the ones shown. */
+    hasOlder: () => nextCursor() !== undefined,
+    olderPending: () => olderPages().some((page) => page.pending()),
+    showOlder() {
+      const id = taskId();
+      const next = nextCursor();
+      if (!id || !next) return;
+      setOlder({ taskId: id, cursors: [...cursors(), next] });
+    },
     failed: entries.failed,
     refetch: entries.refetch,
     viewerId,

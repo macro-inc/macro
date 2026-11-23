@@ -75,6 +75,14 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
                           t('timeTracking.saveFailed')
                         );
                       }}
+                      onDelete={() => {
+                        const deleted = entry();
+                        setMode({ kind: 'list' });
+                        reportWrite(
+                          time.remove(deleted),
+                          t('timeTracking.deleteFailed')
+                        );
+                      }}
                     />
                   )}
                 </Match>
@@ -162,7 +170,14 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
                                 />
                               }
                             >
-                              {content}
+                              <button
+                                type="button"
+                                class="w-full text-left"
+                                aria-description={t('timeTracking.editEntry')}
+                                onClick={() => setMode({ kind: 'edit', entry })}
+                              >
+                                {content}
+                              </button>
                             </SwipableRow>
                           </Show>
                         )}

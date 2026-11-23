@@ -30,6 +30,7 @@ export default {
   dayTotal: '{{day}} · {{length}}',
   timerSource: 'timer',
   noEntries: 'No time logged yet',
+  showOlder: 'Show older entries',
   loadingEntries: 'Loading the time logged',
   entriesFailed: 'Could not load the time logged',
   retry: 'Try again',

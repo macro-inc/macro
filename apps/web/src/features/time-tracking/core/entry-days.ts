@@ -26,14 +26,16 @@ export function dayName(day: string, today: string): DayName {
 export type EntryDay<T> = { day: string; minutes: number; entries: T[] };
 
 /**
- * Group entries, already newest day first, into days with their totals,
- * keeping the order the server returned within each day.
+ * Group entries into days with their totals, newest day first, keeping the
+ * order the server returned within each day. An entry whose day was just
+ * edited may still sit in its old place, so the days are put in order here.
  */
 export function groupByDay<T extends { date: string; minutes: number }>(
   entries: readonly T[]
 ): EntryDay<T>[] {
   const days: EntryDay<T>[] = [];
-  for (const entry of entries) {
+  const newestFirst = [...entries].sort((a, b) => b.date.localeCompare(a.date));
+  for (const entry of newestFirst) {
     const last = days.at(-1);
     if (last?.day === entry.date) {
       last.entries.push(entry);

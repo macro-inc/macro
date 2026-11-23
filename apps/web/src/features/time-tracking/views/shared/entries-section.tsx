@@ -2,7 +2,7 @@ import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
 import { t } from '@app/lib/i18n';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { Button } from '@ui/components/Button';
-import { type JSX, Match, Switch } from 'solid-js';
+import { type JSX, Match, Show, Switch } from 'solid-js';
 import { EntryList } from '../../components/entry-list';
 import type { TaskTime } from '../../primitives/create-task-time';
 
@@ -19,13 +19,26 @@ export function EntriesSection(props: EntriesSectionProps): JSX.Element {
   return (
     <Switch
       fallback={
-        <EntryList
-          entries={props.time.entries()}
-          today={props.today}
-          person={props.person}
-          row={props.row}
-          actions={props.actions}
-        />
+        <>
+          <EntryList
+            entries={props.time.entries()}
+            today={props.today}
+            person={props.person}
+            row={props.row}
+            actions={props.actions}
+          />
+          <Show when={props.time.hasOlder()}>
+            <Button
+              variant="ghost"
+              size="sm"
+              class="self-start"
+              disabled={props.time.olderPending()}
+              onClick={() => props.time.showOlder()}
+            >
+              {t('timeTracking.showOlder')}
+            </Button>
+          </Show>
+        </>
       }
     >
       <Match when={props.time.pending() && props.time.entries().length === 0}>

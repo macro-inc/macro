@@ -5,6 +5,9 @@ import { createTaskTime } from './create-task-time';
 
 const hooks = vi.hoisted(() => ({
   refetch: vi.fn(),
+  firstPage: [] as { id: string }[],
+  firstCursor: undefined as string | undefined,
+  pages: {} as Record<string, { entries: { id: string }[]; next?: string }>,
   onChange: undefined as
     | ((change: TimeTrackingChange) => Promise<unknown>)
     | undefined,
@@ -20,10 +23,19 @@ vi.mock('../context/time-tracking-context', () => ({
 }));
 vi.mock('../queries/time-entries', () => ({
   createTaskTimeEntriesQuery: () => ({
-    entries: () => [],
+    entries: () => hooks.firstPage,
+    nextCursor: () => hooks.firstCursor,
     pending: () => false,
     failed: () => false,
     refetch: hooks.refetch,
+  }),
+  createTaskTimeEntriesAfterQuery: (
+    _taskId: unknown,
+    after: () => string | undefined
+  ) => ({
+    entries: () => hooks.pages[after() ?? '']?.entries ?? [],
+    nextCursor: () => hooks.pages[after() ?? '']?.next,
+    pending: () => false,
   }),
   logTime: vi.fn(),
   updateTimeEntry: vi.fn(),
@@ -41,10 +53,33 @@ vi.mock('../queries/time-tracking-changes', () => ({
 
 const [taskId, setTaskId] = createSignal<string | undefined>();
 
+let time: ReturnType<typeof createTaskTime>;
+
 beforeEach(() => {
   hooks.refetch.mockReset();
+  hooks.firstPage = [];
+  hooks.firstCursor = undefined;
+  hooks.pages = {};
   setTaskId(undefined);
-  createRoot(() => createTaskTime(taskId));
+  time = createRoot(() => createTaskTime(taskId));
+});
+
+it('reads older pages on request, without repeats, until there are none', () => {
+  setTaskId('task-1');
+  hooks.firstPage = [{ id: 'a' }, { id: 'b' }];
+  hooks.firstCursor = 'after-b';
+  hooks.pages = {
+    'after-b': { entries: [{ id: 'b' }, { id: 'c' }], next: 'after-c' },
+    'after-c': { entries: [{ id: 'd' }] },
+  };
+  expect(time.hasOlder()).toBe(true);
+  time.showOlder();
+  expect(time.entries().map((entry) => entry.id)).toEqual(['a', 'b', 'c']);
+  time.showOlder();
+  expect(time.entries().map((entry) => entry.id)).toEqual(['a', 'b', 'c', 'd']);
+  expect(time.hasOlder()).toBe(false);
+  setTaskId('task-2');
+  expect(time.entries().map((entry) => entry.id)).toEqual(['a', 'b']);
 });
 
 it('re-reads entries when another session changes this task', async () => {
