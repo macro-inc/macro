@@ -240,7 +240,8 @@ fn watcher_leaves_play_alone_while_publishing() {
         include_str!("../scripts/android_play_statuses.sh"),
         include_str!("../scripts/android_release_watch.sh")
     );
-    // `gh run list` applies the script's own --jq filter to the fake runs.
+    // `gh run list` filters the fake runs by --status, then applies the
+    // script's own --jq filter.
     let fakes = r#"
 cd() { :; }
 gh_fetch() { [[ "$1" == merge ]]; }
@@ -255,7 +256,8 @@ gh() {
   esac
   if [[ -n "${runs+set}" ]]; then
     [[ "$runs" != error ]] || return 1
-    jq "${@: -1}" <<<"$runs"
+    [[ "$*" =~ --status\ ([a-z_]+) ]] || return 1
+    jq --arg status "${BASH_REMATCH[1]}" '[.[] | select(.status == $status)]' <<<"$runs" | jq "${@: -1}"
   fi
 }
 bun() {
@@ -282,7 +284,7 @@ bun() {
         ),
         (
             "a publish run queued",
-            r#"[{"status":"queued"}]"#,
+            r#"[{"status":"completed"},{"status":"queued"}]"#,
             done,
             true,
             0,

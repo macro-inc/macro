@@ -166,12 +166,16 @@ jobs:
           conf_path="apps/web/tauri/src-tauri/tauri.android.conf.json"
 
           # How many runs of the workflows that edit the Play app have not completed.
+          # GitHub filters by status, so an old unfinished run is found however many
+          # newer runs there are.
           play_publish_runs() {
-            local workflow count total=0
+            local workflow status count total=0
             for workflow in android-play-publish.yml publish-android-play.yml; do
-              count=$(gh run list --repo "$GH_REPO" --workflow "$workflow" --limit 100 --json status \
-                --jq '[.[] | select(.status != "completed")] | length') || return 1
-              total=$(( total + count ))
+              for status in queued in_progress waiting requested pending; do
+                count=$(gh run list --repo "$GH_REPO" --workflow "$workflow" --status "$status" \
+                  --json databaseId --jq 'length') || return 1
+                total=$(( total + count ))
+              done
             done
             echo "$total"
           }
