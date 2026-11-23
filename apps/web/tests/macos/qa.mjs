@@ -11,6 +11,13 @@
 // `skip` (could not be attempted; the detail says why). Nothing is faked: a
 // runner without a GUI session reports window checks as failed, not passed.
 //
+// `--dmg <Macro.dmg>` names the release DMG the app was copied from and adds the
+// checks only a notarized release passes (stapled ticket, Gatekeeper); `Build
+// Desktop on Tag` runs the smoke suite that way on the DMG it built, and its
+// desktop-stable promotion waits for a pass.
+// `--attempts N` relaunches the app up to N times when a launch check fails, so
+// one flaky launch does not block a release; every attempt is reported.
+//
 // The desktop app on macOS is Chromium (CEF), not WKWebView, and tauri-driver
 // does not support macOS, so there is no WebDriver route. The `cdp` check
 // instead asks the running app for Chrome DevTools Protocol on a debugging
@@ -42,6 +49,10 @@ const { values: args } = parseArgs({
 		"window-timeout": { type: "string", default: "90" },
 		// Seconds the app must stay up after its window appears.
 		soak: { type: "string" },
+		// The notarized release DMG the app was copied from.
+		dmg: { type: "string" },
+		// Launches to try before the launch checks count as failed.
+		attempts: { type: "string", default: "1" },
 	},
 });
 if (!args.app || !args.out) {
@@ -50,6 +61,12 @@ if (!args.app || !args.out) {
 }
 if (args.suite !== "smoke" && args.suite !== "full") {
 	console.error(`suite must be smoke or full, got ${args.suite}`);
+	process.exit(2);
+}
+
+const attempts = Number(args.attempts);
+if (!Number.isInteger(attempts) || attempts < 1) {
+	console.error(`attempts must be a positive integer, got ${args.attempts}`);
 	process.exit(2);
 }
 
@@ -68,6 +85,8 @@ const run = (cmd, argv, options = {}) => {
 };
 
 const checks = [];
+// Checks of the current launch attempt; folded into `checks` once it is final.
+let target = checks;
 const check = async (name, body) => {
 	const t = Date.now();
 	let result;
@@ -76,7 +95,7 @@ const check = async (name, body) => {
 	} catch (error) {
 		result = { status: "fail", detail: `threw: ${error?.stack ?? error}` };
 	}
-	checks.push({ name, ms: Date.now() - t, ...result });
+	target.push({ name, ms: Date.now() - t, ...result });
 	console.log(`[${result.status}] ${name}: ${result.detail ?? ""}`);
 };
 const pass = (detail) => ({ status: "pass", detail });
@@ -117,25 +136,47 @@ await check("bundle-codesign", async () => {
 		: fail(`${r.stderr.trim().slice(0, 400)}`);
 });
 
-// ── launch ──────────────────────────────────────────────────────────────
-// A clean HOME: the app creates its data directories as a first-time user.
-const home = join(tmpdir(), `macro-qa-home-${process.pid}`);
-mkdirSync(home, { recursive: true });
-const realHome = homedir();
-const appLog = join(out, "app.log");
-writeFileSync(appLog, "");
-const launchedAt = Date.now();
+// Nix's dev shell points xcrun and friends at its own SDK; Apple's tools run
+// with those variables removed.
+const systemEnv = Object.fromEntries(
+	Object.entries(process.env).filter(
+		([k]) => !/^(SDKROOT|DEVELOPER_DIR|NIX_.*|CPATH|LIBRARY_PATH|CC|CXX|LD)$/.test(k),
+	),
+);
 
-const child = spawn(binary, [], {
-	env: { ...process.env, HOME: home, CFFIXED_USER_HOME: home },
-	stdio: ["ignore", "pipe", "pipe"],
-});
-child.stdout.on("data", (d) => appendFileSync(appLog, d));
-child.stderr.on("data", (d) => appendFileSync(appLog, d));
-let exit; // { code, signal } once the app has ended
-child.on("exit", (code, signal) => {
-	exit = { code, signal, after: Date.now() - launchedAt };
-});
+if (args.dmg) {
+	const dmg = args.dmg;
+	// Both read the ticket stapled to the DMG, so neither needs Apple's servers.
+	await check("notarization-ticket", async () => {
+		const r = run("/usr/bin/xcrun", ["stapler", "validate", dmg], { env: systemEnv });
+		return r.code === 0
+			? pass(`stapler validate: ticket stapled to ${basename(dmg)}`)
+			: fail(`stapler validate exit ${r.code}: ${`${r.stdout}${r.stderr}`.trim().slice(0, 400)}`);
+	});
+
+	await check("gatekeeper", async () => {
+		const r = run(
+			"/usr/sbin/spctl",
+			["--assess", "--type", "open", "--context", "context:primary-signature", "-vv", dmg],
+			{ env: systemEnv },
+		);
+		// spctl reports on stderr: "<dmg>: accepted\nsource=Notarized Developer ID".
+		const text = `${r.stdout}${r.stderr}`.trim();
+		return r.code === 0 && /source=Notarized Developer ID/.test(text)
+			? pass(text.split("\n").slice(1).join("; "))
+			: fail(`spctl exit ${r.code}: ${text.slice(0, 400)}`);
+	});
+}
+
+// ── launch ──────────────────────────────────────────────────────────────
+const realHome = homedir();
+// The first attempt keeps the plain file names; a retry's files carry its number.
+let attempt = 1;
+const named = (file) => {
+	if (attempt === 1) return file;
+	const dot = file.lastIndexOf(".");
+	return dot === -1 ? `${file}.attempt${attempt}` : `${file.slice(0, dot)}.attempt${attempt}${file.slice(dot)}`;
+};
 
 // Windows are found with CoreGraphics, which needs no permission. System
 // Events (AppleScript) makes macOS ask for Automation consent in a dialog
@@ -158,11 +199,6 @@ for w in info {
 const jxa = `ObjC.import("CoreGraphics");
 const list = ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, $.kCGNullWindowID)));
 list.map((w) => [w.kCGWindowOwnerPID, w.kCGWindowLayer, Math.round(w.kCGWindowBounds.Width) + "x" + Math.round(w.kCGWindowBounds.Height), w.kCGWindowOwnerName].join("\\t")).join("\\n");`;
-const systemEnv = Object.fromEntries(
-	Object.entries(process.env).filter(
-		([k]) => !/^(SDKROOT|DEVELOPER_DIR|NIX_.*|CPATH|LIBRARY_PATH|CC|CXX|LD)$/.test(k),
-	),
-);
 const listWindows = () => {
 	const viaJxa = run("/usr/bin/osascript", ["-l", "JavaScript", "-e", jxa], { env: systemEnv });
 	if (viaJxa.code === 0 && viaJxa.stdout.trim() !== "") return { text: viaJxa.stdout };
@@ -174,7 +210,7 @@ const listWindows = () => {
 		? { text: viaSwift.stdout }
 		: { error: `JXA: ${viaJxa.stderr.trim().slice(0, 200)}; swift: ${viaSwift.stderr.trim().slice(0, 200)}` };
 };
-const windowsOf = () => {
+const windowsOf = (pid) => {
 	const listed = listWindows();
 	if (listed.error) return { error: listed.error };
 	const rows = listed.text
@@ -183,120 +219,164 @@ const windowsOf = () => {
 		.map((line) => line.split("\t"));
 	// The app's own on-screen, normal-layer, window-sized windows.
 	return {
-		windows: rows.filter(([pid, layer, size]) => {
+		windows: rows.filter(([owner, layer, size]) => {
 			const [w, h] = size.split("x").map(Number);
-			return Number(pid) === child.pid && layer === "0" && w >= 200 && h >= 200;
+			return Number(owner) === pid && layer === "0" && w >= 200 && h >= 200;
 		}),
 		all: rows.length,
 	};
 };
 
-await check("window-appears", async () => {
-	const deadline = Date.now() + windowTimeout * 1000;
-	let last = "";
-	while (Date.now() < deadline) {
-		if (exit) return fail(`app exited (${JSON.stringify(exit)}) before showing a window; log: ${readFileSync(appLog, "utf8").trim().slice(0, 300)}`);
-		const found = windowsOf();
-		if (found.error) return fail(`could not list windows: ${found.error}`);
-		last = `${found.all} on-screen windows, none of the app's`;
-		if (found.windows.length > 0)
-			return pass(
-				`window ${found.windows[0][2]} after ${((Date.now() - launchedAt) / 1000).toFixed(1)}s (owner ${found.windows[0][3]})`,
-			);
-		await sleep(2000);
-	}
-	return fail(`no window within ${windowTimeout}s (${last})`);
-});
+// One launch of the app on a clean HOME, with every check of that launch.
+const launchAndCheck = async () => {
+	// A clean HOME: the app creates its data directories as a first-time user.
+	const home = join(tmpdir(), `macro-qa-home-${process.pid}-${attempt}`);
+	mkdirSync(home, { recursive: true });
+	const appLog = join(out, named("app.log"));
+	writeFileSync(appLog, "");
+	const launchedAt = Date.now();
 
-await check("screenshot", async () => {
-	// Let Chromium paint its first frame.
-	await sleep(8000);
-	const file = join(shots, "app-launch.png");
-	const r = run("screencapture", ["-x", file]);
-	if (r.code !== 0 || !existsSync(file))
-		return fail(`screencapture exit ${r.code}: ${r.stderr.trim()}`);
-	const bytes = statSync(file).size;
-	// An all-black or empty framebuffer compresses to almost nothing.
-	return bytes > 20_000
-		? pass(`${bytes} bytes → screenshots/app-launch.png`)
-		: fail(`screenshot is ${bytes} bytes: probably a blank display`);
-});
-
-await check("menu-bar", async () => {
-	if (process.env.QA_AUTOMATION !== "1")
-		return skip(
-			"System Events needs Automation consent, which a runner shows as an unanswerable dialog; set QA_AUTOMATION=1 on a Mac where it is granted",
-		);
-	const r = run("osascript", ["-e", `tell application "System Events" to get name of every menu bar item of menu bar 1 of (first process whose unix id is ${child.pid})`], { timeout: 15_000 });
-	if (r.code !== 0) return fail(`System Events: ${r.stderr.trim().slice(0, 300)}`);
-	return r.stdout.trim() === "" ? fail("menu bar has no items") : pass(r.stdout.trim());
-});
-
-if (full) {
-	await check("cdp", async () => {
-		// The app parses its own command line (clap) and refuses Chromium's
-		// switches, so it cannot be started with --remote-debugging-port;
-		// reaching the page needs a change in the app. Report that, not a pass.
-		return skip(
-			"the app's argument parser rejects --remote-debugging-port (exit 2), so DevTools cannot be enabled from outside",
-		);
+	const child = spawn(binary, [], {
+		env: { ...process.env, HOME: home, CFFIXED_USER_HOME: home },
+		stdio: ["ignore", "pipe", "pipe"],
 	});
+	child.stdout.on("data", (d) => appendFileSync(appLog, d));
+	child.stderr.on("data", (d) => appendFileSync(appLog, d));
+	let exit; // { code, signal } once the app has ended
+	child.on("exit", (code, signal) => {
+		exit = { code, signal, after: Date.now() - launchedAt };
+	});
+	// A binary that cannot be started fails the launch checks instead of the harness.
+	child.on("error", (error) => {
+		exit ??= { code: null, signal: null, error: String(error), after: Date.now() - launchedAt };
+	});
+
+	await check("window-appears", async () => {
+		const deadline = Date.now() + windowTimeout * 1000;
+		let last = "";
+		while (Date.now() < deadline) {
+			if (exit) return fail(`app exited (${JSON.stringify(exit)}) before showing a window; log: ${readFileSync(appLog, "utf8").trim().slice(0, 300)}`);
+			const found = windowsOf(child.pid);
+			if (found.error) return fail(`could not list windows: ${found.error}`);
+			last = `${found.all} on-screen windows, none of the app's`;
+			if (found.windows.length > 0)
+				return pass(
+					`window ${found.windows[0][2]} after ${((Date.now() - launchedAt) / 1000).toFixed(1)}s (owner ${found.windows[0][3]})`,
+				);
+			await sleep(2000);
+		}
+		return fail(`no window within ${windowTimeout}s (${last})`);
+	});
+
+	await check("screenshot", async () => {
+		// Let Chromium paint its first frame.
+		await sleep(8000);
+		const file = join(shots, named("app-launch.png"));
+		const r = run("screencapture", ["-x", file]);
+		if (r.code !== 0 || !existsSync(file))
+			return fail(`screencapture exit ${r.code}: ${r.stderr.trim()}`);
+		const bytes = statSync(file).size;
+		// An all-black or empty framebuffer compresses to almost nothing.
+		return bytes > 20_000
+			? pass(`${bytes} bytes → screenshots/${named("app-launch.png")}`)
+			: fail(`screenshot is ${bytes} bytes: probably a blank display`);
+	});
+
+	await check("menu-bar", async () => {
+		if (process.env.QA_AUTOMATION !== "1")
+			return skip(
+				"System Events needs Automation consent, which a runner shows as an unanswerable dialog; set QA_AUTOMATION=1 on a Mac where it is granted",
+			);
+		const r = run("osascript", ["-e", `tell application "System Events" to get name of every menu bar item of menu bar 1 of (first process whose unix id is ${child.pid})`], { timeout: 15_000 });
+		if (r.code !== 0) return fail(`System Events: ${r.stderr.trim().slice(0, 300)}`);
+		return r.stdout.trim() === "" ? fail("menu bar has no items") : pass(r.stdout.trim());
+	});
+
+	if (full) {
+		await check("cdp", async () => {
+			// The app parses its own command line (clap) and refuses Chromium's
+			// switches, so it cannot be started with --remote-debugging-port;
+			// reaching the page needs a change in the app. Report that, not a pass.
+			return skip(
+				"the app's argument parser rejects --remote-debugging-port (exit 2), so DevTools cannot be enabled from outside",
+			);
+		});
+	}
+
+	await check("stays-up", async () => {
+		const until = Date.now() + soakSeconds * 1000;
+		while (Date.now() < until && !exit) await sleep(1000);
+		run("screencapture", ["-x", join(shots, named("app-after-soak.png"))]);
+		return exit
+			? fail(`app exited after ${(exit.after / 1000).toFixed(1)}s: code ${exit.code}, signal ${exit.signal}`)
+			: pass(`still running ${soakSeconds}s after the window appeared`);
+	});
+
+	// ── quit, then look for crashes ─────────────────────────────────────────
+	if (!exit) {
+		child.kill("SIGTERM");
+		for (let i = 0; i < 15 && !exit; i++) await sleep(1000);
+		if (!exit) child.kill("SIGKILL");
+	}
+	await sleep(3000);
+
+	await check("no-crash-report", async () => {
+		const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
+		const fresh = existsSync(reports)
+			? readdirSync(reports).filter(
+					(n) =>
+						/\.(ips|crash)$/.test(n) &&
+						n.toLowerCase().includes(basename(executable).toLowerCase()) &&
+						statSync(join(reports, n)).mtimeMs >= launchedAt,
+				)
+			: [];
+		for (const name of fresh) cpSync(join(reports, name), join(out, name));
+		return fresh.length === 0 ? pass("no crash report since launch") : fail(`crash report(s): ${fresh.join(", ")}`);
+	});
+
+	await check("clean-shutdown", async () => {
+		if (!exit) return fail("app did not exit after SIGKILL");
+		// SIGTERM ends a Chromium app with a signal; a crash would be SIGSEGV/SIGABRT/SIGILL.
+		const crashSignals = ["SIGSEGV", "SIGABRT", "SIGILL", "SIGBUS", "SIGTRAP"];
+		return crashSignals.includes(exit.signal)
+			? fail(`died of ${exit.signal}`)
+			: pass(`exit code ${exit.code}, signal ${exit.signal}`);
+	});
+
+	await check("app-log", async () => {
+		const lines = readFileSync(appLog, "utf8").split("\n").filter(Boolean);
+		const bad = lines.filter((l) => /\b(panic|panicked|fatal)\b/i.test(l));
+		return bad.length === 0
+			? pass(`${lines.length} lines on stdout/stderr, none with panic/fatal`)
+			: fail(`${bad.length} panic/fatal lines, first: ${bad[0].slice(0, 300)}`);
+	});
+
+	// What the app wrote to the clean HOME (its own logs, data directories).
+	const homeLogs = join(out, named("app-home"));
+	for (const sub of ["Library/Logs", "Library/Application Support"]) {
+		const from = join(home, sub);
+		if (existsSync(from)) cpSync(from, join(homeLogs, sub), { recursive: true });
+	}
+};
+
+// A launch check that fails is retried with a fresh launch, up to `attempts`
+// times; the last attempt's checks are the result, earlier ones are reported.
+const retried = [];
+for (;;) {
+	target = [];
+	await launchAndCheck();
+	const failed = target.filter((c) => c.status === "fail");
+	if (failed.length === 0 || attempt >= attempts) break;
+	retried.push({ attempt, failed: failed.map(({ name, detail }) => ({ name, detail })) });
+	console.log(`attempt ${attempt} of ${attempts} failed (${failed.map((c) => c.name).join(", ")}); relaunching`);
+	attempt += 1;
 }
-
-await check("stays-up", async () => {
-	const until = Date.now() + soakSeconds * 1000;
-	while (Date.now() < until && !exit) await sleep(1000);
-	run("screencapture", ["-x", join(shots, "app-after-soak.png")]);
-	return exit
-		? fail(`app exited after ${(exit.after / 1000).toFixed(1)}s: code ${exit.code}, signal ${exit.signal}`)
-		: pass(`still running ${soakSeconds}s after the window appeared`);
-});
-
-// ── quit, then look for crashes ─────────────────────────────────────────
-if (!exit) {
-	child.kill("SIGTERM");
-	for (let i = 0; i < 15 && !exit; i++) await sleep(1000);
-	if (!exit) child.kill("SIGKILL");
+if (attempt > 1) {
+	for (const c of target) c.detail = `${c.detail ?? ""} (attempt ${attempt} of ${attempts})`.trim();
 }
-await sleep(3000);
+checks.push(...target);
+target = checks;
 
-await check("no-crash-report", async () => {
-	const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
-	const fresh = existsSync(reports)
-		? readdirSync(reports).filter(
-				(n) =>
-					/\.(ips|crash)$/.test(n) &&
-					n.toLowerCase().includes(basename(executable).toLowerCase()) &&
-					statSync(join(reports, n)).mtimeMs >= launchedAt,
-			)
-		: [];
-	for (const name of fresh) cpSync(join(reports, name), join(out, name));
-	return fresh.length === 0 ? pass("no crash report since launch") : fail(`crash report(s): ${fresh.join(", ")}`);
-});
-
-await check("clean-shutdown", async () => {
-	if (!exit) return fail("app did not exit after SIGKILL");
-	// SIGTERM ends a Chromium app with a signal; a crash would be SIGSEGV/SIGABRT/SIGILL.
-	const crashSignals = ["SIGSEGV", "SIGABRT", "SIGILL", "SIGBUS", "SIGTRAP"];
-	return crashSignals.includes(exit.signal)
-		? fail(`died of ${exit.signal}`)
-		: pass(`exit code ${exit.code}, signal ${exit.signal}`);
-});
-
-await check("app-log", async () => {
-	const lines = readFileSync(appLog, "utf8").split("\n").filter(Boolean);
-	const bad = lines.filter((l) => /\b(panic|panicked|fatal)\b/i.test(l));
-	return bad.length === 0
-		? pass(`${lines.length} lines on stdout/stderr, none with panic/fatal`)
-		: fail(`${bad.length} panic/fatal lines, first: ${bad[0].slice(0, 300)}`);
-});
-
-// What the app wrote to the clean HOME (its own logs, data directories).
-const homeLogs = join(out, "app-home");
-for (const sub of ["Library/Logs", "Library/Application Support"]) {
-	const from = join(home, sub);
-	if (existsSync(from)) cpSync(from, join(homeLogs, sub), { recursive: true });
-}
 const unified = run("log", ["show", "--last", "10m", "--style", "compact", "--predicate", `process CONTAINS[c] "${basename(executable)}"`], { timeout: 120_000 });
 writeFileSync(join(out, "unified-log.txt"), unified.stdout.slice(-2_000_000));
 
@@ -308,10 +388,9 @@ if (full) {
 		const status = readFileSync(cargoStatus, "utf8").trim();
 		if (status === "0") return pass("cargo test (src-tauri) passed; log in cargo-test.log");
 		const log = existsSync(join(out, "cargo-test.log")) ? readFileSync(join(out, "cargo-test.log"), "utf8") : "";
-		// A test binary that never linked says nothing about the code under test.
-		// Nix's cctools ld crashes (SIGTRAP) in the dev shell on this runner image.
+		// A test binary that never linked ran no tests: say so, and still fail.
 		if (/linker command failed|linking with/.test(log) && !/^test result:/m.test(log))
-			return skip("the test binary did not link on the runner (the Nix dev shell's ld crashes); no tests ran. See cargo-test.log");
+			return fail(`the test binary did not link (exit ${status}); no tests ran. See cargo-test.log`);
 		return fail(`cargo test exit ${status}; log in cargo-test.log`);
 	});
 }
@@ -327,7 +406,9 @@ const summary = {
 	report: args.report || null,
 	runner: { os: `macOS ${sw}`, arch: run("uname", ["-m"]).stdout.trim() },
 	app: { name: executable, version: bundleVersion },
+	dmg: args.dmg ? basename(args.dmg) : null,
 	durationMs: Date.now() - startedAt,
+	attempts: { used: attempt, allowed: attempts, retried },
 	passed: count("pass"),
 	failed: count("fail"),
 	skipped: count("skip"),
@@ -358,6 +439,11 @@ const markdown = [
 	"|---|---|---|",
 	...checks.map((c) => `| ${icon[c.status]} | ${c.name} | ${String(c.detail ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ").slice(0, 300)} |`),
 	"",
+	...retried.map(
+		(r) =>
+			`Launch attempt ${r.attempt} failed and was retried: ${r.failed.map((c) => `${c.name} (${String(c.detail ?? "").replace(/\n/g, " ").slice(0, 200)})`).join("; ")}`,
+	),
+	...(retried.length > 0 ? [""] : []),
 	`${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped in ${(summary.durationMs / 1000).toFixed(0)}s. Screenshots, logs and \`summary.json\` are in the \`macos-qa-*\` artifact.`,
 ].join("\n");
 writeFileSync(join(out, "summary.md"), `${markdown}\n`);
