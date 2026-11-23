@@ -801,9 +801,12 @@ requires platform release testing; mocked HTTP tests never replace the test runn
 
 `PR CI` builds the desktop app on Linux and runs the library tests of `app` and
 `macro_bundle_updater_plugin` (`Desktop app / Test on Linux`,
-`desktop_check.yml`) when a pull request changes `apps/web/tauri/`, the
-generated wire types in `apps/web/src/observability/generated/`, or the Tauri
-Nix shell. It stubs the frontend build as `desktop_qa_macos.yml` does. Locally,
+`desktop_check.yml`) when a pull request changes `apps/web/tauri/`, a
+root-workspace crate it builds (such as `crates/client/cache-core`) or the root
+`Cargo.toml`, the generated wire types in
+`apps/web/src/observability/generated/`, or the Nix shell. A new path dependency
+needs its crate in that workflow's `PATHS` (`desktop_check.rs`); its test fails
+otherwise. The job stubs the frontend build as `desktop_qa_macos.yml` does. Locally,
 from the repository root:
 
 ```sh

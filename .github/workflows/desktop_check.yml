@@ -77,6 +77,8 @@ jobs:
           mkdir -p apps/web/dist
           echo '<!doctype html>' > apps/web/dist/index.html
           echo development > apps/web/tauri/src-tauri/.macro-tauri-env
+      - name: Check the path filter covers the app's crates
+        run: cargo test --locked -p xtask_workflows paths_cover_every_local_crate_the_desktop_app_builds
       - name: cargo test (desktop app)
         run: cargo test --manifest-path apps/web/tauri/Cargo.toml --locked --no-fail-fast -p app -p macro_bundle_updater_plugin --lib
       - name: show sccache stats

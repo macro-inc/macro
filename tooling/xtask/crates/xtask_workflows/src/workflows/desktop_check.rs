@@ -13,11 +13,44 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{runners, steps, vars};
 
-/// Files whose change makes `PR CI` call this workflow.
+#[cfg(test)]
+mod test;
+
+/// Files whose change makes `PR CI` call this workflow: the Tauri workspace,
+/// the root-workspace crates it builds by path (and the root manifest their
+/// `workspace = true` dependencies resolve against), the Nix shell it builds
+/// in, and the generated files its tests compare. A test fails when the
+/// Tauri lockfile names a local crate this list misses.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("apps/web/tauri/**"),
+    xtask_paths::repo_glob!("crates/bot_id/**"),
+    xtask_paths::repo_glob!("crates/client/cache-core/**"),
+    xtask_paths::repo_glob!("crates/client/cache-schema/**"),
+    xtask_paths::repo_glob!("crates/client/cache-turso/**"),
+    xtask_paths::repo_glob!("crates/client/turso-opfs/**"),
+    xtask_paths::repo_glob!("crates/cowlike/**"),
+    xtask_paths::repo_glob!("crates/database_sql/**"),
+    xtask_paths::repo_glob!("crates/document_sub_type/**"),
+    xtask_paths::repo_glob!("crates/filter_ast/**"),
+    xtask_paths::repo_glob!("crates/graphql_soup_filter_input/**"),
+    xtask_paths::repo_glob!("crates/item_filter_index/**"),
+    xtask_paths::repo_glob!("crates/item_filters/**"),
+    xtask_paths::repo_glob!("crates/macro_user_id/**"),
+    xtask_paths::repo_glob!("crates/macro_uuid/**"),
+    xtask_paths::repo_glob!("crates/maybe_send/**"),
+    xtask_paths::repo_glob!("crates/model_file_type/**"),
+    xtask_paths::repo_glob!("crates/model_owner/**"),
+    xtask_paths::repo_glob!("crates/models_databases/**"),
+    xtask_paths::repo_glob!("crates/non_empty/**"),
+    xtask_paths::repo_glob!("crates/notification_state/**"),
+    xtask_paths::repo_glob!("crates/predicate_index/**"),
+    xtask_paths::repo_glob!("crates/soup_filter_cache_adapter/**"),
+    xtask_paths::repo_glob!("crates/soup_filter_projection/**"),
+    xtask_paths::repo_glob!("crates/subsequence_match/**"),
+    xtask_paths::repo_glob!("Cargo.toml"),
     xtask_paths::repo_glob!("apps/web/src/observability/generated/**"),
     xtask_paths::repo_glob!("nix/tauri-dev-shells.nix"),
+    xtask_paths::repo_glob!("nix/cloud-storage.nix"),
     xtask_paths::repo_glob!("flake.nix"),
     xtask_paths::repo_glob!("flake.lock"),
     xtask_paths::repo_glob!("rust-toolchain.toml"),
@@ -59,6 +92,11 @@ fn test_linux_job() -> Job {
         )
         .add_step(steps::configure_namespace_sccache(vars::DESKTOP_CI_CACHE))
         .add_step(stub_frontend())
+        // This job runs on the PR that adds a path dependency, which may run no
+        // other test of this crate.
+        .add_step(Step::new("Check the path filter covers the app's crates").run(
+            "cargo test --locked -p xtask_workflows paths_cover_every_local_crate_the_desktop_app_builds",
+        ))
         .add_step(Step::new("cargo test (desktop app)").run(TEST_COMMAND))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
