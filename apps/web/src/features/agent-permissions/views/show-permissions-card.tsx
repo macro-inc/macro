@@ -27,8 +27,7 @@ import {
 import type { PermissionFocus } from '../core/model';
 import {
   actionPermission,
-  changeForAction,
-  defaultFor,
+  changeForException,
   groupActionTarget,
   groupPermissions,
   ruleFor,
@@ -226,12 +225,9 @@ export function ShowPermissionsCard(props: {
                                   changes.apply(
                                     groupActionTarget(group, action),
                                     state,
-                                    changeForAction(
-                                      group,
-                                      action,
-                                      state,
-                                      defaultFor(loaded().view, action)
-                                    )
+                                    // An explicit choice is kept, even one
+                                    // equal to the action's default.
+                                    changeForException(group, action, state)
                                   ),
                                   'agent-permissions'
                                 )

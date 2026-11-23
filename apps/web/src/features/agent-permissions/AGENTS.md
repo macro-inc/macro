@@ -43,10 +43,10 @@ changes.
 - Wire names stay `always`/`ask`/`never` and `update`/`destroy`; only labels
   say Allow/Ask/Never, Edit, Delete (`components/labels.ts`).
 - A default set to Allow sends `null` (no saved default is Allow). In the
-  settings an exception keeps any state, even one equal to the default; `Use
-  default (X)` (the row's ✕) sends `null`. In the chat cards, setting a group's action to
-  its action's default sends `null` (`changeForAction`), and a tool set to
-  its action's state sends `null` (`PendingChanges.setTool`).
+  settings and the chat cards an exception keeps any state, even one equal
+  to the default (`changeForException`); `Use default (X)` (the row's ✕)
+  sends `null`. A tool set to its action's state sends `null`
+  (`PendingChanges.setTool`).
 - The view's states are the server's: an exception the agent set on itself
   only adds to the default (the stricter wins), so show `state`, never
   recompute it from `rules`.

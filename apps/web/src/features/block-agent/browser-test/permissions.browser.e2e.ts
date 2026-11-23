@@ -196,14 +196,10 @@ test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
   await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();
   await shot(page, 'show-permissions', isMobile);
   await send.getByText('Allow', { exact: true }).click();
-  // Allow is the default here, so the card clears the exception.
+  // An explicit Allow is kept as the exception, though it is the default.
   await expect(page.locator('body')).toHaveAttribute(
     'data-saved',
-    /"email.destroy":"never"/
-  );
-  await expect(page.locator('body')).not.toHaveAttribute(
-    'data-saved',
-    /email.send/
+    /"email.send":"always"/
   );
   await expect(send.getByRole('radio', { name: 'Allow' })).toBeChecked();
 });

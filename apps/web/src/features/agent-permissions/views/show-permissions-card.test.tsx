@@ -107,8 +107,8 @@ describe('ShowPermissionsCard', () => {
           changes: [
             {
               target: { kind: 'group_action', group: 'email', action: 'send' },
-              // Allow follows the (always) default: no explicit exception.
-              state: null,
+              // An explicit Allow is kept, though it equals the default.
+              state: 'always',
             },
           ],
         },
@@ -116,6 +116,39 @@ describe('ShowPermissionsCard', () => {
       )
     );
     await waitFor(() => expect(client.session).toHaveBeenCalledTimes(2));
+  });
+
+  it("keeps an explicit exception equal to the action's default", async () => {
+    // Send defaults to Ask; Email's Send exception is Never.
+    renderCard({
+      ...VIEW,
+      defaults: VIEW.defaults.map((entry) =>
+        entry.action === 'send' ? { ...entry, state: 'ask' } : entry
+      ),
+      groups: VIEW.groups.map((group) =>
+        group.group === 'email'
+          ? {
+              ...group,
+              actions: group.actions.map((pair) =>
+                pair.action === 'send'
+                  ? { ...pair, state: 'never' as const, exception: true }
+                  : pair
+              ),
+            }
+          : group
+      ),
+    });
+    await screen.findByRole('radiogroup', { name: 'Email: Send' });
+    fireEvent.click(option('Email: Send', 'Ask'));
+    await waitFor(() => expect(client.set).toHaveBeenCalled());
+    expect(client.set.mock.calls[0]?.[1]).toEqual({
+      changes: [
+        {
+          target: { kind: 'group_action', group: 'email', action: 'send' },
+          state: 'ask',
+        },
+      ],
+    });
   });
 
   it('opens the agent’s permissions page at the group', async () => {

@@ -99,24 +99,6 @@ export function changeForTool(
   };
 }
 
-/**
- * The change a chat card's control makes to a group's action: setting it to
- * the action's default follows the default (`null`); any other state saves
- * an exception. The settings' own exception menus keep an explicit choice
- * instead (`changeForException`).
- */
-export function changeForAction(
-  group: string,
-  action: PermissionAction,
-  state: ToolPermissionState,
-  defaultState: ToolPermissionState
-): ToolPermissionChange {
-  return {
-    target: groupActionTarget(group, action),
-    state: state === defaultState ? null : state,
-  };
-}
-
 /** The view's permissions for one group, if the view lists it. */
 export function groupPermissions(
   view: AgentToolPermissions,
