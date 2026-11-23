@@ -21,15 +21,21 @@ TanStack path in `../` runs untouched.
   (`channel-stream.ts`), catches up open channels on reconnect, and tells open
   timelines and threads to reread (`onChanged`).
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
-  durable cache mutation queue and waits for their settlement.
+  durable cache mutation queue and waits for their settlement; a retired host
+  (`graphql-soup.ts` cleanup) fails the writes still waiting.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
-  person is idle, and evicts channels untouched for 30 days.
+  person is idle, and evicts channels untouched for 30 days. A pushed frame
+  for a channel the device does not hold gives it an empty sync row once, so
+  eviction finds the records the frame stored.
 
 ## Start here
 
 - `channel-sync.ts`: the per-host factories every caller goes through.
 - `../channel-timeline-source.ts`: `useChannelReadPath`, the once-per-mount
   choice between device and REST; `../thread-replies.ts` uses the same choice.
+  A flag PostHog has not answered yet reads as off: REST never waits for it.
+- `channel-resets.ts`: counts deletes and evictions per host, so a page
+  fetched across one commits no coverage.
 
 ## Checks
 
@@ -48,6 +54,9 @@ TanStack path in `../` runs untouched.
   30-day eviction would take at once.
 - `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts` and
   `channel-prewarm.ts` (FE-46).
+- A page's `stored` and a thread's store acknowledgements never reject: a
+  loader that moved on leaves them unawaited. The store runs in a
+  `channel.page.store` child span of the page.
 - Keep the prewarm pace under the engine's idle checkpoint quiet period, or
   every channel forces a checkpoint.
 
