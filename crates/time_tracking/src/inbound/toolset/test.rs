@@ -7,26 +7,30 @@ use super::*;
 use crate::{
     domain::service::TimeTrackingServiceImpl,
     test_support::{
-        EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER, RecordingPublisher, TASK, TestClock,
-        VIEWER, noon, user,
+        EDITOR, FakeAccess, FakeRepo, FixedRollout, OUTSIDER, RecordingPublisher, RecordingUpdates,
+        TASK, TestClock, VIEWER, noon, user,
     },
 };
 
-type Service = TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, TestClock>;
+type Service =
+    TimeTrackingServiceImpl<FakeRepo, FakeAccess, RecordingPublisher, RecordingUpdates, TestClock>;
 
 struct Tools {
     context: TimeTrackingToolContext<Service, FakeAccess>,
     repo: FakeRepo,
+    updates: RecordingUpdates,
 }
 
 fn tools(enabled: bool) -> Tools {
     let access = Arc::new(FakeAccess::team());
     let repo = FakeRepo::with_live_tasks(&[TASK]);
+    let updates = RecordingUpdates::default();
     let service = TimeTrackingServiceImpl::new(
         repo.clone(),
         access.clone(),
         Arc::new(FixedRollout(enabled)),
         RecordingPublisher::default(),
+        updates.clone(),
     )
     .with_clock(TestClock::at(noon()));
     Tools {
@@ -35,6 +39,7 @@ fn tools(enabled: bool) -> Tools {
             access,
         },
         repo,
+        updates,
     }
 }
 
@@ -113,6 +118,11 @@ async fn an_editor_logs_time_as_themselves_and_the_total_follows() {
         "Logged 45m on 2026-11-20; the task's Time logged is now 2h 15m."
     );
     assert_eq!(tools.repo.total(TASK), 135);
+    let sent = tools.updates.sent();
+    assert_eq!(sent.len(), 2);
+    assert!(sent.iter().all(|(to, change)| to == EDITOR
+        && !change.timer
+        && change.task_id.as_deref() == Some(TASK)));
 }
 
 #[tokio::test]
@@ -148,6 +158,7 @@ async fn logging_is_refused_while_time_tracking_is_off_for_the_user() {
     );
     assert!(!error.description.contains("not found"));
     assert_eq!(tools.repo.entry_count(), 0);
+    assert!(tools.updates.sent().is_empty());
 }
 
 #[tokio::test]

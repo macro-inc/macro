@@ -450,6 +450,11 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         pool.clone(),
         entity_access_service.clone(),
         macro_event_broker.clone(),
+        connection_gateway_client::ConnectionGatewayClient::new(
+            "testing".to_string(),
+            "http://localhost".to_string(),
+        ),
+        TaskTracker::new(),
         macro_env::Environment::Local,
         None,
     );

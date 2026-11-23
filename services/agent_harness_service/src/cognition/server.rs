@@ -641,6 +641,8 @@ pub async fn build(
         db.clone(),
         entity_access_service.clone(),
         macro_event_broker.clone(),
+        channels_connection_gateway.as_ref().clone(),
+        event_broker_tracker.clone(),
         config.environment,
         side_effect_clients.feature_flags.clone(),
     );
