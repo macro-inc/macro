@@ -3,6 +3,7 @@ import {
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
 import { describe, expect, it, vi } from 'vitest';
+import type * as ChannelNetwork from '../channel-network';
 import {
   CHANNEL_TOUCH_INTERVAL_MS,
   type ChannelServerPage,
@@ -19,7 +20,8 @@ import {
   keyOf,
 } from './fixtures';
 
-vi.mock('../channel-network', () => ({
+vi.mock('../channel-network', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChannelNetwork>()),
   queryChannelNetwork: () => {
     throw new Error('tests pass fetchPage');
   },

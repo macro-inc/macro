@@ -1,6 +1,11 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import type { AnyVariables, DocumentInput } from '@urql/core';
+import {
+  type AnyVariables,
+  CombinedError,
+  type DocumentInput,
+} from '@urql/core';
 
 /**
  * Runs a query over the cached client. Resolves with the data as soon as it
@@ -38,3 +43,22 @@ export async function queryChannelNetwork<
   };
   return { data: result.data, cached: cached() };
 }
+
+/**
+ * Whether a read failed to store because the cache session changed under it
+ * (startup's first owner proof, a permission change). Read again: the new
+ * session can store it.
+ */
+export function cacheSessionChanged(error: unknown): boolean {
+  if (error instanceof StaleCacheAuthorityError) return true;
+  return (
+    error instanceof CombinedError &&
+    error.networkError instanceof StaleCacheAuthorityError
+  );
+}
+
+/**
+ * Times a view reads again because the cache session changed before the
+ * device stored what it read, as startup's first owner proof does.
+ */
+export const SESSION_CHANGE_RELOADS = 2;

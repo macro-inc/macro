@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
@@ -125,6 +126,31 @@ describe('loadChannelThread', () => {
         seq: { kind: 'lower', seq: '12' },
       },
     ]);
+  });
+
+  it('says so when the cache session changed before the thread was stored', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => ({
+      page: {
+        root,
+        replies: [first, second],
+        olderCursor: null,
+        newerCursor: null,
+        seq: '12',
+      },
+      cached: Promise.reject(new StaleCacheAuthorityError()),
+    }));
+
+    const loaded = await loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
+      fetchPage,
+    });
+
+    expect(loaded).toMatchObject({
+      source: 'server',
+      seq: null,
+      sessionChanged: true,
+    });
+    expect(host.commits).toEqual([]);
   });
 
   it('reads over REST on a host that cannot serve channels', async () => {

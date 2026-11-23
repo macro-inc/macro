@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
   CacheRevision,
   ChannelTimelineCacheArgs,
@@ -12,6 +13,7 @@ import {
   mapChannelTimelineEntry,
   rootSortKey,
 } from '../channel-map';
+import type * as ChannelNetwork from '../channel-network';
 import type {
   ChannelPageEntry,
   FetchChannelServerPage,
@@ -29,7 +31,8 @@ import {
   keyOf,
 } from './fixtures';
 
-vi.mock('../channel-network', () => ({
+vi.mock('../channel-network', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChannelNetwork>()),
   queryChannelNetwork: () => {
     throw new Error('tests pass fetchPage');
   },
@@ -340,6 +343,46 @@ describe('createLocalChannelTimeline', () => {
       seq: { kind: 'lower', seq: '9' },
     });
 
+    mounted.addRow(graphqlMessage(3));
+    runtime.changed();
+    await waitFor(() => timeline.entries().length === 3);
+    mounted.dispose();
+  });
+
+  it('reads a page again when the cache session changed before it was stored, keeping it shown', async () => {
+    const rows = messages(2);
+    let held = false;
+    let calls = 0;
+    const fetchPage = vi.fn<FetchChannelServerPage>(async () => {
+      calls += 1;
+      const first = calls === 1;
+      return {
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: [...rows].reverse(),
+          olderCursor: null,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: (async () => {
+          if (first) throw new StaleCacheAuthorityError();
+          held = true;
+        })(),
+      };
+    });
+    const mounted = mount({ rows, held: false, fetchPage });
+    const { timeline, runtime } = mounted;
+    const shown: number[] = [];
+    await waitFor(() => {
+      shown.push(timeline.entries().length);
+      return vi.mocked(runtime.noteServerRead).mock.calls.length > 0;
+    });
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, '9', 3);
+    // The reload never blanks the window it shows.
+    expect(shown.slice(shown.indexOf(2))).not.toContain(0);
+
+    mounted.setHeld(held);
     mounted.addRow(graphqlMessage(3));
     runtime.changed();
     await waitFor(() => timeline.entries().length === 3);

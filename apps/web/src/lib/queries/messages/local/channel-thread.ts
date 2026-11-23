@@ -24,7 +24,11 @@ import {
   mapChannelMessage,
   mapChannelRoot,
 } from './channel-map';
-import { queryChannelNetwork } from './channel-network';
+import {
+  cacheSessionChanged,
+  queryChannelNetwork,
+  SESSION_CHANGE_RELOADS,
+} from './channel-network';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 export type ChannelThreadHost = Pick<
@@ -146,7 +150,10 @@ async function fetchServerThread(
   rootId: string,
   fetchPage: FetchChannelThreadPage,
   signal?: AbortSignal
-): Promise<{ thread: MessageThread; seq: string | null } | undefined> {
+): Promise<
+  | { thread: MessageThread; seq: string | null; sessionChanged: boolean }
+  | undefined
+> {
   // The session the thread is read under: a later one must not store it.
   const generation = cacheSessionGeneration.capture();
   const ask = (cursor: Partial<ChannelThreadInput> = {}) =>
@@ -200,10 +207,14 @@ async function fetchServerThread(
     );
     if (result.kind === 'committed') committed = result.channelSeq;
   } catch (error) {
+    // The cache session changed before the device stored the thread; the
+    // caller reads it again under the new one.
+    if (cacheSessionChanged(error))
+      return { thread, seq: null, sessionChanged: true };
     // The thread still shows; it is read from the server again next time.
     Telemetry.error(error, { surface: 'channel-thread' });
   }
-  return { thread, seq: committed };
+  return { thread, seq: committed, sessionChanged: false };
 }
 
 export type LoadedChannelThread = {
@@ -211,6 +222,8 @@ export type LoadedChannelThread = {
   source: 'device' | 'server';
   /** The sequence the device holds for the channel; null when not stored. */
   seq: string | null;
+  /** The cache session changed before the device could store the thread. */
+  sessionChanged?: boolean;
 };
 
 /**
@@ -316,7 +329,7 @@ export function createLocalChannelThread(
   const show = (thread: MessageThread) =>
     setState('replies', reconcile(thread.replies, { key: 'id' }));
 
-  const load = async (root: string) => {
+  const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
     held = false;
     const abort = new AbortController();
@@ -338,6 +351,11 @@ export function createLocalChannelThread(
         deps.runtime.noteStoredSeq(channelId, loaded.seq);
         held = true;
         fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-thread');
+        return;
+      }
+      if (loaded.sessionChanged) {
+        // The new session can store what the old one could not.
+        if (reloads < SESSION_CHANGE_RELOADS) await load(root, reloads + 1);
         return;
       }
       deps.runtime.noteServerRead(channelId, loaded.seq, epoch);

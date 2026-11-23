@@ -12,6 +12,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
+import { cacheSessionChanged, SESSION_CHANGE_RELOADS } from './channel-network';
 import {
   type ChannelPage,
   type ChannelPageDeps,
@@ -241,48 +242,58 @@ export function createLocalChannelTimeline(
     abort?.abort();
   });
 
-  /** Follows what the page's store step learns of the device. */
+  /**
+   * Follows what the page's store step learns of the device: whether it now
+   * holds the page, or the cache session changed before it could store it.
+   */
   const settle = async (
     loaded: LoadedChannelPage,
     epoch: number,
     token: number
-  ) => {
+  ): Promise<'held' | 'unheld' | 'session-changed'> => {
     let seq: string | null;
     try {
       seq = await loaded.stored;
     } catch (error) {
+      if (cacheSessionChanged(error)) return 'session-changed';
       Telemetry.error(error, { surface: 'channel-local-sync' });
       seq = null;
     }
-    if (token !== loadToken) return false;
+    if (token !== loadToken) return 'unheld';
     if (loaded.source === 'device') {
       deps.runtime.noteStoredSeq(channelId, seq);
-      return true;
+      return 'held';
     }
     deps.runtime.noteServerRead(channelId, seq, epoch);
-    return seq !== null;
+    return seq === null ? 'unheld' : 'held';
   };
 
   const load = (around: string | undefined): Promise<void> => {
-    currentLoad = loadWindow(around);
+    currentLoad = loadWindow(around, 0);
     return currentLoad;
   };
 
-  const loadWindow = async (around: string | undefined) => {
+  /**
+   * Loads the window around a message, or at the live end. A window read
+   * again after a session change keeps what it shows until the new page
+   * replaces it.
+   */
+  const loadWindow = async (around: string | undefined, reloads: number) => {
     const token = ++loadToken;
     abort?.abort();
     abort = new AbortController();
     held = false;
     anchorId = around;
-    setState({
-      phase: 'loading',
-      error: undefined,
-      entries: [],
-      olderCursor: null,
-      newerCursor: null,
-      loadingOlder: false,
-      loadingNewer: false,
-    });
+    if (reloads === 0)
+      setState({
+        phase: 'loading',
+        error: undefined,
+        entries: [],
+        olderCursor: null,
+        newerCursor: null,
+        loadingOlder: false,
+        loadingNewer: false,
+      });
     const epoch = deps.runtime.epoch();
     let loaded: LoadedChannelPage | 'unsupported';
     try {
@@ -297,7 +308,8 @@ export function createLocalChannelTimeline(
       );
     } catch (error) {
       if (token !== loadToken) return;
-      setState({ phase: 'failed', error });
+      // A reload keeps the window it already shows.
+      if (reloads === 0) setState({ phase: 'failed', error });
       return;
     }
     if (token !== loadToken) return;
@@ -311,8 +323,18 @@ export function createLocalChannelTimeline(
       olderCursor: loaded.page.olderCursor,
       newerCursor: loaded.page.newerCursor,
     });
-    held = await settle(loaded, epoch, token);
-    if (token !== loadToken || !held) return;
+    const settled = await settle(loaded, epoch, token);
+    if (token !== loadToken) return;
+    if (settled === 'session-changed') {
+      // The new session can store what the old one could not.
+      if (reloads < SESSION_CHANGE_RELOADS) {
+        currentLoad = loadWindow(around, reloads + 1);
+        await currentLoad;
+      }
+      return;
+    }
+    held = settled === 'held';
+    if (!held) return;
     // Opening asks the server only when the channel is not proven current.
     fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-local-sync');
   };
@@ -389,8 +411,8 @@ export function createLocalChannelTimeline(
           }
         })
       );
-      const pageHeld = await settle(loaded, epoch, token);
-      if (token === loadToken && !pageHeld) held = false;
+      const settled = await settle(loaded, epoch, token);
+      if (token === loadToken && settled !== 'held') held = false;
     } catch (error) {
       // The window keeps what it shows; the next scroll asks again.
       Telemetry.error(error, { surface: 'channel-local-sync' });
