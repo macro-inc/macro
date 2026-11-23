@@ -12,8 +12,9 @@ use macro_uuid::Uuid;
 use crate::domain::model::{
     AgentFacts, AgentOwner, AgentScope, CandidatesFor, CatalogEntry, CatalogGroup, Follows,
     MAX_CHAIN, PolicyChain, PolicyLevel, SourceScope, SourceStatus, SourceUnavailable, Target,
+    TeamFacts, TeamRole,
 };
-use crate::domain::ports::SourceWrite;
+use crate::domain::ports::{SourceWrite, TeamDirectory};
 
 const OWNER: &str = "macro|owner@example.com";
 const TEAMMATE: &str = "macro|teammate@example.com";
@@ -58,6 +59,7 @@ fn catalog() -> Arc<Catalog> {
 enum Key {
     Agent(BotId),
     Persona(BotId, String),
+    Team(Uuid),
     Session(AgentSessionId),
 }
 
@@ -65,6 +67,7 @@ fn key(owner: &PolicyOwner) -> Key {
     match owner {
         PolicyOwner::Agent(agent) => Key::Agent(*agent),
         PolicyOwner::Persona { persona, user } => Key::Persona(*persona, user.as_ref().to_owned()),
+        PolicyOwner::Team(team) => Key::Team(*team),
     }
 }
 
@@ -105,7 +108,7 @@ impl FakeStore {
     fn slot(&self, key: &Key) -> Option<Slot> {
         match key {
             Key::Session(session) => Some(Slot::Session(*session)),
-            Key::Agent(_) | Key::Persona(..) => self
+            Key::Agent(_) | Key::Persona(..) | Key::Team(_) => self
                 .policies
                 .lock()
                 .unwrap()
@@ -188,6 +191,26 @@ impl PermissionStore for Arc<FakeStore> {
             .unwrap()
             .entry(id)
             .or_insert_with(|| (owner.clone(), Follows::Own));
+        Ok(id)
+    }
+
+    async fn find_policy(&self, owner: &PolicyOwner) -> Result<Option<PolicyId>, Infallible> {
+        Ok(self.policy(&key(owner)))
+    }
+
+    async fn ensure_following_policy(
+        &self,
+        agent: BotId,
+        source: PolicyId,
+    ) -> Result<PolicyId, Infallible> {
+        let owner = PolicyOwner::Agent(agent);
+        if let Some(id) = self.policy(&key(&owner)) {
+            return Ok(id);
+        }
+        let id = self.ensure_policy(&owner).await?;
+        if let Some((_, follows)) = self.owners.lock().unwrap().get_mut(&id) {
+            *follows = Follows::Source(source);
+        }
         Ok(id)
     }
 
@@ -307,12 +330,14 @@ impl PermissionStore for Arc<FakeStore> {
         Ok(Ok(written))
     }
 
-    async fn ensure_agent_policies(&self, agents: &[BotId]) -> Result<Vec<PolicyId>, Infallible> {
-        let mut ids = Vec::with_capacity(agents.len());
-        for agent in agents {
-            ids.push(self.ensure_policy(&PolicyOwner::Agent(*agent)).await?);
-        }
-        Ok(ids)
+    async fn find_agent_policies(
+        &self,
+        agents: &[BotId],
+    ) -> Result<Vec<Option<PolicyId>>, Infallible> {
+        Ok(agents
+            .iter()
+            .map(|agent| self.policy(&Key::Agent(*agent)))
+            .collect())
     }
 
     async fn followers_height(&self, policy: PolicyId) -> Result<usize, Infallible> {
@@ -320,6 +345,20 @@ impl PermissionStore for Arc<FakeStore> {
     }
 }
 
+/// Agents created after policies had default sources: no policy yet.
+const NEW_PRIVATE: BotId = BotId::new_from_uuid(Uuid::from_u128(0x0E01));
+const NEW_TEAM: BotId = BotId::new_from_uuid(Uuid::from_u128(0x0E02));
+/// The agents that had a policy before default sources (the migration gave
+/// each its own).
+const EXISTING: [BotId; 7] = [
+    BotId::TEST_A,
+    SCOUT,
+    GONE,
+    THEIRS,
+    TEAM_ONE,
+    TEAM_TWO,
+    OTHER_TEAMS,
+];
 /// The owner's private `Scout`.
 const SCOUT: BotId = BotId::new_from_uuid(Uuid::from_u128(0x5C07));
 /// The owner's deleted private agent.
@@ -363,6 +402,8 @@ impl Default for FakeAgents {
                 agent(TEAM_ONE, AgentOwner::Team(TEAM), "One", false),
                 agent(TEAM_TWO, AgentOwner::Team(TEAM), "Two", false),
                 agent(OTHER_TEAMS, AgentOwner::Team(OTHER_TEAM), "Other", false),
+                agent(NEW_PRIVATE, mine(), "Newbie", false),
+                agent(NEW_TEAM, AgentOwner::Team(TEAM), "New team agent", false),
             ],
             members: Mutex::new(vec![
                 (TEAM, OWNER.to_owned()),
@@ -465,15 +506,72 @@ impl PermissionsRollout for FakeRollout {
 
 struct Fixture {
     store: Arc<FakeStore>,
-    service: AgentPermissionsService<Arc<FakeStore>, FakeAgents, FakeSessions, FakeRollout>,
+    service:
+        AgentPermissionsService<Arc<FakeStore>, FakeAgents, FakeTeams, FakeSessions, FakeRollout>,
+}
+
+/// `TEAM`: the owner is its admin, the teammate a member; `OTHER_TEAM`: the
+/// teammate is its owner.
+struct FakeTeams;
+
+impl TeamDirectory for FakeTeams {
+    type Err = Infallible;
+
+    async fn role(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        team: Uuid,
+    ) -> Result<Option<TeamRole>, Infallible> {
+        Ok(match (team, user.as_ref()) {
+            (TEAM, OWNER) => Some(TeamRole::Admin),
+            (TEAM, TEAMMATE) => Some(TeamRole::Member),
+            (OTHER_TEAM, TEAMMATE) => Some(TeamRole::Owner),
+            _ => None,
+        })
+    }
+
+    async fn teams(&self, user: &MacroUserIdStr<'static>) -> Result<Vec<TeamFacts>, Infallible> {
+        let mut teams = Vec::new();
+        for team in [TEAM, OTHER_TEAM] {
+            if self.role(user, team).await?.is_some() {
+                teams.push(self.team(team).await?.unwrap());
+            }
+        }
+        Ok(teams)
+    }
+
+    async fn team(&self, team: Uuid) -> Result<Option<TeamFacts>, Infallible> {
+        Ok(match team {
+            TEAM => Some(TeamFacts {
+                id: TEAM,
+                name: "Team".to_owned(),
+            }),
+            OTHER_TEAM => Some(TeamFacts {
+                id: OTHER_TEAM,
+                name: "Other team".to_owned(),
+            }),
+            _ => None,
+        })
+    }
 }
 
 fn fixture_with(enabled: bool) -> Fixture {
     let store = Arc::new(FakeStore::default());
+    // The agents that existed before default sources own their settings.
+    for agent in EXISTING {
+        let id = PolicyId::generate();
+        store.policies.lock().unwrap().insert(Key::Agent(agent), id);
+        store
+            .owners
+            .lock()
+            .unwrap()
+            .insert(id, (PolicyOwner::Agent(agent), Follows::Own));
+    }
     Fixture {
         service: AgentPermissionsService::new(
             Arc::clone(&store),
             FakeAgents::default(),
+            FakeTeams,
             FakeSessions,
             FakeRollout(enabled),
             catalog(),
@@ -1176,7 +1274,7 @@ async fn a_policy_keeps_one_id_through_reads_writes_and_the_gate() {
         (set.policy_id, viewed.policy_id, reset.policy_id),
         (id, id, id)
     );
-    assert_eq!(fixture.store.policies.lock().unwrap().len(), 1);
+    assert_eq!(fixture.store.policies.lock().unwrap().len(), EXISTING.len());
 
     let mine = fixture
         .service
@@ -1226,7 +1324,7 @@ async fn a_refused_request_creates_no_policy() {
                 .is_err()
         );
     }
-    assert!(fixture.store.policies.lock().unwrap().is_empty());
+    assert_eq!(fixture.store.policies.lock().unwrap().len(), EXISTING.len());
 }
 
 fn send_default(state: Option<PermissionState>) -> Change {
@@ -1876,7 +1974,13 @@ async fn following_grants_no_authority_over_the_source() {
     let followed = view.source.unwrap();
     assert_eq!(followed.policy_id, Some(team_two));
     assert!(!followed.can_edit && !followed.in_scope);
-    assert_eq!(followed.scope, Some(SourceScope::Team { team_id: TEAM }));
+    assert_eq!(
+        followed.scope,
+        Some(SourceScope::Team {
+            team_id: TEAM,
+            team_name: Some("Team".to_owned()),
+        })
+    );
     for refused in [
         fixture
             .service
@@ -1979,7 +2083,13 @@ async fn the_picker_lists_macro_then_agents_and_says_why_one_cant_be_picked() {
         .iter()
         .map(|candidate| {
             (
-                candidate.agent.name.as_str(),
+                candidate.agent.as_ref().map_or(
+                    candidate
+                        .team
+                        .as_ref()
+                        .map_or("", |team| team.name.as_str()),
+                    |agent| agent.name.as_str(),
+                ),
                 candidate.current,
                 candidate.unavailable,
             )
@@ -1989,14 +2099,18 @@ async fn the_picker_lists_macro_then_agents_and_says_why_one_cant_be_picked() {
         summary,
         [
             ("Macro", true, None),
+            ("Team", false, None),
             ("Scout", false, Some(SourceUnavailable::Cycle)),
             ("One", false, None),
             ("Two", false, None),
+            ("Newbie", false, None),
+            ("New team agent", false, None),
         ]
     );
-    assert_eq!(listed[1].policy_id, scout);
+    assert_eq!(listed[2].policy_id, scout);
 
-    // A new team agent: that team's agents, no personal Macro.
+    // A new team agent: that team's default, then its agents, no personal
+    // Macro.
     let team = fixture
         .service
         .source_candidates(&person(OWNER), CandidatesFor::Team(TEAM))
@@ -2005,9 +2119,17 @@ async fn the_picker_lists_macro_then_agents_and_says_why_one_cant_be_picked() {
         .candidates;
     assert_eq!(
         team.iter()
-            .map(|candidate| candidate.agent.name.as_str())
+            .map(|candidate| {
+                candidate.agent.as_ref().map_or(
+                    candidate
+                        .team
+                        .as_ref()
+                        .map_or("", |team| team.name.as_str()),
+                    |agent| agent.name.as_str(),
+                )
+            })
             .collect::<Vec<_>>(),
-        ["One", "Two"]
+        ["Team", "One", "Two", "New team agent"]
     );
     assert!(matches!(
         fixture
@@ -2060,7 +2182,12 @@ async fn a_chain_too_long_is_marked_in_the_picker() {
     let unavailable = |bot: BotId| {
         listed
             .iter()
-            .find(|candidate| candidate.agent.id == bot)
+            .find(|candidate| {
+                candidate
+                    .agent
+                    .as_ref()
+                    .is_some_and(|agent| agent.id == bot)
+            })
             .unwrap()
             .unavailable
     };
@@ -2111,4 +2238,233 @@ async fn a_policy_is_read_by_id_only_by_who_may_read_it() {
             .await,
         Err(PermissionError::NotFound)
     ));
+}
+
+#[tokio::test]
+async fn new_agents_follow_their_scope_default_and_existing_agents_keep_their_own() {
+    let fixture = fixture();
+    let mine = owners_macro(&fixture).await;
+    let team = policy_of(&fixture, PolicyOwner::Team(TEAM)).await;
+    // Listing the new agents as candidates first makes their policies, as
+    // their first use would.
+    fixture
+        .service
+        .source_candidates(&person(OWNER), CandidatesFor::Private)
+        .await
+        .unwrap();
+
+    // A new private agent follows its owner's own Macro, live.
+    let view = fixture
+        .service
+        .view_agent(&person(OWNER), NEW_PRIVATE)
+        .await
+        .unwrap();
+    let followed = view.source.unwrap();
+    assert_eq!(
+        (followed.policy_id, followed.kind),
+        (Some(mine), Some(PolicyKind::Persona))
+    );
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(
+            &SessionPolicy {
+                agent: NEW_PRIVATE,
+                owner: user(OWNER),
+                session: AgentSessionId::TEST_A,
+            },
+            &[send_email()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].origin),
+        (PermissionState::Never, Origin::Source)
+    );
+
+    // A new team agent follows its team's default.
+    let view = fixture
+        .service
+        .view_agent(&person(TEAMMATE), NEW_TEAM)
+        .await
+        .unwrap();
+    let followed = view.source.unwrap();
+    assert_eq!(
+        (followed.policy_id, followed.kind),
+        (Some(team), Some(PolicyKind::Team))
+    );
+    assert_eq!(followed.team.unwrap().name, "Team");
+    assert_eq!(
+        followed.scope,
+        Some(SourceScope::Team {
+            team_id: TEAM,
+            team_name: Some("Team".to_owned()),
+        })
+    );
+    assert!(followed.in_scope);
+    // A member reads it but may not edit it.
+    assert!(!followed.can_edit);
+
+    // An agent that existed before keeps its own settings.
+    let existing = fixture
+        .service
+        .view_agent(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    assert!(existing.source.is_none());
+    let resolved = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(resolved[0].state, PermissionState::Always);
+}
+
+#[tokio::test]
+async fn team_default_is_edited_by_admins_and_read_by_members() {
+    let fixture = fixture();
+    // The owner is TEAM's admin; the teammate a member.
+    let set = fixture
+        .service
+        .set_team(&person(OWNER), TEAM, never_send())
+        .await
+        .unwrap();
+    assert!(set.can_edit);
+    assert_eq!((set.team_id, set.kind), (TEAM, PolicyKind::Team));
+    assert_eq!(set.rules.len(), 1);
+
+    let read = fixture
+        .service
+        .view_team(&person(TEAMMATE), TEAM)
+        .await
+        .unwrap();
+    assert!(!read.can_edit);
+    assert_eq!(read.policy_id, set.policy_id);
+    for refused in [
+        fixture
+            .service
+            .set_team(&person(TEAMMATE), TEAM, never_send())
+            .await,
+        fixture.service.reset_team(&person(TEAMMATE), TEAM).await,
+    ] {
+        assert!(matches!(refused, Err(PermissionError::Forbidden)));
+    }
+    // Not a member: nothing to see.
+    assert!(matches!(
+        fixture.service.view_team(&person(OWNER), OTHER_TEAM).await,
+        Err(PermissionError::NotFound)
+    ));
+    // An admin's agent or API key may not change it.
+    for credential in [
+        Credential::Agent {
+            agent: TEAM_ONE,
+            session: None,
+        },
+        Credential::Other,
+    ] {
+        let caller = Caller {
+            user: user(OWNER),
+            credential,
+        };
+        assert!(matches!(
+            fixture.service.set_team(&caller, TEAM, never_send()).await,
+            Err(PermissionError::NeedsPerson)
+        ));
+        assert!(
+            !fixture
+                .service
+                .view_team(&caller, TEAM)
+                .await
+                .unwrap()
+                .can_edit
+        );
+    }
+
+    // The team's agents that follow it take the change on their next call.
+    fixture
+        .service
+        .view_agent(&person(TEAMMATE), NEW_TEAM)
+        .await
+        .unwrap();
+    let resolved = fixture
+        .service
+        .resolve_calls(
+            &SessionPolicy {
+                agent: NEW_TEAM,
+                owner: user(TEAMMATE),
+                session: AgentSessionId::TEST_A,
+            },
+            &[send_email()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(resolved[0].state, PermissionState::Never);
+
+    let reset = fixture
+        .service
+        .reset_team(&person(OWNER), TEAM)
+        .await
+        .unwrap();
+    assert!(reset.rules.is_empty());
+    // Read by id too, by members only.
+    assert_eq!(
+        fixture
+            .service
+            .view_policy(&person(TEAMMATE), set.policy_id)
+            .await
+            .unwrap()
+            .kind,
+        PolicyKind::Team
+    );
+    assert!(matches!(
+        fixture
+            .service
+            .view_policy(
+                &Caller {
+                    user: user("macro|stranger@example.com"),
+                    credential: Credential::PersonSession,
+                },
+                set.policy_id
+            )
+            .await,
+        Err(PermissionError::NotFound)
+    ));
+
+    let off = fixture_with(false);
+    assert!(matches!(
+        off.service.view_team(&person(OWNER), TEAM).await,
+        Err(PermissionError::Disabled)
+    ));
+}
+
+#[tokio::test]
+async fn team_defaults_follow_the_scope_rules() {
+    let fixture = fixture();
+    let team = policy_of(&fixture, PolicyOwner::Team(TEAM)).await;
+    let other_team = policy_of(&fixture, PolicyOwner::Team(OTHER_TEAM)).await;
+    // A private agent may follow the default of a team its owner belongs to.
+    for (agent, source, allowed) in [
+        (BotId::TEST_A, team, true),
+        (BotId::TEST_A, other_team, false),
+        // A team agent its own team's only.
+        (TEAM_ONE, team, true),
+        (TEAM_ONE, other_team, false),
+    ] {
+        let set = fixture
+            .service
+            .set_source(&person(OWNER), agent, source)
+            .await;
+        assert_eq!(set.is_ok(), allowed, "{agent} {source} {set:?}");
+    }
+    // The owner, TEAM's admin, may edit the default an agent follows.
+    let view = fixture
+        .service
+        .view_agent(&person(OWNER), TEAM_ONE)
+        .await
+        .unwrap();
+    assert!(view.source.unwrap().can_edit);
 }

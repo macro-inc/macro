@@ -101,6 +101,31 @@ impl AgentPermissions for Viewer {
     ) -> Result<crate::domain::model::PermissionsView, crate::domain::model::PermissionError> {
         Err(crate::domain::model::PermissionError::NotFound)
     }
+    async fn view_team(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<crate::domain::model::TeamPermissionsView, crate::domain::model::PermissionError>
+    {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
+    async fn set_team(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: macro_uuid::Uuid,
+        _: Vec<crate::domain::model::Change>,
+    ) -> Result<crate::domain::model::TeamPermissionsView, crate::domain::model::PermissionError>
+    {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
+    async fn reset_team(
+        &self,
+        _: &crate::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<crate::domain::model::TeamPermissionsView, crate::domain::model::PermissionError>
+    {
+        Err(crate::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &SessionPolicy,

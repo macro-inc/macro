@@ -32,7 +32,7 @@ use utoipa::ToSchema;
 
 use crate::domain::model::{
     Caller, CandidatesFor, Change, Credential, LoosenedOperation, PermissionError, PermissionsView,
-    PolicyId, SourceCandidates, Target, Tightened, ToolPermissionCatalog,
+    PolicyId, SourceCandidates, Target, TeamPermissionsView, Tightened, ToolPermissionCatalog,
 };
 use crate::domain::service::AgentPermissions;
 
@@ -272,6 +272,12 @@ where
         .route(
             "/agent-tool-permissions/policies/{policy_id}",
             get(get_policy_handler::<Access, Auth>),
+        )
+        .route(
+            "/agent-tool-permissions/teams/{team_id}",
+            get(get_team_handler::<Access, Auth>)
+                .put(set_team_handler::<Access, Auth>)
+                .delete(reset_team_handler::<Access, Auth>),
         )
         .route(
             "/agent-sessions/{session_id}/tool-permissions",
@@ -701,6 +707,114 @@ where
             &caller(authorization.authorization),
             PolicyId::from_uuid(policy_id),
         )
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-tool-permissions/teams/{team_id}",
+    tag = TAG,
+    operation_id = "get_team_tool_permissions",
+    params(("team_id" = Uuid, Path, description = "The team")),
+    responses(
+        (status = 200, body = TeamPermissionsView),
+        (status = 401, body = String),
+        (status = 404, body = ToolPermissionError, description = "Off, or not a member of the team"),
+    )
+)]
+/// A team's default tool permissions: what its agents follow unless they
+/// pick another source. Its members read them.
+#[tracing::instrument(skip_all, fields(%team_id), err(Debug, level = "warn"))]
+pub async fn get_team_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<TeamPermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .view_team(&caller(authorization.authorization), team_id)
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-tool-permissions/teams/{team_id}",
+    tag = TAG,
+    operation_id = "set_team_tool_permissions",
+    params(("team_id" = Uuid, Path, description = "The team")),
+    request_body = ToolPermissionChanges,
+    responses(
+        (status = 200, body = TeamPermissionsView),
+        (status = 400, body = ToolPermissionError),
+        (status = 401, body = String),
+        (status = 403, body = ToolPermissionError, description = "Not a team admin or owner, or not a person's own session (needs_person)"),
+        (status = 404, body = ToolPermissionError),
+    )
+)]
+/// Change a team's default tool permissions in either direction, as `PUT
+/// /agents/{agent_id}/tool-permissions` does for an agent. Only a team admin
+/// or owner signed in to Macro; every agent following it takes the change
+/// on its next call.
+#[tracing::instrument(skip_all, fields(%team_id), err(Debug, level = "warn"))]
+pub async fn set_team_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(team_id): Path<Uuid>,
+    Json(request): Json<ToolPermissionChanges>,
+) -> Result<Json<TeamPermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .set_team(
+            &caller(authorization.authorization),
+            team_id,
+            request.changes,
+        )
+        .await
+        .map(Json)
+        .map_err(ToolPermissionApiError)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/agent-tool-permissions/teams/{team_id}",
+    tag = TAG,
+    operation_id = "reset_team_tool_permissions",
+    params(("team_id" = Uuid, Path, description = "The team")),
+    responses(
+        (status = 200, body = TeamPermissionsView),
+        (status = 401, body = String),
+        (status = 403, body = ToolPermissionError, description = "Not a team admin or owner, or not a person's own session (needs_person)"),
+        (status = 404, body = ToolPermissionError),
+    )
+)]
+/// Reset a team's default tool permissions so everything is always allowed
+/// for the agents following it. Only a team admin or owner signed in to
+/// Macro.
+#[tracing::instrument(skip_all, fields(%team_id), err(Debug, level = "warn"))]
+pub async fn reset_team_handler<Access, Auth>(
+    State(state): State<AgentPermissionsRouterState<Access, Auth>>,
+    authorization: MacroAuthorizationExtractor<Auth, UserOnly>,
+    Path(team_id): Path<Uuid>,
+) -> Result<Json<TeamPermissionsView>, ToolPermissionApiError>
+where
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    state
+        .service
+        .reset_team(&caller(authorization.authorization), team_id)
         .await
         .map(Json)
         .map_err(ToolPermissionApiError)

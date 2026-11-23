@@ -173,12 +173,13 @@ pub struct ShowPermissionsResult {
 /// The line naming what a following view follows.
 fn follows_line(view: &PermissionsView) -> Option<String> {
     let source = view.source.as_ref()?;
-    Some(match &source.agent {
-        Some(agent) => match &agent.handle {
+    Some(match (&source.agent, &source.team) {
+        (Some(agent), _) => match &agent.handle {
             Some(handle) => format!("Follows {} (@{handle})", agent.name),
             None => format!("Follows {}", agent.name),
         },
-        None => "Follows a deleted agent's permissions: everything asks".to_owned(),
+        (None, Some(team)) => format!("Follows the {} team's default permissions", team.name),
+        (None, None) => "Follows a deleted agent's permissions: everything asks".to_owned(),
     })
 }
 

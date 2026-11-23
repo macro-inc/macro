@@ -6,10 +6,11 @@ use std::future::Future;
 use agent_fold::domain::log::AgentSessionId;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 use super::model::{
     AgentAccess, AgentFacts, AgentScope, Change, PermissionError, PolicyChain, PolicyId,
-    PolicyOwner, Rule, SessionFacts, SetBy,
+    PolicyOwner, Rule, SessionFacts, SetBy, TeamFacts, TeamRole,
 };
 
 /// Saved settings, the policies they follow, and session overlays.
@@ -22,6 +23,21 @@ pub trait PermissionStore: Send + Sync + 'static {
     fn ensure_policy(
         &self,
         owner: &PolicyOwner,
+    ) -> impl Future<Output = Result<PolicyId, Self::Err>> + Send;
+
+    /// The id of `owner`'s policy, when it has one.
+    fn find_policy(
+        &self,
+        owner: &PolicyOwner,
+    ) -> impl Future<Output = Result<Option<PolicyId>, Self::Err>> + Send;
+
+    /// The id of the owned agent `agent`'s policy, created following `source`
+    /// (a root: a persona's or a team's policy, so no cycle or depth check is
+    /// needed) when it has none yet. One that exists is returned as it is.
+    fn ensure_following_policy(
+        &self,
+        agent: BotId,
+        source: PolicyId,
     ) -> impl Future<Output = Result<PolicyId, Self::Err>> + Send;
 
     /// A policy, every policy it follows and each one's saved settings, as
@@ -100,12 +116,12 @@ pub trait PermissionStore: Send + Sync + 'static {
     where
         Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send;
 
-    /// The ids of these owned agents' policies, in the order given, each
-    /// created (owning no settings) when it has none yet, in one batch.
-    fn ensure_agent_policies(
+    /// The ids of these owned agents' policies, in the order given, `None`
+    /// for one that has none yet, in one read.
+    fn find_agent_policies(
         &self,
         agents: &[BotId],
-    ) -> impl Future<Output = Result<Vec<PolicyId>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Option<PolicyId>>, Self::Err>> + Send;
 
     /// The most policies on any path of followers ending at `policy`, itself
     /// included (1 when nothing follows it), counted no further than one
@@ -177,6 +193,29 @@ pub trait AgentDirectory: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         scope: &AgentScope,
     ) -> impl Future<Output = Result<Vec<AgentFacts>, Self::Err>> + Send;
+}
+
+/// Teams: a person's role in one, the teams they belong to, a team's name.
+pub trait TeamDirectory: Send + Sync + 'static {
+    /// The adapter's error.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// `user`'s role in `team`; `None` when they are not a member.
+    fn role(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        team: Uuid,
+    ) -> impl Future<Output = Result<Option<TeamRole>, Self::Err>> + Send;
+
+    /// The teams `user` belongs to.
+    fn teams(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<TeamFacts>, Self::Err>> + Send;
+
+    /// A team's name; `None` when there is no such team.
+    fn team(&self, team: Uuid)
+    -> impl Future<Output = Result<Option<TeamFacts>, Self::Err>> + Send;
 }
 
 /// The facts about a session that decide whose permissions apply in it.
