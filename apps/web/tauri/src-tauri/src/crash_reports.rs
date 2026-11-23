@@ -274,7 +274,8 @@ impl CrashReports {
                 let attachments = database.join("attachments").join(uuid);
                 let dump = dump_signature::read(&path).unwrap_or_else(|error| {
                     tracing::warn!(%error, "Failed to read a minidump");
-                    dump_signature::Dump::unreadable(modified_ms(&path))
+                    // Whole seconds, like a minidump's own time (`launch_at`).
+                    dump_signature::Dump::unreadable(modified_ms(&path) / 1000 * 1000)
                 });
                 found.push(Found {
                     report: dump.into_report(id, launches),

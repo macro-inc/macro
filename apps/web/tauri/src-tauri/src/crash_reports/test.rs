@@ -93,6 +93,28 @@ fn scrubs_values_out_of_panic_messages() {
         "failed to open '…' for <user>, users' files"
     );
     assert_eq!(
+        scrub("invalid password: hunter2 for api_key: sk_live_abc, Authorization:Bearer abc"),
+        "invalid password: <token> for api_key: <token>, Authorization:Bearer <token>"
+    );
+    assert_eq!(
+        scrub("connect 10.0.0.5 failed; fe80::1 at app_lib::v2::h1"),
+        "connect <ip> failed; <ip> at app_lib::v2::h1"
+    );
+    assert_eq!(
+        scrub("(«https://x/y») —http://a/b éhttp://x/y"),
+        "(«https://x/…) —http://a/… éhttp://x/…"
+    );
+    for message in [
+        "assertion failed: buffer_len_v2_remaining_count > 0",
+        "assertion failed: token_count==0",
+        "unexpected token at line 3",
+        "called `Option::unwrap()` on a `None` value",
+        "assertion `left == right` failed\n  left: 1\n right: 2",
+        "attempt to add with overflow",
+    ] {
+        assert_eq!(scrub(message), message);
+    }
+    assert_eq!(
         scrub("index out of bounds: the len is 3 but the index is 5"),
         "index out of bounds: the len is 3 but the index is 5"
     );

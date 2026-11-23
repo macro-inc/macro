@@ -21,10 +21,23 @@ const CODE_SPANS: &[&str] = &[
     "left == right",
     "left != right",
 ];
-/// The word after one of these is a credential.
-const CREDENTIAL_SCHEMES: &[&str] = &["basic", "bearer", "token"];
-/// `name=value` pairs whose value is a credential.
-const CREDENTIAL_KEYS: &[&str] = &["auth", "key", "password", "secret", "session", "token"];
+/// The word after one of these is a credential (`Authorization: Bearer x`).
+const CREDENTIAL_SCHEMES: &[&str] = &["basic", "bearer"];
+/// Names whose value is a credential, in `name=value` or `name: value`: a
+/// name ending in one of these (`api_key`, `session_token`).
+const CREDENTIAL_KEYS: &[&str] = &[
+    "auth",
+    "authorization",
+    "cookie",
+    "key",
+    "passwd",
+    "password",
+    "secret",
+    "session",
+    "sessionid",
+    "session_id",
+    "token",
+];
 
 /// This user's home directory and login name, replaced wherever they appear.
 #[derive(Clone, Debug, Default)]
@@ -80,10 +93,7 @@ pub(super) fn scrub_message(message: &str, redactions: &Redactions) -> String {
         } else {
             scrubbed.push_str(&redact_word(word));
         }
-        let core = word.trim_matches(|c: char| !c.is_alphanumeric());
-        after_scheme = CREDENTIAL_SCHEMES
-            .iter()
-            .any(|scheme| core.eq_ignore_ascii_case(scheme));
+        after_scheme = precedes_credential(word);
         word.clear();
     };
     for c in unquoted.chars() {
@@ -149,6 +159,25 @@ fn redact_quotes(message: &str) -> String {
     out
 }
 
+/// `Bearer`, `Authorization:Bearer`, or `password:`.
+fn precedes_credential(word: &str) -> bool {
+    let core = word.trim_matches(|c: char| !(c.is_alphanumeric() || c == ':'));
+    let scheme = core.rsplit(':').next().unwrap_or_default();
+    CREDENTIAL_SCHEMES
+        .iter()
+        .any(|credential| scheme.eq_ignore_ascii_case(credential))
+        || core
+            .strip_suffix(':')
+            .is_some_and(|name| !name.contains(':') && is_credential_name(name))
+}
+
+fn is_credential_name(name: &str) -> bool {
+    let name = name.to_ascii_lowercase();
+    CREDENTIAL_KEYS
+        .iter()
+        .any(|credential| name.ends_with(credential))
+}
+
 fn is_code(span: &str) -> bool {
     CODE_SPANS.contains(&span)
 }
@@ -159,9 +188,13 @@ fn redact_word(word: &str) -> String {
         return word.to_string();
     }
     let replacement = if let Some(url) = core.find("://") {
+        // Byte index after the last character that can't be in a scheme;
+        // that character may be multibyte (`«https://…`).
         let scheme_start = core[..url]
-            .rfind(|c: char| !(c.is_ascii_alphanumeric() || "+-.".contains(c)))
-            .map_or(0, |index| index + 1);
+            .char_indices()
+            .rev()
+            .find(|(_, c)| !(c.is_ascii_alphanumeric() || "+-.".contains(*c)))
+            .map_or(0, |(index, c)| index + c.len_utf8());
         let rest = &core[url + 3..];
         let host = rest.split(['/', '?', '#']).next().unwrap_or_default();
         let host = host.rsplit('@').next().unwrap_or_default();
@@ -177,13 +210,13 @@ fn redact_word(word: &str) -> String {
         .is_some_and(|(_, domain)| domain.contains('.'))
     {
         "<email>".to_string()
-    } else if let Some((key, _)) = core.split_once('=').filter(|(key, _)| {
-        let key = key.to_ascii_lowercase();
-        CREDENTIAL_KEYS
-            .iter()
-            .any(|credential| key.contains(credential))
-    }) {
+    } else if let Some((key, _)) = core
+        .split_once('=')
+        .filter(|(key, value)| !value.starts_with('=') && is_credential_name(key))
+    {
         format!("{key}={REDACTED}")
+    } else if is_ip_address(core) || is_ipv6_address(core) {
+        "<ip>".to_string()
     } else if core.contains('/') || core.contains('\\') {
         // A path, or part of one split at a space; module paths use `::`.
         "<path>".to_string()
@@ -210,14 +243,27 @@ fn is_ip_address(host: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-/// A long run of letters and digits mixed, like an API key or session id.
+/// `fe80::1`: hex digits and colons, with a digit and at least two colons. A
+/// Rust path has a non-hex letter (`v2::h1`) or no digit (`a::b`).
+fn is_ipv6_address(word: &str) -> bool {
+    word.matches(':').count() >= 2
+        && word.chars().any(|c| c.is_ascii_digit())
+        && word.chars().all(|c| c.is_ascii_hexdigit() || c == ':')
+}
+
+/// A long random-looking run, like an API key or session id: mixed case with
+/// a digit (`Ab3dEf6h…`), or many digits among letters. A code identifier
+/// (`buffer_len_v2_remaining_count`) is neither.
 fn is_token(word: &str) -> bool {
+    let digits = word.chars().filter(char::is_ascii_digit).count();
+    let mixed_case = word.chars().any(|c| c.is_ascii_uppercase())
+        && word.chars().any(|c| c.is_ascii_lowercase());
     word.len() >= 20
         && word
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
-        && word.chars().any(|c| c.is_ascii_digit())
         && word.chars().any(|c| c.is_ascii_alphabetic())
+        && ((mixed_case && digits > 0) || digits >= 6)
 }
 
 fn truncate(text: &str, max_chars: usize) -> String {
