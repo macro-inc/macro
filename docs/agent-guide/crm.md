@@ -280,8 +280,12 @@ archived individually, while email syncing stays off. Re-enable **Sync Emails** 
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
 **Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels; company Properties, Lists and Email sharing
-follow. Neither panel has a duplicate visibility control.
+appear first in both information panels, then Properties; company Lists and Email
+sharing follow. Neither panel has a duplicate visibility control. A contact's
+Properties hold the team's custom properties only (Stage, Owner and Revenue are
+company-only): **Add property** attaches one, such as a Phone text or a LinkedIn
+link, and it saves, clears and survives a reload like a company property. On a
+phone the panel opens from **Show details** in the record header.
 
 Verify successful changes update open People, Companies, Team and ordinary Cmd-K;
 late responses must not reintroduce archived rows or hide restored rows with an
