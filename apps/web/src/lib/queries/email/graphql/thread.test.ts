@@ -1052,8 +1052,11 @@ it('applies an identity answer that a cache change overtook', async () => {
     // The changes ask for one more read, not one each.
     await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
     answers[1]({ revision: '2', records: [] });
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
     expect(read).toHaveBeenCalledTimes(2);
+    // The lookup has ended: the next change starts a read of its own.
+    changed();
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(3));
   } finally {
     root.dispose();
     vi.useRealTimers();

@@ -2,6 +2,7 @@ import {
   createUrqlInfiniteQuery,
   type UrqlInfiniteQueryResult,
 } from '@app/lib/urql-solid';
+import { useFlowTrace } from '@app/observability/flow';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
@@ -266,8 +267,8 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
   let lookingUp: string | undefined;
   let lookUpAgain = false;
   let disposed = false;
-  // The opening view's trace, for a fallback recorded after an await.
-  const trace = Telemetry.captureContext();
+  // A fallback recorded while the opening view loads joins its trace.
+  const flowTrace = useFlowTrace();
   const isCurrent = (id: string, generation: number) =>
     !disposed && generation === request && id === threadId();
 
@@ -279,7 +280,7 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     startedAt: number
   ) => {
     if (untrack(identity)?.requested === id) return;
-    trace.run(() => {
+    const recordFallback = () => {
       const span = Telemetry.span('email.thread.identity_fallback');
       span.setAttr('email.thread_id', id);
       span.setAttr('email.thread.identity_fallback_reason', reason);
@@ -288,7 +289,9 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
         Math.round(performance.now() - startedAt)
       );
       span.end();
-    });
+    };
+    if (flowTrace) flowTrace.run(recordFallback);
+    else recordFallback();
     setIdentity({ requested: id, canonical: id, kind: 'unknown' });
   };
 
