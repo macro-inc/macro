@@ -81,6 +81,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
         </Show>
         {/* Local menus must escape the card; the editor body owns scrolling. */}
         <Popover.Content
+          data-calendar-composer-surface
           ref={content}
           class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-visible outline-none"
           classList={{
