@@ -26,6 +26,9 @@ import { companyContactsPage } from '../company-contacts-page';
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
 export async function invalidateCachedCrmContacts() {}
+export async function fetchCrmContacts() {
+  return { contacts: [], nextCursor: null };
+}
 // This fixture verifies REST/UI integration; normalized-cache fencing has separate exchange tests.
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
