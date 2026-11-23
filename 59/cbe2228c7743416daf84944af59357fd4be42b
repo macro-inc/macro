@@ -1,0 +1,52 @@
+apps/web/src/features/agent-permissions/views/team-permissions-panel.test.tsx
+  s_9aaadd038e8bff::t_3df2d516c08844 1-100
+  s_9aaadd038e8bff::t_626e42000f346c 101-102
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_9aaadd038e8bff::t_805589b88861c0 30-34
+apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
+  s_9aaadd038e8bff::t_729288f55bd329 12-15,28-30,43-47
+apps/web/src/features/agent-permissions/components/tool-permissions.tsx
+  s_9aaadd038e8bff::t_823ce0d2918233 21,38
+apps/web/src/features/agent-permissions/core/model.ts
+  s_9aaadd038e8bff::t_50c35f1b6df862 30-35,128,187,213,267
+apps/web/src/features/agent-permissions/index.ts
+  s_9aaadd038e8bff::t_14462b31023bd0 11-14,27
+apps/web/src/features/agent-permissions/queries/keys.ts
+  s_9aaadd038e8bff::t_81834f2fb9d052 13
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_9aaadd038e8bff::t_407077ec130137 104
+apps/web/src/features/agent-permissions/queries/team.ts
+  s_9aaadd038e8bff::t_1d5d729538084a 1-105
+apps/web/src/features/agent-permissions/use-agent-permissions-available.ts
+  s_9aaadd038e8bff::t_9000b3e9440ab6 3,20-36
+apps/web/src/features/agent-permissions/views/permission-changes.ts
+  s_9aaadd038e8bff::t_16c5514d2806c8 5,18,60,100,102-103,105-109,111,121,147-161
+apps/web/src/features/agent-permissions/views/team-permissions-panel.tsx
+  s_9aaadd038e8bff::t_ec61c0ee47338c 1-210
+apps/web/src/features/settings/Agents.test.tsx
+  s_9aaadd038e8bff::t_cdeee95c846d67 91,96-102,398,1184-1222
+apps/web/src/features/settings/Agents.tsx
+  s_9aaadd038e8bff::t_8bed688bbba43a 10,13,51,308-309,421-450,537-543,546-547,659-715
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_9aaadd038e8bff::t_7d1718e9dd3cec 144-152
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_9aaadd038e8bff::t_400ad92546bb69 10,46-49,186-226
+docs/agent-guide/settings.md
+  s_9aaadd038e8bff::t_06ee6cc662cdb8 1305-1314
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "59cbe2228c7743416daf84944af59357fd4be42b",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
