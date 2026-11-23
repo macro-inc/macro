@@ -91,6 +91,7 @@ fn entity_type_label(entity_type: ToolPropertyTargetEntityType) -> &'static str 
         ToolPropertyTargetEntityType::Call => "call",
         ToolPropertyTargetEntityType::User => "user",
         ToolPropertyTargetEntityType::Company => "company",
+        ToolPropertyTargetEntityType::Contact => "contact",
     }
 }
 

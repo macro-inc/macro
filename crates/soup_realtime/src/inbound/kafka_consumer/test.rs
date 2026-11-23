@@ -393,6 +393,34 @@ fn task_property_updates_map_to_document_updates() {
 }
 
 #[test]
+fn crm_contact_property_updates_map_to_contact_updates() {
+    let contact_id = Uuid::now_v7().to_string();
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
+        entity_property_id: Uuid::now_v7(),
+        entity_id: contact_id.clone(),
+        entity_type: PropertyEntityType::Contact,
+        property_definition_id: Uuid::now_v7(),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        source: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::CrmContact
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, contact_id);
+}
+
+#[test]
 fn deleting_or_clearing_properties_updates_the_soup_entity() {
     let thread_id = Uuid::now_v7().to_string();
     let deleted = PropertyTopicEvent::EntityPropertyDeleted(EntityPropertyDeletedMetadata {
