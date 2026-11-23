@@ -120,8 +120,9 @@ export function createVoiceMemo(options: {
       attached = await (trace
         ? trace.span('voice_memo.upload', upload)
         : upload());
-    } catch {
+    } catch (error) {
       // A thrown upload is a failed one: keep the recording for a retry.
+      trace?.error(error);
     }
     // Cancelled or unmounted while uploading: the draft has moved on.
     if (disposed || recording !== file) return;

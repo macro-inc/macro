@@ -42,7 +42,10 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
       .with('starting', () => t('channelComposer.voiceMemoStarting'))
       .with('attaching', () => t('channelComposer.voiceMemoAttaching'))
       .with('failed', () => t('channelComposer.voiceMemoUploadFailed'))
-      .otherwise(() => formatRecordingTime(props.memo.elapsedMs()));
+      .with('idle', 'recording', 'unavailable', () =>
+        formatRecordingTime(props.memo.elapsedMs())
+      )
+      .exhaustive();
 
   return (
     <Show when={props.memo.active()}>
