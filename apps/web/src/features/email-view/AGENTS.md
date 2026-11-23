@@ -11,9 +11,11 @@ the Soup-backed thread list, and saved email views.
   `mail.savedView` URL id, and saved-view selection.
 - `queries/email-query.ts`: each tab's or saved view's Soup `ef` filter.
 - `queries/use-email-query.ts`: list, search, read admission, local drafts.
+- `queries/email-search.ts`: the search service request for a search's scope
+  (all mail, or the view an `in:` filter names) and the list's filters.
 - `views/mobile/email-search.tsx`: the touch search page's field and Cancel
-  (`EmailMobileSearchField`) and recent searches
-  (`EmailMobileRecentSearches`); the mobile layout in `email-view.tsx` opens
+  (`EmailMobileSearchField`) and the rows under it
+  (`EmailMobileSearchSuggestions`); the mobile layout in `email-view.tsx` opens
   it from the search pill, puts the field in place of the list pane's pill
   row, and keeps the list mounted below it. The search pill and filter drawer
   stay to the right of the scrolling tabs while the sidebar toggle stays on
@@ -33,9 +35,13 @@ the Soup-backed thread list, and saved email views.
   overrides.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
-- `search/`: recent searches (`recent-searches.ts`, per person in browser
-  storage) and the suggestions the header's search field lists
-  (`create-email-search-suggestions.ts`), behind `enable-email-wide-search`.
+- `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
+  field's chip and the views it names), recent searches (`recent-searches.ts`,
+  per person in browser storage) and the rows the search field lists, views
+  while `in:` is typed and recent searches otherwise
+  (`create-email-search-suggestions.ts`, drawn by
+  `components/EmailSearchSuggestionList.tsx`), behind
+  `enable-email-wide-search`. The chip is `components/EmailSearchScopeChip.tsx`.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
@@ -76,6 +82,11 @@ the Soup-backed thread list, and saved email views.
 - `beforeSavedView` restores the prior tab and inboxes on leaving, and is what
   local and entry persistence save while a view is open; never persist view
   filters as the user's own.
+- A search reaches all mail from every tab but Spam and Trash; only an `in:`
+  filter in its text narrows it, through `EmailDataSourceInput.searchScope`,
+  never `tab`. The tab's own slice is dropped; the Filters menu, inbox picker,
+  alias and an open saved view's conditions are kept. Focus, Scheduled and
+  Reminders hand their rows to the search while it runs.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
