@@ -20,7 +20,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
   Telemetry: {
     error: vi.fn(),
     span: async (_name: string, run: (span: unknown) => unknown) =>
-      run({ setAttr: () => undefined }),
+      run({ setAttr: () => undefined, run: <T>(op: () => T) => op() }),
   },
 }));
 
@@ -198,6 +198,34 @@ describe('loadChannelThread', () => {
       loadChannelThread(host, CHANNEL_ID, ROOT_ID, { fetchPage })
     ).rejects.toThrow('offline');
     await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(host.commits).toEqual([]);
+  });
+
+  it('stops asking for pages once the load is aborted', async () => {
+    const host = fakeHost([devicePage([], { covered: false })]);
+    const abort = new AbortController();
+    const fetchPage = vi.fn<FetchChannelThreadPage>(async () => {
+      // The person closes the thread while the first page is in flight.
+      abort.abort();
+      return {
+        page: {
+          root,
+          replies: [first],
+          olderCursor: 'older',
+          newerCursor: null,
+          seq: '9',
+        },
+        cached: Promise.resolve(),
+      };
+    });
+
+    await expect(
+      loadChannelThread(host, CHANNEL_ID, ROOT_ID, {
+        fetchPage,
+        signal: abort.signal,
+      })
+    ).rejects.toThrow();
+    expect(fetchPage).toHaveBeenCalledTimes(1);
     expect(host.commits).toEqual([]);
   });
 

@@ -9,7 +9,7 @@ import {
   selectRecords,
 } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type ChannelMessageFieldsFragment,
   ChannelMessageFieldsFragmentDoc,
@@ -31,7 +31,11 @@ import {
   SESSION_CHANGE_RELOADS,
   storeFailure,
 } from './channel-network';
-import { channelResetMark, unchangedSince } from './channel-resets';
+import {
+  channelResetMark,
+  holdAgainstDeletes,
+  unchangedSince,
+} from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 export type ChannelThreadHost = Pick<
@@ -152,13 +156,15 @@ export async function readDeviceThread(
 /**
  * Every reply from the server, committed as a fully held thread once the
  * normalized cache holds the records. Undefined for a thread too long for the
- * device, which then reads over REST.
+ * device, which then reads over REST. Each request starts in `span`, and an
+ * abort stops the fill between pages.
  */
 async function fetchServerThread(
   host: ChannelThreadHost,
   channelId: string,
   rootId: string,
   fetchPage: FetchChannelThreadPage,
+  span: Span,
   signal?: AbortSignal
 ): Promise<
   | {
@@ -173,70 +179,91 @@ async function fetchServerThread(
   const generation = cacheSessionGeneration.capture();
   // A reset or eviction after this must not be followed by its coverage.
   const resets = channelResetMark(host, channelId);
-  const ask = (cursor: Partial<ChannelThreadInput> = {}) =>
-    fetchPage(
-      { channelId, rootId, limit: MAX_CHANNEL_TIMELINE_PAGE, ...cursor },
-      signal
-    );
-  const first = await ask();
-  const replies = new Map(
-    first.page.replies.map((reply) => [reply.sortKey, reply])
-  );
-  const stored = [storeFailure(first.cached)];
-  let seq = first.page.seq;
-  let pages = 1;
-  for (const direction of ['before', 'after'] as const) {
-    let cursor =
-      direction === 'before' ? first.page.olderCursor : first.page.newerCursor;
-    while (cursor !== null) {
-      if (pages >= MAX_THREAD_PAGES) return undefined;
-      const next = await ask({ [direction]: cursor });
-      pages += 1;
-      stored.push(storeFailure(next.cached));
-      for (const reply of next.page.replies) replies.set(reply.sortKey, reply);
-      if (BigInt(next.page.seq) < BigInt(seq)) seq = next.page.seq;
-      cursor =
-        direction === 'before' ? next.page.olderCursor : next.page.newerCursor;
-    }
-  }
-  // Sort keys compare bytewise in display order.
-  const ordered = [...replies.keys()]
-    .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
-    .flatMap((key) => replies.get(key) ?? []);
-  const thread = threadOf(first.page.root, ordered);
-  if (!thread) return undefined;
-  let committed: string | null = null;
+  // Held from before the first page until the coverage is sent: no other
+  // tab's delete lands between them. Null when one is pending: no coverage.
+  const hold = await holdAgainstDeletes();
   try {
-    const failed = (await Promise.all(stored)).find(Boolean);
-    if (failed) throw failed.error;
-    // Deleted meanwhile: coverage would show records that may be gone.
-    if (!unchangedSince(host, channelId, resets)) {
-      return { thread, seq: null, readSeq: seq, sessionChanged: false };
-    }
-    const result = await host.channelTimelineCommit(
-      {
-        channelId,
-        coverage: [
-          {
-            threadRootId: rootId,
-            start: CHANNEL_TIMELINE_START,
-            end: CHANNEL_TIMELINE_HEAD,
-          },
-        ],
-        seq: { kind: 'lower', seq },
-      },
-      generation
-    );
-    if (result.kind === 'committed') committed = result.channelSeq;
-  } catch (error) {
-    // The cache session changed before the device stored the thread; the
-    // caller reads it again under the new one.
-    if (cacheSessionChanged(error))
-      return { thread, seq: null, readSeq: seq, sessionChanged: true };
-    // The thread still shows; it is read from the server again next time.
-    Telemetry.error(error, { surface: 'channel-thread' });
+    return await fillThread();
+  } finally {
+    hold?.release();
   }
-  return { thread, seq: committed, readSeq: seq, sessionChanged: false };
+
+  async function fillThread() {
+    const ask = (cursor: Partial<ChannelThreadInput> = {}) => {
+      signal?.throwIfAborted();
+      return span.run(() =>
+        fetchPage(
+          { channelId, rootId, limit: MAX_CHANNEL_TIMELINE_PAGE, ...cursor },
+          signal
+        )
+      );
+    };
+    const first = await ask();
+    const replies = new Map(
+      first.page.replies.map((reply) => [reply.sortKey, reply])
+    );
+    const stored = [storeFailure(first.cached)];
+    let seq = first.page.seq;
+    let pages = 1;
+    for (const direction of ['before', 'after'] as const) {
+      let cursor =
+        direction === 'before'
+          ? first.page.olderCursor
+          : first.page.newerCursor;
+      while (cursor !== null) {
+        if (pages >= MAX_THREAD_PAGES) return undefined;
+        const next = await ask({ [direction]: cursor });
+        pages += 1;
+        stored.push(storeFailure(next.cached));
+        for (const reply of next.page.replies)
+          replies.set(reply.sortKey, reply);
+        if (BigInt(next.page.seq) < BigInt(seq)) seq = next.page.seq;
+        cursor =
+          direction === 'before'
+            ? next.page.olderCursor
+            : next.page.newerCursor;
+      }
+    }
+    // Sort keys compare bytewise in display order.
+    const ordered = [...replies.keys()]
+      .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+      .flatMap((key) => replies.get(key) ?? []);
+    const thread = threadOf(first.page.root, ordered);
+    if (!thread) return undefined;
+    let committed: string | null = null;
+    try {
+      const failed = (await Promise.all(stored)).find(Boolean);
+      if (failed) throw failed.error;
+      // Deleted meanwhile, here or in another tab: coverage would show
+      // records that may be gone.
+      if (!hold || !unchangedSince(host, channelId, resets)) {
+        return { thread, seq: null, readSeq: seq, sessionChanged: false };
+      }
+      const result = await host.channelTimelineCommit(
+        {
+          channelId,
+          coverage: [
+            {
+              threadRootId: rootId,
+              start: CHANNEL_TIMELINE_START,
+              end: CHANNEL_TIMELINE_HEAD,
+            },
+          ],
+          seq: { kind: 'lower', seq },
+        },
+        generation
+      );
+      if (result.kind === 'committed') committed = result.channelSeq;
+    } catch (error) {
+      // The cache session changed before the device stored the thread; the
+      // caller reads it again under the new one.
+      if (cacheSessionChanged(error))
+        return { thread, seq: null, readSeq: seq, sessionChanged: true };
+      // The thread still shows; it is read from the server again next time.
+      Telemetry.error(error, { surface: 'channel-thread' });
+    }
+    return { thread, seq: committed, readSeq: seq, sessionChanged: false };
+  }
 }
 
 export type LoadedChannelThread = {
@@ -279,6 +306,7 @@ export async function loadChannelThread(
       channelId,
       rootId,
       options.fetchPage ?? fetchChannelThreadPage,
+      span,
       options.signal
     );
     span.setAttr('thread.source', fetched ? 'server' : 'too-long');
