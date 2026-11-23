@@ -98,7 +98,7 @@ pub fn resolve(
             .typename()
             .ok_or("invalid local identity")?;
         let typename =
-            response_typename(selections, &binding.response_path, object).unwrap_or(local_type);
+            response_typename(selections, &binding.response_path, object)?.unwrap_or(local_type);
         let id = object
             .get("id")
             .and_then(Value::as_str)
@@ -120,23 +120,34 @@ pub fn resolve(
 }
 
 /// The `__typename` of the response object at `path`, under any key
-/// `selections` select it by, an alias included. A key that a fragment on
-/// another type selects another field by is skipped: its value may not be a
-/// type name.
+/// `selections` select it by, an alias included, or `None` when the response
+/// holds none. A key that a fragment on another type selects another field by
+/// is skipped: its value may not be a type name. When the object holds a
+/// value only under such keys, its type can't be told.
 fn response_typename<'a>(
     selections: &[Selection],
     path: &[String],
     object: &'a Value,
-) -> Option<&'a str> {
+) -> Result<Option<&'a str>, String> {
     let mut keys = ResponseKeys {
         typename: vec!["__typename"],
         other: BTreeSet::new(),
     };
     keys.collect(selections, path);
-    keys.typename
+    let (ambiguous, typename): (Vec<&str>, Vec<&str>) = keys
+        .typename
         .into_iter()
-        .filter(|key| !keys.other.contains(key))
+        .partition(|key| keys.other.contains(key));
+    if let Some(typename) = typename
+        .into_iter()
         .find_map(|key| object.get(key)?.as_str())
+    {
+        return Ok(Some(typename));
+    }
+    if ambiguous.into_iter().any(|key| object.get(key).is_some()) {
+        return Err("identity response type is ambiguous".into());
+    }
+    Ok(None)
 }
 
 /// The response keys selected on the object at a path, through fragments.
@@ -570,6 +581,23 @@ mod tests {
         assert_eq!(
             resolve(&bindings, selections, &response),
             Err("identity response changed entity type".into())
+        );
+    }
+
+    #[test]
+    fn resolve_fails_when_only_an_ambiguous_key_holds_the_type() {
+        let bindings = [binding("Saved:local", &["save", "saved"])];
+        let document = crate::document::Document::parse(
+            "mutation Save { save { saved { ... on Saved { kind: __typename } \
+             ... on Other { kind: label } id } } }",
+        )
+        .unwrap();
+        let selections = &document.operation(None).unwrap().selection_set;
+        // An `Other` whose label reads as the local type.
+        let response = json!({ "save": { "saved": { "kind": "Saved", "id": "server" } } });
+        assert_eq!(
+            resolve(&bindings, selections, &response),
+            Err("identity response type is ambiguous".into())
         );
     }
 }
