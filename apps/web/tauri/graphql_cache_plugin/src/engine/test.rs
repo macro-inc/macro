@@ -785,16 +785,29 @@ fn bad_transaction_id_is_an_error() {
 fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_loss() {
     block_on(async {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("schema.json");
-        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
-        let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+        let bundled = cache_core::meta::bundled_schema();
+        let open = |schema: &Arc<cache_core::meta::Schema>| {
+            let (storage, adoption) =
+                crate::commands::open_cache(dir.path(), "scope-1", schema).unwrap();
+            assert!(
+                matches!(
+                    adoption.change,
+                    None | Some(cache_core::schema_change::Tier::Compatible)
+                ),
+                "{:?}",
+                adoption.change
+            );
+            assert_eq!(adoption.dropped_records, 0);
+            EngineHandle::with_schema(storage, None, adoption.schema)
+        };
+        let handle = open(&bundled);
         let generation = handle.current_storage_generation().await.unwrap();
         let sdl = format!(
             "{}\nextend type GraphqlUser {{ runtimeLabel: String }}",
             cache_core::meta::BUNDLED_SCHEMA_SDL
         );
         let schema = cache_core::meta::Schema::from_sdl(&sdl).unwrap();
-        handle.install_schema(&schema, &path).await.unwrap();
+        handle.install_schema(&schema).await.unwrap();
         let query = "query { user { id runtimeLabel } }";
         let data = serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}});
         handle
@@ -810,29 +823,26 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
             .await
             .unwrap();
         // Older windows/bundles may initialize again without downgrading metadata.
-        handle
-            .install_schema(&cache_core::meta::bundled_schema(), &path)
-            .await
-            .unwrap();
-        let persisted = std::fs::read_to_string(&path).unwrap();
+        handle.install_schema(&bundled).await.unwrap();
         let conflict = cache_core::meta::Schema::from_sdl(
             &sdl.replace("runtimeLabel: String", "runtimeLabel: [String]"),
         )
         .unwrap();
-        assert!(handle.install_schema(&conflict, &path).await.is_err());
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), persisted);
+        assert!(handle.install_schema(&conflict).await.is_err());
         handle.shutdown().unwrap();
-        let schema = cache_core::meta::Schema::from_json(&persisted).unwrap();
-        let reopened =
-            EngineHandle::with_schema(database.open_or_reset("scope-1").unwrap(), None, schema);
-        assert_eq!(
-            reopened.current_storage_generation().await.unwrap(),
-            generation
-        );
-        assert!(
-            matches!(reopened.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: actual } if actual == data)
-        );
-        reopened.shutdown().unwrap();
+        // The OTA bundle opens next, then the bundle an OTA rollback returns
+        // to: the stored schema keeps the field the older one lacks.
+        for schema in [schema, bundled] {
+            let reopened = open(&schema);
+            assert_eq!(
+                reopened.current_storage_generation().await.unwrap(),
+                generation
+            );
+            assert!(
+                matches!(reopened.read(None, query.into(), None, Variables::new(), vec![]).await.unwrap(), ReadResultWire::Hit { data: actual } if actual == data)
+            );
+            reopened.shutdown().unwrap();
+        }
     });
 }
 

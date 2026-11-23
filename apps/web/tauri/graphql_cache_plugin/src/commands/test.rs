@@ -338,3 +338,109 @@ fn only_a_well_formed_traceparent_names_an_upstream_trace() {
     }
     assert_eq!(super::upstream_trace_id(None), None);
 }
+
+/// The bundled schema with a `runtimeLabel` of `declared` on users.
+fn labelled(declared: &str) -> std::sync::Arc<cache_core::meta::Schema> {
+    cache_core::meta::Schema::from_sdl(&format!(
+        "{}\nextend type GraphqlUser {{ runtimeLabel: {declared} }}",
+        cache_core::meta::BUNDLED_SCHEMA_SDL
+    ))
+    .unwrap()
+}
+
+const LABEL_QUERY: &str = "query { user { id runtimeLabel } }";
+
+/// Writes a user with a label through `handle`.
+async fn write_label(handle: &crate::engine::EngineHandle) {
+    handle
+        .write(crate::engine::WriteRequest {
+            origin_op_id: None,
+            registration: None,
+            query: LABEL_QUERY.into(),
+            operation_name: None,
+            variables: serde_json::Map::new(),
+            data: serde_json::json!({"user": {"id": "viewer", "runtimeLabel": "OTA"}}),
+            identity: None,
+        })
+        .await
+        .unwrap();
+}
+
+async fn label_hits(handle: &crate::engine::EngineHandle) -> bool {
+    matches!(
+        handle
+            .read(
+                None,
+                LABEL_QUERY.into(),
+                None,
+                serde_json::Map::new(),
+                vec![],
+            )
+            .await
+            .unwrap(),
+        crate::engine::ReadResultWire::Hit { .. }
+    )
+}
+
+#[test]
+fn an_older_builds_cache_upgrades_against_its_schema_file_and_the_file_goes() {
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        // What an older build leaves: a storage 12 file, and the schema its
+        // records were written under beside it.
+        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
+        storage.try_close().unwrap();
+        let legacy = dir.path().join("schema.json");
+        std::fs::write(&legacy, serde_json::to_vec(written.artifact()).unwrap()).unwrap();
+
+        // The bundle an OTA rollback returns to lacks the label; the file
+        // says the records hold one, so they stay and keep answering.
+        let bundled = cache_core::meta::bundled_schema();
+        let (storage, adoption) = super::open_cache(dir.path(), "scope", &bundled).unwrap();
+        assert_eq!(storage.upgraded_from_storage_version(), Some(12));
+        assert_eq!(
+            adoption.change,
+            Some(cache_core::schema_change::Tier::Compatible)
+        );
+        assert_eq!(adoption.dropped_records, 0);
+        assert!(!legacy.exists());
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
+fn a_build_that_retypes_a_field_opens_without_that_types_records() {
+    // Native init used to refuse a build whose schema changed a stored
+    // type's shape, leaving the webview on the network; now the type's
+    // records go and the rest of the cache opens.
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written);
+        write_label(&handle).await;
+        assert!(label_hits(&handle).await);
+        handle.shutdown().unwrap();
+
+        let retyped = labelled("[String]");
+        let (storage, adoption) = super::open_cache(dir.path(), "scope", &retyped).unwrap();
+        let Some(cache_core::schema_change::Tier::Types { changed, .. }) = &adoption.change else {
+            panic!("{:?}", adoption.change);
+        };
+        assert!(changed.contains("GraphqlUser"), "{changed:?}");
+        assert!(adoption.dropped_records > 0);
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.install_schema(&retyped).await.unwrap();
+        handle.shutdown().unwrap();
+    });
+}

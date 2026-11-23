@@ -552,19 +552,22 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
-    /// Validates and persists compatible metadata before publishing it to native operations.
-    pub async fn install_schema(
-        &self,
-        schema: &cache_core::meta::Schema,
-        path: &std::path::Path,
-    ) -> Result<(), String> {
+    /// Merges `schema`, a webview's build, into the engine's and records the
+    /// result in storage before native operations use it. A build that
+    /// changes the shape of a type the engine knows is refused, and nothing
+    /// changes.
+    pub async fn install_schema(&self, schema: &cache_core::meta::Schema) -> Result<(), String> {
         let mut state = self.inner.lock().await;
         let merged = state
             .engine
             .schema()
             .merge(schema)
             .map_err(|e| e.to_string())?;
-        persist_schema(path, &merged)?;
+        state
+            .engine
+            .storage()
+            .record_schema(&merged, schema)
+            .map_err(|e| e.to_string())?;
         state
             .engine
             .install_schema(&merged)
@@ -1345,25 +1348,3 @@ impl EngineHandle {
 
 #[cfg(test)]
 mod test;
-
-/// Atomically persists metadata separately from user records; no database reset occurs.
-pub(crate) fn persist_schema(
-    path: &std::path::Path,
-    schema: &cache_core::meta::Schema,
-) -> Result<(), String> {
-    let bytes = serde_json::to_vec(schema.artifact()).map_err(|e| e.to_string())?;
-    let temporary = path.with_extension("json.tmp");
-    use std::io::Write;
-    let mut file = std::fs::File::create(&temporary).map_err(|e| e.to_string())?;
-    file.write_all(&bytes).map_err(|e| e.to_string())?;
-    file.sync_all().map_err(|e| e.to_string())?;
-    drop(file);
-    std::fs::rename(&temporary, path).map_err(|e| e.to_string())?;
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        std::fs::File::open(parent)
-            .and_then(|dir| dir.sync_all())
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
