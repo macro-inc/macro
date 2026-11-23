@@ -19,6 +19,21 @@ import {
 const NOW = new Date(2026, 10, 20);
 
 describe('formatStartDue', () => {
+  it('reads as one date when the start and due date share a day', () => {
+    expect(
+      formatStartDue(
+        { start: new Date(2026, 10, 25), due: new Date(2026, 10, 25, 23, 59) },
+        NOW
+      )
+    ).toBe('Nov 25');
+    expect(
+      formatStartDue(
+        { start: new Date(2027, 0, 4), due: new Date(2027, 0, 4) },
+        NOW
+      )
+    ).toBe('Jan 4, 2027');
+  });
+
   it('reads as a range within the current year', () => {
     expect(
       formatStartDue(

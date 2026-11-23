@@ -39,8 +39,9 @@ const DAY_YEAR_FORMAT = new Intl.DateTimeFormat('en-US', {
 /**
  * The text a dates pill shows when a start is set: `Nov 23 → Nov 27`, the
  * year added once when it is not the current one and on both ends when they
- * differ, or `Nov 23 →` without a due date. Without a start there is no range;
- * the pill keeps the due date's own text.
+ * differ, `Nov 23 →` without a due date, or the one date when both fall on
+ * the same day. Without a start there is no range; the pill keeps the due
+ * date's own text.
  */
 export function formatStartDue(
   dates: StartDue,
@@ -53,6 +54,11 @@ export function formatStartDue(
     const format =
       start.getFullYear() === now.getFullYear() ? DAY_FORMAT : DAY_YEAR_FORMAT;
     return `${format.format(start)} →`;
+  }
+  if (isSameDay(start, due)) {
+    const format =
+      due.getFullYear() === now.getFullYear() ? DAY_FORMAT : DAY_YEAR_FORMAT;
+    return format.format(due);
   }
   if (start.getFullYear() !== due.getFullYear()) {
     return `${DAY_YEAR_FORMAT.format(start)} → ${DAY_YEAR_FORMAT.format(due)}`;
