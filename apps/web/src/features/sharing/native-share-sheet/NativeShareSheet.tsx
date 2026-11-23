@@ -23,6 +23,7 @@ import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
@@ -120,6 +121,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const composerId = crypto.randomUUID();
   const mentionsTracker = createMentionsTracker();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
+  const userId = useUserId();
   const { sendToChannel, resolvePeopleChannel } = useSendMessageToPeople();
   let clearComposer = () => {};
 
@@ -175,6 +177,11 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
           'Finish uploading the shared attachments before sending'
         );
       }
+      // Without a sender the post never runs, so nothing else would say so.
+      if (!userId()) {
+        toast.failure('Failed to send message');
+        throw new Error('Missing sender id for native share sheet send');
+      }
       const options = recipients.selected();
       if (options.length === 0) {
         toast.failure('Select a recipient');
@@ -199,18 +206,15 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
       }
 
       // The share stays on the current view: the sheet closes once it's sent.
-      try {
-        await postToExistingChannel(sendToChannel, {
-          span: 'channels.share_sheet_send',
-          channelId,
-          content,
-          mentions,
-          attachments,
-        });
-      } catch (error) {
-        toast.failure('Failed to send message');
-        throw error;
-      }
+      // A failed post shows the send mutation's own toast; throwing keeps the
+      // draft.
+      await postToExistingChannel(sendToChannel, {
+        span: 'channels.share_sheet_send',
+        channelId,
+        content,
+        mentions,
+        attachments,
+      });
     },
   });
 
