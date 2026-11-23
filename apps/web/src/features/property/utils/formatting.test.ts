@@ -53,14 +53,23 @@ describe('formatTimeRange', () => {
 });
 
 describe('formatDateValue', () => {
-  const at = new Date(2026, 10, 26, 14, 30);
+  const now = new Date(2026, 10, 20);
 
-  it('adds the time of day to a date that has one while times are shown', () => {
-    expect(formatDateValue(at, true, true)).toBe('Nov 26, 2026, 2:30 PM');
+  it('adds a compact time of day to a date that has one while times are shown', () => {
+    expect(
+      formatDateValue(new Date(2026, 10, 26, 14, 30), true, true, now)
+    ).toBe('Nov 26, 2:30pm');
+    expect(formatDateValue(new Date(2026, 10, 26, 14), true, true, now)).toBe(
+      'Nov 26, 2pm'
+    );
+    expect(formatDateValue(new Date(2027, 0, 4, 9), true, true, now)).toBe(
+      'Jan 4, 2027, 9am'
+    );
   });
 
   it('shows the day alone for a whole day, or while times are not shown', () => {
-    expect(formatDateValue(at, undefined, true)).toBe(formatDate(at));
-    expect(formatDateValue(at, true, false)).toBe(formatDate(at));
+    const at = new Date(2026, 10, 26, 14, 30);
+    expect(formatDateValue(at, undefined, true, now)).toBe(formatDate(at));
+    expect(formatDateValue(at, true, false, now)).toBe(formatDate(at));
   });
 });

@@ -1,3 +1,4 @@
+import { formatCompactCalendarTime } from '@app/features/calendar/utils/time-format';
 import { getPropertyOptionLabel } from '@entity/utils/task-properties';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type { DateRangeValue, Property, PropertyOptionValue } from '../types';
@@ -42,24 +43,26 @@ export function formatDate(value: Date | string): string {
 
 /**
  * A date property's value: with its time of day when it has one and
- * `showTime` is on (`Nov 26, 2026, 2:00 PM`), else the day alone.
+ * `showTime` is on, compact as on a calendar event (`Nov 26, 2:30pm`, the
+ * year added when it is not the current one), else the day alone.
  */
 export function formatDateValue(
   value: Date,
   hasTime: boolean | undefined,
-  showTime: boolean
+  showTime: boolean,
+  now = new Date()
 ): string {
   if (!hasTime || !showTime) return formatDate(value);
-  return new Intl.DateTimeFormat('en-US', {
+  const day = new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: clockIs12Hour(),
-  })
-    .format(value)
-    .replace(/\u202f/g, ' ');
+    ...(value.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
+  }).format(value);
+  const time = formatCompactCalendarTime(
+    value,
+    clockIs12Hour() ? '12-hour' : '24-hour'
+  );
+  return `${day}, ${time}`;
 }
 
 const DATE_TIME_FORMAT = new Intl.DateTimeFormat('en-US', {
