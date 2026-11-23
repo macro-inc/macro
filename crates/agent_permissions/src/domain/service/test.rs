@@ -340,6 +340,28 @@ impl PermissionStore for Arc<FakeStore> {
             .collect())
     }
 
+    async fn ensure_following_policies(
+        &self,
+        agents: &[(BotId, PolicyId)],
+    ) -> Result<Vec<PolicyId>, Infallible> {
+        let mut ids = Vec::with_capacity(agents.len());
+        for (agent, source) in agents {
+            ids.push(self.ensure_following_policy(*agent, *source).await?);
+        }
+        Ok(ids)
+    }
+
+    async fn chain_ids(&self, policies: &[PolicyId]) -> Result<Vec<Vec<PolicyId>>, Infallible> {
+        Ok(policies
+            .iter()
+            .map(|policy| {
+                self.read_chain(*policy)
+                    .map(|chain| chain.levels().map(|level| level.id).collect())
+                    .unwrap_or_default()
+            })
+            .collect())
+    }
+
     async fn followers_height(&self, policy: PolicyId) -> Result<usize, Infallible> {
         Ok(self.height(policy))
     }
@@ -2467,4 +2489,98 @@ async fn team_defaults_follow_the_scope_rules() {
         .await
         .unwrap();
     assert!(view.source.unwrap().can_edit);
+}
+
+#[tokio::test]
+async fn a_sources_restrictions_on_itself_stay_its_own() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    // Macro, in the owner's own session, restricts itself: saved to the
+    // owner's Macro policy, labelled as the agent's.
+    let macro_in_session = agent_caller(OWNER, MACRO_NEW_BOT_ID, Some(AgentSessionId::TEST_B));
+    let tightened = fixture
+        .service
+        .tighten(&macro_in_session, MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Agent);
+    let macro_resolved = fixture
+        .service
+        .resolve_calls(
+            &SessionPolicy {
+                agent: MACRO_NEW_BOT_ID,
+                owner: user(OWNER),
+                session: AgentSessionId::TEST_B,
+            },
+            &[send_email()],
+        )
+        .await
+        .unwrap();
+    assert_eq!(macro_resolved[0].state, PermissionState::Never);
+
+    // The agent following Macro is not restricted by it, in the gate, the
+    // view or what a detach copies.
+    let follower = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(follower[0].state, PermissionState::Always);
+    let view = fixture
+        .service
+        .view_agent(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    assert!(view.inherited.unwrap().is_empty());
+    let detached = fixture
+        .service
+        .detach(&person(OWNER), BotId::TEST_A, None)
+        .await
+        .unwrap();
+    assert!(detached.rules.is_empty());
+
+    // A person's Never on Macro does reach it.
+    follow_owners_macro(&fixture).await;
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let follower = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(follower[0].state, PermissionState::Never);
+}
+
+#[tokio::test]
+async fn a_follower_may_drop_its_own_exception_its_source_holds_too() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let agent = agent_caller(OWNER, BotId::TEST_A, None);
+    fixture
+        .service
+        .tighten(&agent, BotId::TEST_A, never_send())
+        .await
+        .unwrap();
+    // Dropping its own Never leaves the source's Never: nothing loosens.
+    let drop = vec![Change {
+        target: Target::GroupAction {
+            group: "email".to_owned(),
+            action: Action::Send,
+        },
+        state: None,
+    }];
+    let tightened = fixture
+        .service
+        .tighten(&agent, BotId::TEST_A, drop)
+        .await
+        .unwrap();
+    assert!(tightened.permissions.rules.is_empty());
 }

@@ -1325,13 +1325,48 @@ where
             .find_agent_policies(&ids)
             .await
             .map_err(internal)?;
-        for (facts, policy) in agents.iter().zip(found) {
-            // An agent no one has used yet gets its policy now, following
-            // its own default as it would on first use.
-            let policy = match policy {
-                Some(policy) => policy,
-                None => self.policy_id(&PolicyOwner::Agent(facts.id)).await?,
+        // Agents no one has used yet get their policies now, following their
+        // own defaults as they would on first use: one batch, after one
+        // policy per distinct default (a person's Macro, a team's default).
+        let mut defaults: Vec<(PolicyOwner, PolicyId)> = Vec::new();
+        let mut missing: Vec<(BotId, PolicyId)> = Vec::new();
+        for (facts, policy) in agents.iter().zip(&found) {
+            if policy.is_some() {
+                continue;
+            }
+            let default = match &facts.owner {
+                AgentOwner::User(user) => PolicyOwner::Persona {
+                    persona: bot_id::MACRO_NEW_BOT_ID,
+                    user: user.clone(),
+                },
+                AgentOwner::Team(team) => PolicyOwner::Team(*team),
             };
+            let source = match defaults.iter().find(|(owner, _)| *owner == default) {
+                Some((_, source)) => *source,
+                None => {
+                    let source = self.store.ensure_policy(&default).await.map_err(internal)?;
+                    defaults.push((default, source));
+                    source
+                }
+            };
+            missing.push((facts.id, source));
+        }
+        let mut made = self
+            .store
+            .ensure_following_policies(&missing)
+            .await
+            .map_err(internal)?
+            .into_iter();
+        let policies: Vec<PolicyId> = found
+            .into_iter()
+            .map(|policy| policy.or_else(|| made.next()))
+            .collect::<Option<_>>()
+            .ok_or_else(|| {
+                PermissionError::Internal(
+                    rootcause::report!("a candidate's policy was not made").into_dynamic(),
+                )
+            })?;
+        for (facts, policy) in agents.iter().zip(policies) {
             candidates.push(SourceCandidate {
                 policy_id: policy,
                 kind: PolicyKind::Agent,
@@ -1344,19 +1379,17 @@ where
         }
 
         if let Some((_, policy, height, current)) = follower {
-            for candidate in &mut candidates {
+            // Every candidate's chain in one read.
+            let ids: Vec<PolicyId> = candidates
+                .iter()
+                .map(|candidate| candidate.policy_id)
+                .collect();
+            let chains = self.store.chain_ids(&ids).await.map_err(internal)?;
+            for (candidate, chain) in candidates.iter_mut().zip(chains) {
                 candidate.current = current == Some(candidate.policy_id);
-                let Some(chain) = self
-                    .store
-                    .chain(candidate.policy_id)
-                    .await
-                    .map_err(internal)?
-                else {
-                    continue;
-                };
-                candidate.unavailable = if chain.levels().any(|level| level.id == policy) {
+                candidate.unavailable = if chain.contains(&policy) {
                     Some(SourceUnavailable::Cycle)
-                } else if height + chain.depth() > MAX_CHAIN {
+                } else if height + chain.len() > MAX_CHAIN {
                     Some(SourceUnavailable::TooDeep)
                 } else {
                     None

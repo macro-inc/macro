@@ -123,6 +123,23 @@ pub trait PermissionStore: Send + Sync + 'static {
         agents: &[BotId],
     ) -> impl Future<Output = Result<Vec<Option<PolicyId>>, Self::Err>> + Send;
 
+    /// The ids of these owned agents' policies, in the order given, each
+    /// made following its paired source (a root) when it has none yet, in
+    /// one batch. One that exists is returned as it is.
+    fn ensure_following_policies(
+        &self,
+        agents: &[(BotId, PolicyId)],
+    ) -> impl Future<Output = Result<Vec<PolicyId>, Self::Err>> + Send;
+
+    /// The ids along each of `policies`' chains (the policy first, toward
+    /// its root, walked no further than one level past
+    /// [`MAX_CHAIN`](super::model::MAX_CHAIN)), in the order given, in one
+    /// read; empty for no such policy.
+    fn chain_ids(
+        &self,
+        policies: &[PolicyId],
+    ) -> impl Future<Output = Result<Vec<Vec<PolicyId>>, Self::Err>> + Send;
+
     /// The most policies on any path of followers ending at `policy`, itself
     /// included (1 when nothing follows it), counted no further than one
     /// past [`MAX_CHAIN`](super::model::MAX_CHAIN).

@@ -664,3 +664,48 @@ async fn team_defaults_new_agents_and_the_existing_agents_backfill(pool: PgPool)
         Follows::Lost
     );
 }
+
+/// The picker's batches: missing policies made following their sources in
+/// one insert (one that exists kept as it is), and every candidate's chain
+/// in one read.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("permissions", "sources"))
+)]
+async fn the_pickers_batches_make_following_policies_and_read_chains(pool: PgPool) {
+    let store = PgPermissionStore::new(pool);
+    let persona = store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let existing = policy(&store, 0).await;
+    let made = store
+        .ensure_following_policies(&[
+            (agent(0), persona),
+            (agent(1), persona),
+            (agent(2), persona),
+        ])
+        .await
+        .unwrap();
+    assert_eq!(made[0], existing);
+    assert_eq!(chain(&store, existing).await.policy().follows, Follows::Own);
+    for policy in &made[1..] {
+        assert_eq!(ids(&chain(&store, *policy).await), [*policy, persona]);
+    }
+    follow(&store, existing, made[1]).await.unwrap();
+    let chains = store
+        .chain_ids(&[existing, made[1], PolicyId::generate()])
+        .await
+        .unwrap();
+    assert_eq!(
+        chains,
+        [
+            vec![existing, made[1], persona],
+            vec![made[1], persona],
+            Vec::new()
+        ]
+    );
+}
