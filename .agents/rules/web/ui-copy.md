@@ -28,8 +28,9 @@ Don't:
 
 Do:
 
-- **Skip** on an agent's question, with the tooltip "The agent continues
-  without sending it": the consequence of declining (#11628).
+- **Remove {name}?** on a team agent, with "Its computer and files are
+  deleted. This can't be undone.": the consequence the label hides
+  (`teamAgents.removeBody`).
 - The composer note while an agent waits: "The agent is waiting for your answer
   above; Skip lets it continue without one. Messages sent now are queued."
   It explains a state and what sending does in it (#11628).
