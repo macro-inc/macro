@@ -33,28 +33,31 @@ const nonEmailFilters: EntityFilters = {
  * inbox, so it sends no Done state for the service to check page by page.
  */
 function scopeFilters(scope: EmailSearchScope): EmailFilters {
-  return match(scope)
-    .with('inbox', () => ({ done: false }))
-    .with('signal', () => ({
-      importance: true,
-      shared: 'exclude' as const,
-      done: false,
-    }))
-    .with('noise', () => ({
-      importance: false,
-      shared: 'exclude' as const,
-      done: false,
-    }))
-    .with('calendar', () => ({
-      calendar_only: true,
-      shared: 'exclude' as const,
-    }))
-    .with('shared', () => ({ shared: 'only' as const }))
-    .with('archived', () => ({ shared: 'exclude' as const, done: true }))
-    .with('sent', () => ({ view: 'sent' as const }))
-    .with('drafts', () => ({ view: 'drafts' as const }))
-    .with('focus', 'favorites', 'all', () => ({}))
-    .exhaustive();
+  return (
+    match(scope)
+      .with('inbox', () => ({ done: false }))
+      .with('signal', () => ({
+        importance: true,
+        shared: 'exclude' as const,
+        done: false,
+      }))
+      .with('noise', () => ({
+        importance: false,
+        shared: 'exclude' as const,
+        done: false,
+      }))
+      .with('calendar', () => ({
+        calendar_only: true,
+        shared: 'exclude' as const,
+      }))
+      .with('shared', () => ({ shared: 'only' as const }))
+      .with('archived', () => ({ shared: 'exclude' as const, done: true }))
+      .with('sent', () => ({ view: 'sent' as const }))
+      .with('drafts', () => ({ view: 'drafts' as const }))
+      .with('focus', 'favorites', 'all', () => ({}))
+      // A view this build doesn't know searches all mail.
+      .exhaustive(() => ({}))
+  );
 }
 
 /** Where a search runs: the list's own filters, and the mail it reaches. */

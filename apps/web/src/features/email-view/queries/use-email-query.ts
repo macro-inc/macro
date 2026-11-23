@@ -158,7 +158,7 @@ function emailMatchesSearchScope(
     .with('shared', () => userId !== undefined && entity.ownerId !== userId)
     .with('inbox', 'focus', 'signal', 'noise', () => entity.done !== true)
     .with('favorites', 'sent', 'drafts', 'calendar', 'all', () => true)
-    .exhaustive();
+    .exhaustive(() => true);
 }
 
 // Provider-neutral folder membership needs a server lookup; arbitrary realtime
