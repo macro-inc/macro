@@ -234,6 +234,12 @@ function TooltipComponent(props: TooltipProps) {
   );
 }
 
+/**
+ * Supplemental context on desktop hover or keyboard focus.
+ * @do Use compound parts to keep interactive controls as the trigger.
+ * @do Pass measureTarget to show a full label only while its text is truncated.
+ * @dont Put essential information only in a tooltip; touch devices do not show it.
+ */
 export const Tooltip = Object.assign(TooltipComponent, {
   Root: TooltipRoot,
   Trigger: TooltipTrigger,
