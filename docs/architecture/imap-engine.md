@@ -520,9 +520,67 @@ minutes. Each page examines at most sixteen streams, including up to eight due
 deferred ids. Locked or failed rows enter a bounded-backoff queue; deleted and
 ineligible ids are retired. The steady-state thirty-second cycle uses a partial
 index of unconsumed notification revisions, so an idle cycle does not scan every
-account. The dedicated catch-up pool adds one connection per worker replica;
-normal sync uses its existing pool. Statements are bounded to fifteen seconds,
-individual wake transactions to one second, and no provider I/O occurs in a page.
+account. Catch-up shares the existing worker pool with normal sync. Each call
+acquires within five seconds and uses transaction-local statement and lock
+limits: fifteen seconds per statement, one second per wake statement and one
+second for lock waits. List reads commit before individual wake transactions;
+no provider I/O occurs in a page, and the next provider sees the pool defaults.
+
+The engine pool is lazy, has no idle minimum and is capped at ten connections,
+including LISTEN. Its idle timeout is one third of the thirty-second scheduler interval,
+so an empty replica releases its poll connection between rounds. LISTEN starts
+on the first non-empty binding result and is retained thereafter. First
+enrollment is discovered by the scheduler poll even before the listener exists.
+
+### Database connection budget
+
+Catch-up, connection recovery, mailbox claims and SMTP use clones of their
+service's existing pool. Catch-up adds no pool to a worker replica. Pool limits
+from the repository configuration are:
+
+| Pool | Local min/max | Dev min/max | Production min/max per replica | Production replicas | Production ceiling |
+| --- | --- | --- | --- | --- | --- |
+| Email API | 1/10 | 1/10 | 3/20 | 3 desired, up to 10 | 60 desired, 200 maximum |
+| Pubsub worker shared | 1/10 | 1/10 | 3/15 | 8 | 120 |
+| Pubsub worker backfill | 1/50 | 1/30 | 3/25 | 8 | 200 |
+| IMAP engine, including LISTEN | 0/10 | 0/10 | 0/10 | 1 | 10 |
+
+The API and worker pools connect eagerly and retain their existing SQLx defaults
+(600-second idle timeout and 1,800-second maximum lifetime). The engine connects
+lazily with a ten-second idle timeout. The subtotal is 390 connections at desired
+replicas or 530 at the API scaling maximum, compared with main's 380/520 before
+the engine. Other Macro services are outside this subtotal.
+
+The MacroDB configuration specifies `db.m9g.8xlarge` without a `max_connections`
+override. Applying the [AWS PostgreSQL default](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Limits.html),
+`LEAST(DBInstanceClassMemory/9531392, 5000)`, yields 5,000. This is computed from
+repo configuration and the AWS default, not observed; a custom parameter group
+set outside the repository could change it. No production database was queried.
+
+CI has a much smaller limit of 600. A real native browser-stack measurement
+with no IMAP links, no warm spare stacks and the same 150-second window gave:
+
+| Process | Main | Earlier PR | Shared catch-up pool |
+| --- | --- | --- | --- |
+| Document storage | 30 | 30 | 30 |
+| Pubsub worker | 10 | 13 | 12 |
+| Email API | 1 | 1 | 1 |
+| Test harness | 1 | 1 | 1 |
+| IMAP engine (not started in this generic stack) | 0 | 0 | 0 |
+| Total | 42 | 45 | 44 |
+
+Twelve active and warm stacks put main near 504 before migration and test
+clients. The earlier PR's additional 36 can cross that threshold. Sharing the
+catch-up pool removes its one permanent connection per worker, but the two extra
+connections from shared-pool high-water remain: this is not parity with main.
+The exact-head browser run must compare connection refusals with main before
+attributing the shard failures or deciding whether to cap IMAP poll concurrency.
+These idle native counts are not a multi-replica throughput measurement. A
+separate empty-engine run confirmed zero engine connections immediately before
+the next poll. Healthy-account idle connections have not been measured.
+Unreadable persisted-state classification and owner recovery are tracked in
+`mac-imap-smtp.108`; a synthetic malformed state must not be mistaken for a KMS
+failure when interpreting connection counts.
 
 Claims capture the current notification revision. Successful commits and local
 error releases cannot consume a newer wake. Startup catch-up always bumps the

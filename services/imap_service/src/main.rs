@@ -16,6 +16,7 @@ use macro_env::Environment;
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 mod config;
+mod database;
 mod scheduler;
 mod shutdown;
 
@@ -54,32 +55,13 @@ async fn main() -> Result<(), rootcause::Report> {
         },
     };
     let connector = Connector::new(endpoints)?;
-    let pool = sqlx::postgres::PgPoolOptions::new()
-        .max_connections(10)
-        .after_connect(|connection, _| {
-            Box::pin(async move {
-                sqlx::query!(
-                    r#"
-                    SET statement_timeout = '30s'
-                    "#,
-                )
-                .execute(connection)
-                .await?;
-                Ok(())
-            })
-        })
-        .connect(config.database_url.as_ref())
-        .await?;
-    let mut configuration_notifications = sqlx::postgres::PgListener::connect_with(&pool).await?;
-    configuration_notifications
-        .listen("imap_config_changed")
-        .await?;
+    let pool = database::pool(config.database_url.as_ref())?;
     let aws = macro_aws_config::get_macro_aws_config().await;
     let notifier = HttpNotifier::new(
         macro_service_urls::EmailServiceUrl::new_for_environment(config.environment)?.to_string(),
         config.internal_auth_key.to_string(),
     )?;
-    let repository = Arc::new(PgRepository::new(pool));
+    let repository = Arc::new(PgRepository::new(pool.clone()));
     let tasks = TaskTracker::new();
     let cancel = CancellationToken::new();
     let engine = Arc::new(
@@ -100,13 +82,20 @@ async fn main() -> Result<(), rootcause::Report> {
             macro_service_urls::ThunderbirdAutoconfigUrl::new_for_environment(config.environment)?,
         ))),
     );
+    let (first_binding, first_binding_seen) = tokio::sync::oneshot::channel();
     tasks.spawn(scheduler::configuration_notifications(
-        configuration_notifications,
+        pool,
+        first_binding_seen,
         engine.clone(),
         cancel.clone(),
     ));
     let actor_tasks = tasks.clone();
-    tasks.spawn(scheduler::run(engine.clone(), cancel.clone(), actor_tasks));
+    tasks.spawn(scheduler::run(
+        engine.clone(),
+        cancel.clone(),
+        actor_tasks,
+        first_binding,
+    ));
     let state = ApiState {
         engine,
         internal_key: config.internal_auth_key.to_string(),

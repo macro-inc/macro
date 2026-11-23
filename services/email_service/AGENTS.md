@@ -471,14 +471,15 @@ pool, with its own singleton cursor lock and an absolute two-second page budget.
 Each link probe commits its cursor independently. Timed-out unpark attempts halve
 their row budget in fresh savepoints down to one row; a link still failing is
 skipped until wrap, with consecutive skips visible on the recovery span.
-It never borrows the IMAP catch-up maintenance connection.
+Both recovery loops borrow the existing worker pool; neither owns a maintenance pool.
 Connect/reconnect adapters clear one FIFO parking page after their parent update
 and finish bounded pages after commit; the periodic sweep recovers interrupted
 tails and old-binary activations without changing retry or provider due times.
 
 The pubsub worker alone runs IMAP host catch-up (`imap_runtime::catch_up`), through
-the domain service and a dedicated one-connection pool. This adds one database
-connection per worker replica; API replicas do not start fleet scans. One global
+the domain service on the existing worker pool. Every adapter call applies
+transaction-local statement and lock timeouts, restoring the connection defaults
+on commit or rollback. API replicas do not start fleet scans. One global
 lease serializes bounded pages and preserves their cursor across restarts. See
 [host restart recovery](../../docs/architecture/imap-engine.md#host-catch-up-after-restart).
 

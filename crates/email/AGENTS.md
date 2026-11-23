@@ -983,11 +983,15 @@ are projected only with a current send_rejected issue; recipient positions use
 the frozen To, Cc, Bcc order and contain no additional personal data.
 
 IMAP host catch-up lives in `domain/mailbox/imap_catchup.rs` behind its repository
-port; only the pubsub worker composes the dedicated one-connection adapter. Keep
+port; only the pubsub worker composes the adapter on its existing worker pool. Keep
 startup scans globally leased and cursored, steady-state scans restricted to
 unconsumed hint revisions, and deferred stream ids within the same page budget.
 Compare notification revisions on release; local contention may yield to a newer
 hint, but the nullable provider retry floor and import pacing remain authoritative.
+Bound every catch-up transaction locally: acquisition within five seconds,
+statement timeout fifteen seconds (one second per wake), lock timeout one second.
+Commit list reads before individual probes, and never leave timeout settings on a
+shared connection for another provider.
 
 Startup catch-up must advance the hint revision even for an already-due stream
 with a live lease; steady-state pending catch-up preserves its queue order.

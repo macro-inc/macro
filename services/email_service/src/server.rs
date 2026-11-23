@@ -40,7 +40,7 @@ async fn run_server() -> anyhow::Result<()> {
         .await
         .context("expected to be able to resolve config secrets")?;
 
-    // limiting to max of 200 connections (12.5% of macrodb total) in prod.
+    // At most 200 API pool connections across ten production replicas.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (3, 20),
         Environment::Develop => (1, 10),

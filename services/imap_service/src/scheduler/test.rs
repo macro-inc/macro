@@ -72,3 +72,30 @@ async fn a_replica_at_capacity_retains_owners_and_admits_no_new_actor() {
         owner.task.abort();
     }
 }
+
+#[tokio::test]
+async fn empty_rounds_preserve_first_enrollment_and_listening_starts_only_once() {
+    let (start, mut ready) = oneshot::channel();
+    let mut start = Some(start);
+    start_listener_for_bindings(&[], &mut start);
+    start_listener_for_bindings(&[], &mut start);
+    assert!(matches!(
+        ready.try_recv(),
+        Err(oneshot::error::TryRecvError::Empty)
+    ));
+    let binding = Binding {
+        link_id: Uuid::now_v7(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    // A later thirty-second poll can still admit the first account without
+    // receiving a notification or having an existing owner.
+    let pending = pending_bindings(vec![binding], &HashMap::new());
+    assert_eq!(pending.len(), 1);
+    start_listener_for_bindings(&pending, &mut start);
+    ready.await.unwrap();
+    assert!(start.is_none());
+    start_listener_for_bindings(&[], &mut start);
+    start_listener_for_bindings(&[binding], &mut start);
+    assert!(start.is_none());
+}

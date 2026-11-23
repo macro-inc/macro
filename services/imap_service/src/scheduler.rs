@@ -1,9 +1,11 @@
 //! Composition-level scheduling and shutdown of fenced per-account actors.
 use imap_engine::domain::{models::Binding, service::Engine};
 use std::{collections::HashMap, sync::Arc, time::Duration};
-use tokio::task::JoinHandle;
+use tokio::{sync::oneshot, task::JoinHandle};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use uuid::Uuid;
+
+pub(crate) const POLL_INTERVAL: Duration = Duration::from_secs(30);
 
 struct RunningAccount {
     sync_generation: i64,
@@ -12,8 +14,14 @@ struct RunningAccount {
     task: JoinHandle<()>,
 }
 
-pub(crate) async fn run(engine: Arc<Engine>, cancellation: CancellationToken, tasks: TaskTracker) {
-    let mut interval = tokio::time::interval(Duration::from_secs(30));
+pub(crate) async fn run(
+    engine: Arc<Engine>,
+    cancellation: CancellationToken,
+    tasks: TaskTracker,
+    first_binding: oneshot::Sender<()>,
+) {
+    let mut first_binding = Some(first_binding);
+    let mut interval = tokio::time::interval(POLL_INTERVAL);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     let mut owners = HashMap::<Uuid, RunningAccount>::new();
     loop {
@@ -22,7 +30,14 @@ pub(crate) async fn run(engine: Arc<Engine>, cancellation: CancellationToken, ta
             _ = cancellation.cancelled() => break,
             _ = interval.tick() => {},
         }
-        schedule_round(&engine, &cancellation, &tasks, &mut owners).await;
+        schedule_round(
+            &engine,
+            &cancellation,
+            &tasks,
+            &mut owners,
+            &mut first_binding,
+        )
+        .await;
     }
     for owner in owners.into_values() {
         owner.cancellation.cancel();
@@ -39,6 +54,7 @@ async fn schedule_round(
     cancellation: &CancellationToken,
     tasks: &TaskTracker,
     owners: &mut HashMap<Uuid, RunningAccount>,
+    first_binding: &mut Option<oneshot::Sender<()>>,
 ) {
     let retained_links = owners
         .iter()
@@ -52,6 +68,7 @@ async fn schedule_round(
             return;
         }
     };
+    start_listener_for_bindings(&bindings, first_binding);
     owners.retain(|link, owner| {
         let keep = !owner.task.is_finished()
             && bindings.iter().any(|binding| {
@@ -93,10 +110,41 @@ async fn schedule_round(
 }
 
 pub(crate) async fn configuration_notifications(
-    mut listener: sqlx::postgres::PgListener,
+    pool: sqlx::PgPool,
+    first_binding: oneshot::Receiver<()>,
     engine: Arc<Engine>,
     cancellation: CancellationToken,
 ) {
+    // The scheduler's thirty-second poll discovers the first enrollment even
+    // before LISTEN exists. Once needed, retain one listener until shutdown.
+    tokio::select! {
+        biased;
+        _ = cancellation.cancelled() => return,
+        result = first_binding => if result.is_err() { return; },
+    }
+    let mut listener = loop {
+        let connect = async {
+            let mut listener = sqlx::postgres::PgListener::connect_with(&pool).await?;
+            listener.listen("imap_config_changed").await?;
+            Ok::<_, sqlx::Error>(listener)
+        };
+        let result = tokio::select! {
+            biased;
+            _ = cancellation.cancelled() => return,
+            result = connect => result,
+        };
+        match result {
+            Ok(listener) => break listener,
+            Err(error) => {
+                tracing::warn!(?error, "IMAP configuration listener unavailable");
+                tokio::select! {
+                    biased;
+                    _ = cancellation.cancelled() => return,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {},
+                }
+            }
+        }
+    };
     loop {
         let notification = tokio::select! {
             biased;
@@ -119,6 +167,19 @@ pub(crate) async fn configuration_notifications(
                 }
             }
         }
+    }
+}
+
+// This is a one-way signal: a replica that has ever served an account keeps
+// listening even if the next scheduler round is empty.
+fn start_listener_for_bindings(
+    bindings: &[Binding],
+    first_binding: &mut Option<oneshot::Sender<()>>,
+) {
+    if !bindings.is_empty()
+        && let Some(start) = first_binding.take()
+    {
+        let _ = start.send(());
     }
 }
 

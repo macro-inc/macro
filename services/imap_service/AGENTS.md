@@ -45,3 +45,10 @@ Derive the verification subkey from the required INTERNAL_AUTH_KEY once at
 startup; do not retain another copy of the bearer key in Engine or add a new
 configuration secret. Rotation starts fresh owner and login verification buckets
 without resetting host quotas.
+
+Keep the engine pool lazy with minimum zero and maximum ten connections. Derive
+its idle timeout as one third of the thirty-second scheduler poll, so an empty replica
+releases its poll connection between rounds. Start LISTEN only after the first
+non-empty bindings result, then retain it until shutdown; the scheduler poll
+admits the first enrollment independently of notifications. The listener counts
+within the ten-connection limit.

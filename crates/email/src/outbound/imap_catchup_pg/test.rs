@@ -441,3 +441,42 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
     );
     assert_eq!(ids.len(), 2);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_pool_catchup_bounds_are_local_and_restore_other_provider_defaults(db: PgPool) {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(db.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let before = sqlx::query!(
+        "SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout"
+    ).fetch_one(&pool).await.unwrap();
+    let job = PgImapCatchup(pool.clone());
+    let mut tx = job.transaction("10ms").await.unwrap();
+    let bounds = sqlx::query!(
+        "SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout"
+    ).fetch_one(&mut *tx).await.unwrap();
+    assert_eq!(bounds.statement_timeout.as_deref(), Some("10ms"));
+    assert_eq!(bounds.lock_timeout.as_deref(), Some("1s"));
+    let error = sqlx::query!("SELECT pg_sleep(0.1) IS NULL AS finished")
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().code().as_deref(),
+        Some("57014")
+    );
+    tx.rollback().await.unwrap();
+    // Exercise real catch-up transactions and their successful commit path on
+    // the same physical connection another provider will use next.
+    job.request_startup(300).await.unwrap();
+    let lease = job.claim(Uuid::now_v7(), 120).await.unwrap().unwrap();
+    assert!(job.advance(&lease, 16, 30).await.unwrap().complete);
+    let after = sqlx::query!(
+        "SELECT current_setting('statement_timeout') AS statement_timeout, current_setting('lock_timeout') AS lock_timeout"
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(after.statement_timeout, before.statement_timeout);
+    assert_eq!(after.lock_timeout, before.lock_timeout);
+    pool.close().await;
+}

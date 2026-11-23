@@ -352,8 +352,15 @@ for (const provider of PROVIDERS) {
       await views.getByText('Noise', { exact: true }).click();
       await expect.poll(() => rowIds(page)).toEqual([photos.id]);
 
-      await row(page, photos.id).click({ button: 'right' });
-      await page.getByRole('menuitem', { name: 'Sender → Signal' }).click();
+      const signal = page.getByRole('menuitem', { name: 'Sender → Signal' });
+      // Noise may replace its first row while settling after the view change.
+      await expect(async () => {
+        if (!(await signal.isVisible())) {
+          await row(page, photos.id).click({ button: 'right' });
+        }
+        await expect(signal).toBeVisible({ timeout: 3_000 });
+      }).toPass({ timeout: 20_000 });
+      await signal.click();
       did('AL-086');
       await expect(notice(page, 'Sender marked as Signal')).toContainText(
         'hal@example.com'

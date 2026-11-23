@@ -4,8 +4,10 @@ use crate::domain::mailbox::MailboxError;
 use crate::domain::mailbox::imap_catchup::{
     CatchupLease, CatchupMode, CatchupPage, ImapCatchupRepository,
 };
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+
+const PAGE_STATEMENT_TIMEOUT: &str = "15s";
 
 pub struct PgImapCatchup(pub PgPool);
 
@@ -14,6 +16,7 @@ mod test;
 
 impl ImapCatchupRepository for PgImapCatchup {
     async fn request_startup(&self, coalesce_seconds: u32) -> Result<(), MailboxError> {
+        let mut tx = self.transaction(PAGE_STATEMENT_TIMEOUT).await?;
         sqlx::query!(
             r#"
             UPDATE
@@ -29,9 +32,10 @@ impl ImapCatchupRepository for PgImapCatchup {
             "#,
             f64::from(coalesce_seconds),
         )
-        .execute(&self.0)
+        .execute(&mut *tx)
         .await
         .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(())
     }
 
@@ -40,6 +44,7 @@ impl ImapCatchupRepository for PgImapCatchup {
         id: Uuid,
         lease_seconds: u32,
     ) -> Result<Option<CatchupLease>, MailboxError> {
+        let mut tx = self.transaction(PAGE_STATEMENT_TIMEOUT).await?;
         let row = sqlx::query!(
             r#"
             WITH available AS (
@@ -75,9 +80,10 @@ impl ImapCatchupRepository for PgImapCatchup {
             id,
             f64::from(lease_seconds),
         )
-        .fetch_optional(&self.0)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         row.map(|row| {
             Ok(CatchupLease {
                 id,
@@ -94,6 +100,7 @@ impl ImapCatchupRepository for PgImapCatchup {
         limit: u32,
         idle_seconds: u32,
     ) -> Result<CatchupPage, MailboxError> {
+        let mut tx = self.transaction(PAGE_STATEMENT_TIMEOUT).await?;
         let deferred = sqlx::query!(
             r#"
             SELECT
@@ -112,7 +119,7 @@ impl ImapCatchupRepository for PgImapCatchup {
             "#,
             i64::from(limit / 2),
         )
-        .fetch_all(&self.0)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_error)?;
         let room = limit
@@ -144,7 +151,7 @@ impl ImapCatchupRepository for PgImapCatchup {
                 lease.after,
                 i64::from(room),
             )
-            .fetch_all(&self.0)
+            .fetch_all(&mut *tx)
             .await
             .map_err(db_error)?,
             CatchupMode::Pending => sqlx::query_scalar!(
@@ -174,10 +181,11 @@ impl ImapCatchupRepository for PgImapCatchup {
                 lease.after,
                 i64::from(room),
             )
-            .fetch_all(&self.0)
+            .fetch_all(&mut *tx)
             .await
             .map_err(db_error)?,
         };
+        tx.commit().await.map_err(db_error)?;
         let ids = deferred
             .iter()
             .map(|row| row.stream_id)
@@ -225,7 +233,7 @@ impl ImapCatchupRepository for PgImapCatchup {
             }
         }
         let after = regular.last().copied().unwrap_or(lease.after);
-        let mut tx = self.0.begin().await.map_err(db_error)?;
+        let mut tx = self.transaction(PAGE_STATEMENT_TIMEOUT).await?;
         let owned = sqlx::query_scalar!(
             r#"
             SELECT
@@ -330,16 +338,33 @@ impl ImapCatchupRepository for PgImapCatchup {
 }
 
 impl PgImapCatchup {
+    // Catch-up shares the ordinary worker pool. Bounds belong to each short
+    // transaction so the next provider's query retains its own defaults.
+    async fn transaction(&self, timeout: &str) -> Result<Transaction<'_, Postgres>, MailboxError> {
+        let mut tx = tokio::time::timeout(std::time::Duration::from_secs(5), self.0.begin())
+            .await
+            .map_err(|_| MailboxError::Persistence)?
+            .map_err(db_error)?;
+        sqlx::query!(
+            r#"
+            SELECT
+                set_config('statement_timeout', $1, true) AS statement_timeout,
+                set_config('lock_timeout', '1s', true) AS lock_timeout
+            "#,
+            timeout,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(db_error)?;
+        Ok(tx)
+    }
+
     async fn wake_one(
         &self,
         lease: &CatchupLease,
         stream: Uuid,
     ) -> Result<(Option<bool>, bool), MailboxError> {
-        let mut tx = self.0.begin().await.map_err(db_error)?;
-        sqlx::query!("SET LOCAL statement_timeout = '1s'")
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+        let mut tx = self.transaction("1s").await?;
         let result = sqlx::query!(
             r#"
             WITH owned AS MATERIALIZED (

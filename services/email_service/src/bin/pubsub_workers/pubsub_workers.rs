@@ -571,37 +571,12 @@ async fn main() -> anyhow::Result<()> {
     ));
     let imap_repository = email::outbound::mailbox_pg::PgMailboxSync::new(db.clone())
         .with_provider(email::domain::models::UserProvider::Imap);
-    // At most one additional maintenance connection per worker replica;
-    // the singleton job fence permits only one active catch-up page fleet-wide.
-    let catchup_pool = PgPoolOptions::new()
-        .min_connections(0)
-        .max_connections(1)
-        .acquire_timeout(std::time::Duration::from_secs(5))
-        .idle_timeout(std::time::Duration::from_secs(60))
-        .after_connect(|connection, _| {
-            Box::pin(async move {
-                sqlx::query!("SET statement_timeout = '15s'")
-                    .execute(&mut *connection)
-                    .await?;
-                sqlx::query!("SET lock_timeout = '1s'")
-                    .execute(&mut *connection)
-                    .await?;
-                Ok(())
-            })
-        })
-        .connect_lazy(&config.macro_db_url)
-        .context("invalid IMAP catch-up database configuration")?;
-    let catchup_stopped = worker_cancellation_token.clone();
-    worker_tracker.spawn(async move {
-        email_service::imap_runtime::catch_up(
-            email::domain::mailbox::imap_catchup::ImapCatchupService(
-                email::outbound::imap_catchup_pg::PgImapCatchup(catchup_pool.clone()),
-            ),
-            catchup_stopped,
-        )
-        .await;
-        catchup_pool.close().await;
-    });
+    worker_tracker.spawn(email_service::imap_runtime::catch_up(
+        email::domain::mailbox::imap_catchup::ImapCatchupService(
+            email::outbound::imap_catchup_pg::PgImapCatchup(db.clone()),
+        ),
+        worker_cancellation_token.clone(),
+    ));
     worker_tracker.spawn(email_service::mailbox_sync_worker::run(
         email::domain::mailbox::MailboxSyncService::new(
             imap_repository.clone(),
@@ -641,8 +616,8 @@ async fn main() -> anyhow::Result<()> {
         ),
         worker_cancellation_token.clone(),
     ));
-    // Separate singleton cursor and shared projection pool: recovery never owns
-    // the startup-critical IMAP catch-up or rollout repair connection.
+    // Recovery has its own singleton cursor and shares the ordinary worker
+    // pool with catch-up; neither loop owns a maintenance connection.
     worker_tracker.spawn(
         email_service::mailbox_sync_worker::run_parked_work_recovery(
             email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryService(

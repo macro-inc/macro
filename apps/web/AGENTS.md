@@ -1463,7 +1463,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Never restore explicitly invalidated membership from an older view's snapshot.
 - Sender filter writes and Undo return no per-thread classification. Refresh
   active GraphQL Soup readers with an email Importance predicate so their
-  server pages reconcile Signal and Noise membership.
+  server pages reconcile Signal and Noise membership. In browser scenarios,
+  establish the sender menu after the Noise view settles; a replaced first row
+  can close the menu before its item is available.
 - Project calendar invitations from GraphQL Mail aggregate facts into the
   shared row flag so the Calendar invite facet also matches inline invitations.
 - Render user-visible text in new UI, and every menu and navigation label,
