@@ -186,17 +186,19 @@ const LEGACY_SCHEMA_FILE: &str = "schema.json";
 /// engine runs with. A tier that fails resets the cache, and only one that
 /// cannot even reset is replaced and opened empty. An older build's schema
 /// file names what wrote a cache that stores no schema yet, and goes once the
-/// cache stores one.
+/// cache stores one; a file that cannot be read names nothing, and the
+/// records it described go.
 pub(crate) fn open_cache(
     dir: &Path,
     scope: &str,
     incoming: &Arc<Schema>,
 ) -> Result<(TursoStorage, SchemaAdoption), String> {
     let legacy = dir.join(LEGACY_SCHEMA_FILE);
-    let unrecorded = std::fs::read_to_string(&legacy)
-        .ok()
-        .and_then(|json| Schema::from_json(&json).ok())
-        .map_or(Unrecorded::Guess, Unrecorded::Known);
+    let unrecorded = match std::fs::read_to_string(&legacy) {
+        Ok(json) => Schema::from_json(&json).map_or(Unrecorded::Unreadable, Unrecorded::Known),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Unrecorded::Guess,
+        Err(_) => Unrecorded::Unreadable,
+    };
     let database = TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
     let storage = open_storage(&database, scope)?;
     let opened = match adopt_schema(&storage, incoming, unrecorded) {

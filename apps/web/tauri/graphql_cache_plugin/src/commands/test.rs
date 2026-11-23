@@ -418,6 +418,36 @@ fn an_older_builds_cache_upgrades_against_its_schema_file_and_the_file_goes() {
 }
 
 #[test]
+fn an_unreadable_schema_file_drops_the_records_it_described() {
+    // The bundled guess at what wrote a cache is for one that left no
+    // schema file; one it cannot read could name any older schema.
+    pollster::block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let written = labelled("String");
+        let (storage, _) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, written.clone());
+        write_label(&handle).await;
+        handle.shutdown().unwrap();
+        let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+        let mut storage = database.open("scope").unwrap();
+        cache_turso::migration_test_hooks::rewrite_as_storage_12(&mut storage).unwrap();
+        storage.try_close().unwrap();
+        std::fs::write(dir.path().join("schema.json"), b"{").unwrap();
+
+        let (storage, adoption) = super::open_cache(dir.path(), "scope", &written).unwrap();
+        assert_eq!(
+            adoption.change,
+            Some(cache_core::schema_change::Tier::Reset(
+                cache_core::schema_change::ResetReason::Unreadable
+            ))
+        );
+        let handle = crate::engine::EngineHandle::with_schema(storage, None, adoption.schema);
+        assert!(!label_hits(&handle).await);
+        handle.shutdown().unwrap();
+    });
+}
+
+#[test]
 fn a_build_that_retypes_a_field_opens_without_that_types_records() {
     // Native init used to refuse a build whose schema changed a stored
     // type's shape, leaving the webview on the network; now the type's
