@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { ViewShell } from '@app/components/view-shell';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { UserContextProvider } from '@core/context/user';
@@ -280,7 +281,9 @@ if (root)
     () => (
       <QueryClientProvider client={queryClient}>
         <UserContextProvider>
-          <Fixture />
+          <AnalyticsContextProvider>
+            <Fixture />
+          </AnalyticsContextProvider>
         </UserContextProvider>
       </QueryClientProvider>
     ),
