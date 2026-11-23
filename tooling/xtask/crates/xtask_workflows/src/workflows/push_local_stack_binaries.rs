@@ -2,8 +2,8 @@
 //!
 //! Sibling of the deploy pipeline on purpose: a cache miss or a failed `nix
 //! copy` must not hold or fail `deploy_on_push` / `release-production`. The
-//! ten deploy packages this aggregate reuses are already pushed by
-//! `build-service-binaries`; this workflow exists for the five local-only
+//! deploy packages this aggregate reuses are already pushed by
+//! `build-service-binaries`; this workflow exists for the local-only
 //! closures and the `buildEnv` wrapper. Cursor Cloud's `.cursor` scripts
 //! substitute them from the cache instead of compiling. Generated into
 //! `push_local_stack_binaries.yml`.
