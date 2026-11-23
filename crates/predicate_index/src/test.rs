@@ -383,3 +383,159 @@ fn effective_projection_rejects_an_unassigned_owner() {
         Err(ValidationError::InvalidOptimisticOwner)
     );
 }
+
+#[test]
+fn sort_fact_derivation_copies_the_source_only_when_every_required_fact_matches() {
+    const RULE: SortFactDerivation = SortFactDerivation {
+        profiles: &["profile-v1", "profile-v1b"],
+        source: "source-ts",
+        target: "target-ts",
+        required: &[("visible", &[1]), ("kind", b"a")],
+    };
+    let base = IndexDocument {
+        record_key: RecordKey::new("Thing:1").unwrap(),
+        profile: Profile::new(token("profile-v1")),
+        partition: token("thing"),
+        exact_facts: vec![
+            ExactFact {
+                attribute: token("visible"),
+                value: ExactValue::new([1]).unwrap(),
+            },
+            ExactFact {
+                attribute: token("kind"),
+                value: exact("a"),
+            },
+        ],
+        integer_facts: vec![],
+        sort_facts: vec![IntegerFact {
+            attribute: token("source-ts"),
+            value: 7,
+        }],
+    };
+    assert_eq!(
+        RULE.derive(&base),
+        Some(IntegerFact {
+            attribute: token("target-ts"),
+            value: 7
+        })
+    );
+    let mut other_profile = base.clone();
+    other_profile.profile = Profile::new(token("profile-v2"));
+    assert_eq!(RULE.derive(&other_profile), None);
+    let mut second_profile = base.clone();
+    second_profile.profile = Profile::new(token("profile-v1b"));
+    assert_eq!(RULE.derive(&second_profile).map(|fact| fact.value), Some(7));
+    let mut hidden = base.clone();
+    hidden.exact_facts[0].value = ExactValue::new([0]).unwrap();
+    assert_eq!(RULE.derive(&hidden), None);
+    let mut missing = base.clone();
+    missing.exact_facts.pop();
+    assert_eq!(RULE.derive(&missing), None);
+    let mut no_source = base;
+    no_source.sort_facts.clear();
+    assert_eq!(RULE.derive(&no_source), None);
+    assert_eq!(
+        RULE.fingerprint(),
+        "profile-v1|profile-v1b:source-ts->target-ts[visible=01,kind=61]"
+    );
+
+    // Applying replaces a stale copy, removes one the facts no longer
+    // derive, and leaves other profiles alone.
+    let stale = IntegerFact {
+        attribute: token("target-ts"),
+        value: 3,
+    };
+    let mut applied = base_with(&hidden_free(), Some(stale.clone()));
+    RULE.apply(&mut applied);
+    assert_eq!(
+        applied.sort_facts,
+        vec![
+            IntegerFact {
+                attribute: token("source-ts"),
+                value: 7
+            },
+            IntegerFact {
+                attribute: token("target-ts"),
+                value: 7
+            },
+        ]
+    );
+    let mut now_hidden = base_with(&hidden_free(), Some(stale.clone()));
+    now_hidden.exact_facts[0].value = ExactValue::new([0]).unwrap();
+    RULE.apply(&mut now_hidden);
+    assert_eq!(now_hidden.sort_facts.len(), 1);
+    let mut foreign = base_with(&hidden_free(), Some(stale.clone()));
+    foreign.profile = Profile::new(token("profile-v2"));
+    RULE.apply(&mut foreign);
+    assert!(foreign.sort_facts.contains(&stale));
+
+    fn hidden_free() -> Vec<ExactFact> {
+        vec![
+            ExactFact {
+                attribute: token("visible"),
+                value: ExactValue::new([1]).unwrap(),
+            },
+            ExactFact {
+                attribute: token("kind"),
+                value: exact("a"),
+            },
+        ]
+    }
+    fn base_with(exact_facts: &[ExactFact], target: Option<IntegerFact>) -> IndexDocument {
+        IndexDocument {
+            record_key: RecordKey::new("Thing:1").unwrap(),
+            profile: Profile::new(token("profile-v1")),
+            partition: token("thing"),
+            exact_facts: exact_facts.to_vec(),
+            integer_facts: vec![],
+            sort_facts: std::iter::once(IntegerFact {
+                attribute: token("source-ts"),
+                value: 7,
+            })
+            .chain(target)
+            .collect(),
+        }
+    }
+}
+
+#[test]
+fn derived_sort_facts_are_as_uncertain_as_their_inputs() {
+    const RULE: SortFactDerivation = SortFactDerivation {
+        profiles: &["profile-v1"],
+        source: "source-ts",
+        target: "target-ts",
+        required: &[("visible", &[1])],
+    };
+    let profile = Profile::new(token("profile-v1"));
+    let target = token("target-ts");
+
+    // A copy of an uncertain source, or of a document whose required fact
+    // is uncertain, is uncertain.
+    for input in ["source-ts", "visible"] {
+        let mut uncertainty = OptimisticUncertainty::default();
+        uncertainty.mark(&[token(input)]);
+        RULE.apply_uncertainty(&profile, &mut uncertainty);
+        assert!(uncertainty.affects(&target), "{input}");
+    }
+    // Certain inputs make the copy certain, even when everything else is not.
+    let mut uncertainty = OptimisticUncertainty::default();
+    uncertainty.mark(&[target.clone()]);
+    RULE.apply_uncertainty(&profile, &mut uncertainty);
+    assert!(!uncertainty.affects(&target));
+    let mut all = OptimisticUncertainty::default();
+    all.mark(&[]);
+    all.clear([token("source-ts"), token("visible")]);
+    RULE.apply_uncertainty(&profile, &mut all);
+    assert!(!all.affects(&target));
+    assert!(all.affects(&token("other")));
+    let mut all_but_source = OptimisticUncertainty::default();
+    all_but_source.mark(&[]);
+    all_but_source.clear([token("source-ts"), target.clone()]);
+    RULE.apply_uncertainty(&profile, &mut all_but_source);
+    assert!(all_but_source.affects(&target));
+    // Other profiles are left alone.
+    let mut foreign = OptimisticUncertainty::default();
+    foreign.mark(&[token("source-ts")]);
+    RULE.apply_uncertainty(&Profile::new(token("profile-v2")), &mut foreign);
+    assert!(!foreign.affects(&target));
+}

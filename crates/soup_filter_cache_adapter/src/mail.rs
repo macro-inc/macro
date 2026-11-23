@@ -187,14 +187,19 @@ fn project_with_facts(
             value: outbound,
         });
     }
-    Some(IndexDocument {
+    let mut document = IndexDocument {
         record_key: key,
         profile: vocabulary::profile(),
         partition: vocabulary::partition(),
         exact_facts: facts,
         integer_facts: times.clone(),
         sort_facts: times,
-    })
+    };
+    // The Inbox view's sort key, only on threads it can show.
+    if let Some(fact) = vocabulary::INBOX_VIEW_DERIVATION.derive(&document) {
+        document.sort_facts.push(fact);
+    }
+    Some(document)
 }
 
 /// Compact contribution fields needed by the shared Mail projection adapter.

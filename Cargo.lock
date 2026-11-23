@@ -3899,6 +3899,7 @@ dependencies = [
  "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru 0.16.4",
  "macro_user_id",
  "maybe_send",
@@ -3956,6 +3957,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "item-filter-index",
  "maybe_send",
  "miniz_oxide",
  "pollster",
