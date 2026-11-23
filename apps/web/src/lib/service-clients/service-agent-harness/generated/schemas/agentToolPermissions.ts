@@ -5,7 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { AgentToolPermissionsInherited } from './agentToolPermissionsInherited';
 import type { AgentToolPermissionsSessionRules } from './agentToolPermissionsSessionRules';
+import type { AgentToolPermissionsSource } from './agentToolPermissionsSource';
 import type { BotId } from './botId';
 import type { ToolPermissionDefault } from './toolPermissionDefault';
 import type { ToolPermissionGroup } from './toolPermissionGroup';
@@ -21,6 +23,9 @@ export interface AgentToolPermissions {
   agentId: BotId;
   /** The caller may change and reset them. */
   canEdit: boolean;
+  /** The caller may set this agent's source or detach it: a person who
+may edit an owned agent. */
+  canSetSource: boolean;
   /** The caller may tighten them. */
   canTighten: boolean;
   /** Each action's default, in display order: what every group's action
@@ -29,6 +34,10 @@ without an exception follows, a new group's included. */
   /** Every catalog group with an operation, with the actions it has
 operations for. */
   groups: ToolPermissionGroup[];
+  /** When it follows: the settings it inherits, as a policy owning them
+would hold them (what a detach copies, before the agent's own
+restrictions). Read only. */
+  inherited?: AgentToolPermissionsInherited;
   /** Whose settings these are. */
   kind: ToolPermissionPolicyKind;
   /** The policy's stable id. */
@@ -44,6 +53,7 @@ has yet (not in `groups`, applied once one does). */
   /** The agent's restrictions on itself for this session, when the view is
 of a session. */
   sessionRules?: AgentToolPermissionsSessionRules;
+  source?: AgentToolPermissionsSource;
   /** The registry version the resolution used. */
   version: string;
 }

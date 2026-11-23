@@ -8,8 +8,8 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
-    AgentAccess, Change, PermissionError, PolicyChain, PolicyId, PolicyOwner, Rule, SessionFacts,
-    SetBy,
+    AgentAccess, AgentFacts, AgentScope, Change, PermissionError, PolicyChain, PolicyId,
+    PolicyOwner, Rule, SessionFacts, SetBy,
 };
 
 /// Saved settings, the policies they follow, and session overlays.
@@ -100,6 +100,13 @@ pub trait PermissionStore: Send + Sync + 'static {
     where
         Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send;
 
+    /// The ids of these owned agents' policies, in the order given, each
+    /// created (owning no settings) when it has none yet, in one batch.
+    fn ensure_agent_policies(
+        &self,
+        agents: &[BotId],
+    ) -> impl Future<Output = Result<Vec<PolicyId>, Self::Err>> + Send;
+
     /// The most policies on any path of followers ending at `policy`, itself
     /// included (1 when nothing follows it), counted no further than one
     /// past [`MAX_CHAIN`](super::model::MAX_CHAIN).
@@ -154,6 +161,22 @@ pub trait AgentDirectory: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         agent: BotId,
     ) -> impl Future<Output = Result<AgentAccess, Self::Err>> + Send;
+
+    /// An owned agent's owner and identity, a deleted one's included; `None`
+    /// when there is no such agent.
+    fn facts(
+        &self,
+        agent: BotId,
+    ) -> impl Future<Output = Result<Option<AgentFacts>, Self::Err>> + Send;
+
+    /// The live agents `user` may edit whose policies a follower in `scope`
+    /// could follow: for a private scope, the person's own and their teams'
+    /// agents; for a team, that team's.
+    fn source_candidates(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        scope: &AgentScope,
+    ) -> impl Future<Output = Result<Vec<AgentFacts>, Self::Err>> + Send;
 }
 
 /// The facts about a session that decide whose permissions apply in it.

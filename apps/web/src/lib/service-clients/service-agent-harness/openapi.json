@@ -3839,6 +3839,147 @@
         }
       }
     },
+    "/agent-tool-permissions/policies/{policy_id}": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "A policy by id, read only: the caller's own Macro policy, or an agent's\nthey may edit. The form shows it before the agent that will follow it\nexists.",
+        "operationId": "get_agent_tool_permission_policy",
+        "parameters": [
+          {
+            "name": "policy_id",
+            "in": "path",
+            "description": "The policy",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-tool-permissions/sources": {
+      "get": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "The policies an agent may follow, for the picker: the caller's own Macro\nfirst (private agents only), then agents. With `agentId`, those it can't\nfollow say why (`unavailable`) and the one it follows is `current`.",
+        "operationId": "get_agent_tool_permission_sources",
+        "parameters": [
+          {
+            "name": "agentId",
+            "in": "query",
+            "description": "An existing agent: its scope, with candidates it can't follow marked.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Without `agentId`: the scope the new agent will have.",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/SourceScopeQuery"
+            }
+          },
+          {
+            "name": "teamId",
+            "in": "query",
+            "description": "With `scope=team`: the team.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionSourceCandidates"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-work-registrations": {
       "get": {
         "tags": ["agent-sessions"],
@@ -4069,6 +4210,168 @@
           },
           "404": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}/tool-permissions/detach": {
+      "post": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Make an agent own its settings again: they become what it resolves to\nnow (session restrictions and approvals aside), its own restrictions\nkept, with `changes` applied on top, all in one transaction. Only a\nperson signed in to Macro who may edit the agent.",
+        "operationId": "detach_agent_tool_permissions",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The owned agent",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DetachToolPermissions"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "May not edit the agent, or not a person's own session (needs_person)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}/tool-permissions/source": {
+      "put": {
+        "tags": ["agent-tool-permissions"],
+        "summary": "Make an agent follow another policy (its source): the source's settings\napply on the agent's next call, and its own rows only restrict them. An\nagent that owned its settings loses the ones a person made; its\nrestrictions on itself stay. Only a person signed in to Macro who may\nedit the agent; following grants nothing over the source.",
+        "operationId": "set_agent_tool_permissions_source",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "The owned agent",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetToolPermissionSource"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentToolPermissions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "May not edit the agent, not a person's own session (needs_person), or a source it may not follow (source_not_allowed)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolPermissionError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The source follows the agent (source_cycle), or too many agents would follow each other in a row (source_too_deep)",
             "content": {
               "application/json": {
                 "schema": {
@@ -5797,7 +6100,8 @@
           "restricted",
           "defaults",
           "rules",
-          "groups"
+          "groups",
+          "canSetSource"
         ],
         "properties": {
           "agentId": {
@@ -5807,6 +6111,10 @@
           "canEdit": {
             "type": "boolean",
             "description": "The caller may change and reset them."
+          },
+          "canSetSource": {
+            "type": "boolean",
+            "description": "The caller may set this agent's source or detach it: a person who\nmay edit an owned agent."
           },
           "canTighten": {
             "type": "boolean",
@@ -5825,6 +6133,13 @@
               "$ref": "#/components/schemas/ToolPermissionGroup"
             },
             "description": "Every catalog group with an operation, with the actions it has\noperations for."
+          },
+          "inherited": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionRule"
+            },
+            "description": "When it follows: the settings it inherits, as a policy owning them\nwould hold them (what a detach copies, before the agent's own\nrestrictions). Read only."
           },
           "kind": {
             "$ref": "#/components/schemas/ToolPermissionPolicyKind",
@@ -5853,6 +6168,17 @@
               "$ref": "#/components/schemas/ToolPermissionRule"
             },
             "description": "The agent's restrictions on itself for this session, when the view is\nof a session."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSource",
+                "description": "The policy it follows, when it follows one."
+              }
+            ]
           },
           "version": {
             "type": "string",
@@ -6995,6 +7321,20 @@
         "type": "string",
         "description": "How an approval ended without approving.",
         "enum": ["denied", "cancelled", "expired"]
+      },
+      "DetachToolPermissions": {
+        "type": "object",
+        "description": "A detach, and the changes to make in the same transaction.",
+        "properties": {
+          "changes": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionChange"
+            },
+            "description": "Changes applied on top of the snapshot (between 1 and 200), as `set`\ntakes them."
+          }
+        },
+        "additionalProperties": false
       },
       "DiscoverAgentCapabilitiesRequest": {
         "type": "object",
@@ -9340,6 +9680,18 @@
           }
         }
       },
+      "SetToolPermissionSource": {
+        "type": "object",
+        "description": "The policy an agent is to follow.",
+        "required": ["sourcePolicyId"],
+        "properties": {
+          "sourcePolicyId": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyId",
+            "description": "The source's policy id, from the picker (`sources`) or a view's\n`policyId`."
+          }
+        },
+        "additionalProperties": false
+      },
       "SharePermissionV2": {
         "type": "object",
         "required": ["id", "owner"],
@@ -9417,6 +9769,10 @@
             },
             "description": "Each action's default as it stands now, in display order: what every\ngroup's action without an exception follows."
           },
+          "follows": {
+            "type": ["string", "null"],
+            "description": "When the agent follows another policy: \"Follows <name> (@handle)\".\nIts settings come from there, and changes made there apply here."
+          },
           "message": {
             "type": "string",
             "description": "What the model should do next."
@@ -9486,6 +9842,11 @@
           "computer_busy",
           "rollout_disabled"
         ]
+      },
+      "SourceScopeQuery": {
+        "type": "string",
+        "description": "Whose sources to list: an agent's, or a scope for an agent not created\nyet.",
+        "enum": ["private", "team"]
       },
       "StartFreshAgentConversationRequest": {
         "type": "object",
@@ -9800,7 +10161,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "`invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,\n`would_loosen`, `source_cycle`, `source_too_deep`,\n`source_not_allowed` or `internal`."
+            "description": "`invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,\n`would_loosen`, `follows_source`, `source_cycle`, `source_too_deep`,\n`source_not_allowed` or `internal`."
           },
           "message": {
             "type": "string",
@@ -9811,7 +10172,18 @@
             "items": {
               "$ref": "#/components/schemas/LoosenedOperation"
             },
-            "description": "For `would_loosen`: the operations the change would have loosened."
+            "description": "For `would_loosen` and `follows_source`: the operations the change\nwould have loosened."
+          },
+          "source": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionPolicyId",
+                "description": "For `follows_source`: the policy the agent follows."
+              }
+            ]
           },
           "targets": {
             "type": ["array", "null"],
@@ -9910,6 +10282,212 @@
           "viaAgent": {
             "type": "boolean",
             "description": "The agent set it by restricting itself."
+          }
+        }
+      },
+      "ToolPermissionSource": {
+        "type": "object",
+        "description": "The policy a follower follows, as its view shows it.",
+        "required": ["status", "inScope", "canEdit", "via"],
+        "properties": {
+          "agent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceAgent",
+                "description": "Its agent (or persona); absent once it was lost."
+              }
+            ]
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "The caller may edit the source itself (through its own permissions)."
+          },
+          "inScope": {
+            "type": "boolean",
+            "description": "The follower may still follow it: false once the follower's or the\nsource's owner changed so that it would not be offered now. Nothing\nloosens; its editors should pick a source or detach."
+          },
+          "kind": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionPolicyKind",
+                "description": "Whose it is; absent once it was lost."
+              }
+            ]
+          },
+          "policyId": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionPolicyId",
+                "description": "The source's policy id; `null` once it was lost."
+              }
+            ]
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceScope",
+                "description": "Whose it is, for the picker's badge; absent once it was lost."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/ToolPermissionSourceStatus",
+            "description": "Whether it still applies as itself."
+          },
+          "via": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionSourceVia"
+            },
+            "description": "The rest of the chain past the source, toward its root."
+          }
+        }
+      },
+      "ToolPermissionSourceAgent": {
+        "type": "object",
+        "description": "The agent a source policy belongs to (for a built-in persona, the\npersona), as a person recognizes it.",
+        "required": ["id", "name", "deleted"],
+        "properties": {
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "description": "Its picture."
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "It was deleted: its policy still applies, and nobody can edit it."
+          },
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Its handle; absent once it is deleted."
+          },
+          "id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent's (or persona's) id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
+          }
+        }
+      },
+      "ToolPermissionSourceCandidate": {
+        "type": "object",
+        "description": "A policy the picker offers as a source.",
+        "required": ["policyId", "kind", "agent", "scope", "current"],
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/ToolPermissionSourceAgent",
+            "description": "Its agent (or persona)."
+          },
+          "current": {
+            "type": "boolean",
+            "description": "The agent follows it now."
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyKind",
+            "description": "Whose it is."
+          },
+          "policyId": {
+            "$ref": "#/components/schemas/ToolPermissionPolicyId",
+            "description": "Its policy id, to set as the source."
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ToolPermissionSourceScope",
+            "description": "Whose it is, for the badge."
+          },
+          "unavailable": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ToolPermissionSourceUnavailable",
+                "description": "Why it can't be picked, when it can't."
+              }
+            ]
+          }
+        }
+      },
+      "ToolPermissionSourceCandidates": {
+        "type": "object",
+        "description": "The sources the picker offers: the person's own Macro first, then\nagents.",
+        "required": ["candidates"],
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ToolPermissionSourceCandidate"
+            },
+            "description": "The candidates, in display order."
+          }
+        }
+      },
+      "ToolPermissionSourceScope": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A person's own.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["personal"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A team's.",
+            "required": ["teamId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["team"]
+              },
+              "teamId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The team."
+              }
+            }
+          }
+        ],
+        "description": "Whose a source policy is: a person's own (their Macro, their private\nagents) or a team's."
+      },
+      "ToolPermissionSourceStatus": {
+        "type": "string",
+        "description": "Whether a followed source still applies as itself.",
+        "enum": ["live", "deleted", "lost"]
+      },
+      "ToolPermissionSourceUnavailable": {
+        "type": "string",
+        "description": "Why a candidate source can't be picked.",
+        "enum": ["cycle", "too_deep"]
+      },
+      "ToolPermissionSourceVia": {
+        "type": "object",
+        "description": "One more policy along a chain: \"Scout follows Macro\".",
+        "required": ["name"],
+        "properties": {
+          "handle": {
+            "type": ["string", "null"],
+            "description": "Its handle, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "Its name."
           }
         }
       },

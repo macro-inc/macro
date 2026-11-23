@@ -20,9 +20,12 @@ use agent_harness::inbound::tool_approvals::{
     self, AnswerToolApprovalRequest, AnswerToolApprovalResponse, ToolApprovalAnswerDto,
     ToolApprovalStatusDto,
 };
-use agent_permissions::domain::model::{PermissionsView, Tightened, ToolPermissionCatalog};
+use agent_permissions::domain::model::{
+    PermissionsView, SourceCandidates, Tightened, ToolPermissionCatalog,
+};
 use agent_permissions::inbound::axum_router::{
-    self as tool_permissions_router, ToolPermissionChanges, ToolPermissionError,
+    self as tool_permissions_router, DetachToolPermissions, SetToolPermissionSource,
+    SourceScopeQuery, ToolPermissionChanges, ToolPermissionError,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::coding_agents::CodingAgent;
@@ -145,6 +148,10 @@ impl Modify for SecurityAddon {
         tool_permissions_router::set_handler,
         tool_permissions_router::tighten_handler,
         tool_permissions_router::reset_handler,
+        tool_permissions_router::set_source_handler,
+        tool_permissions_router::detach_handler,
+        tool_permissions_router::get_sources_handler,
+        tool_permissions_router::get_policy_handler,
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
         crate::computers::claude::claude_sign_in_complete_handler,
@@ -242,6 +249,10 @@ impl Modify for SecurityAddon {
         ToolApprovalAnswerDto,
         ToolApprovalStatusDto,
         ToolPermissionChanges,
+        SetToolPermissionSource,
+        DetachToolPermissions,
+        SourceScopeQuery,
+        SourceCandidates,
         ToolPermissionError,
         ToolPermissionCatalog,
         PermissionsView,

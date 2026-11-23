@@ -223,6 +223,8 @@ fn a_run_that_sends_nothing_reaches_nobody() {
         ("PUT", "/auth/agents/01a1/api-key"),
         ("PUT", "/agent-harness/agents/01a1/tool-permissions"),
         ("DELETE", "/agents/01a1/tool-permissions"),
+        ("PUT", "/agent-harness/agents/01a1/tool-permissions/source"),
+        ("POST", "/agents/01a1/tool-permissions/detach"),
         ("POST", "/bots"),
         ("PATCH", "/bots/01a1"),
         ("DELETE", "/bots/01a1"),

@@ -84,8 +84,11 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   403). Agent git and agent MCP keys share the same check.
 - `src/tool_permissions.rs`: the adapters `crates/agent_permissions` needs
   (who may edit an agent from `BotService::manageable_agent`, a session's
-  agent and owner from the session repo); its routes
-  (`/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`,
+  agent and owner from the session repo, an agent's owner and identity,
+  deleted or not, from the bots repository); its routes
+  (`/agent-tool-permissions/catalog`, `/agent-tool-permissions/sources`,
+  `/agent-tool-permissions/policies/{id}`,
+  `/agents/{id}/tool-permissions[/tighten|/source|/detach]`,
   `/agent-sessions/{id}/tool-permissions`) answer 404 unless the caller has
   `enable-agent-permissions` (`code_mode::PermissionsFlag`; off without
   PostHog).

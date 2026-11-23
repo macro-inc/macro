@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ShownPermission } from './shownPermission';
+import type { ShowPermissionsResultFollows } from './showPermissionsResultFollows';
 import type { ShowPermissionsResultReason } from './showPermissionsResultReason';
 import type { ShowPermissionsSelection } from './showPermissionsSelection';
 import type { ToolPermissionDefault } from './toolPermissionDefault';
@@ -21,6 +22,9 @@ export interface ShowPermissionsResult {
   /** Each action's default as it stands now, in display order: what every
 group's action without an exception follows. */
   defaults?: ToolPermissionDefault[];
+  /** When the agent follows another policy: "Follows <name> (@handle)".
+Its settings come from there, and changes made there apply here. */
+  follows?: ShowPermissionsResultFollows;
   /** What the model should do next. */
   message: string;
   /** The agent's sentence for above the controls. */

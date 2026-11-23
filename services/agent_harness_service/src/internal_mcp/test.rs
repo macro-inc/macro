@@ -741,6 +741,48 @@ impl agent_permissions::domain::service::AgentPermissions for Unrestricted {
     > {
         Err(agent_permissions::domain::model::PermissionError::NotFound)
     }
+    async fn set_source(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: agent_permissions::domain::model::PolicyId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn detach(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Option<Vec<agent_permissions::domain::model::Change>>,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn source_candidates(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: agent_permissions::domain::model::CandidatesFor,
+    ) -> Result<
+        agent_permissions::domain::model::SourceCandidates,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn view_policy(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: agent_permissions::domain::model::PolicyId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &agent_permissions::domain::model::SessionPolicy,

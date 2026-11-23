@@ -128,6 +128,40 @@ impl AgentPermissions for FakePermissions {
         Err(self.refuse(caller))
     }
 
+    async fn set_source(
+        &self,
+        caller: &Caller,
+        _agent: BotId,
+        _source: PolicyId,
+    ) -> Result<PermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
+    async fn detach(
+        &self,
+        caller: &Caller,
+        _agent: BotId,
+        _changes: Option<Vec<Change>>,
+    ) -> Result<PermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
+    async fn source_candidates(
+        &self,
+        caller: &Caller,
+        _of: CandidatesFor,
+    ) -> Result<SourceCandidates, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
+    async fn view_policy(
+        &self,
+        caller: &Caller,
+        _policy: PolicyId,
+    ) -> Result<PermissionsView, PermissionError> {
+        Err(self.refuse(caller))
+    }
+
     async fn resolve_calls(
         &self,
         _policy: &SessionPolicy,
@@ -151,7 +185,12 @@ async fn send(
     uri: &str,
     token: &str,
 ) -> (StatusCode, serde_json::Value) {
-    let body = if method == "PUT" || method == "POST" {
+    let body = if uri.ends_with("/source") {
+        Body::from(
+            serde_json::json!({ "sourcePolicyId": "00000000-0000-0000-0000-00000000501c" })
+                .to_string(),
+        )
+    } else if method == "PUT" || method == "POST" {
         Body::from(
             serde_json::json!({
                 "changes": [{
@@ -184,7 +223,7 @@ async fn send(
     )
 }
 
-const AGENT_ROUTES: [(&str, &str); 5] = [
+const AGENT_ROUTES: [(&str, &str); 10] = [
     ("GET", "/agent-tool-permissions/catalog"),
     (
         "GET",
@@ -201,6 +240,24 @@ const AGENT_ROUTES: [(&str, &str); 5] = [
     (
         "DELETE",
         "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions",
+    ),
+    (
+        "PUT",
+        "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions/source",
+    ),
+    (
+        "POST",
+        "/agents/00000000-0000-0000-0000-00000000b07a/tool-permissions/detach",
+    ),
+    (
+        "GET",
+        "/agent-tool-permissions/sources?agentId=00000000-0000-0000-0000-00000000b07a",
+    ),
+    // A query the service would refuse is still not found while off.
+    ("GET", "/agent-tool-permissions/sources?scope=team"),
+    (
+        "GET",
+        "/agent-tool-permissions/policies/00000000-0000-0000-0000-00000000501c",
     ),
 ];
 
@@ -343,4 +400,54 @@ fn a_change_reads_from_the_wire() {
             },
         ]
     );
+}
+
+#[tokio::test]
+async fn a_follower_looser_than_its_source_is_a_conflict_naming_the_source() {
+    let permissions = Arc::new(FakePermissions {
+        error: || PermissionError::FollowsSource {
+            operations: vec![LoosenedOperation {
+                service: "email".to_owned(),
+                operation: "send_message".to_owned(),
+                label: "Send email".to_owned(),
+                from: PermissionState::Never,
+                to: PermissionState::Always,
+            }],
+            followed: Some(PolicyId::from_uuid(Uuid::from_u128(0x501c))),
+        },
+        callers: Mutex::new(vec![]),
+    });
+    let (status, body) = send(app(permissions), "PUT", AGENT_ROUTES[2].1, "person").await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "follows_source");
+    assert_eq!(body["source"], "00000000-0000-0000-0000-00000000501c");
+    assert_eq!(body["operations"][0]["operation"], "send_message");
+}
+
+#[tokio::test]
+async fn source_refusals_have_their_codes() {
+    for (error, status, code) in [
+        (
+            (|| PermissionError::SourceCycle) as fn() -> PermissionError,
+            StatusCode::CONFLICT,
+            "source_cycle",
+        ),
+        (
+            || PermissionError::SourceTooDeep,
+            StatusCode::CONFLICT,
+            "source_too_deep",
+        ),
+        (
+            || PermissionError::SourceNotAllowed,
+            StatusCode::FORBIDDEN,
+            "source_not_allowed",
+        ),
+    ] {
+        let permissions = Arc::new(FakePermissions {
+            error,
+            callers: Mutex::new(vec![]),
+        });
+        let (got, body) = send(app(permissions), "PUT", AGENT_ROUTES[5].1, "person").await;
+        assert_eq!((got, body["code"].as_str()), (status, Some(code)));
+    }
 }

@@ -931,11 +931,14 @@ pub async fn run() -> anyhow::Result<()> {
         Arc::new(
             agent_permissions::domain::service::AgentPermissionsService::new(
                 agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
-                tool_permissions::BotsAgentDirectory(bots::domain::service::BotServiceImpl::new(
+                tool_permissions::BotsAgentDirectory(
+                    bots::domain::service::BotServiceImpl::new(
+                        PgBotsRepo::new(pool.clone()),
+                        broker.clone(),
+                        computers::harness_service(&pool),
+                    ),
                     PgBotsRepo::new(pool.clone()),
-                    broker.clone(),
-                    computers::harness_service(&pool),
-                )),
+                ),
                 tool_permissions::RepoSessionDirectory(session_repo.clone()),
                 code_mode::PermissionsFlag(feature_flags.clone()),
                 Arc::new(agent_permissions::outbound::registry::registry_catalog()),

@@ -95,6 +95,48 @@ impl AgentPermissions for FakePermissions {
     async fn reset(&self, _: &Caller, _: BotId) -> Result<PermissionsView, PermissionError> {
         Err(PermissionError::NotFound)
     }
+    async fn set_source(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: agent_permissions::domain::model::PolicyId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn detach(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: bot_id::BotId,
+        _: Option<Vec<agent_permissions::domain::model::Change>>,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn source_candidates(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: agent_permissions::domain::model::CandidatesFor,
+    ) -> Result<
+        agent_permissions::domain::model::SourceCandidates,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn view_policy(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: agent_permissions::domain::model::PolicyId,
+    ) -> Result<
+        agent_permissions::domain::model::PermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &SessionPolicy,
@@ -833,4 +875,166 @@ async fn a_js_tools_ask_operation_holds_naming_the_language_and_runs_on_approval
         "{}",
         refused.message
     );
+}
+
+/// Agents and sessions the real permissions service never asks about in a
+/// gate's resolution.
+struct NoDirectory;
+
+impl agent_permissions::domain::ports::AgentDirectory for NoDirectory {
+    type Err = std::convert::Infallible;
+    async fn access(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: BotId,
+    ) -> Result<agent_permissions::domain::model::AgentAccess, Self::Err> {
+        Ok(agent_permissions::domain::model::AgentAccess::NotFound)
+    }
+    async fn facts(
+        &self,
+        _: BotId,
+    ) -> Result<Option<agent_permissions::domain::model::AgentFacts>, Self::Err> {
+        Ok(None)
+    }
+    async fn source_candidates(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &agent_permissions::domain::model::AgentScope,
+    ) -> Result<Vec<agent_permissions::domain::model::AgentFacts>, Self::Err> {
+        Ok(Vec::new())
+    }
+}
+
+impl agent_permissions::domain::ports::SessionDirectory for NoDirectory {
+    type Err = std::convert::Infallible;
+    async fn facts(
+        &self,
+        _: AgentSessionId,
+    ) -> Result<Option<agent_permissions::domain::model::SessionFacts>, Self::Err> {
+        Ok(None)
+    }
+}
+
+impl agent_permissions::domain::ports::PermissionsRollout for NoDirectory {
+    async fn enabled(&self, _: &MacroUserIdStr<'static>) -> bool {
+        true
+    }
+}
+
+/// A follower's program is gated by its source's rules, live: a person's
+/// Never on the source refuses the follower's next program, and lifting it
+/// lets the next one run.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_followers_program_is_gated_by_its_sources_rules(pool: sqlx::PgPool) {
+    use agent_permissions::domain::model::{PolicyOwner, SetBy, Target};
+    use agent_permissions::domain::ports::{PermissionStore, SourceWrite, Write, WriteTo};
+    use agent_permissions::outbound::pg::PgPermissionStore;
+
+    let follower = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0xf011));
+    let source = BotId::new_from_uuid(macro_uuid::Uuid::from_u128(0x5005));
+    sqlx::raw_sql(
+        r#"
+        INSERT INTO macro_user (id, username, email, stripe_customer_id)
+        VALUES ('00000000-0000-4000-8000-0000000000f1', 'follower-owner@example.com', 'follower-owner@example.com', 'stripe_follower_owner');
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ('macro|follower-owner@example.com', 'follower-owner@example.com', '00000000-0000-4000-8000-0000000000f1');
+        INSERT INTO bots (id, kind, owner_user_id, name, handle, created_by) VALUES
+        ('00000000-0000-0000-0000-00000000f011', 'owned', 'macro|follower-owner@example.com', 'Analyst', 'analyst', 'macro|follower-owner@example.com'),
+        ('00000000-0000-0000-0000-000000005005', 'owned', 'macro|follower-owner@example.com', 'Scout', 'scout', 'macro|follower-owner@example.com');
+        "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let owner = MacroUserIdStr::try_from("macro|follower-owner@example.com".to_owned()).unwrap();
+    let store = PgPermissionStore::new(pool.clone());
+    let follower_policy = store
+        .ensure_policy(&PolicyOwner::Agent(follower))
+        .await
+        .unwrap();
+    let source_policy = store
+        .ensure_policy(&PolicyOwner::Agent(source))
+        .await
+        .unwrap();
+    store
+        .set_source(
+            SourceWrite {
+                policy: follower_policy,
+                by: &owner,
+            },
+            source_policy,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let set_source_send = |state: Option<PermissionState>| {
+        let (store, owner) = (store.clone(), owner.clone());
+        async move {
+            let write = Write {
+                policy: source_policy,
+                session: None,
+                to: WriteTo::Saved,
+                by: &owner,
+                set_by: SetBy::Person,
+            };
+            let change = Change {
+                target: Target::GroupAction {
+                    group: "email".to_owned(),
+                    action: Action::Send,
+                },
+                state,
+            };
+            store
+                .write(write, |_, _| Ok(vec![change]))
+                .await
+                .unwrap()
+                .unwrap();
+        }
+    };
+
+    let permissions = Arc::new(
+        agent_permissions::domain::service::AgentPermissionsService::new(
+            store.clone(),
+            NoDirectory,
+            NoDirectory,
+            NoDirectory,
+            Arc::new(agent_permissions::outbound::registry::registry_catalog()),
+        ),
+    );
+    let gate = |analysis: Analysis| PermissionGate {
+        analyzers: Analyzers {
+            js_tools: Some(Arc::new(FakeAnalyzer::new(analysis))),
+        },
+        permissions: permissions.clone(),
+        holds: Arc::new(FakeHolds::new(ToolApprovalStatus::Approved)),
+        rollout: Arc::new(Rollout(true)),
+        prompters: Arc::new(Prompters(Mutex::new(vec![prompter()]))),
+    };
+    let identity = ExecutionIdentity {
+        agent_id: follower,
+        owner: owner.clone(),
+        ..identity()
+    };
+
+    set_source_send(Some(PermissionState::Never)).await;
+    let refused = not_run(
+        gate(two_calls())
+            .check(&identity, "src", ProgramLanguage::JsTools)
+            .await,
+    );
+    match refused.permission {
+        Some(ExecutionPermission::Blocked { operations }) => {
+            assert_eq!(operations.len(), 1);
+            assert_eq!(operations[0].operation, "send_message");
+            assert_eq!(operations[0].origin, Origin::Source);
+        }
+        other => panic!("{other:?}"),
+    }
+
+    set_source_send(None).await;
+    let checked = gate(two_calls())
+        .check(&identity, "src", ProgramLanguage::JsTools)
+        .await
+        .unwrap();
+    assert!(checked.is_some());
 }

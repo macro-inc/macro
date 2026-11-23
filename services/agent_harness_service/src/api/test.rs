@@ -467,6 +467,26 @@ fn the_openapi_document_serves_agent_tool_permissions() {
             "tighten_agent_tool_permissions",
         ),
         (
+            "/agents/{agent_id}/tool-permissions/source",
+            "put",
+            "set_agent_tool_permissions_source",
+        ),
+        (
+            "/agents/{agent_id}/tool-permissions/detach",
+            "post",
+            "detach_agent_tool_permissions",
+        ),
+        (
+            "/agent-tool-permissions/sources",
+            "get",
+            "get_agent_tool_permission_sources",
+        ),
+        (
+            "/agent-tool-permissions/policies/{policy_id}",
+            "get",
+            "get_agent_tool_permission_policy",
+        ),
+        (
             "/agent-sessions/{session_id}/tool-permissions",
             "get",
             "get_agent_session_tool_permissions",
@@ -482,6 +502,10 @@ fn the_openapi_document_serves_agent_tool_permissions() {
         "ToolPermissionChanges",
         "TightenToolPermissionsResponse",
         "ToolPermissionError",
+        "SetToolPermissionSource",
+        "DetachToolPermissions",
+        "ToolPermissionSourceCandidates",
+        "ToolPermissionSource",
     ] {
         assert!(schemas.contains_key(schema), "{schema}");
     }

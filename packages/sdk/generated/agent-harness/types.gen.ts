@@ -759,6 +759,11 @@ export type AgentToolPermissions = {
      */
     canEdit: boolean;
     /**
+     * The caller may set this agent's source or detach it: a person who
+     * may edit an owned agent.
+     */
+    canSetSource: boolean;
+    /**
      * The caller may tighten them.
      */
     canTighten: boolean;
@@ -772,6 +777,12 @@ export type AgentToolPermissions = {
      * operations for.
      */
     groups: Array<ToolPermissionGroup>;
+    /**
+     * When it follows: the settings it inherits, as a policy owning them
+     * would hold them (what a detach copies, before the agent's own
+     * restrictions). Read only.
+     */
+    inherited?: Array<ToolPermissionRule> | null;
     /**
      * Whose settings these are.
      */
@@ -794,6 +805,7 @@ export type AgentToolPermissions = {
      * of a session.
      */
     sessionRules?: Array<ToolPermissionRule> | null;
+    source?: null | ToolPermissionSource;
     /**
      * The registry version the resolution used.
      */
@@ -1755,6 +1767,17 @@ export type DecisionVia = 'card' | 'chat' | 'inbox';
  * How an approval ended without approving.
  */
 export type DeclinedStatus = 'denied' | 'cancelled' | 'expired';
+
+/**
+ * A detach, and the changes to make in the same transaction.
+ */
+export type DetachToolPermissions = {
+    /**
+     * Changes applied on top of the snapshot (between 1 and 200), as `set`
+     * takes them.
+     */
+    changes?: Array<ToolPermissionChange> | null;
+};
 
 /**
  * HTTP request selecting one provider to probe.
@@ -3246,6 +3269,17 @@ export type SetAgentSessionArchivedRequest = {
     archived: boolean;
 };
 
+/**
+ * The policy an agent is to follow.
+ */
+export type SetToolPermissionSource = {
+    /**
+     * The source's policy id, from the picker (`sources`) or a view's
+     * `policyId`.
+     */
+    sourcePolicyId: ToolPermissionPolicyId;
+};
+
 export type SharePermissionV2 = {
     /**
      * The channel share permissions for the item
@@ -3282,6 +3316,11 @@ export type ShowPermissionsResult = {
      * group's action without an exception follows.
      */
     defaults?: Array<ToolPermissionDefault>;
+    /**
+     * When the agent follows another policy: "Follows <name> (@handle)".
+     * Its settings come from there, and changes made there apply here.
+     */
+    follows?: string | null;
     /**
      * What the model should do next.
      */
@@ -3338,6 +3377,12 @@ export type ShownPermission = {
  * chooses its way out from this, never from the message.
  */
 export type SignInRecoveryCode = 'invalid_code' | 'malformed_code' | 'sign_in_expired' | 'computer_unreachable' | 'computer_busy' | 'rollout_disabled';
+
+/**
+ * Whose sources to list: an agent's, or a scope for an agent not created
+ * yet.
+ */
+export type SourceScopeQuery = 'private' | 'team';
 
 /**
  * The session the user is choosing to leave behind.
@@ -3592,7 +3637,7 @@ export type ToolPermissionDefault = {
 export type ToolPermissionError = {
     /**
      * `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
-     * `would_loosen`, `source_cycle`, `source_too_deep`,
+     * `would_loosen`, `follows_source`, `source_cycle`, `source_too_deep`,
      * `source_not_allowed` or `internal`.
      */
     code: string;
@@ -3601,9 +3646,11 @@ export type ToolPermissionError = {
      */
     message: string;
     /**
-     * For `would_loosen`: the operations the change would have loosened.
+     * For `would_loosen` and `follows_source`: the operations the change
+     * would have loosened.
      */
     operations?: Array<LoosenedOperation> | null;
+    source?: null | ToolPermissionPolicyId;
     /**
      * For `unknown_target`: the targets the registry does not have.
      */
@@ -3687,6 +3734,137 @@ export type ToolPermissionRule = {
      * The agent set it by restricting itself.
      */
     viaAgent: boolean;
+};
+
+/**
+ * The policy a follower follows, as its view shows it.
+ */
+export type ToolPermissionSource = {
+    agent?: null | ToolPermissionSourceAgent;
+    /**
+     * The caller may edit the source itself (through its own permissions).
+     */
+    canEdit: boolean;
+    /**
+     * The follower may still follow it: false once the follower's or the
+     * source's owner changed so that it would not be offered now. Nothing
+     * loosens; its editors should pick a source or detach.
+     */
+    inScope: boolean;
+    kind?: null | ToolPermissionPolicyKind;
+    policyId?: null | ToolPermissionPolicyId;
+    scope?: null | ToolPermissionSourceScope;
+    /**
+     * Whether it still applies as itself.
+     */
+    status: ToolPermissionSourceStatus;
+    /**
+     * The rest of the chain past the source, toward its root.
+     */
+    via: Array<ToolPermissionSourceVia>;
+};
+
+/**
+ * The agent a source policy belongs to (for a built-in persona, the
+ * persona), as a person recognizes it.
+ */
+export type ToolPermissionSourceAgent = {
+    /**
+     * Its picture.
+     */
+    avatarUrl?: string | null;
+    /**
+     * It was deleted: its policy still applies, and nobody can edit it.
+     */
+    deleted: boolean;
+    /**
+     * Its handle; absent once it is deleted.
+     */
+    handle?: string | null;
+    /**
+     * The agent's (or persona's) id.
+     */
+    id: BotId;
+    /**
+     * Its name.
+     */
+    name: string;
+};
+
+/**
+ * A policy the picker offers as a source.
+ */
+export type ToolPermissionSourceCandidate = {
+    /**
+     * Its agent (or persona).
+     */
+    agent: ToolPermissionSourceAgent;
+    /**
+     * The agent follows it now.
+     */
+    current: boolean;
+    /**
+     * Whose it is.
+     */
+    kind: ToolPermissionPolicyKind;
+    /**
+     * Its policy id, to set as the source.
+     */
+    policyId: ToolPermissionPolicyId;
+    /**
+     * Whose it is, for the badge.
+     */
+    scope: ToolPermissionSourceScope;
+    unavailable?: null | ToolPermissionSourceUnavailable;
+};
+
+/**
+ * The sources the picker offers: the person's own Macro first, then
+ * agents.
+ */
+export type ToolPermissionSourceCandidates = {
+    /**
+     * The candidates, in display order.
+     */
+    candidates: Array<ToolPermissionSourceCandidate>;
+};
+
+/**
+ * Whose a source policy is: a person's own (their Macro, their private
+ * agents) or a team's.
+ */
+export type ToolPermissionSourceScope = {
+    kind: 'personal';
+} | {
+    kind: 'team';
+    /**
+     * The team.
+     */
+    teamId: string;
+};
+
+/**
+ * Whether a followed source still applies as itself.
+ */
+export type ToolPermissionSourceStatus = 'live' | 'deleted' | 'lost';
+
+/**
+ * Why a candidate source can't be picked.
+ */
+export type ToolPermissionSourceUnavailable = 'cycle' | 'too_deep';
+
+/**
+ * One more policy along a chain: "Scout follows Macro".
+ */
+export type ToolPermissionSourceVia = {
+    /**
+     * Its handle, when known.
+     */
+    handle?: string | null;
+    /**
+     * Its name.
+     */
+    name: string;
 };
 
 /**
@@ -5681,6 +5859,66 @@ export type GetAgentToolPermissionCatalogResponses = {
 
 export type GetAgentToolPermissionCatalogResponse = GetAgentToolPermissionCatalogResponses[keyof GetAgentToolPermissionCatalogResponses];
 
+export type GetAgentToolPermissionPolicyData = {
+    body?: never;
+    path: {
+        /**
+         * The policy
+         */
+        policy_id: string;
+    };
+    query?: never;
+    url: '/agent-tool-permissions/policies/{policy_id}';
+};
+
+export type GetAgentToolPermissionPolicyErrors = {
+    401: string;
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionPolicyError = GetAgentToolPermissionPolicyErrors[keyof GetAgentToolPermissionPolicyErrors];
+
+export type GetAgentToolPermissionPolicyResponses = {
+    200: AgentToolPermissions;
+};
+
+export type GetAgentToolPermissionPolicyResponse = GetAgentToolPermissionPolicyResponses[keyof GetAgentToolPermissionPolicyResponses];
+
+export type GetAgentToolPermissionSourcesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * An existing agent: its scope, with candidates it can't follow marked.
+         */
+        agentId?: string;
+        /**
+         * Without `agentId`: the scope the new agent will have.
+         */
+        scope?: SourceScopeQuery;
+        /**
+         * With `scope=team`: the team.
+         */
+        teamId?: string;
+    };
+    url: '/agent-tool-permissions/sources';
+};
+
+export type GetAgentToolPermissionSourcesErrors = {
+    400: ToolPermissionError;
+    401: string;
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type GetAgentToolPermissionSourcesError = GetAgentToolPermissionSourcesErrors[keyof GetAgentToolPermissionSourcesErrors];
+
+export type GetAgentToolPermissionSourcesResponses = {
+    200: ToolPermissionSourceCandidates;
+};
+
+export type GetAgentToolPermissionSourcesResponse = GetAgentToolPermissionSourcesResponses[keyof GetAgentToolPermissionSourcesResponses];
+
 export type ListAgentWorkRegistrationsData = {
     body?: never;
     path?: never;
@@ -5785,6 +6023,69 @@ export type SetAgentToolPermissionsResponses = {
 };
 
 export type SetAgentToolPermissionsResponse = SetAgentToolPermissionsResponses[keyof SetAgentToolPermissionsResponses];
+
+export type DetachAgentToolPermissionsData = {
+    body: DetachToolPermissions;
+    path: {
+        /**
+         * The owned agent
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions/detach';
+};
+
+export type DetachAgentToolPermissionsErrors = {
+    400: ToolPermissionError;
+    401: string;
+    /**
+     * May not edit the agent, or not a person's own session (needs_person)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+};
+
+export type DetachAgentToolPermissionsError = DetachAgentToolPermissionsErrors[keyof DetachAgentToolPermissionsErrors];
+
+export type DetachAgentToolPermissionsResponses = {
+    200: AgentToolPermissions;
+};
+
+export type DetachAgentToolPermissionsResponse = DetachAgentToolPermissionsResponses[keyof DetachAgentToolPermissionsResponses];
+
+export type SetAgentToolPermissionsSourceData = {
+    body: SetToolPermissionSource;
+    path: {
+        /**
+         * The owned agent
+         */
+        agent_id: string;
+    };
+    query?: never;
+    url: '/agents/{agent_id}/tool-permissions/source';
+};
+
+export type SetAgentToolPermissionsSourceErrors = {
+    401: string;
+    /**
+     * May not edit the agent, not a person's own session (needs_person), or a source it may not follow (source_not_allowed)
+     */
+    403: ToolPermissionError;
+    404: ToolPermissionError;
+    /**
+     * The source follows the agent (source_cycle), or too many agents would follow each other in a row (source_too_deep)
+     */
+    409: ToolPermissionError;
+};
+
+export type SetAgentToolPermissionsSourceError = SetAgentToolPermissionsSourceErrors[keyof SetAgentToolPermissionsSourceErrors];
+
+export type SetAgentToolPermissionsSourceResponses = {
+    200: AgentToolPermissions;
+};
+
+export type SetAgentToolPermissionsSourceResponse = SetAgentToolPermissionsSourceResponses[keyof SetAgentToolPermissionsSourceResponses];
 
 export type TightenAgentToolPermissionsData = {
     body: ToolPermissionChanges;

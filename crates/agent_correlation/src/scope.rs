@@ -101,6 +101,8 @@ const SENDS: &[(&str, &str)] = &[
     ("DELETE", "/agents/{id}/api-key"),
     ("PUT", "/agents/{id}/tool-permissions"),
     ("DELETE", "/agents/{id}/tool-permissions"),
+    ("PUT", "/agents/{id}/tool-permissions/source"),
+    ("POST", "/agents/{id}/tool-permissions/detach"),
     ("POST", "/bots"),
     ("PATCH", "/bots/{id}"),
     ("DELETE", "/bots/{id}"),

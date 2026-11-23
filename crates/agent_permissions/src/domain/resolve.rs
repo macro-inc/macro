@@ -355,6 +355,9 @@ pub fn view(
         rules: chain.rules().to_vec(),
         session_rules: overlay,
         groups,
+        can_set_source: false,
+        source: None,
+        inherited: None,
     }
 }
 
@@ -579,6 +582,61 @@ pub fn asks_looser(
                     );
                 }
             }
+        }
+    }
+    if refused { Err(operations) } else { Ok(()) }
+}
+
+/// Refuses a person's change to a following policy that asks for a state
+/// looser than its source gives the target on its own (without the policy's
+/// own rows): every row of a follower only restricts, so such a row would be
+/// saved and do nothing. Raising it takes an edit of the source, or a
+/// detach and then an edit. A removal is never refused. Names the
+/// operations that resolve through the target.
+pub fn below_source(
+    catalog: &Catalog,
+    chain: &PolicyChain,
+    changes: &[Change],
+) -> Result<(), Vec<LoosenedOperation>> {
+    if !chain.follows() {
+        return Ok(());
+    }
+    let source = Resolver::with_rules(chain, &[], &[]);
+    let mut refused = false;
+    let mut operations: Vec<LoosenedOperation> = Vec::new();
+    for change in changes {
+        let Some(to) = change.state else {
+            continue;
+        };
+        let (floor, entries): (PermissionState, Vec<&CatalogEntry>) = match &change.target {
+            Target::Tool { service, operation } => {
+                let Some(entry) = catalog.entry(service, operation) else {
+                    continue;
+                };
+                (source.entry(entry).0, vec![entry])
+            }
+            Target::GroupAction { group, action } => (
+                source.pair(group, *action).0,
+                catalog
+                    .entries
+                    .iter()
+                    .filter(|entry| entry.group == *group && entry.action == *action)
+                    .collect(),
+            ),
+            Target::Action { action } => (
+                source.default(*action).0,
+                catalog
+                    .entries
+                    .iter()
+                    .filter(|entry| {
+                        entry.action == *action && !source.has_exception(&entry.group, *action)
+                    })
+                    .collect(),
+            ),
+        };
+        if to < floor {
+            refused = true;
+            operations.extend(entries.into_iter().map(|entry| loosened(entry, floor, to)));
         }
     }
     if refused { Err(operations) } else { Ok(()) }

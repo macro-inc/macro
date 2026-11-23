@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ToolPermissionErrorOperations } from './toolPermissionErrorOperations';
+import type { ToolPermissionErrorSource } from './toolPermissionErrorSource';
 import type { ToolPermissionErrorTargets } from './toolPermissionErrorTargets';
 
 /**
@@ -12,13 +13,15 @@ import type { ToolPermissionErrorTargets } from './toolPermissionErrorTargets';
  */
 export interface ToolPermissionError {
   /** `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
-`would_loosen`, `source_cycle`, `source_too_deep`,
+`would_loosen`, `follows_source`, `source_cycle`, `source_too_deep`,
 `source_not_allowed` or `internal`. */
   code: string;
   /** What went wrong, for a person. */
   message: string;
-  /** For `would_loosen`: the operations the change would have loosened. */
+  /** For `would_loosen` and `follows_source`: the operations the change
+would have loosened. */
   operations?: ToolPermissionErrorOperations;
+  source?: ToolPermissionErrorSource;
   /** For `unknown_target`: the targets the registry does not have. */
   targets?: ToolPermissionErrorTargets;
 }
