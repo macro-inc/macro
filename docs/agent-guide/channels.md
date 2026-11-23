@@ -1118,8 +1118,16 @@ reaction do not notify.
 
 In Home, reactions belong to the message's thread row: a top-level message uses
 its own row, and a reply uses its parent thread. Verify that an incoming reaction
-brings that row back into the inbox, displays the reaction and channel name, and
-opens the reacted-to message. Marking the row done should clear its reaction
+brings that row back into the inbox and opens the reacted-to message.
+
+Every surface lays a reaction out like Slack's Activity item: who reacted, then
+**Reacted 👍 to:** and the message, then where (`#channel`, a group chat's
+name, nothing for a DM). Check it on the inbox card (several reactions to one
+message stack as one card naming everyone and every emoji), the touch Home
+card, a desktop notification, and the push and email digest, which take it
+from `ChannelMessageReactionMetadata`'s title and body. The push and desktop
+notification cut the message at 80 characters so the channel line stays in
+view. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
 ## Marking notifications done in the channel gutter
@@ -1367,7 +1375,9 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order.
+groups keep the source's page order. An unseen invite (being added to a channel)
+makes the channel unread, as it is in Notifications and the Chat badge, until
+Chat opens the channel and marks the invite seen.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading

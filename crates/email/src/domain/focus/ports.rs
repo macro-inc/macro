@@ -134,6 +134,17 @@ pub enum FocusClassifierError {
     Rejected,
 }
 
+/// Which work a classification is for, so the classifier can pace it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassifierLane {
+    /// Mail that just arrived: answered at once, ahead of everything else.
+    Live,
+    /// A backfill or sweep working through an inbox's older mail: waits its
+    /// turn so it neither crowds out live mail nor overruns the model's rate
+    /// limits.
+    Background,
+}
+
 /// Yes/no answers about a thread, metered against its owner.
 pub trait FocusClassifier: Send + Sync + 'static {
     /// The probability of "yes" for each question, in question order.
@@ -143,6 +154,7 @@ pub trait FocusClassifier: Send + Sync + 'static {
         thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> impl Future<Output = Result<Vec<f32>, FocusClassifierError>> + Send;
 
     /// Model identifier stored with each classification.

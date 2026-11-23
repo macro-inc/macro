@@ -440,6 +440,7 @@ fragment SoupPropertyValueFields on GraphqlPropertyValue {
 	}
 	... on GraphqlDatePropertyValue {
 		dateValue: value
+		dateHasTime: hasTime
 	}
 	... on GraphqlDateRangePropertyValue {
 		rangeStart: start

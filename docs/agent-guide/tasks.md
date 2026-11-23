@@ -372,8 +372,8 @@ Behind `enable-task-start-date` (on in dev), tasks and projects have a Start Dat
 optional: nothing is backfilled, and a task without one looks as it always has.
 With a start, the Due date pill under the title, the list's Due date cell, the
 board card, a project's header pill and its list row read as one range,
-`Nov 23 → Nov 27` (`Nov 23 →` with no due date); overdue colours follow the due
-date only. The Properties panel (desktop and the phone sheet) keeps Start Date
+`Nov 23 → Nov 27` (`Nov 23 →` with no due date, and one date when both fall on
+the same day); overdue colours follow the due date only. The Properties panel (desktop and the phone sheet) keeps Start Date
 and Due Date as separate rows, Start Date directly above Due Date.
 Every one of them opens the same picker: Start and Due fields over the date
 suggestions, which set the active field and close the picker as a due date's
@@ -385,6 +385,25 @@ task composer's Due date pill opens the same picker (a stacked sheet on phones).
 Start Date is never offered in Add property menus. With the flag off nothing
 shows it, apart from a row already set (by an agent or the SDK), which the
 Properties panel lists like any other property.
+
+**Add time**, under the calendar, gives both ends a time of day (`has_time` on
+the stored value): the start takes the next full hour and the due date an hour
+after it, as a new calendar event does. The picker then lists clock times for
+the active field (**Set start time…** / **Set end time…**; typed times such as
+`3p` work); due times on the start's day show the length each gives (`1h`,
+`1h 30min`). A new start time moves the due date with it, keeping the length;
+**Change day** moves the active end to another day, keeping its time. Times
+follow the calendar's 12/24-hour setting. The footer then reads `2h` with
+**Remove time**, which makes both ends whole days again, and **Clear both**.
+With times, the pills read `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
+Nov 28, 4:00 PM` across days); list cells, board cards and project rows write
+times compactly, as calendar events do (`Nov 26, 2–4pm`), and the Properties
+rows show `Nov 26, 2pm`. A due date with a time is overdue from that moment.
+When a pick moves the start past the saved due date, the picker saves the due
+date first, so the server's start rule never clamps the new start. A date without a time is read and
+written exactly as before. Agents set a time with `date_has_time` on
+SetEntityProperty; the SDK with `tasks.create({ dueDate, startDate, withTimes:
+true })` or `setProperty` with `has_time: true`.
 
 Writers other than the picker (agents, the SDK, quick input, routines, the
 board's deadline move) go through one server rule: the start never lands after
