@@ -36,21 +36,31 @@ export function installBrowserLocks(): BrowserLocks {
     ): Promise<void> {
       return new Promise<void>((resolve, reject) => {
         const lock = named(name);
-        const answer = async (held: { name: string } | null) => {
+        // `release` runs once the callback settles, before the request
+        // does: a browser frees the name and grants the next waiter first.
+        const answer = async (
+          held: { name: string } | null,
+          release?: () => void
+        ) => {
+          let settle: () => void;
           try {
             // A browser calls back in a later task, never inside `request`.
             await null;
-            resolve(await granted(held));
+            const result = await granted(held);
+            settle = () => resolve(result);
           } catch (error) {
-            reject(error);
+            settle = () => reject(error);
           }
+          release?.();
+          settle();
         };
         const grant = async () => {
           lock.held = true;
-          await answer({ name });
-          lock.held = false;
-          const next = lock.waiters.shift();
-          if (next) fireAndForget(next.grant(), 'test-browser-locks');
+          await answer({ name }, () => {
+            lock.held = false;
+            const next = lock.waiters.shift();
+            if (next) fireAndForget(next.grant(), 'test-browser-locks');
+          });
         };
         if (!lock.held) {
           fireAndForget(grant(), 'test-browser-locks');
