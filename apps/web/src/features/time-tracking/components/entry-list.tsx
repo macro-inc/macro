@@ -51,7 +51,7 @@ function EntryRow(props: {
       .filter(Boolean)
       .join(' · ');
   return (
-    <div class="flex items-center gap-2 px-2 py-1.5 text-sm touch:min-h-[44px]">
+    <div class="flex w-full items-center gap-2 px-2 py-1.5 text-sm touch:min-h-[44px]">
       <div class="shrink-0">{props.person(props.entry.userId)}</div>
       <div class="flex min-w-0 flex-1 flex-col">
         <Show when={props.entry.note}>
