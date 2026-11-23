@@ -2,7 +2,10 @@ use super::*;
 use std::{
     io::{BufRead, BufReader},
     process::{Child, Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     time::Duration,
 };
 use zbus::{connection::Builder, object_server::SignalEmitter, zvariant::OwnedValue};
@@ -88,17 +91,46 @@ impl Drop for Bus {
     }
 }
 
+/// A private session bus's configuration. `dbus-daemon --session` reads
+/// `/etc/dbus-1/session.conf`, which minimal machines and CI runners lack, so
+/// each bus gets this instead: the standard session policy, without the host's
+/// service files and includes.
+const BUS_CONFIG: &str = r#"<busconfig>
+  <type>session</type>
+  <listen>unix:tmpdir=/tmp</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+"#;
+
+/// Tells apart the configuration files of the buses tests start at once.
+static NEXT_BUS: AtomicUsize = AtomicUsize::new(0);
+
 async fn setup(early_click: bool, fail: bool) -> (Bus, Connection, Connection, Arc<Mutex<Calls>>) {
     // Never claim the developer's real notification service or display popups.
+    let config = std::env::temp_dir().join(format!(
+        "macro-notification-test-bus-{}-{}.conf",
+        std::process::id(),
+        NEXT_BUS.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::write(&config, BUS_CONFIG).unwrap();
     let mut child = Command::new("dbus-daemon")
-        .args(["--session", "--nofork", "--print-address=1"])
+        .arg("--nofork")
+        .arg("--print-address=1")
+        .arg(format!("--config-file={}", config.display()))
         .stdout(Stdio::piped())
         .spawn()
-        .expect("dbus-daemon from the tauri-e2e shell");
+        .expect("dbus-daemon from the tauri-linux shell");
+    // The daemon prints its address once it has read the configuration.
     let mut address = String::new();
     BufReader::new(child.stdout.take().unwrap())
         .read_line(&mut address)
         .unwrap();
+    std::fs::remove_file(&config).unwrap();
     let bus = Bus(child);
     let calls = Arc::new(Mutex::new(Calls::default()));
     let server = Builder::address(address.trim())
