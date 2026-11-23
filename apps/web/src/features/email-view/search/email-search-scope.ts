@@ -34,9 +34,6 @@ export type ParsedEmailSearch = {
 
 const IN_FILTER = /^in:(\S*)$/i;
 
-/** A leading `in:<view>` followed by a space is the field's filter chip. */
-const LEADING_FILTER = /^in:(\S+)\s/i;
-
 export const isEmailSearchScopeId = (
   value: string
 ): value is EmailSearchScopeId =>
@@ -87,43 +84,42 @@ export function formatEmailSearch(
   return scope ? `in:${scope} ${query}` : query;
 }
 
-/** The field's chip and the text typed after it. */
+/** A view's whole name in the text, with the space after it. */
+const WHOLE_FILTER = /(?<=^|\s)in:(\S+)(?:\s|$)/gi;
+
+/**
+ * The field's chip and the text beside it. The chip is the view the search
+ * runs in, the last one named as `parseEmailSearch` reads it, so a stored or
+ * restored search can never show one view and search another; every whole
+ * view name leaves the text. No view's name starts another's, so a whole
+ * name is never one still being typed.
+ */
 export function splitEmailSearchField(text: string): {
   scope?: EmailSearchScopeId;
   text: string;
 } {
-  const leading = LEADING_FILTER.exec(text);
-  const value = leading?.[1]?.toLowerCase();
-  if (!leading || !value || !isEmailSearchScopeId(value)) return { text };
+  let scope: EmailSearchScopeId | undefined;
+  const rest = text.replace(WHOLE_FILTER, (whole, value: string) => {
+    const id = value.toLowerCase();
+    if (!isEmailSearchScopeId(id)) return whole;
 
-  return { scope: value, text: text.slice(leading[0].length) };
+    scope = id;
+    return '';
+  });
+
+  return scope ? { scope, text: rest } : { text };
 }
 
 /**
- * What typing `typed` after the chip makes of the search. A view's whole
- * name typed as `in:<view>` becomes the chip at once, replacing the one there,
- * so the field never holds a filter the chip does not show. No view's name
- * starts another's, so a whole name is never one still being typed.
+ * What typing `typed` beside the chip makes of the search: a view's whole
+ * name typed as `in:<view>` becomes the chip at once, replacing the one there.
  */
 export function editEmailSearchField(
   scope: EmailSearchScopeId | undefined,
   typed: string
 ): string {
-  let chip = scope;
-  let moved = false;
-  const text = typed.replace(
-    /(?<=^|\s)in:(\S+)(?:\s|$)/gi,
-    (whole, value: string) => {
-      const id = value.toLowerCase();
-      if (!isEmailSearchScopeId(id)) return whole;
-
-      chip = id;
-      moved = true;
-      return '';
-    }
-  );
-
-  return formatEmailSearch(chip, moved ? text : typed);
+  const field = splitEmailSearchField(typed);
+  return formatEmailSearch(field.scope ?? scope, field.text);
 }
 
 /** The tab each view is, except Inbox, which is Focus, Signal and Noise. */

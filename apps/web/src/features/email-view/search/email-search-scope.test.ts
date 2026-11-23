@@ -43,21 +43,32 @@ describe('parseEmailSearch', () => {
 });
 
 describe('splitEmailSearchField', () => {
-  it('shows a leading view followed by a space as the chip', () => {
+  it('shows the view a search runs in as the chip, wherever it was named', () => {
     expect(splitEmailSearchField('in:sent invoice')).toEqual({
       scope: 'sent',
       text: 'invoice',
     });
-    expect(splitEmailSearchField('in:sent ')).toEqual({
+    expect(splitEmailSearchField('in:sent')).toEqual({
       scope: 'sent',
       text: '',
     });
+    expect(splitEmailSearchField('invoice in:sent')).toEqual({
+      scope: 'sent',
+      text: 'invoice ',
+    });
   });
 
-  it('leaves a view still being typed, or named later, in the text', () => {
-    expect(splitEmailSearchField('in:sent')).toEqual({ text: 'in:sent' });
-    expect(splitEmailSearchField('invoice in:sent')).toEqual({
-      text: 'invoice in:sent',
+  it('shows the same view the search runs in when a stored search names two', () => {
+    const stored = 'in:sent invoice in:drafts';
+    expect(splitEmailSearchField(stored).scope).toBe(
+      parseEmailSearch(stored).scope
+    );
+    expect(splitEmailSearchField(stored).text).toBe('invoice ');
+  });
+
+  it('leaves an in: still being typed, or naming no view, in the text', () => {
+    expect(splitEmailSearchField('invoice in:se')).toEqual({
+      text: 'invoice in:se',
     });
     expect(splitEmailSearchField('in:berlin offsite')).toEqual({
       text: 'in:berlin offsite',

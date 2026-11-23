@@ -168,7 +168,7 @@ export function EmailHeader(props: EmailHeaderProps) {
     enabled: panel.isPanelActive,
     tabs: inboxTabsElement,
     ids: () => inboxTabs().map((tab) => tab.value),
-    activeId: () => state.tab,
+    activeId: shownInboxTab,
     setActiveId: setTab,
     label: (id) => EMAIL_TAB_LABELS[id],
   });

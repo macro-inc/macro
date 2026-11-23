@@ -151,11 +151,12 @@ export function useFocusEmailSource(
   });
   const items = createSoupRowStore(built);
 
-  // Without Focus, or once its read fails, an `in:focus` search matches nothing
-  // rather than waiting on a list that will not come.
+  // Without Focus, or when its first read fails, an `in:focus` search matches
+  // nothing rather than waiting on a list that will not come; a failed
+  // refresh keeps the threads the last read listed.
   const threadIds = createMemo((): string[] | undefined => {
-    if (tabAvailability('focus') === 'off' || focus.error) return [];
-    if (!focus.data) return undefined;
+    if (tabAvailability('focus') === 'off') return [];
+    if (!focus.data) return focus.error ? [] : undefined;
 
     return emails()
       .filter((email) => email.done !== true)

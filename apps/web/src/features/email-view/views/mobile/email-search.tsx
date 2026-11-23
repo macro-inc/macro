@@ -50,6 +50,26 @@ export function EmailMobileSearchField(props: {
   // An `in:` filter shows as a chip before the text, as on desktop.
   const field = () => splitEmailSearchField(props.search);
   const removeScope = () => props.setSearch(field().text);
+  // A hardware keyboard walks the rows under the field and picks one; a
+  // picked view keeps the keyboard up for the words, as a tap does.
+  const moveInSuggestions = (event: KeyboardEvent) => {
+    const suggestions = props.suggestions;
+    const active = suggestions.active();
+    if (event.key === 'ArrowDown' && active < suggestions.count() - 1) {
+      suggestions.setActive(active + 1);
+      return true;
+    }
+    if (event.key === 'ArrowUp' && active >= 0) {
+      suggestions.setActive(active - 1);
+      return true;
+    }
+    if (event.key !== 'Enter' || active < 0) return false;
+
+    const editsQuery = suggestions.editsQuery?.(active) ?? false;
+    suggestions.pick(active);
+    if (!editsQuery) input?.blur();
+    return true;
+  };
 
   return (
     <div class="flex w-full min-w-0 items-center gap-2">
@@ -86,6 +106,10 @@ export function EmailMobileSearchField(props: {
           onBlur={() => props.suggestions.setFocused(false)}
           onKeyDown={(event) => {
             if (isComposing(event)) return;
+            if (moveInSuggestions(event)) {
+              event.preventDefault();
+              return;
+            }
             // Search drops the keyboard to show the results.
             if (event.key === 'Enter') input?.blur();
             // Backspace at the start of the text takes the chip back off.

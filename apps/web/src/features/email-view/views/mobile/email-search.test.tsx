@@ -121,6 +121,19 @@ it('turns a picked view into a chip, keeps the keyboard up, and Backspace takes 
   expect(screen.queryByRole('group', { name: 'In' })).toBeNull();
 });
 
+it('picks a listed view from a hardware keyboard and keeps the keyboard up', () => {
+  const { field, search } = renderPage();
+  field.focus();
+  fireEvent.input(field, { target: { value: 'invoice in:s' } });
+
+  // Signal, Sent, Shared: the second row is Sent.
+  fireEvent.keyDown(field, { key: 'ArrowDown' });
+  fireEvent.keyDown(field, { key: 'ArrowDown' });
+  fireEvent.keyDown(field, { key: 'Enter' });
+  expect(search()).toBe('in:sent invoice');
+  expect(document.activeElement).toBe(field);
+});
+
 it('remembers the search it is left with', () => {
   const { field } = renderPage();
   field.focus();

@@ -87,8 +87,10 @@ vi.mock('./use-scheduled-email-source', () => ({
 const focusRows = vi.hoisted(() => ({
   current: [] as import('./use-email-query').EmailDataSourceItem[],
 }));
+const focusThreadIds = vi.hoisted(() => ({ current: [] as string[] }));
 vi.mock('./use-focus-email-source', () => ({
   useFocusEmailSource: () => ({
+    threadIds: () => focusThreadIds.current,
     items: () => focusRows.current,
     isLoading: () => false,
     isFetching: () => false,
@@ -742,6 +744,15 @@ describe('Email list query transitions', () => {
       setState('tab', tab);
       expect(ids(source)).toEqual(['archived', 'active']);
     }
+  });
+
+  it('keeps only hits still in Focus for an in:focus search', () => {
+    focusThreadIds.current = ['still-focus'];
+    const { source, setState, setSearchEntities } = mount('invoice');
+    setState('searchScope', 'focus');
+    setSearchEntities([email('still-focus'), email('left-focus')]);
+    expect(ids(source)).toEqual(['still-focus']);
+    focusThreadIds.current = [];
   });
 
   it('sends the in: filter, not the tab, to the search service', () => {

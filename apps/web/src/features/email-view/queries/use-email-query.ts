@@ -215,6 +215,9 @@ export function useEmailDataSource(
       : undefined
   );
   const favoriteIds = createMemo(() => new Set(favoriteThreadIds()));
+  const focusIds = createMemo(
+    () => new Set(searchesFocus() ? focus.threadIds() : [])
+  );
 
   const facetContext = createMemo((): EmailFacetContext => {
     const context = createTagFacetContext(options.tagSets());
@@ -303,6 +306,8 @@ export function useEmailDataSource(
           continue;
         // Search results have no Soup favorite field and use search's ID scope.
         if (searchesFavorites() && !favoriteIds().has(entity.id)) continue;
+        // A thread that has left Focus since the search ran leaves its results.
+        if (searchesFocus() && !focusIds().has(entity.id)) continue;
       } else {
         if (!emailMatchesTab(entity, tab, userId())) continue;
         if (showsFavorites() && entity.isFavorited === false) continue;

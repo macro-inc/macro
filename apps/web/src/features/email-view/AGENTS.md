@@ -87,8 +87,10 @@ the Soup-backed thread list, and saved email views.
   never `tab`. The tab's own slice is dropped; the Filters menu, inbox picker,
   alias and an open saved view's conditions are kept. Focus, Scheduled and
   Reminders hand their rows to the search while it runs. `setTab` during a
-  search narrows it to the tab's view instead of leaving it, and navigation
-  reads `shownTab` (none while a search covers all mail), never `state.tab`.
+  search narrows it to the tab's view instead of leaving it, except
+  Scheduled, Reminders, Spam and Trash, which have no view in the search
+  index and end the search; navigation reads `shownTab` (none while a search
+  covers all mail), never `state.tab`.
 - Search inside a view intersects search hits with the view's own GraphQL
   predicate, as aliases do; local working copies are left out.
 - Build participant and subject ORs as balanced trees; a flat OR exceeds the
