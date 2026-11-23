@@ -129,8 +129,9 @@ export function RouteDownload() {
             .
           </p>
           <p>
-            Splits, keyboard shortcuts, and some account and connection settings
-            are available only on the web and desktop apps.
+            The iOS and Android apps don't include splits, keyboard shortcuts,
+            or some account and connection settings. Use the web or desktop app
+            for those.
           </p>
         </article>
       </div>
