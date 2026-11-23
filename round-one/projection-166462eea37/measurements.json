@@ -1,0 +1,4002 @@
+{
+ "title": "Projection queue claim/finish/recovery measurement (synthetic, PostgreSQL 14)",
+ "sourceCommit": "166462eea3787c54259fe53dbb16cf8b1b73f2b6",
+ "productionFiles": {
+  "services/email_service/src/mailbox_sync_worker.rs": "b77bbc657f7a999497511c55596092f6ea16efab2a2d9399befc31431dfec7c7",
+  "crates/email/src/domain/mailbox/projection_recovery.rs": "d7a98054d59ee65fa23de01a09ff36d616d18fbdc71d3dfa8243ed2c1ceac7c9",
+  "crates/email/src/outbound/mailbox_pg/projection_recovery.rs": "572ac5c936af441c27c01e2b7687a14260aaee5fc80f81ef16c2fbb4daf05bb7",
+  "crates/email/src/outbound/mailbox_pg/projection.rs": "4ae3993cac879fb518659edc648e55a4858ecc9cb79fa68e2ddcec08855c0095",
+  "crates/macro_db_client/migrations/20261120233268_email_projection_fifo_sequence.sql": "f6ba11b5883a32cb66abb9382b629c73f4143e4938a8d0692e05f4b29128f3c5",
+  "crates/macro_db_client/migrations/20261120233269_email_projection_unparked_due_index.sql": "256bca55b15e16dc0771fc30120b098e8afd4f1b78210733d2a594ae1f2f420c",
+  "crates/macro_db_client/migrations/20261120233270_email_projection_fifo_index.sql": "ec8917a7b5b38b4e7b93fe10df95fa276b7bd81a8ba05a206686641d82da0d7f",
+  "crates/macro_db_client/migrations/20261120233271_email_projection_unpark_sweep.sql": "dfc40302089da17cfceb62b52327ba52bd540c078468a8ffb5e4c5dc79b3d826",
+  "crates/macro_db_client/migrations/20261120233272_email_projection_parked_link_index.sql": "94c8647953fed635b8a8879ad0e801e4e4f88308607956c882da627c28c52197"
+ },
+ "statementSha256": {
+  "renew_projection": [
+   {
+    "sha256": "7f2d2fb0bc820b856c9cb6383cddb579c264bb8539564c97a2d6271cda5a1523",
+    "params": 4
+   }
+  ],
+  "claim_projection": [
+   {
+    "sha256": "e8b8bcc7421b398430b3a764d8e165f955ebbc90ae8a2e82a4b437a5d4c32866",
+    "params": 0
+   }
+  ],
+  "finish_projection": [
+   {
+    "sha256": "c98896d03b189887b65e632cb105fcd6b7902feef52b9d2fc55d9b358b95b08f",
+    "params": 2
+   },
+   {
+    "sha256": "7c59f3df09aac2c04f146762da177900230e460cb632c41a6c4e74c596602275",
+    "params": 4
+   }
+  ],
+  "lock_projection_window": [
+   {
+    "sha256": "f78c844b7bb8bb31d6e26f618eb5b9fbfdb97577e1e2947379bb41e10363753b",
+    "params": 0
+   }
+  ],
+  "claim_locked_projection": [
+   {
+    "sha256": "7e6dea2c11b525cee4a5fd61d2740225f8d29d74ad2e0f8ae81bcfc04c80f868",
+    "params": 2
+   }
+  ],
+  "unpark_link_page": [
+   {
+    "sha256": "d94275d98bcdfd331105fc1444f1d46f6e41f9f27d8e61df64352b4e872ab416",
+    "params": 2
+   }
+  ],
+  "projection_recovery_probe": [
+   {
+    "sha256": "bead4597603512ea9301a68cf0130238b3e4e430b958572aca383614592cb8c0",
+    "params": 0
+   },
+   {
+    "sha256": "cfee2a46b43561869186186278b375b45be8ce06b19bbee4a6bec22c1c57bbe2",
+    "params": 0
+   },
+   {
+    "sha256": "f37252eeb2b1259ff830f70c9ca697d2b651764cb44205071fb32ed671be4ed5",
+    "params": 1
+   },
+   {
+    "sha256": "f9a675a781563eb280b28cede9da517dab16ba2e9039f6a21e82b46ed4f5c449",
+    "params": 1
+   },
+   {
+    "sha256": "38fe813601e78db5089aef4c82361a2a4a1ce0817cedc176e174ea71b00e0777",
+    "params": 1
+   },
+   {
+    "sha256": "249caf7ed5b6ce04f10cc6c488597154851581847330bb64c83ea17c67fd3f37",
+    "params": 1
+   },
+   {
+    "sha256": "99b83de02264787d2472a1ebfbc6c218511a7da382c7376b18cb7944f4b00420",
+    "params": 4
+   }
+  ],
+  "lock_projection_finish": [
+   {
+    "sha256": "83f03b91ceb817ecba8e9214e6e2cb4cfd594a36ddc4683bd9365bb046a4d8f8",
+    "params": 1
+   }
+  ],
+  "wake_projection_successor": [
+   {
+    "sha256": "fabf316122550ea42ef9e81a5ac95e1b73f42a0438a2296d9a1f301984692cd3",
+    "params": 2
+   }
+  ]
+ },
+ "environment": {
+  "postgres": "14.24 (local, synthetic data only; production 14.22)",
+  "fixture": "per-run scratch database from the schema plus synthetic rows; 1k/10k/100k links (IMAP/OUTLOOK/GMAIL mix), two hot mailboxes with 20,002 outbox rows each; dropped after each run",
+  "statistics": {
+   "fresh": "VACUUM ANALYZE after seeding",
+   "stale": "ANALYZE of a tiny seed, autovacuum off, then the full seed"
+  },
+  "planModes": [
+   "force_custom_plan",
+   "force_generic_plan"
+  ],
+  "repeats": 2
+ },
+ "measurementMethod": [
+  "Each claim runs the source prelude and both statements (lock_projection_window, claim_locked_projection) in one READ COMMITTED transaction.",
+  "EXPLAIN-sampled claims add a helper-only replay of lock_projection_window in the same transaction to read the ids; it re-selects the 64 rows the transaction already holds, takes no new locks and writes nothing.",
+  "Reported buffers (shared hit+read), row locks (LockRows rows x loops) and execution ms are the sum of the two source plans only; the replay and harness bookkeeping are excluded. No figure is a whole-transaction wall time.",
+  "Unsampled full-drain calls run the window and core once each; their client ms are round-trips around the source statements only. Row-change counts are pg_stat_xact_user_tables deltas around the source statements.",
+  "Heavy scenario states are committed and vacuumed before measuring, then restored."
+ ],
+ "gate": {
+  "kind": "approved benchmark criterion for this synthetic measurement, not a production measurement",
+  "final": {
+   "buffersPerClaimTxVacuumed": "<=3500 (fresh statistics, vacuumed tables)",
+   "buffersPerClaimTxUnvacuumedStale": "<=4000 (stale statistics, unvacuumed tables)",
+   "growth1kTo100k": "<=2x",
+   "locks": "<=128",
+   "timeouts": 0
+  },
+  "history": [
+   "Original criterion <=3000 buffers per claim transaction: missed by 13 matrix cells (FIFO backoff, leased and locked-uncommitted cases; worst 3,304).",
+   "Conditional <=3500 criterion: missed by FIFO backoff at 100k links with stale statistics, generic plan (3,571; custom 3,461) in the same-data stage comparison.",
+   "The criterion was then split by vacuum state after the per-stage review: the stale-statistics excess comes from the head probe visiting heap pages while the visibility map is unset."
+  ],
+  "evaluationAgainstFinal": {
+   "matrixMaxBuffersFresh": 3304,
+   "matrixMaxBuffersStale": 3264,
+   "stageCompareMaxPerCellFresh": 3148,
+   "stageCompareMaxPerCellStale": 3571,
+   "maxGrowth1kTo100k": 1.39,
+   "maxLocks": 128,
+   "timeouts": 0,
+   "pass": true
+  }
+ },
+ "matrix": {
+  "cases": [
+   {
+    "case": "ordinary",
+    "worstBuffers": {
+     "1000/fresh": 2101,
+     "1000/stale": 2166,
+     "10000/fresh": 2328,
+     "10000/stale": 2398,
+     "100000/fresh": 2460,
+     "100000/stale": 2415
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.17,
+     "stale": 1.11
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "leased_prefix_200",
+    "worstBuffers": {
+     "1000/fresh": 2196,
+     "1000/stale": 2279,
+     "10000/fresh": 2437,
+     "10000/stale": 2523,
+     "100000/fresh": 2603,
+     "100000/stale": 2550
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.19,
+     "stale": 1.12
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "locked_prefix_200",
+    "worstBuffers": {
+     "1000/fresh": 2338,
+     "1000/stale": 2370,
+     "10000/fresh": 2554,
+     "10000/stale": 2585,
+     "100000/fresh": 2688,
+     "100000/stale": 2626
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.15,
+     "stale": 1.11
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "ineligible_prefix_1pct_inactive",
+    "worstBuffers": {
+     "1000/fresh": 2095,
+     "1000/stale": 2096,
+     "10000/fresh": 2397,
+     "10000/stale": 2399,
+     "100000/fresh": 2919,
+     "100000/stale": 2917
+    },
+    "maxLocks": 128,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.39,
+     "stale": 1.39
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "worstBuffers": {
+     "1000/fresh": 2177,
+     "1000/stale": 2174,
+     "10000/fresh": 2649,
+     "10000/stale": 2649,
+     "100000/fresh": 2923,
+     "100000/stale": 2923
+    },
+    "maxLocks": 128,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.34,
+     "stale": 1.34
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "ineligible_prefix_50pct_inactive",
+    "worstBuffers": {
+     "1000/fresh": 2408,
+     "1000/stale": 2418,
+     "10000/fresh": 2667,
+     "10000/stale": 2667,
+     "100000/fresh": 2916,
+     "100000/stale": 2920
+    },
+    "maxLocks": 128,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.21,
+     "stale": 1.21
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "ineligible_prefix_10pct_reauth_still_eligible",
+    "worstBuffers": {
+     "1000/fresh": 1916,
+     "1000/stale": 1904,
+     "10000/fresh": 1959,
+     "10000/stale": 1959,
+     "100000/fresh": 2174,
+     "100000/stale": 2188
+    },
+    "maxLocks": 65,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Acquired"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.13,
+     "stale": 1.15
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "hot_mailbox_first",
+    "worstBuffers": {
+     "1000/fresh": 2181,
+     "1000/stale": 2181,
+     "10000/fresh": 2325,
+     "10000/stale": 2326,
+     "100000/fresh": 2517,
+     "100000/stale": 2454
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.15,
+     "stale": 1.13
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "empty",
+    "worstBuffers": {
+     "1000/fresh": 3,
+     "1000/stale": 3,
+     "10000/fresh": 3,
+     "10000/stale": 3,
+     "100000/fresh": 3,
+     "100000/stale": 3
+    },
+    "maxLocks": 0,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Idle"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.0,
+     "stale": 1.0
+    },
+    "indexesUsed": [
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "projection_backoff",
+    "worstBuffers": {
+     "1000/fresh": 2931,
+     "1000/stale": 2930,
+     "10000/fresh": 3067,
+     "10000/stale": 3088,
+     "100000/fresh": 3115,
+     "100000/stale": 3126
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.06,
+     "stale": 1.07
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "worstBuffers": {
+     "1000/fresh": 3187,
+     "1000/stale": 3184,
+     "10000/fresh": 3304,
+     "10000/stale": 3264,
+     "100000/fresh": 3159,
+     "100000/stale": 3138
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 0.99,
+     "stale": 0.99
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "worstBuffers": {
+     "1000/fresh": 3004,
+     "1000/stale": 2996,
+     "10000/fresh": 2947,
+     "10000/stale": 2948,
+     "100000/fresh": 3167,
+     "100000/stale": 3186
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.05,
+     "stale": 1.06
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "parked_heavy_50pct",
+    "worstBuffers": {
+     "1000/fresh": 2367,
+     "1000/stale": 2369,
+     "10000/fresh": 2335,
+     "10000/stale": 2332,
+     "100000/fresh": 2419,
+     "100000/stale": 2423
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.02,
+     "stale": 1.02
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "worstBuffers": {
+     "1000/fresh": 2384,
+     "1000/stale": 2386,
+     "10000/fresh": 2324,
+     "10000/stale": 2323,
+     "100000/fresh": 2421,
+     "100000/stale": 2416
+    },
+    "maxLocks": 64,
+    "timeouts": 0,
+    "fifoViolation": false,
+    "outcome": [
+     "Progress"
+    ],
+    "growth100kOver1k": {
+     "fresh": 1.02,
+     "stale": 1.01
+    },
+    "indexesUsed": [
+     "email_projection_outbox_link_fifo",
+     "email_projection_outbox_pkey",
+     "email_projection_outbox_unparked_due"
+    ]
+   }
+  ],
+  "missesOver3000": [
+   {
+    "case": "projection_backoff",
+    "cell": "10000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2722
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2832
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3034
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3067
+     }
+    ]
+   },
+   {
+    "case": "projection_backoff",
+    "cell": "10000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2730
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2828
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3020
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3088
+     }
+    ]
+   },
+   {
+    "case": "projection_backoff",
+    "cell": "100000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2970
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3090
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3115
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3079
+     }
+    ]
+   },
+   {
+    "case": "projection_backoff",
+    "cell": "100000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2952
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3082
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3099
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3126
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "1000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2664
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2752
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3055
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3187
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "1000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2654
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2723
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3050
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3184
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "10000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3134
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3193
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3203
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3304
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "10000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3170
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3182
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3221
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3264
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "100000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3159
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3150
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3134
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3131
+     }
+    ]
+   },
+   {
+    "case": "projection_leased",
+    "cell": "100000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3095
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3106
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3121
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3138
+     }
+    ]
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "cell": "1000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2654
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 2620
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 2975
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3004
+     }
+    ]
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "cell": "100000/fresh",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3092
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3059
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3152
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3167
+     }
+    ]
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "cell": "100000/stale",
+    "runs": [
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3044
+     },
+     {
+      "mode": "force_custom_plan",
+      "buffers": 3073
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3186
+     },
+     {
+      "mode": "force_generic_plan",
+      "buffers": 3148
+     }
+    ]
+   }
+  ],
+  "maxBuffers": 3304
+ },
+ "stageAttributionSameData": {
+  "stages": "window = lock_projection_window (v3: due CTE); reread = statement-2 primary-key reread of the locked ids; head = link_fifo head probe; links; inactive; deferred; claimed",
+  "rows": [
+   {
+    "case": "hot_mailbox_first",
+    "version": "n1n4",
+    "links": 23,
+    "reread": 384,
+    "head": 193,
+    "inactive": 23,
+    "deferred": 1610,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2364,
+    "window": 131,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "hot_mailbox_first",
+    "version": "n1n4",
+    "links": 3,
+    "reread": 384,
+    "head": 193,
+    "inactive": 3,
+    "deferred": 1613,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2326,
+    "window": 130,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "hot_mailbox_first",
+    "version": "n1n4",
+    "links": 4,
+    "reread": 384,
+    "head": 193,
+    "inactive": 4,
+    "deferred": 1740,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2456,
+    "window": 131,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "hot_mailbox_first",
+    "version": "v3",
+    "links": 23,
+    "window": 131,
+    "head": 193,
+    "inactive": 23,
+    "deferred": 1802,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2172,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "hot_mailbox_first",
+    "version": "v3",
+    "links": 3,
+    "window": 130,
+    "head": 193,
+    "inactive": 3,
+    "deferred": 1800,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2129,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "hot_mailbox_first",
+    "version": "v3",
+    "links": 4,
+    "window": 131,
+    "head": 193,
+    "inactive": 4,
+    "deferred": 1930,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2262,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "n1n4",
+    "links": 96,
+    "reread": 277,
+    "head": 206,
+    "inactive": 156,
+    "deferred": 1321,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2169,
+    "window": 113,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 365,
+    "head": 258,
+    "inactive": 320,
+    "deferred": 1397,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2653,
+    "window": 121,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "n1n4",
+    "links": 256,
+    "reread": 383,
+    "head": 246,
+    "inactive": 384,
+    "deferred": 1540,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2940,
+    "window": 131,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "v3",
+    "links": 23,
+    "window": 177,
+    "head": 193,
+    "inactive": 83,
+    "deferred": 1361,
+    "claimed": 0,
+    "rest": 0,
+    "total": 1837,
+    "stats": "stale",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "v3",
+    "links": 192,
+    "window": 121,
+    "head": 255,
+    "inactive": 320,
+    "deferred": 1562,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2450,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ineligible_prefix_10pct_inactive",
+    "version": "v3",
+    "links": 256,
+    "window": 131,
+    "head": 246,
+    "inactive": 384,
+    "deferred": 1727,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2744,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "n1n4",
+    "links": 22,
+    "reread": 321,
+    "head": 256,
+    "inactive": 22,
+    "deferred": 1416,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2167,
+    "window": 130,
+    "stats": "stale",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "n1n4",
+    "links": 6,
+    "reread": 382,
+    "head": 256,
+    "inactive": 6,
+    "deferred": 1618,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2399,
+    "window": 131,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "n1n4",
+    "links": 8,
+    "reread": 386,
+    "head": 193,
+    "inactive": 8,
+    "deferred": 1735,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2461,
+    "window": 131,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "v3",
+    "links": 22,
+    "window": 130,
+    "head": 256,
+    "inactive": 22,
+    "deferred": 1479,
+    "claimed": 0,
+    "rest": 0,
+    "total": 1909,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "v3",
+    "links": 6,
+    "window": 131,
+    "head": 256,
+    "inactive": 6,
+    "deferred": 1679,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2078,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "ordinary",
+    "version": "v3",
+    "links": 8,
+    "window": 195,
+    "head": 193,
+    "inactive": 8,
+    "deferred": 1789,
+    "claimed": 6,
+    "rest": 0,
+    "total": 2199,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "n1n4",
+    "links": 39,
+    "reread": 381,
+    "head": 193,
+    "inactive": 39,
+    "deferred": 1607,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2390,
+    "window": 131,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "n1n4",
+    "links": 6,
+    "reread": 383,
+    "head": 193,
+    "inactive": 6,
+    "deferred": 1610,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2329,
+    "window": 131,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "n1n4",
+    "links": 8,
+    "reread": 384,
+    "head": 193,
+    "inactive": 8,
+    "deferred": 1740,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2464,
+    "window": 131,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "v3",
+    "links": 39,
+    "window": 195,
+    "head": 193,
+    "inactive": 39,
+    "deferred": 1653,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2119,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "v3",
+    "links": 6,
+    "window": 195,
+    "head": 193,
+    "inactive": 6,
+    "deferred": 1657,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2057,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "parked_heavy_90pct",
+    "version": "v3",
+    "links": 8,
+    "window": 195,
+    "head": 193,
+    "inactive": 8,
+    "deferred": 1788,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2192,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 255,
+    "head": 672,
+    "inactive": 192,
+    "deferred": 1557,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2972,
+    "window": 104,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 370,
+    "head": 584,
+    "inactive": 192,
+    "deferred": 1831,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3268,
+    "window": 99,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "n1n4",
+    "links": 256,
+    "reread": 407,
+    "head": 644,
+    "inactive": 256,
+    "deferred": 1895,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3571,
+    "window": 113,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "v3",
+    "links": 22,
+    "window": 102,
+    "head": 641,
+    "inactive": 22,
+    "deferred": 1608,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2395,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "v3",
+    "links": 192,
+    "window": 106,
+    "head": 545,
+    "inactive": 192,
+    "deferred": 1849,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2884,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_backoff",
+    "version": "v3",
+    "links": 256,
+    "window": 148,
+    "head": 609,
+    "inactive": 256,
+    "deferred": 1903,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3172,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 269,
+    "head": 427,
+    "inactive": 192,
+    "deferred": 1570,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2807,
+    "window": 157,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 370,
+    "head": 426,
+    "inactive": 192,
+    "deferred": 1823,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3165,
+    "window": 162,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "n1n4",
+    "links": 256,
+    "reread": 407,
+    "head": 431,
+    "inactive": 256,
+    "deferred": 1884,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3379,
+    "window": 145,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "v3",
+    "links": 22,
+    "window": 123,
+    "head": 408,
+    "inactive": 22,
+    "deferred": 1592,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2167,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "v3",
+    "links": 192,
+    "window": 119,
+    "head": 401,
+    "inactive": 192,
+    "deferred": 1832,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2736,
+    "stats": "stale",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_leased",
+    "version": "v3",
+    "links": 256,
+    "window": 95,
+    "head": 386,
+    "inactive": 256,
+    "deferred": 1934,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2927,
+    "stats": "stale",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 255,
+    "head": 521,
+    "inactive": 192,
+    "deferred": 1599,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2885,
+    "window": 126,
+    "stats": "fresh",
+    "mode": "force_generic_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "n1n4",
+    "links": 192,
+    "reread": 320,
+    "head": 596,
+    "inactive": 192,
+    "deferred": 1677,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3148,
+    "window": 171,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "n1n4",
+    "links": 256,
+    "reread": 407,
+    "head": 256,
+    "inactive": 256,
+    "deferred": 1921,
+    "claimed": 0,
+    "rest": 0,
+    "total": 3241,
+    "window": 145,
+    "stats": "stale",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "v3",
+    "links": 22,
+    "window": 120,
+    "head": 521,
+    "inactive": 22,
+    "deferred": 1574,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2259,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "v3",
+    "links": 192,
+    "window": 138,
+    "head": 631,
+    "inactive": 192,
+    "deferred": 1682,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2835,
+    "stats": "fresh",
+    "mode": "force_custom_plan"
+   },
+   {
+    "case": "projection_locked_uncommitted",
+    "version": "v3",
+    "links": 256,
+    "window": 119,
+    "head": 256,
+    "inactive": 256,
+    "deferred": 1911,
+    "claimed": 0,
+    "rest": 0,
+    "total": 2798,
+    "stats": "stale",
+    "mode": "force_custom_plan"
+   }
+  ],
+  "findings": [
+   "The increase over v3 on the same data is the statement-2 primary-key reread of the 64 locked ids (269 buffers at 1k, ~370 at 10k, 383-407 at 100k): 64 x (index depth + heap).",
+   "Miss of the restated <=3500: FIFO backoff, 100k links, stale statistics, generic plan = 3,571 (custom 3,461); v3 on the same data and plan = 3,172 (custom 3,004).",
+   "The head probe costs 257-296 buffers with fresh statistics but 381-644 in the stale build (visibility map unset), growing with not-all-visible pages rather than link count.",
+   "The deferred UPDATE (64 non-HOT updates into every index) is the largest stage in both versions (1,540-1,934 buffers).",
+   "A 90% parked share costs the same as the ordinary case."
+  ]
+ },
+ "sequences": {
+  "1000": {
+   "n1StaleHeadInterleave": {
+    "finisherWaitedOnRowLock": true,
+    "bOutcome": "Progress",
+    "successorBlockedUntilAfterBoth": "NULL",
+    "nextClaim": {
+     "outcome": "Acquired",
+     "claimedSuccessor": true
+    },
+    "pass": true
+   },
+   "finishAdvisory": {
+    "sameLinkWaitsBehindHolder": true,
+    "differentLinkProceeds": true,
+    "pass": true
+   },
+   "window100": {
+    "callsUntilBClaimed": 2,
+    "aSiblingsClaimedBeforeB": 0,
+    "maxTxBlocksPerCall": 2158,
+    "pass": true
+   },
+   "window20002": {
+    "callsUntilBClaimed": 313,
+    "aSiblingsClaimedBeforeB": 0,
+    "progressCalls": 312,
+    "cycles": 10,
+    "maxProgressPerCycle": 32,
+    "txBlocks": {
+     "max": 2366,
+     "p50": 2243,
+     "total": 701338
+    },
+    "pass": true
+   },
+   "mixedNullSeqOrder": {
+    "claimedOrder": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "expected": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "pass": true,
+    "timestampEdits": 0
+   },
+   "releaseThenFinish": {
+    "pass": true
+   },
+   "backstopRecheck20002": {
+    "simulated": "blocked_until of 20,002 non-head rows set to now()-1s (stands for the 1-hour backstop expiring)",
+    "calls": 314,
+    "progressCalls": 313,
+    "rowWrites": 20002,
+    "jitteredBackstop": "1h * (1 + random()) => recheck period 1-2h, mean 1.5h",
+    "rewritesPerSecondPerLinkMean1p5h": 3.7,
+    "rewritesPerSecondPerLinkWorst1h": 5.56
+   },
+   "supersededFinishNote": "finishAdvisory and releaseThenFinish here used the earlier single-transaction finish with an un-namespaced lock key; they are retained as history, not current finish measurements"
+  },
+  "10000": {
+   "n1StaleHeadInterleave": {
+    "finisherWaitedOnRowLock": true,
+    "bOutcome": "Progress",
+    "successorBlockedUntilAfterBoth": "NULL",
+    "nextClaim": {
+     "outcome": "Acquired",
+     "claimedSuccessor": true
+    },
+    "pass": true
+   },
+   "finishAdvisory": {
+    "sameLinkWaitsBehindHolder": true,
+    "differentLinkProceeds": true,
+    "pass": true
+   },
+   "window100": {
+    "callsUntilBClaimed": 2,
+    "aSiblingsClaimedBeforeB": 0,
+    "maxTxBlocksPerCall": 2160,
+    "pass": true
+   },
+   "window20002": {
+    "callsUntilBClaimed": 313,
+    "aSiblingsClaimedBeforeB": 0,
+    "progressCalls": 312,
+    "cycles": 10,
+    "maxProgressPerCycle": 32,
+    "txBlocks": {
+     "max": 2383,
+     "p50": 2244,
+     "total": 701389
+    },
+    "pass": true
+   },
+   "mixedNullSeqOrder": {
+    "claimedOrder": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "expected": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "pass": true,
+    "timestampEdits": 0
+   },
+   "releaseThenFinish": {
+    "pass": true
+   },
+   "backstopRecheck20002": {
+    "simulated": "blocked_until of 20,002 non-head rows set to now()-1s (stands for the 1-hour backstop expiring)",
+    "calls": 314,
+    "progressCalls": 313,
+    "rowWrites": 20002,
+    "jitteredBackstop": "1h * (1 + random()) => recheck period 1-2h, mean 1.5h",
+    "rewritesPerSecondPerLinkMean1p5h": 3.7,
+    "rewritesPerSecondPerLinkWorst1h": 5.56
+   },
+   "supersededFinishNote": "finishAdvisory and releaseThenFinish here used the earlier single-transaction finish with an un-namespaced lock key; they are retained as history, not current finish measurements"
+  },
+  "100000": {
+   "n1StaleHeadInterleave": {
+    "finisherWaitedOnRowLock": true,
+    "bOutcome": "Progress",
+    "successorBlockedUntilAfterBoth": "NULL",
+    "nextClaim": {
+     "outcome": "Acquired",
+     "claimedSuccessor": true
+    },
+    "pass": true
+   },
+   "finishAdvisory": {
+    "sameLinkWaitsBehindHolder": true,
+    "differentLinkProceeds": true,
+    "pass": true
+   },
+   "window100": {
+    "callsUntilBClaimed": 2,
+    "aSiblingsClaimedBeforeB": 0,
+    "maxTxBlocksPerCall": 2167,
+    "pass": true
+   },
+   "window20002": {
+    "callsUntilBClaimed": 313,
+    "aSiblingsClaimedBeforeB": 0,
+    "progressCalls": 312,
+    "cycles": 10,
+    "maxProgressPerCycle": 32,
+    "txBlocks": {
+     "max": 2437,
+     "p50": 2310,
+     "total": 722515
+    },
+    "pass": true
+   },
+   "mixedNullSeqOrder": {
+    "claimedOrder": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "expected": [
+     "a001",
+     "a002",
+     "a003",
+     "b009",
+     "b001"
+    ],
+    "pass": true,
+    "timestampEdits": 0
+   },
+   "releaseThenFinish": {
+    "pass": true
+   },
+   "backstopRecheck20002": {
+    "simulated": "blocked_until of 20,002 non-head rows set to now()-1s (stands for the 1-hour backstop expiring)",
+    "calls": 314,
+    "progressCalls": 313,
+    "rowWrites": 20002,
+    "jitteredBackstop": "1h * (1 + random()) => recheck period 1-2h, mean 1.5h",
+    "rewritesPerSecondPerLinkMean1p5h": 3.7,
+    "rewritesPerSecondPerLinkWorst1h": 5.56
+   },
+   "supersededFinishNote": "finishAdvisory and releaseThenFinish here used the earlier single-transaction finish with an un-namespaced lock key; they are retained as history, not current finish measurements"
+  }
+ },
+ "fullDrain20002": {
+  "links": 100000,
+  "autovacuumOnOutbox": false,
+  "finishTransactions": 2,
+  "runs": 2,
+  "rowsDrained": 20002,
+  "claimCalls": 20002,
+  "acquired": 20002,
+  "nonAcquiredCalls": 0,
+  "fifoOrderExact": true,
+  "claimUpdates": {
+   "total": 40003,
+   "perCall": {
+    "n": 20002,
+    "p50": 1,
+    "p99": 64,
+    "max": 64
+   },
+   "callsWithExactly1": 19684,
+   "callsWithMoreThan1": 318
+  },
+  "finishWrites": {
+   "updatesTotal": 20001,
+   "deletesTotal": 20002,
+   "perFinish": {
+    "n": 20002,
+    "p50": 2,
+    "p99": 2,
+    "max": 2
+   },
+   "finishesWithExactly1": 1,
+   "finishesWithExactly3": 0,
+   "finishesWithExactly2": 20001
+  },
+  "claimClientMs": {
+   "n": 20002,
+   "p50": 0.874,
+   "p99": 1.881,
+   "max": 10.942
+  },
+  "finishClientMs": {
+   "n": 20002,
+   "p50": 1.446,
+   "p99": 2.147,
+   "max": 9.577
+  },
+  "confirmationRun": {
+   "finishWrites": {
+    "updatesTotal": 20001,
+    "deletesTotal": 20002,
+    "perFinish": {
+     "n": 20002,
+     "p50": 2,
+     "p99": 2,
+     "max": 2
+    },
+    "finishesWithExactly1": 1,
+    "finishesWithExactly3": 0,
+    "finishesWithExactly2": 20001
+   },
+   "claimUpdates": {
+    "total": 40003,
+    "perCall": {
+     "n": 20002,
+     "p50": 1,
+     "p99": 64,
+     "max": 64
+    },
+    "callsWithExactly1": 19684,
+    "callsWithMoreThan1": 318
+   },
+   "fifoOrderExact": true
+  },
+  "sampledStages": [
+   {
+    "call": 1,
+    "remaining": 20002,
+    "lockWindowBuffers": 75,
+    "coreBuffers": 2399,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 33,
+     "tx2.advisory": 0,
+     "tx2.wake": 6
+    },
+    "claimExecutionMs": 1.638
+   },
+   {
+    "call": 2,
+    "remaining": 20001,
+    "lockWindowBuffers": 76,
+    "coreBuffers": 2226,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 31,
+     "tx2.advisory": 0,
+     "tx2.wake": 5
+    },
+    "claimExecutionMs": 1.553
+   },
+   {
+    "call": 3,
+    "remaining": 20000,
+    "lockWindowBuffers": 189,
+    "coreBuffers": 2338,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 33,
+     "tx2.advisory": 0,
+     "tx2.wake": 6
+    },
+    "claimExecutionMs": 1.552
+   },
+   {
+    "call": 4,
+    "remaining": 19999,
+    "lockWindowBuffers": 141,
+    "coreBuffers": 2224,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 31,
+     "tx2.advisory": 0,
+     "tx2.wake": 5
+    },
+    "claimExecutionMs": 1.45
+   },
+   {
+    "call": 5,
+    "remaining": 19998,
+    "lockWindowBuffers": 79,
+    "coreBuffers": 2203,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 31,
+     "tx2.advisory": 0,
+     "tx2.wake": 5
+    },
+    "claimExecutionMs": 1.294
+   },
+   {
+    "call": 1000,
+    "remaining": 19003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 61,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 45,
+     "tx2.advisory": 0,
+     "tx2.wake": 18
+    },
+    "claimExecutionMs": 0.326
+   },
+   {
+    "call": 2000,
+    "remaining": 18003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 74,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 60,
+     "tx2.advisory": 0,
+     "tx2.wake": 33
+    },
+    "claimExecutionMs": 0.336
+   },
+   {
+    "call": 3000,
+    "remaining": 17003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 86,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 72,
+     "tx2.advisory": 0,
+     "tx2.wake": 45
+    },
+    "claimExecutionMs": 0.367
+   },
+   {
+    "call": 4000,
+    "remaining": 16003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 99,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 84,
+     "tx2.advisory": 0,
+     "tx2.wake": 58
+    },
+    "claimExecutionMs": 0.452
+   },
+   {
+    "call": 5000,
+    "remaining": 15003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 112,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 95,
+     "tx2.advisory": 0,
+     "tx2.wake": 69
+    },
+    "claimExecutionMs": 0.341
+   },
+   {
+    "call": 6000,
+    "remaining": 14003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 125,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 108,
+     "tx2.advisory": 0,
+     "tx2.wake": 82
+    },
+    "claimExecutionMs": 0.369
+   },
+   {
+    "call": 7000,
+    "remaining": 13003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 138,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 121,
+     "tx2.advisory": 0,
+     "tx2.wake": 95
+    },
+    "claimExecutionMs": 0.471
+   },
+   {
+    "call": 8000,
+    "remaining": 12003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 151,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 137,
+     "tx2.advisory": 0,
+     "tx2.wake": 110
+    },
+    "claimExecutionMs": 0.459
+   },
+   {
+    "call": 9000,
+    "remaining": 11003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 163,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 146,
+     "tx2.advisory": 0,
+     "tx2.wake": 120
+    },
+    "claimExecutionMs": 0.318
+   },
+   {
+    "call": 10000,
+    "remaining": 10003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 176,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 159,
+     "tx2.advisory": 0,
+     "tx2.wake": 133
+    },
+    "claimExecutionMs": 0.389
+   },
+   {
+    "call": 11000,
+    "remaining": 9003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 189,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 176,
+     "tx2.advisory": 0,
+     "tx2.wake": 148
+    },
+    "claimExecutionMs": 0.348
+   },
+   {
+    "call": 12000,
+    "remaining": 8003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 202,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 186,
+     "tx2.advisory": 0,
+     "tx2.wake": 159
+    },
+    "claimExecutionMs": 0.445
+   },
+   {
+    "call": 13000,
+    "remaining": 7003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 215,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 198,
+     "tx2.advisory": 0,
+     "tx2.wake": 172
+    },
+    "claimExecutionMs": 0.34
+   },
+   {
+    "call": 14000,
+    "remaining": 6003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 228,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 213,
+     "tx2.advisory": 0,
+     "tx2.wake": 187
+    },
+    "claimExecutionMs": 0.376
+   },
+   {
+    "call": 15000,
+    "remaining": 5003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 242,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 223,
+     "tx2.advisory": 0,
+     "tx2.wake": 197
+    },
+    "claimExecutionMs": 0.42
+   },
+   {
+    "call": 16000,
+    "remaining": 4003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 256,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 238,
+     "tx2.advisory": 0,
+     "tx2.wake": 212
+    },
+    "claimExecutionMs": 0.619
+   },
+   {
+    "call": 17000,
+    "remaining": 3003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 266,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 249,
+     "tx2.advisory": 0,
+     "tx2.wake": 223
+    },
+    "claimExecutionMs": 0.357
+   },
+   {
+    "call": 18000,
+    "remaining": 2003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 279,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 264,
+     "tx2.advisory": 0,
+     "tx2.wake": 238
+    },
+    "claimExecutionMs": 0.38
+   },
+   {
+    "call": 19000,
+    "remaining": 1003,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 292,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 277,
+     "tx2.advisory": 0,
+     "tx2.wake": 251
+    },
+    "claimExecutionMs": 0.418
+   },
+   {
+    "call": 19998,
+    "remaining": 5,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 309,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 7,
+     "tx1.wake": 290,
+     "tx2.advisory": 0,
+     "tx2.wake": 263
+    },
+    "claimExecutionMs": 0.399
+   },
+   {
+    "call": 19999,
+    "remaining": 4,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 309,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 7,
+     "tx1.wake": 298,
+     "tx2.advisory": 0,
+     "tx2.wake": 263
+    },
+    "claimExecutionMs": 0.407
+   },
+   {
+    "call": 20000,
+    "remaining": 3,
+    "lockWindowBuffers": 183,
+    "coreBuffers": 309,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 7,
+     "tx1.wake": 290,
+     "tx2.advisory": 0,
+     "tx2.wake": 263
+    },
+    "claimExecutionMs": 0.389
+   },
+   {
+    "call": 20001,
+    "remaining": 2,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 313,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 289,
+     "tx2.advisory": 0,
+     "tx2.wake": 263
+    },
+    "claimExecutionMs": 0.429
+   },
+   {
+    "call": 20002,
+    "remaining": 1,
+    "lockWindowBuffers": 184,
+    "coreBuffers": 306,
+    "finishBuffers": {
+     "tx1.advisory": 0,
+     "tx1.delete": 6,
+     "tx1.wake": 261,
+     "tx2.advisory": 0,
+     "tx2.wake": 261
+    },
+    "claimExecutionMs": 0.416
+   }
+  ],
+  "guardedWakePlanSamples": [
+   {
+    "call": 1,
+    "remaining": 20002,
+    "transaction": "tx1",
+    "buffers": 33,
+    "executionMs": 0.093,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> '00000000-0000-7000-c000-000000000001'::uuid)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 1,
+    "remaining": 20002,
+    "transaction": "tx2",
+    "buffers": 6,
+    "executionMs": 0.031,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> '00000000-0000-7000-c000-000000000001'::uuid)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 2,
+    "remaining": 20001,
+    "transaction": "tx1",
+    "buffers": 31,
+    "executionMs": 0.067,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> '00000000-0000-7000-c000-000000000002'::uuid)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 2,
+    "remaining": 20001,
+    "transaction": "tx2",
+    "buffers": 5,
+    "executionMs": 0.045,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> '00000000-0000-7000-c000-000000000002'::uuid)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 3,
+    "remaining": 20000,
+    "transaction": "tx1",
+    "buffers": 33,
+    "executionMs": 0.095,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> '00000000-0000-7000-c000-000000000003'::uuid)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 3,
+    "remaining": 20000,
+    "transaction": "tx2",
+    "buffers": 6,
+    "executionMs": 0.039,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 1000,
+    "remaining": 19003,
+    "transaction": "tx1",
+    "buffers": 45,
+    "executionMs": 0.088,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 1000,
+    "remaining": 19003,
+    "transaction": "tx2",
+    "buffers": 18,
+    "executionMs": 0.055,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 5000,
+    "remaining": 15003,
+    "transaction": "tx1",
+    "buffers": 95,
+    "executionMs": 0.102,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 5000,
+    "remaining": 15003,
+    "transaction": "tx2",
+    "buffers": 69,
+    "executionMs": 0.063,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 10000,
+    "remaining": 10003,
+    "transaction": "tx1",
+    "buffers": 159,
+    "executionMs": 0.195,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 10000,
+    "remaining": 10003,
+    "transaction": "tx2",
+    "buffers": 133,
+    "executionMs": 0.11,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 15000,
+    "remaining": 5003,
+    "transaction": "tx1",
+    "buffers": 223,
+    "executionMs": 0.188,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 15000,
+    "remaining": 5003,
+    "transaction": "tx2",
+    "buffers": 197,
+    "executionMs": 0.146,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 20000,
+    "remaining": 3,
+    "transaction": "tx1",
+    "buffers": 290,
+    "executionMs": 0.212,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 20000,
+    "remaining": 3,
+    "transaction": "tx2",
+    "buffers": 263,
+    "executionMs": 0.172,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 20001,
+    "remaining": 2,
+    "transaction": "tx1",
+    "buffers": 289,
+    "executionMs": 0.199,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "call": 20001,
+    "remaining": 2,
+    "transaction": "tx2",
+    "buffers": 263,
+    "executionMs": 0.162,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 1
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 20002,
+    "remaining": 1,
+    "transaction": "tx1",
+    "buffers": 261,
+    "executionMs": 0.19,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 0
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "call": 20002,
+    "remaining": 1,
+    "transaction": "tx2",
+    "buffers": 261,
+    "executionMs": 0.193,
+    "plan": [
+     {
+      "node": "ModifyTable",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Limit",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "LockRows",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_link_fifo",
+      "filter": "(id <> $2)",
+      "rows": 0
+     },
+     {
+      "node": "Nested Loop",
+      "index": null,
+      "filter": null,
+      "rows": 0
+     },
+     {
+      "node": "CTE Scan",
+      "index": null,
+      "filter": "(blocked_until IS NOT NULL)",
+      "rows": 0
+     },
+     {
+      "node": "Index Scan",
+      "index": "email_projection_outbox_pkey",
+      "filter": null,
+      "rows": 0
+     }
+    ]
+   }
+  ],
+  "notes": [
+   "Each normal finish writes 2 rows: the delete and the transaction-1 successor wake; the guarded transaction-2 wake updates 0 rows (no HOT updates over the drain); the final finish (no successor) writes 1.",
+   "Guarded wake plan at every sample: Limit -> LockRows -> Index Scan on email_projection_outbox_link_fifo (successor, 1 row), CTE Scan with Filter (blocked_until IS NOT NULL), Index Scan on email_projection_outbox_pkey; transaction 2 filters the successor out (0 rows) unless a claimer deferred it.",
+   "With autovacuum off, the claim core head probe and both wake lookups grow linearly with dead deleted heads (about +13 buffers per 1,000; tx1 wake 31-33 -> ~290, tx2 wake 5-6 -> ~263); the lock window stays flat and the advisory locks read no buffers.",
+   "Finish client ms are round-trips around the source statements of both finish transactions."
+  ]
+ },
+ "discoveryFallback": {
+  "statementSha256": "f9a675a781563eb280b28cede9da517dab16ba2e9039f6a21e82b46ed4f5c449",
+  "runs": [
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.018,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.012,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.008,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.009,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 2,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 2,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.021,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.012,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.027,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.021,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 2,
+    "executionMs": 0.009,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 1000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 2,
+    "executionMs": 0.016,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.021,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.011,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.02,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.012,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 2,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 2,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.024,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.011,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.01,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.008,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 2,
+    "executionMs": 0.009,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 10000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 2,
+    "executionMs": 0.021,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 4,
+    "executionMs": 0.019,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 4,
+    "executionMs": 0.012,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 4,
+    "executionMs": 0.044,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 4,
+    "executionMs": 0.008,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "fresh",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.004,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_custom_plan",
+    "buffers": 4,
+    "executionMs": 0.02,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "start",
+    "mode": "force_generic_plan",
+    "buffers": 4,
+    "executionMs": 0.014,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_custom_plan",
+    "buffers": 4,
+    "executionMs": 0.047,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "middle",
+    "mode": "force_generic_plan",
+    "buffers": 4,
+    "executionMs": 0.045,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 1
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 1
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_custom_plan",
+    "buffers": 3,
+    "executionMs": 0.008,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   },
+   {
+    "links": 100000,
+    "stats": "stale",
+    "cursor": "end",
+    "mode": "force_generic_plan",
+    "buffers": 3,
+    "executionMs": 0.006,
+    "plan": [
+     {
+      "node": "Limit",
+      "index": null,
+      "rows": 0
+     },
+     {
+      "node": "Index Only Scan",
+      "index": "email_links_pkey",
+      "rows": 0
+     }
+    ]
+   }
+  ],
+  "summary": "Index Only Scan on email_links_pkey returning 1 row (0 past the last id), 2-4 buffers at every size, statistics and plan mode."
+ },
+ "priorM3RecoveryWalk": {
+  "receipt": "prior M3 recovery walk (per-probe COMMIT + halving retry loop); its known-link unpark and sweep statements are identical in the final source, which adds only the N4 parent-PK discovery fallback",
+  "statementSha256": {
+   "unpark_link_page": [
+    "d94275d98bcdfd331105fc1444f1d46f6e41f9f27d8e61df64352b4e872ab416"
+   ],
+   "projection_recovery_probe": [
+    "bead4597603512ea9301a68cf0130238b3e4e430b958572aca383614592cb8c0",
+    "cfee2a46b43561869186186278b375b45be8ce06b19bbee4a6bec22c1c57bbe2",
+    "f37252eeb2b1259ff830f70c9ca697d2b651764cb44205071fb32ed671be4ed5",
+    "38fe813601e78db5089aef4c82361a2a4a1ce0817cedc176e174ea71b00e0777",
+    "249caf7ed5b6ce04f10cc6c488597154851581847330bb64c83ea17c67fd3f37",
+    "99b83de02264787d2472a1ebfbc6c218511a7da382c7376b18cb7944f4b00420"
+   ]
+  },
+  "fixture": {
+   "deadLinks": 10000,
+   "activeLinks": 100,
+   "parkedRowsPerLink": 100,
+   "parkedRows": 1010000
+  },
+  "wraps": [
+   {
+    "wrap": "first: 100 active x 100 parked",
+    "pages": 252,
+    "probeCommits": 10237,
+    "linksScanned": 10236,
+    "unparkedRows": 10000,
+    "failedProbes": 0,
+    "blocks": {
+     "total": 369559,
+     "max": 2370,
+     "p50": 1611
+    },
+    "maxPageStatementMs": 10.252,
+    "maxProbesPerPage": 64,
+    "maxUnparkedPerPage": 64,
+    "retriedProbes": []
+   },
+   {
+    "wrap": "steady: dead links only",
+    "pages": 157,
+    "probeCommits": 10001,
+    "linksScanned": 10000,
+    "unparkedRows": 0,
+    "failedProbes": 0,
+    "blocks": {
+     "total": 121763,
+     "max": 792,
+     "p50": 780
+    },
+    "maxPageStatementMs": 8.132,
+    "maxProbesPerPage": 64,
+    "maxUnparkedPerPage": 0,
+    "retriedProbes": []
+   },
+   {
+    "wrap": "locked: 10 active links with all parked rows row-locked",
+    "pages": 157,
+    "probeCommits": 10011,
+    "linksScanned": 10010,
+    "unparkedRows": 0,
+    "failedProbes": 0,
+    "blocks": {
+     "total": 1158604,
+     "max": 13989,
+     "p50": 7325
+    },
+    "maxPageStatementMs": 30.442,
+    "maxProbesPerPage": 64,
+    "maxUnparkedPerPage": 0,
+    "retriedProbes": []
+   },
+   {
+    "wrap": "next wrap after locks released",
+    "pages": 163,
+    "probeCommits": 10023,
+    "linksScanned": 10022,
+    "unparkedRows": 1000,
+    "failedProbes": 0,
+    "blocks": {
+     "total": 169713,
+     "max": 2580,
+     "p50": 908
+    },
+    "maxPageStatementMs": 6.543,
+    "maxProbesPerPage": 64,
+    "maxUnparkedPerPage": 64,
+    "retriedProbes": []
+   },
+   {
+    "wrap": "slow link: 5 ms per row (64-row unpark > 250 ms)",
+    "pages": 157,
+    "probeCommits": 10004,
+    "linksScanned": 10003,
+    "unparkedRows": 100,
+    "failedProbes": 0,
+    "blocks": {
+     "total": 144505,
+     "max": 2531,
+     "p50": 908
+    },
+    "maxPageStatementMs": 335.824,
+    "maxProbesPerPage": 64,
+    "maxUnparkedPerPage": 64,
+    "retriedProbes": [
+     {
+      "attempts": 2,
+      "budgets": [
+       64,
+       32
+      ],
+      "unparked": 32
+     }
+    ]
+   }
+  ],
+  "notes": [
+   "slow-link wrap uses a scratch-only BEFORE UPDATE trigger sleeping 5 ms per row on one link so a 64-row unpark exceeds the 250 ms probe timeout",
+   "the locked wrap holds row locks in a second open transaction; its higher page cost reflects dead entries that cannot be cleaned while that transaction holds the horizon",
+   "worker consecutive-skip accounting is Rust in-memory and was not emulated"
+  ]
+ },
+ "finishShape": "finish_projection: transaction 1 takes the namespaced per-link finish lock, records the fenced outcome (delete, or release with retry) and wakes exactly the successor if it is still blocked; after commit, transaction 2 (best effort) takes the same lock and repeats the guarded wake, which only writes when a claimer deferred the successor while transaction 1 was open.",
+ "n6PostCommitWakeInterleave": {
+  "headClaimed": "Acquired",
+  "tx1FirstWakeRowsUpdated": 0,
+  "claimerOutcomeWhileTx1Open": "Acquired",
+  "claimerDeferred": 63,
+  "successorBlockedSecondsAfterClaim": "4601",
+  "successorBlockedSecondsAfterTx1Commit": "4601",
+  "tx2WakeRowsUpdated": 1,
+  "successorBlockedAfterTx2": "NULL",
+  "nextClaim": {
+   "outcome": "Acquired",
+   "claimedSuccessor": true
+  },
+  "pass": true,
+  "scenario": "transaction 1 locks, deletes the head and finds no successor (0 rows), then pauses; a producer commits successor S; a real claimer, seeing the still-visible head, defers S by 1-2 h; transaction 1 commits with S still blocked; transaction 2 locks and its guarded wake clears S (1 row); the next claim acquires S."
+ },
+ "history": [
+  "Earlier drain receipts counted 2 rows per finish with a single-transaction finish, then 3 rows per finish with an unguarded post-commit wake; both are superseded by the guarded two-transaction finish measured here."
+ ]
+}

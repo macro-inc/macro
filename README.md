@@ -1,6 +1,8 @@
 # IMAP/SMTP proof for #11484
 
-Latest source `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
+Latest round-one checkpoint `166462eea37`: [projection queue automated measurements](round-one/projection-166462eea37/README.md). Other round-one fixes remain open; no new movie or real-provider proof is claimed.
+
+Previous runtime checkpoint `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
 
 [Desktop and phone proof recorded at f678c962e57](f678c962e57/README.md), plus the connect clip and smoke at `76dda9df8e3`, source provenance, final-head comparison, stand-ins and scope gaps.
 
