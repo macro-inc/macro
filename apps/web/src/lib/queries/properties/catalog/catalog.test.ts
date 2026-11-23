@@ -15,14 +15,14 @@ import { CombinedError, createRequest } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
-/** How each detached task ended: the error fireAndForget would report, or none. */
+/** How each detached task ended: 'ok', or the error fireAndForget would report. */
 const DETACHED = vi.hoisted(() => [] as Promise<unknown>[]);
 vi.mock('@core/util/fireAndForget', () => ({
   fireAndForget: (work: Promise<unknown>) => {
     const outcome = async () => {
       try {
         await work;
-        return undefined;
+        return 'ok';
       } catch (error: unknown) {
         return error;
       }
@@ -611,7 +611,25 @@ describe('catalog mutations', () => {
       );
       retries.mutate(undefined);
       retries.mutate(undefined);
-      expect(await Promise.all(DETACHED)).toEqual([broken, undefined, refused]);
+      // A callback that rejects with nothing, and an onError that rethrows
+      // the failure it was given, are callback failures too.
+      const empty = createCatalogMutation(async () => 1, {
+        onSuccess: () => Promise.reject(undefined),
+      });
+      empty.mutate(undefined);
+      const rethrows = createCatalogMutation(() => Promise.reject(refused), {
+        onError: (error) => {
+          throw error;
+        },
+      });
+      rethrows.mutate(undefined);
+      expect(await Promise.all(DETACHED)).toEqual([
+        broken,
+        'ok',
+        refused,
+        undefined,
+        refused,
+      ]);
       expect(onError).toHaveBeenCalledTimes(1);
       dispose();
     });

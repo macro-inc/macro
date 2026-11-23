@@ -59,7 +59,8 @@ export function createCatalogMutation<TVars, TData>(
     }
   };
 
-  // `writeFailed` hears a failure of the write itself, before its callbacks.
+  // `writeFailed` hears a failure of the write itself once every callback
+  // has handled it, just before it is rethrown.
   const execute = async (
     vars: TVars,
     call?: CatalogMutationCallbacks<TData, TVars>,
@@ -74,11 +75,11 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
-        writeFailed?.(error);
         await eachLayer(call, parent, (layer) => layer.onError?.(error, vars));
         await eachLayer(call, parent, (layer) =>
           layer.onSettled?.(undefined, error, vars)
         );
+        writeFailed?.(error);
         throw error;
       }
       await eachLayer(call, parent, (layer) => layer.onSuccess?.(data, vars));
@@ -97,11 +98,11 @@ export function createCatalogMutation<TVars, TData>(
     vars: TVars,
     call?: CatalogMutationCallbacks<TData, TVars>
   ): Promise<void> => {
-    let failure: Error | undefined;
+    let failure: { error: Error } | undefined;
     try {
-      await execute(vars, call, (error) => (failure = error));
+      await execute(vars, call, (error) => (failure = { error }));
     } catch (error: unknown) {
-      if (error !== failure) throw error;
+      if (!failure || error !== failure.error) throw error;
     }
   };
 
