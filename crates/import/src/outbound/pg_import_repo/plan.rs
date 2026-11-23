@@ -340,14 +340,17 @@ impl NotionPlanRepo for PgImportRepo {
             r#"
             UPDATE import_run AS run
             SET status = 'importing', error = NULL, error_kind = NULL, updated_at = NOW(),
-                lease_owner = NULL, lease_expires_at = NULL
-            WHERE run.user_id = $1 AND run.source = $2 AND run.status = 'ready'
-              AND (run.review_id = $3
-                   OR (run.review_id IS NULL AND EXISTS (
-                       SELECT 1 FROM import_entity AS entity
-                       WHERE entity.review_id = $3 AND entity.user_id = $1
-                         AND entity.source = $2 AND entity.status = 'staged'
-                   )))
+                lease_owner = NULL, lease_expires_at = NULL, write_review_id = $3
+            WHERE run.user_id = $1 AND run.source = $2
+              AND ((run.status = 'ready'
+                    AND (run.review_id = $3
+                         OR (run.review_id IS NULL AND EXISTS (
+                             SELECT 1 FROM import_entity AS entity
+                             WHERE entity.review_id = $3 AND entity.user_id = $1
+                               AND entity.source = $2 AND entity.status = 'staged'
+                         ))))
+                   -- A failed write, retried by the review it admitted.
+                   OR (run.status = 'failed' AND run.write_review_id = $3))
             "#,
             user.as_ref(),
             source.as_ref(),
