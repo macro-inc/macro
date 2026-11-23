@@ -1,0 +1,31 @@
+crates/agent_inmem/src/inbound/ask_user.rs
+  s_b6e2032407f232::t_b1b8b680318e90 25
+  s_b6e2032407f232::t_f73e37bbda4dc5 31-32
+  s_b6e2032407f232::t_8406a9513a3eb2 35
+crates/agent_inmem/src/domain/user_input.rs
+  s_b6e2032407f232::t_f73e37bbda4dc5 12-13
+crates/agent_inmem/src/domain/agent/test.rs
+  s_b6e2032407f232::t_8c3260a6bb8cba 2327-2335,2360-2368,2378-2380,2399-2404,2430-2434,2446-2456
+  s_b6e2032407f232::t_bf522c5dc6affb 2314-2326,2336-2337,2339-2345,2347-2359,2369-2377,2381-2398,2405-2429,2435-2445,2457-2465
+crates/agent_inmem/src/domain/agent.rs
+  s_b6e2032407f232::t_d2d81018ca3961 622
+  s_b6e2032407f232::t_440ba5ec3a4d14 584-613
+  s_b6e2032407f232::t_edd9d860058748 109-117
+  s_b6e2032407f232::t_a40e0d7868a70d 635-649,651-658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "651e41f89ad7bc83f8de68aabfcb9d428fbc1e5b",
+  "prompts": {},
+  "sessions": {
+    "s_b6e2032407f232": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a821cdcf-505c-4d83-9ab7-42b78ab94514",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
