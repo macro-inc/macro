@@ -32,6 +32,33 @@ CREATE INDEX task_dependency_edges_blocker ON task_dependency_edges (blocker_tas
 CREATE INDEX task_dependency_edges_dependent_property ON task_dependency_edges (dependent_property_id);
 CREATE INDEX task_dependency_edges_blocking_property ON task_dependency_edges (blocking_property_id);
 
+-- All graph participants use this namespace and sort the actual signed keys.
+CREATE FUNCTION task_dependency_lock_key(task_id UUID) RETURNS BIGINT
+LANGUAGE SQL IMMUTABLE STRICT PARALLEL SAFE AS $$
+    SELECT hashtextextended('task_dependency:' || task_id::text, 0)
+$$;
+
+-- Row-first triggers never wait for graph-first writers. Partial acquisitions
+-- release with the failed transaction, including on a hash collision.
+CREATE FUNCTION lock_task_dependency_endpoints(task_ids UUID[], try_only BOOLEAN DEFAULT FALSE)
+RETURNS VOID LANGUAGE plpgsql AS $$
+DECLARE
+    lock_key BIGINT;
+BEGIN
+    FOR lock_key IN SELECT DISTINCT task_dependency_lock_key(id)
+        FROM unnest(task_ids) endpoint(id) WHERE id IS NOT NULL ORDER BY 1
+    LOOP
+        IF try_only THEN
+            IF NOT pg_try_advisory_xact_lock(lock_key) THEN
+                RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
+            END IF;
+        ELSE
+            PERFORM pg_advisory_xact_lock(lock_key);
+        END IF;
+    END LOOP;
+END;
+$$;
+
 -- Rebuild each affected endpoint once per statement, including FK cascades.
 CREATE FUNCTION sync_task_dependency_properties() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
@@ -39,10 +66,9 @@ BEGIN
        OR NOT EXISTS (SELECT 1 FROM changed_task_dependency_edges) THEN
         RETURN NULL;
     END IF;
-    -- Row-first legacy writers must not wait behind graph-first writers.
-    IF NOT pg_try_advisory_xact_lock(747847177) THEN
-        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
-    END IF;
+    PERFORM lock_task_dependency_endpoints(ARRAY(
+        SELECT dependent_task_id FROM changed_task_dependency_edges
+        UNION SELECT blocker_task_id FROM changed_task_dependency_edges), TRUE);
     UPDATE entity_properties p SET
         values = (SELECT CASE WHEN count(*) = 0 THEN NULL ELSE
             jsonb_build_object('type', 'EntityReference', 'value',
@@ -84,14 +110,14 @@ DECLARE
     cursor_id uuid := '00000000-0000-0000-0000-000000000000';
     next_id uuid;
 BEGIN
-CREATE TEMP TABLE task_dependency_batch (id uuid PRIMARY KEY, entity_id text, values jsonb);
-CREATE TEMP TABLE task_dependency_references (dependent_task_id uuid, blocker_task_id uuid,
+-- A retry after committed batches can reuse the same migration connection.
+CREATE TEMP TABLE IF NOT EXISTS task_dependency_batch (id uuid PRIMARY KEY, entity_id text, values jsonb);
+CREATE TEMP TABLE IF NOT EXISTS task_dependency_references (dependent_task_id uuid, blocker_task_id uuid,
     dependent_property_id uuid, PRIMARY KEY (dependent_task_id, blocker_task_id));
 
 
     LOOP
         PERFORM set_config('lock_timeout', '5s', true);
-        PERFORM pg_advisory_xact_lock(747847177);
         PERFORM set_config('macro.task_dependency_backfill', 'on', true);
         TRUNCATE task_dependency_batch, task_dependency_references;
         -- Bound ordinary batches by assignments and reference volume. Always
@@ -101,7 +127,7 @@ CREATE TEMP TABLE task_dependency_references (dependent_task_id uuid, blocker_ta
             WHERE entity_type = 'TASK'
               AND property_definition_id = '00000001-0000-0000-0000-000000000007'
               AND id > cursor_id
-            ORDER BY id LIMIT 500 FOR UPDATE
+            ORDER BY id LIMIT 500
         ), budget AS (
             SELECT *, row_number() OVER (ORDER BY id) AS position,
                 sum(CASE WHEN jsonb_typeof(values->'value') = 'array'
@@ -131,6 +157,35 @@ CREATE TEMP TABLE task_dependency_references (dependent_task_id uuid, blocker_ta
           AND reference->>'entity_type' = 'TASK'
           AND s.entity_id::uuid <> target.entity_id::uuid
         ON CONFLICT DO NOTHING;
+
+        -- Discover first, then lock endpoints before any property rows or writes.
+        -- Include every source, even assignments with no valid references.
+        PERFORM lock_task_dependency_endpoints(ARRAY(
+            SELECT entity_id::uuid FROM task_dependency_batch
+            WHERE entity_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            UNION SELECT dependent_task_id FROM task_dependency_references
+            UNION SELECT blocker_task_id FROM task_dependency_references));
+
+        -- Row-first writers can hold a source without its endpoint lock. Do not
+        -- wait for those rows while holding endpoints; retry the batch instead.
+        BEGIN
+            PERFORM p.id FROM entity_properties p JOIN task_dependency_batch b ON b.id = p.id
+                ORDER BY p.id FOR UPDATE OF p NOWAIT;
+        EXCEPTION WHEN lock_not_available THEN
+            RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
+        END;
+        IF EXISTS (SELECT 1 FROM task_dependency_batch b
+            LEFT JOIN entity_properties p ON p.id = b.id
+            WHERE p.id IS NULL OR p.entity_id IS DISTINCT FROM b.entity_id
+                OR p.values IS DISTINCT FROM b.values) THEN
+            RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
+        END IF;
+
+        -- A target cleanup can finish between discovery and lock acquisition.
+        DELETE FROM task_dependency_references r WHERE NOT EXISTS (
+            SELECT 1 FROM entity_properties p
+            WHERE p.entity_id = r.blocker_task_id::text AND p.entity_type = 'TASK'
+            LIMIT 1 OFFSET 0);
 
         INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id)
         SELECT task_dependency_assignment_id(), blocker_task_id::text, 'TASK',
@@ -192,9 +247,6 @@ BEGIN
         RAISE EXCEPTION USING ERRCODE = '22023', MESSAGE = 'At most 1000 task relationships can be edited at once';
     END IF;
     source_id := NEW.entity_id::uuid;
-    IF NOT pg_try_advisory_xact_lock(747847177) THEN
-        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
-    END IF;
     IF EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(NEW.values->'value', '[]'::jsonb)) ref
         WHERE ref->>'entity_type' IS DISTINCT FROM 'TASK'
            OR COALESCE(ref->>'entity_id', '') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') THEN
@@ -202,6 +254,12 @@ BEGIN
     END IF;
     SELECT COALESCE(array_agg(DISTINCT (ref->>'entity_id')::uuid), '{}'::uuid[]) INTO desired
     FROM jsonb_array_elements(COALESCE(NEW.values->'value', '[]'::jsonb)) ref;
+    -- Include all old endpoints without a cap so historical oversized lists clear.
+    PERFORM lock_task_dependency_endpoints(ARRAY[source_id] || desired || ARRAY(
+        SELECT blocker_task_id FROM task_dependency_edges WHERE dependent_task_id = source_id
+          AND NEW.property_definition_id = '00000001-0000-0000-0000-000000000007'
+        UNION SELECT dependent_task_id FROM task_dependency_edges WHERE blocker_task_id = source_id
+          AND NEW.property_definition_id = '00000001-0000-0000-0000-000000000015'), TRUE);
     IF EXISTS (SELECT 1 FROM unnest(desired) target(task_id)
         LEFT JOIN LATERAL (SELECT true AS found FROM entity_properties status
             WHERE status.entity_id = target.task_id::text AND status.entity_type = 'TASK'
@@ -234,7 +292,7 @@ BEGIN
     END IF;
 
     -- Existing oversized inverses remain removable; only genuinely new edges
-    -- consume capacity. The graph lock serializes the check with insertion.
+    -- consume capacity. Endpoint locks serialize the check with insertion.
     IF NEW.property_definition_id = '00000001-0000-0000-0000-000000000007' THEN
         IF EXISTS (SELECT 1 FROM unnest(desired) endpoint(id)
             WHERE NOT EXISTS (SELECT 1 FROM task_dependency_edges

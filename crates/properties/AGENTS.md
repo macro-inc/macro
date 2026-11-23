@@ -21,9 +21,12 @@ events to the `macro.properties` Kafka topic.
   (definitions, options, entity values, metadata, tag promotion).
 - `src/domain/service.rs`: property reads and mutations; Soup does not require a separate definition-reader collaborator.
 - `src/outbound/task_dependency_queries.rs`: bounded atomic Depends On / Blocking edits, snapshot authorization, cycle checks, and canonical reciprocal event receipts.
-- Property cleanup captures surviving dependency snapshots under the graph lock and returns receipts only after commit. New writes cap both endpoints at 1000 references; oversized existing snapshots remain clearable.
+- Property cleanup captures surviving dependency snapshots under sorted endpoint locks and returns receipts only after commit. New writes cap both endpoints at 1000 references; oversized existing snapshots remain clearable.
 - Use `set_entity_property_with_effects` when a caller needs the write transaction's exact reciprocal task IDs; the ordinary setter preserves its existing response contract.
 - `src/domain/task_dependency_state.rs` + `src/outbound/task_dependency_state.rs`: receipt-gated, indexed dependency batches; project per-blocker completion facts with `visible_state` and preserve the full aggregate Blocked flag. The storage completion guard applies the team policy atomically to every Status writer.
+- Lock source, authorized current endpoints, and desired endpoints before dependency writes; recheck the snapshot after locking. Use PostgreSQL `task_dependency_lock_key` and sort actual signed keys, not UUIDs.
+- Cleanup locks UUID TASK/DOCUMENT roots even without edges or subtype metadata; discover all neighbors, lock them, and validate discovery. Non-document cleanup skips graph locks.
+- Preserve `PropertiesErr::DependencyContended` for PostgreSQL 40001 and stale snapshots; return HTTP 409 and GraphQL `DEPENDENCY_BUSY` with `retryable: true`.
 - Preserve `PropertiesErr::TaskCompletionBlocked` when atomic completion admission rejects a write; transport adapters map the typed variant, not its display text.
 
 ## Scope

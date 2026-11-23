@@ -364,7 +364,7 @@ async fn changed_dependency_snapshot_rejects_write() {
                 None
             )
             .await,
-        Err(PropertiesErr::Validation(_))
+        Err(PropertiesErr::DependencyContended)
     ));
 }
 

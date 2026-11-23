@@ -845,7 +845,7 @@ where
                 if error.is::<super::error::TaskCompletionBlocked>() {
                     return PropertiesErr::TaskCompletionBlocked;
                 }
-                PropertiesErr::Repo(error)
+                PropertiesErr::from(error)
             })?;
 
         self.publish_property_event(Self::entity_property_updated_event(

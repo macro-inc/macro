@@ -18,7 +18,7 @@ LANGUAGE SQL STABLE AS $$
 $$;
 
 -- The storage guard covers legacy status writers as well as the properties
--- service. The same graph lock serializes dependency edits and admission.
+-- service. The task endpoint lock serializes dependency edits and admission.
 CREATE FUNCTION guard_blocked_task_completion() RETURNS TRIGGER LANGUAGE plpgsql AS $$
 DECLARE
     policy_enabled BOOLEAN;
@@ -44,9 +44,7 @@ BEGIN
         RETURN NEW;
     END IF;
 
-    IF NOT pg_try_advisory_xact_lock(747847177) THEN
-        RAISE EXCEPTION USING ERRCODE = '40001', MESSAGE = 'Task dependencies changed; retry';
-    END IF;
+    PERFORM lock_task_dependency_endpoints(ARRAY[NEW.entity_id::uuid], TRUE);
     IF EXISTS (SELECT 1 FROM task_open_blockers(ARRAY[NEW.entity_id::uuid])) THEN
         RAISE EXCEPTION USING ERRCODE = '23514',
             CONSTRAINT = 'task_completion_blocked', MESSAGE = 'Task is blocked';

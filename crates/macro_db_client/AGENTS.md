@@ -259,3 +259,15 @@ its membership, mailbox and thread foreign keys cascade deletion. The CRM domain
 owns writes and owner-only listing; `crm_email_thread_excluded` is the independent
 veto used by the shared eligibility function and mirrored in set-based ingestion
 and the inline Team reader, including selected contribution.
+
+Dependency writes use `task_dependency_lock_key(uuid)` and deduplicate/sort actual signed
+keys through `lock_task_dependency_endpoints`. New writers lock source/current/desired
+endpoints before writes and recheck their authorized snapshot. Cleanup locks every
+UUID TASK/DOCUMENT root, including zero-edge or missing-subtype tasks, plus discovered
+neighbors, then validates discovery; non-document cleanup skips graph locks.
+Row-first legacy and transition-table triggers only try-lock and raise 40001 on
+contention. Completion admission try-locks its task root. Backfill discovers a batch,
+locks all endpoints, acquires source rows with NOWAIT, and revalidates the snapshot
+before writes. Historical oversized snapshots remain untruncated. The local PG14
+fixture uses `max_locks_per_transaction=8192`; verify production lock-memory capacity
+for historical endpoint cardinalities before deployment.

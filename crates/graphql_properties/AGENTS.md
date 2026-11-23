@@ -22,6 +22,7 @@ edge.
 - Task mutations retain actual reciprocal IDs from the committed domain outcome; pre/post reads alone miss concurrently removed neighbors.
 - Pass blocker view receipts to the properties domain's `visible_state` projection; preserve aggregate `isBlocked` and opaque membership while redacting individual inaccessible-blocker facts.
 - Share at most 1000 blocker visibility checks and one five-second read deadline across the request's loader batches; unverified blockers retain canonical aggregate state but expose no individual facts. Never expose a hidden-open subgroup flag.
+- Map wrapped `PropertiesErr::DependencyContended` to `DEPENDENCY_BUSY` with `retryable: true`; the web queue retries idempotent `SetTaskProperty` twice.
 - Map `PropertiesErr::TaskCompletionBlocked` through wrapped report contexts to `TASK_BLOCKED` and the opaque task ID; never classify completion rejection by display text.
 
 ## Scope

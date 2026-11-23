@@ -104,3 +104,28 @@ async fn storage_guard_covers_direct_and_bulk_status_writes_and_defaults_off(
     set_status(&pool, a, StatusOption::Completed).await?;
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn completion_admission_tries_only_its_task_endpoint(pool: PgPool) -> anyhow::Result<()> {
+    let (team, a, b) = seed(&pool).await?;
+    sqlx::query!(
+        "UPDATE team SET prevent_completing_blocked_tasks = TRUE WHERE id = $1",
+        team
+    )
+    .execute(&pool)
+    .await?;
+    let mut graph = pool.begin().await?;
+    task_dependency_queries::lock_endpoints(&mut graph, &[a]).await?;
+    // B has no blockers and shares no completion endpoint with A.
+    set_status(&pool, b, StatusOption::Completed).await?;
+    let error = set_status(&pool, a, StatusOption::Completed)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().code().as_deref(),
+        Some("40001")
+    );
+    graph.rollback().await?;
+    set_status(&pool, a, StatusOption::Completed).await?;
+    Ok(())
+}

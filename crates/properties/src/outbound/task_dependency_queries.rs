@@ -39,8 +39,8 @@ pub async fn targets(
 }
 
 /// Replace one direction after confirming that authorization covered the exact
-/// snapshot which is modified. The advisory lock serializes disjoint edge writes,
-/// so a cycle check cannot race another writer's cycle check.
+/// snapshot which is modified. Shared endpoint locks serialize reciprocal writes
+/// and direct-cycle admission without serializing unrelated tasks.
 #[tracing::instrument(skip(pool, expected, desired), fields(task_id = %task_id, property_definition_id = %property_definition_id, endpoint_count = desired.len()), err)]
 pub async fn link(
     pool: &Pool<Postgres>,
@@ -57,7 +57,7 @@ pub async fn link(
     .map_err(|_| anyhow::anyhow!("Task dependency transaction timed out; retry"))?
 }
 
-/// Keep the graph lock and all edge work within one cancellable deadline.
+/// Keep endpoint locks and all edge work within one cancellable deadline.
 async fn link_transaction(
     pool: &Pool<Postgres>,
     task_id: Uuid,
@@ -82,9 +82,11 @@ async fn link_transaction(
     sqlx::query!("SET LOCAL statement_timeout = '10s'")
         .execute(&mut *tx)
         .await?;
-    sqlx::query_scalar!("SELECT pg_advisory_xact_lock(747847177) IS NULL")
-        .fetch_one(&mut *tx)
-        .await?;
+    let endpoints = std::iter::once(task_id)
+        .chain(expected.iter().copied())
+        .chain(desired.iter().copied())
+        .collect::<Vec<_>>();
+    lock_endpoints(&mut tx, &endpoints).await?;
 
     let current: HashSet<Uuid> = targets(&mut tx, task_id, property_definition_id)
         .await?
@@ -169,7 +171,7 @@ async fn link_transaction(
     let removed: Vec<Uuid> = current.difference(&desired).copied().collect();
     let added: Vec<Uuid> = desired.difference(&current).copied().collect();
     // Existing oversized lists remain removable. Only additions consume capacity
-    // on the inverse endpoint, and the graph lock makes this check atomic.
+    // on the inverse endpoint, and endpoint locks make this check atomic.
     let inverse_full = if forward {
         sqlx::query_scalar!(
             r#"SELECT EXISTS (SELECT 1 FROM unnest($1::uuid[]) endpoint(id)
@@ -295,4 +297,51 @@ async fn link_transaction(
     }
     tx.commit().await?;
     Ok(TaskDependencyLinkOutcome::Updated(property, reciprocal))
+}
+
+/// Acquire deduplicated endpoint locks in PostgreSQL signed-key order.
+pub(super) async fn lock_endpoints(
+    connection: &mut PgConnection,
+    endpoints: &[Uuid],
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "SELECT lock_task_dependency_endpoints($1::uuid[]) IS NULL AS locked",
+        endpoints
+    )
+    .fetch_one(connection)
+    .await?;
+    Ok(())
+}
+
+/// Discover all neighbors without truncating historical oversized relationships.
+pub(super) async fn neighbors(
+    connection: &mut PgConnection,
+    task_id: Uuid,
+) -> anyhow::Result<Vec<Uuid>> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT blocker_task_id AS "blocker_task_id!" FROM task_dependency_edges WHERE dependent_task_id = $1
+         UNION SELECT dependent_task_id FROM task_dependency_edges WHERE blocker_task_id = $1
+         ORDER BY 1"#,
+        task_id,
+    )
+    .fetch_all(connection)
+    .await?)
+}
+
+/// Fence cleanup discovery, including roots whose first edge has not arrived yet.
+pub(super) async fn lock_cleanup_endpoints(
+    connection: &mut PgConnection,
+    task_id: Uuid,
+    discovered: &[Uuid],
+) -> anyhow::Result<()> {
+    let endpoints = std::iter::once(task_id)
+        .chain(discovered.iter().copied())
+        .collect::<Vec<_>>();
+    lock_endpoints(connection, &endpoints).await?;
+    if discovered != neighbors(connection, task_id).await? {
+        return Err(anyhow::Error::new(
+            crate::domain::error::PropertiesErr::DependencyContended,
+        ));
+    }
+    Ok(())
 }

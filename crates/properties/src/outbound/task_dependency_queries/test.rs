@@ -240,9 +240,7 @@ async fn legacy_property_writer_fails_fast_behind_graph_writer(
     let id = Uuid::now_v7();
     task(&pool, id).await?;
     let mut graph = pool.begin().await?;
-    sqlx::query_scalar!("SELECT pg_advisory_xact_lock(747847177) IS NULL")
-        .fetch_one(&mut *graph)
-        .await?;
+    lock_endpoints(&mut graph, &[id]).await?;
     let mut legacy = pool.begin().await?;
     sqlx::query!("SET LOCAL lock_timeout = '100ms'")
         .execute(&mut *legacy)
@@ -315,9 +313,7 @@ async fn inverse_capacity_is_atomic_and_oversized_snapshots_can_clear(
         // The failed request rolls back asynchronously. Serialize before checking
         // capacity so the fail-fast contention error is not the tested outcome.
         let mut legacy_tx = pool.begin().await?;
-        sqlx::query_scalar!("SELECT pg_advisory_xact_lock(747847177) IS NULL")
-            .fetch_one(&mut *legacy_tx)
-            .await?;
+        lock_endpoints(&mut legacy_tx, &[root, leaves[1000]]).await?;
         let legacy = sqlx::query!(
             "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND entity_type = 'TASK' AND property_definition_id = $3",
             serde_json::json!({"type":"EntityReference","value":[{"entity_type":"TASK","entity_id":root.to_string()}]}),
@@ -435,5 +431,327 @@ async fn cleanup_receipts_keep_remaining_edges_in_both_directions(
         matches!(&blocking.previous_value, Some(models_properties::service::property_value::PropertyValue::EntityRef(refs))
         if refs.len() == 1 && refs[0].entity_id == deleted.to_string())
     );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn unrelated_writes_and_non_document_cleanup_do_not_wait(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    let c = Uuid::now_v7();
+    let d = Uuid::now_v7();
+    for id in [a, b, c, d] {
+        task(&pool, id).await?;
+    }
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let writer_pool = pool.clone();
+    let writer_barrier = barrier.clone();
+    let holder = tokio::spawn(async move {
+        let mut tx = writer_pool.begin().await?;
+        lock_endpoints(&mut tx, &[a, b]).await?;
+        writer_barrier.wait().await;
+        writer_barrier.wait().await;
+        tx.rollback().await?;
+        anyhow::Ok(())
+    });
+    barrier.wait().await;
+    // The holder cannot release until both unrelated operations finish.
+    let outcome = tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        link(
+            &pool,
+            c,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            vec![],
+            vec![d],
+        ),
+    )
+    .await??;
+    assert!(matches!(outcome, TaskDependencyLinkOutcome::Updated(_, _)));
+    tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        super::super::entity_property_queries::delete_entity_properties(
+            &pool,
+            &models_properties::EntityReference::new(a.to_string(), EntityType::Chat),
+        ),
+    )
+    .await??;
+    barrier.wait().await;
+    holder.await??;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_reciprocal_links_admit_only_one_direction(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    task(&pool, a).await?;
+    task(&pool, b).await?;
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let other_barrier = barrier.clone();
+    let other_pool = pool.clone();
+    let other = tokio::spawn(async move {
+        other_barrier.wait().await;
+        link(
+            &other_pool,
+            b,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            vec![],
+            vec![a],
+        )
+        .await
+    });
+    barrier.wait().await;
+    let first = link(
+        &pool,
+        a,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![],
+        vec![b],
+    )
+    .await?;
+    let second = other.await??;
+    assert!(matches!(
+        (first, second),
+        (
+            TaskDependencyLinkOutcome::Updated(_, _),
+            TaskDependencyLinkOutcome::Cycle
+        ) | (
+            TaskDependencyLinkOutcome::Cycle,
+            TaskDependencyLinkOutcome::Updated(_, _)
+        )
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_replacements_recheck_the_authorized_snapshot(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    let c = Uuid::now_v7();
+    for id in [a, b, c] {
+        task(&pool, id).await?;
+    }
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let other_barrier = barrier.clone();
+    let other_pool = pool.clone();
+    let other = tokio::spawn(async move {
+        other_barrier.wait().await;
+        link(
+            &other_pool,
+            a,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            vec![],
+            vec![c],
+        )
+        .await
+    });
+    barrier.wait().await;
+    let first = link(
+        &pool,
+        a,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![],
+        vec![b],
+    )
+    .await?;
+    let second = other.await??;
+    assert!(matches!(
+        (first, second),
+        (
+            TaskDependencyLinkOutcome::Updated(_, _),
+            TaskDependencyLinkOutcome::Stale
+        ) | (
+            TaskDependencyLinkOutcome::Stale,
+            TaskDependencyLinkOutcome::Updated(_, _)
+        )
+    ));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cleanup_racing_first_link_leaves_no_edges_or_assignments(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    for entity_type in [EntityType::Task, EntityType::Document] {
+        let a = Uuid::now_v7();
+        let b = Uuid::now_v7();
+        task(&pool, a).await?;
+        task(&pool, b).await?;
+        let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+        let other_barrier = barrier.clone();
+        let other_pool = pool.clone();
+        let other = tokio::spawn(async move {
+            other_barrier.wait().await;
+            link(
+                &other_pool,
+                b,
+                SystemPropertyKey::DEPENDS_ON_UUID,
+                vec![],
+                vec![a],
+            )
+            .await
+        });
+        barrier.wait().await;
+        let cleanup = super::super::entity_property_queries::delete_entity_properties(
+            &pool,
+            &models_properties::EntityReference::new(a.to_string(), entity_type),
+        )
+        .await;
+        let outcome = other.await??;
+        match cleanup {
+            Ok(_) => {}
+            Err(error) => {
+                assert!(matches!(
+                    error.downcast_ref::<crate::domain::error::PropertiesErr>(),
+                    Some(crate::domain::error::PropertiesErr::DependencyContended)
+                ));
+                super::super::entity_property_queries::delete_entity_properties(
+                    &pool,
+                    &models_properties::EntityReference::new(a.to_string(), entity_type),
+                )
+                .await?;
+            }
+        }
+        assert!(matches!(
+            outcome,
+            TaskDependencyLinkOutcome::Updated(_, _) | TaskDependencyLinkOutcome::MissingTask
+        ));
+        let mut connection = pool.acquire().await?;
+        assert!(neighbors(&mut connection, a).await?.is_empty());
+        let assignments = sqlx::query_scalar!(
+            "SELECT count(*) FROM entity_properties WHERE entity_id = $1 AND entity_type = 'TASK'",
+            a.to_string(),
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(assignments, Some(0));
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_repository_contention_is_typed(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    use crate::domain::error::PropertiesErr;
+    use crate::domain::ports::PropertiesRepo;
+    let id = Uuid::now_v7();
+    task(&pool, id).await?;
+    let mut graph = pool.begin().await?;
+    lock_endpoints(&mut graph, &[id]).await?;
+    let repo = super::super::properties_pg_repo::PropertiesPgRepo::new(pool.clone());
+    let error = repo
+        .upsert_entity_property(
+            &id.to_string(),
+            EntityType::Task,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            Some(models_properties::service::property_value::PropertyValue::EntityRef(vec![])),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        PropertiesErr::from(error),
+        PropertiesErr::DependencyContended
+    ));
+    graph.rollback().await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cleanup_validates_discovery_and_locks_zero_edge_root(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    task(&pool, a).await?;
+    task(&pool, b).await?;
+    let mut cleanup = pool.begin().await?;
+    let discovered = neighbors(&mut cleanup, a).await?;
+    assert!(discovered.is_empty());
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let writer_barrier = barrier.clone();
+    let writer_pool = pool.clone();
+    let writer = tokio::spawn(async move {
+        writer_barrier.wait().await;
+        link(
+            &writer_pool,
+            b,
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            vec![],
+            vec![a],
+        )
+        .await?;
+        writer_barrier.wait().await;
+        anyhow::Ok(())
+    });
+    barrier.wait().await;
+    barrier.wait().await;
+    let error = lock_cleanup_endpoints(&mut cleanup, a, &discovered)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error.downcast_ref::<crate::domain::error::PropertiesErr>(),
+        Some(crate::domain::error::PropertiesErr::DependencyContended)
+    ));
+    cleanup.rollback().await?;
+    writer.await??;
+    link(
+        &pool,
+        b,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![a],
+        vec![],
+    )
+    .await?;
+    let mut cleanup = pool.begin().await?;
+    lock_cleanup_endpoints(&mut cleanup, a, &[]).await?;
+    // A zero-edge cleanup still fences a legacy assignment's first relationship.
+    let error = sqlx::query!("UPDATE entity_properties SET values = $1
+        WHERE entity_id = $2 AND property_definition_id = $3 AND entity_type = 'TASK'",
+        serde_json::json!({"type":"EntityReference","value":[{"entity_id":b.to_string(),"entity_type":"TASK"}]}),
+        a.to_string(), SystemPropertyKey::DEPENDS_ON_UUID)
+        .execute(&pool).await.unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().code().as_deref(),
+        Some("40001")
+    );
+    cleanup.rollback().await?;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn transition_table_writer_tries_both_endpoints(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    task(&pool, a).await?;
+    task(&pool, b).await?;
+    let mut graph = pool.begin().await?;
+    lock_endpoints(&mut graph, &[b]).await?;
+    let error = sqlx::query!(
+        "INSERT INTO task_dependency_edges
+        SELECT $1, $2, dependent.id, blocker.id
+        FROM entity_properties dependent, entity_properties blocker
+        WHERE dependent.entity_id = $1::uuid::text AND dependent.entity_type = 'TASK'
+          AND dependent.property_definition_id = $3
+          AND blocker.entity_id = $2::uuid::text AND blocker.entity_type = 'TASK'
+          AND blocker.property_definition_id = $4",
+        a,
+        b,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        SystemPropertyKey::BLOCKING_UUID,
+    )
+    .execute(&pool)
+    .await
+    .unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().code().as_deref(),
+        Some("40001")
+    );
+    graph.rollback().await?;
     Ok(())
 }

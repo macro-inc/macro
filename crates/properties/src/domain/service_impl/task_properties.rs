@@ -311,9 +311,7 @@ where
                         property
                     }
                     TaskDependencyLinkOutcome::Stale => {
-                        return Err(PropertiesErr::Validation(
-                            "Task dependencies changed; retry".to_string(),
-                        ));
+                        return Err(PropertiesErr::DependencyContended);
                     }
                     TaskDependencyLinkOutcome::Cycle => {
                         return Err(PropertiesErr::Validation(

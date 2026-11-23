@@ -370,6 +370,18 @@ pub(crate) fn task_property_error(error: rootcause::Report, task_id: Uuid) -> as
             Some(properties::domain::error::PropertiesErr::TaskCompletionBlocked)
         )
     });
+    let contended = error.iter_reports().any(|report| {
+        matches!(
+            report.downcast_current_context::<properties::domain::error::PropertiesErr>(),
+            Some(properties::domain::error::PropertiesErr::DependencyContended)
+        )
+    });
+    if contended {
+        return async_graphql::Error::new(message).extend_with(|_, extensions| {
+            extensions.set("code", "DEPENDENCY_BUSY");
+            extensions.set("retryable", true);
+        });
+    }
     if blocked {
         return async_graphql::Error::new(message).extend_with(|_, extensions| {
             extensions.set("code", "TASK_BLOCKED");
@@ -433,4 +445,24 @@ pub async fn load_task_dependency_batch(
         .into_values()
         .map(GraphqlTaskDependencyState::new)
         .collect())
+}
+
+#[cfg(test)]
+mod contention_test {
+    #[test]
+    fn wrapped_contention_report_has_retryable_code() {
+        let report =
+            rootcause::report!(properties::domain::error::PropertiesErr::DependencyContended)
+                .context("task property write failed");
+        let error = super::task_property_error(report.into(), uuid::Uuid::from_u128(1));
+        let extensions = error.extensions.unwrap();
+        assert_eq!(
+            extensions.get("code"),
+            Some(&async_graphql::Value::from("DEPENDENCY_BUSY"))
+        );
+        assert_eq!(
+            extensions.get("retryable"),
+            Some(&async_graphql::Value::from(true))
+        );
+    }
 }

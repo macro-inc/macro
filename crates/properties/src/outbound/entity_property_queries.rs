@@ -702,9 +702,11 @@ pub async fn delete_entity_properties(
     sqlx::query!("SET LOCAL statement_timeout = '10s'")
         .execute(&mut *tx)
         .await?;
-    sqlx::query_scalar!("SELECT pg_advisory_xact_lock(747847177) IS NULL")
-        .fetch_one(&mut *tx)
-        .await?;
+    if let Some(task_id) = task_id {
+        let discovered = super::task_dependency_queries::neighbors(&mut tx, task_id).await?;
+        super::task_dependency_queries::lock_cleanup_endpoints(&mut tx, task_id, &discovered)
+            .await?;
+    }
     let before = sqlx::query!(
         r#"SELECT target.id AS "id!", target.values FROM (
             SELECT blocking_property_id AS id FROM task_dependency_edges WHERE dependent_task_id = $1

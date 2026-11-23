@@ -254,7 +254,9 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
         match self.properties.inherit(&project, &task).await {
             Ok(()) => {}
             Err(
-                error @ (PropertiesErr::Repo(_) | PropertiesErr::PermissionServiceNotConfigured),
+                error @ (PropertiesErr::Repo(_)
+                | PropertiesErr::DependencyContended
+                | PropertiesErr::PermissionServiceNotConfigured),
             ) => {
                 return Err(error.into());
             }
