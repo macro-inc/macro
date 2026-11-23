@@ -65,7 +65,6 @@ function Fixture() {
   const [tabs, setTabs] = createSignal<HTMLElement>();
   const [place, setPlace] = createSignal<Place>('Inbox');
   const [section, setSection] = createSignal<Section>('overview');
-  const [sectionTabs, setSectionTabs] = createSignal<HTMLElement>();
   const [creating, setCreating] = createSignal(false);
   let createView: HTMLButtonElement | undefined;
   const [projectOpen, setProjectOpen] = createSignal(false);
@@ -110,14 +109,6 @@ function Fixture() {
     activeId: tab,
     setActiveId: showTab,
     label: (id) => TABS.find((option) => option.value === id)?.label ?? id,
-  });
-  useViewTabHotkeys<Section>({
-    scopeId,
-    tabs: sectionTabs,
-    ids: () => SECTIONS.map((option) => option.value),
-    activeId: section,
-    setActiveId: setSection,
-    label: (id) => SECTIONS.find((option) => option.value === id)?.label ?? id,
   });
 
   // The rail's press keeps focus off its button and gives the split back
@@ -187,24 +178,37 @@ function Fixture() {
       <Button variant="secondary">Reply</Button>
     </article>
   );
-  const project = () => (
-    <section aria-label="Project" class="flex flex-col gap-2">
-      <div class="flex items-center gap-3">
-        <h1 class="text-sm font-medium">{PROJECT}</h1>
-        <Tabs
-          ref={setSectionTabs}
-          aria-label="Project sections"
-          size="sm"
-          options={[...SECTIONS]}
-          value={section()}
-          onChange={setSection}
-        />
-      </div>
-      <p>Ship the launch checklist.</p>
-    </section>
-  );
+  // The project registers its tabs as it opens, after the press that chose it.
+  const Project = () => {
+    const [sectionTabs, setSectionTabs] = createSignal<HTMLElement>();
+    useViewTabHotkeys<Section>({
+      scopeId,
+      tabs: sectionTabs,
+      ids: () => SECTIONS.map((option) => option.value),
+      activeId: section,
+      setActiveId: setSection,
+      label: (id) =>
+        SECTIONS.find((option) => option.value === id)?.label ?? id,
+    });
+    return (
+      <section aria-label="Project" class="flex flex-col gap-2">
+        <div class="flex items-center gap-3">
+          <h1 class="text-sm font-medium">{PROJECT}</h1>
+          <Tabs
+            ref={setSectionTabs}
+            aria-label="Project sections"
+            size="sm"
+            options={[...SECTIONS]}
+            value={section()}
+            onChange={setSection}
+          />
+        </div>
+        <p>Ship the launch checklist.</p>
+      </section>
+    );
+  };
   const main = () => (
-    <Show when={place() !== PROJECT} fallback={project()}>
+    <Show when={place() !== PROJECT} fallback={<Project />}>
       <Show when={thread()} fallback={mailbox()}>
         {(subject) => threadView(subject())}
       </Show>

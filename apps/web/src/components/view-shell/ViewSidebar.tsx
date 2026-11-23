@@ -16,6 +16,7 @@ import {
   useContext,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { useChosenDestination } from './chosen-destination';
 import { useListSearchKeys } from './list-search-keys';
 import { SearchBar } from './SearchBar';
 import { SidebarSection } from './SidebarSection';
@@ -31,6 +32,9 @@ const SidebarViewContext = createContext<{ view: () => string | undefined }>();
 
 function Root(props: JSX.HTMLAttributes<HTMLElement> & { reorderId?: string }) {
   const [local, rest] = splitProps(props, ['children', 'class', 'reorderId']);
+  // A destination chosen here before the tabs of the view it opens mount
+  // still leaves the keyboard on that view.
+  useChosenDestination();
   return (
     <SidebarViewContext.Provider value={{ view: () => local.reorderId }}>
       <aside

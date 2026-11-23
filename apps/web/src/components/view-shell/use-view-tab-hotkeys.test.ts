@@ -1,6 +1,7 @@
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import { useChosenDestination } from './chosen-destination';
 import { useViewTabHotkeys } from './use-view-tab-hotkeys';
 
 vi.mock('@core/hotkey/hotkeys', () => ({
@@ -398,6 +399,21 @@ it('hands the pane the keyboard from a press on the navigation, wherever it was 
     press(view.rail);
     expect(handler('tab')(keydown(view.favorites))).toBe(true);
     expect(move).toHaveBeenCalledTimes(3);
+    dispose();
+  });
+});
+
+it('keeps a destination chosen before the tabs of the view it opens mount', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    // The sidebar tracks presses while it is mounted.
+    useChosenDestination();
+    press(view.inbox);
+    focus(view.inbox, view.grid);
+
+    const move = mailTabs(view);
+    expect(handler('tab')(keydown(view.inbox))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(1);
     dispose();
   });
 });

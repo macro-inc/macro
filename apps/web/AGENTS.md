@@ -230,8 +230,8 @@ panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
 header's tabs from its list, are focus order on a header button, leave an
 open item that replaced the list open, and leave a thread beside the list
 open after a click on its text. Its `?sidebar` page adds a real `ViewSidebar`
-and a stand-in rail: a folder or project clicked there, or the rail after it,
-leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
+and a stand-in rail: a folder clicked there, a project whose tabs mount only
+once it opens, or the rail after it, leaves Tab to the header's tabs; the keyboard walks the sidebar in focus
 order, and a folder's disclosure caret or a control there that opens a menu
 or a dialog chooses nothing.
 
