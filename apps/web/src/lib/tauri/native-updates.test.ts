@@ -36,12 +36,16 @@ afterEach(() => {
 
 /** Makes the next take fail the way a binary without the command does. */
 const missingCommand: unknown[] = [];
+/** Makes the next take fail for another reason. */
+const brokenTransport: unknown[] = [];
 
 native.invoke.mockImplementation(async (command: string) => {
   if (command === 'take_native_update_reports') {
     const next = native.reports.shift() ?? [];
+    // Tauri rejects with the bare message.
     if (next === missingCommand)
-      throw new Error('command take_native_update_reports not found');
+      throw 'Command take_native_update_reports not found';
+    if (next === brokenTransport) throw 'IPC transport closed';
     return next;
   }
   if (command === 'get_native_update_status') return { status: 'Idle' };
@@ -76,6 +80,20 @@ it('stays quiet on binaries without update reports', async () => {
   // Caught in the drain: fireAndForget would report an escaped rejection.
   expect(native.telemetryError).not.toHaveBeenCalled();
   expect(native.report).not.toHaveBeenCalled();
+  dispose();
+});
+
+it('records relay failures other than a missing command', async () => {
+  native.reports.push(brokenTransport);
+  const dispose = createRoot((dispose) => {
+    createNativeUpdates(async () => {});
+    return dispose;
+  });
+  await vi.waitFor(() =>
+    expect(native.telemetryError).toHaveBeenCalledWith('IPC transport closed', {
+      surface: 'native-updates',
+    })
+  );
   dispose();
 });
 

@@ -141,6 +141,18 @@ fn a_launch_on_any_newer_version_counts_as_installed() {
 }
 
 #[test]
+fn a_launch_on_an_older_copy_keeps_the_recorded_failure() {
+    let path = record_path();
+    let failure = Failure::new(FailureKind::Install);
+    pending(Some(failure.clone())).write(&path).unwrap();
+    let report = PendingInstall::take(&path, "2026.1105.1", None).unwrap();
+    assert!(matches!(
+        report.outcome,
+        Outcome::InstallFailed { failure: recorded, .. } if recorded == failure
+    ));
+}
+
+#[test]
 fn rewriting_the_record_leaves_no_partial_file() {
     let path = record_path();
     pending(None).write(&path).unwrap();

@@ -64,13 +64,13 @@ export type Outcome =
 /**  Downloading or verifying the offered update failed. */
 { kind: "download_failed"; target_version: string; download_ms: number; failure: Failure; consecutive_failures: number } |
 /**
- *  The previous launch installed an update: this launch no longer runs
- *  the version it replaced. `current_version` says which one it runs.
+ *  The previous launch installed an update: this launch runs its target
+ *  or a later version. `current_version` says which one.
  */
 { kind: "installed"; from_version: string; target_version: string; trigger: Trigger } |
 /**
- *  The previous launch tried to install an update and this launch still
- *  runs the old version.
+ *  The previous launch tried to install an update and this launch runs
+ *  an older version than its target.
  */
 { kind: "install_failed"; from_version: string; target_version: string; trigger: Trigger; failure: Failure };
 

@@ -37,6 +37,8 @@ export function nativeUpdateDescription(status: NativeUpdateStatus): string {
     .exhaustive();
 }
 
+const TAKE_REPORTS = 'take_native_update_reports';
+
 /** Desktop lifecycle integration, scoped to the Tauri provider. */
 export function createNativeUpdates(flush: () => Promise<void>) {
   const preparation = createNativeUpdatePreparation({
@@ -118,11 +120,11 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   async function drainReports() {
     let reports: NativeUpdateReport[];
     try {
-      reports = await invoke<NativeUpdateReport[]>(
-        'take_native_update_reports'
-      );
-    } catch {
+      reports = await invoke<NativeUpdateReport[]>(TAKE_REPORTS);
+    } catch (error) {
       // Older binaries do not report update outcomes.
+      if (error !== `Command ${TAKE_REPORTS} not found`)
+        Telemetry.error(error, { surface: 'native-updates' });
       return;
     }
     // The host has already let go of these; one bad report must not drop the rest.
@@ -145,7 +147,8 @@ export function createNativeUpdates(flush: () => Promise<void>) {
         return;
       }
       unsubscribeReports = () => fireAndForget(stop(), 'native-updates');
-    } catch {
+    } catch (error) {
+      Telemetry.error(error, { surface: 'native-updates' });
       return;
     }
     // Reports from before this document listened, such as the last install.

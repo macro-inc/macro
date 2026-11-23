@@ -57,15 +57,15 @@ pub enum Outcome {
         failure: Failure,
         consecutive_failures: u32,
     },
-    /// The previous launch installed an update: this launch no longer runs
-    /// the version it replaced. `current_version` says which one it runs.
+    /// The previous launch installed an update: this launch runs its target
+    /// or a later version. `current_version` says which one.
     Installed {
         from_version: String,
         target_version: String,
         trigger: Trigger,
     },
-    /// The previous launch tried to install an update and this launch still
-    /// runs the old version.
+    /// The previous launch tried to install an update and this launch runs
+    /// an older version than its target.
     InstallFailed {
         from_version: String,
         target_version: String,
@@ -319,7 +319,16 @@ impl PendingInstall {
     }
 
     fn report(self, current_version: &str, bundle_location: Option<BundleLocation>) -> Report {
-        let outcome = if current_version != self.from_version {
+        // A launch on the target or any later version installed; the same or
+        // an older copy did not, whatever the record says.
+        let installed = match (
+            semver::Version::parse(current_version),
+            semver::Version::parse(&self.target_version),
+        ) {
+            (Ok(current), Ok(target)) => current >= target,
+            _ => current_version == self.target_version,
+        };
+        let outcome = if installed {
             Outcome::Installed {
                 from_version: self.from_version,
                 target_version: self.target_version,

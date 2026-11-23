@@ -674,9 +674,9 @@ reports `up_to_date`, `update_found` then `downloaded`, `check_failed` or
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next
-launch reads and deletes it. It reports `installed` when it no longer runs
-the version it replaced, otherwise `install_failed` with the recorded failure or `interrupted`
-(span `native.update.install`). Reports carry `current_version`,
+launch reads and deletes it. It reports `installed` when it runs the target
+or a later version, otherwise `install_failed` with the recorded failure or
+`interrupted` (span `native.update.install`). Reports carry `current_version`,
 `target_version`/`from_version`, `trigger` (`quit` or `restart`), and on macOS
 `bundle_location` (`applications`, `translocated`, `mounted_volume`,
 `elsewhere`): a translocated or mounted app can't be replaced. A failure has a
