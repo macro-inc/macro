@@ -1,6 +1,7 @@
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { beginInteraction } from '@app/observability/flow';
 import { createAssertedContextProvider } from '@core/context/createContext';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Calendar, DatesSetArg } from '@fullcalendar/core';
 import { createSnapPager } from '@ui/components/SnapPager';
 import {
@@ -102,9 +103,13 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   const renderQueue = createRenderQueue();
   const periodView = () => props.initialView;
   let sharedScrollTop = props.initialScrollTop;
+  let scrollViewportSize: { width: number; height: number } | undefined;
 
   const pager = createSnapPager({
     pageCount: CALENDAR_PAGE_IDS.length,
+    instantWheel: () => !isTouchDevice(),
+    rapidPressMs: isTouchDevice() ? undefined : 300,
+    onWheelNavigate: (direction) => preparePeriodNavigation(direction),
     onScrollStart() {
       renderQueue.clear();
     },
@@ -160,6 +165,13 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
   const copyScrollPosition = () => {
     const source = timeGridScroller(activePage()?.element());
+    // Layout can clamp scrollTop and emit scroll before our resize callback.
+    // Keep the user anchor until updateSize restores it in the new geometry.
+    if (source && scrollViewportSize) {
+      const widthChanged = source.clientWidth !== scrollViewportSize.width;
+      const heightChanged = source.clientHeight !== scrollViewportSize.height;
+      if (widthChanged || heightChanged) return;
+    }
     // A hidden/remounting grid clamps scrollTop to zero before it has geometry.
     // Keep the history offset until the opening-scroll hook can apply it.
     if (source && source.clientHeight > 0 && source.scrollHeight > 0)
@@ -232,6 +244,10 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       () => {
         const scroller = timeGridScroller(activePage()?.element());
         if (!scroller) return;
+        scrollViewportSize = {
+          width: scroller.clientWidth,
+          height: scroller.clientHeight,
+        };
         if (sharedScrollTop !== undefined) scroller.scrollTop = sharedScrollTop;
         copyScrollPosition();
         scroller.addEventListener('scroll', copyScrollPosition, {
@@ -274,17 +290,19 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     todayTarget = now;
     if (pager.phase() === 'idle') queueTodayScroll(now);
   };
-  const navigatePeriod = (direction: 'previous' | 'next') => {
-    if (pager.locked()) return;
+  function preparePeriodNavigation(delta: number) {
     todayTarget = undefined;
     renderQueue.clear();
-    const delta = direction === 'previous' ? -1 : 1;
     const target = shiftedDateForView(navigationDate(), periodView(), delta);
     const pending = pendingAnchor();
     if (pending)
       setPendingAnchor({ date: target, position: pending.position + delta });
     setRequestedDate(target);
     props.onNavigate();
+  }
+  const navigatePeriod = (direction: 'previous' | 'next') => {
+    if (pager.locked()) return;
+    preparePeriodNavigation(direction === 'previous' ? -1 : 1);
     if (direction === 'previous') pager.previous();
     else pager.next();
   };
@@ -371,6 +389,13 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
       // Read the last user scroll event, not FullCalendar's already-reset scroller.
       const scrollTop = sharedScrollTop;
       for (const handle of handles.values()) handle.api()?.updateSize();
+      const activeScroller = timeGridScroller(activePage()?.element());
+      if (activeScroller) {
+        scrollViewportSize = {
+          width: activeScroller.clientWidth,
+          height: activeScroller.clientHeight,
+        };
+      }
       // FullCalendar can reset the hour scroller while recomputing its layout.
       // Restore the captured active position to every page after all updates.
       if (scrollTop === undefined) return;

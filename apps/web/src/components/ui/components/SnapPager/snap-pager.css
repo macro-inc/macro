@@ -15,6 +15,12 @@
   overflow-x: hidden;
 }
 
+/* Wheel navigation is discrete here; vertical-dominant input cannot drift x. */
+.snap-pager-discrete {
+  overflow-x: hidden;
+  scroll-snap-type: none;
+}
+
 .snap-pager-rail {
   position: relative;
   width: 100%;

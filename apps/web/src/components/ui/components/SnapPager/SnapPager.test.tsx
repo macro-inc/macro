@@ -440,6 +440,75 @@ describe('SnapPager', () => {
     expect(element.scrollLeft).toBe(320);
   });
 
+  it('retargets an unfinished button navigation after resize', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    expect(element.scrollLeft).toBe(300);
+    Object.defineProperty(element, 'clientWidth', { value: 160 });
+    pager.resize();
+    // The old smooth-scroll completion can still arrive after resize.
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.targetPosition()).toBe(1);
+    expect(element.scrollLeft).toBe(480);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+    expect(moved).toHaveBeenCalledWith(1);
+    expect(element.scrollLeft).toBe(320);
+  });
+
+  it('lets the opposite command replace a resized navigation target', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    Object.defineProperty(element, 'clientWidth', { value: 160 });
+    pager.resize();
+    vi.advanceTimersByTime(200);
+    pager.previous();
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(0);
+    expect(pager.targetPosition()).toBe(0);
+    expect(pager.phase()).toBe('idle');
+    expect(element.scrollLeft).toBe(320);
+  });
+  it('keeps a pending command while resize temporarily hides the viewport', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    Object.defineProperty(element, 'clientWidth', {
+      value: 0,
+      configurable: true,
+    });
+    pager.resize();
+    expect(pager.position()).toBe(0);
+    expect(pager.targetPosition()).toBe(1);
+    expect(moved).not.toHaveBeenCalled();
+    Object.defineProperty(element, 'clientWidth', {
+      value: 160,
+      configurable: true,
+    });
+    pager.resize();
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+  });
+  it('adds a repeated command to the resized target without a stale extra page', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    pager.next();
+    Object.defineProperty(element, 'clientWidth', { value: 160 });
+    pager.resize();
+    pager.next();
+    vi.advanceTimersByTime(200);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(2);
+  });
   it('retains native gesture completion through a resize', () => {
     const pager = createSnapPager();
     const element = viewport();

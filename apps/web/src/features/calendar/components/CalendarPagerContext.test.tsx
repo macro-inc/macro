@@ -14,6 +14,14 @@ import {
   useCalendarPager,
 } from './CalendarPagerContext';
 
+const device = vi.hoisted(() => ({ touch: true }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+afterEach(() => {
+  device.touch = true;
+});
+
 function mountCalendar(
   view: CalendarGridPeriodView = 'timeGridDay',
   restored?: { date: Date; scrollTop: number; laidOut?: boolean }
@@ -61,6 +69,7 @@ function mountCalendar(
         );
         if (scroller) {
           Object.defineProperty(scroller, 'clientHeight', {
+            configurable: true,
             get: () => (laidOut ? 600 : 0),
           });
           Object.defineProperty(scroller, 'scrollHeight', {
@@ -429,6 +438,33 @@ describe('calendar native paging', () => {
     expect(scroller.scrollTop).toBe(480);
   });
 
+  it.each(['clientWidth', 'clientHeight'] as const)(
+    'ignores a resize-clamped scroll event after %s changes',
+    async (dimension) => {
+      const { pager, pages } = mountCalendar('timeGridDay');
+      await vi.advanceTimersByTimeAsync(200);
+      const scroller = pages
+        .get(pager().activePageId())
+        ?.element.querySelector<HTMLElement>(
+          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+        );
+      if (!scroller) throw new Error('Active time grid missing');
+      scroller.scrollTop = 480;
+      scroller.dispatchEvent(new Event('scroll'));
+      Object.defineProperty(scroller, dimension, {
+        value: 400,
+        configurable: true,
+      });
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event('scroll'));
+      pager().updateSize();
+      expect(scroller.scrollTop).toBe(480);
+      scroller.scrollTop = 240;
+      scroller.dispatchEvent(new Event('scroll'));
+      pager().updateSize();
+      expect(scroller.scrollTop).toBe(240);
+    }
+  );
   it('keeps the visible three-day page until adjacent date selection settles', async () => {
     const { pager, calendar, viewport, pages } =
       mountCalendar('timeGridThreeDay');
@@ -621,5 +657,16 @@ describe('calendar native paging', () => {
       root?.querySelector('.fc-scroller-harness-liquid > .fc-scroller')
         ?.scrollTop
     ).toBe(540);
+  });
+  it('keeps the date anchor when desktop wheel interrupts an adjacent date animation', async () => {
+    device.touch = false;
+    const { pager, viewport } = mountCalendar();
+    pager().navigateToDate(new Date(2026, 10, 2));
+    viewport.dispatchEvent(
+      new WheelEvent('wheel', { deltaX: 40, cancelable: true })
+    );
+    expect(pager().navigationDate().getDate()).toBe(3);
+    await vi.advanceTimersByTimeAsync(400);
+    expect(pager().activeDate().getDate()).toBe(3);
   });
 });

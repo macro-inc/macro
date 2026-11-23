@@ -1,11 +1,9 @@
 # SnapPager
 
-A generic, endless, native horizontal scroll ring. Import `SnapPager` and
-`createSnapPager` from `./SnapPager`. The browser owns drag and momentum: there
-are no scroll-driving touch handlers, transforms, preventDefault calls, or custom inertia.
-Passive gesture listeners temporarily disable CSS snapping. Once native scrolling
-ends, the pager requests native smooth alignment before recycling any page.
-Horizontal wheel input follows the same path; vertical input is ignored.
+A generic, endless horizontal page ring. Its default mode leaves drag and momentum
+to the browser, without scroll-driving touch handlers or custom inertia. Passive
+gesture listeners temporarily disable CSS snapping. Native scroll completion
+starts smooth alignment before page recycling. Vertical input is left alone.
 
 ```tsx
 const pager = createSnapPager({
@@ -50,6 +48,15 @@ recovery over an indefinitely stuck pager; it is not compositor-completion proof
 A later gesture cancels pending commands through
 `onNavigationCancel`.
 
+Desktop hosts can set `instantWheel` and `rapidPressMs: 300`. Horizontal-dominant
+wheel input past 4px jumps one period instantly and blocks native horizontal
+overflow; events less than 180ms apart belong to the same gesture, including
+inertia. `onWheelNavigate` updates host date anchors before the jump. A wheel
+gesture interrupts a button animation at the combined target. Buttons animate
+once, then jump during the 300ms burst; an unfinished animation also jumps on a
+new press. One aggregate settlement follows the quiet interval, never a partial
+animation position. Phone swipes keep the default native path.
+
 At rest, CSS uses proximity snapping with `scroll-snap-stop: normal`. During a
 gesture it is disabled so it cannot force an early page decision. A slow drag
 commits only beyond half a page. A release faster than 0.5 CSS px/ms, sampled
@@ -64,6 +71,9 @@ returns to the initial ring without calling `onSettle`. `setLocked(true)` freeze
 horizontal navigation; unlock settles the current location. Locked resizes retain
 the active page. Off-screen pages are inert and aria-hidden. The caller owns keyboard
 navigation. Viewport owns resize observation, listener cleanup, and attachment.
+Width changes re-snap the committed page using the new measurement without
+changing the logical period. An unfinished button command keeps its destination;
+resizing during a held or native gesture leaves settlement with that gesture.
 
 Calendar's `CalendarPagerContext` and `Workspace` use this component for five
 periods on phone and desktop. The original shared Pager remains unchanged for
