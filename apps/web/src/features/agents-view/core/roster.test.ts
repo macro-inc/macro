@@ -1,6 +1,7 @@
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
+import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { describe, expect, it } from 'vitest';
 import { agentPickerGroups } from './agent-picker-groups';
 import {
@@ -9,6 +10,7 @@ import {
   MACRO_PERSONA_ID,
   type PersistedAgentLike,
   type RosterInput,
+  rosterAgentForMention,
   rosterForAgentPicker,
 } from './roster';
 
@@ -235,5 +237,35 @@ describe('rosterForAgentPicker and kindForBot', () => {
     expect(kindForBot('bot-in-memory', roster)).toBe('agent');
     expect(kindForBot('someone-elses-bot', roster)).toBe('agent');
     expect(kindForBot(undefined, roster)).toBe('agent');
+  });
+});
+
+describe('rosterAgentForMention', () => {
+  const roster = buildAgentRoster({
+    ...EMPTY,
+    agents: [persisted({ harness: 'macrod' })],
+  });
+
+  it('finds the agent a bot mention names, and Macro as the default persona', () => {
+    expect(rosterAgentForMention(roster, `bot|${CURSOR_BOT_ID}`)?.id).toBe(
+      CURSOR_BOT_ID
+    );
+    expect(rosterAgentForMention(roster, 'bot|bot-macrod')?.botId).toBe(
+      'bot-macrod'
+    );
+    expect(rosterAgentForMention(roster, `bot|${MACRO_AGENT_BOT_ID}`)?.id).toBe(
+      MACRO_PERSONA_ID
+    );
+    // The @ menu's Macro is the agent-session bot.
+    expect(rosterAgentForMention(roster, `bot|${MACRO_NEW_BOT_ID}`)?.id).toBe(
+      MACRO_PERSONA_ID
+    );
+  });
+
+  it('ignores people and bots outside the roster', () => {
+    expect(
+      rosterAgentForMention(roster, 'macro|me@example.com')
+    ).toBeUndefined();
+    expect(rosterAgentForMention(roster, 'bot|unknown')).toBeUndefined();
   });
 });
