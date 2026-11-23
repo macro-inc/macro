@@ -300,7 +300,7 @@ function AddContactEmail(props: {
                 : buttonClasses({
                     variant: 'ghost',
                     size: 'icon-xs',
-                    class: `text-ink-extra-muted ${contactPropertyIconTouchTarget}`,
+                    class: `text-ink-extra-muted not-data-disabled:focus-visible:text-ink focus-visible:ring-2 focus-visible:ring-accent/20 ${contactPropertyIconTouchTarget}`,
                   })
             }
             aria-label={t('crm.addEmail')}

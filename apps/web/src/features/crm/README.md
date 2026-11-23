@@ -120,12 +120,13 @@ Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
 pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another: an Add email pill while blank, then the property panel's
-add-value button (a 24px ghost icon button in extra-muted ink, named and
-tooltipped Add email) with the 12px glyph these controls use. The addresses wrap
-among themselves inside one Email group, so the add button stays beside the last
-address instead of taking a line of its own in Record details, and a long
-address truncates there. The add control stays one element across both forms,
+control adds another: an Add email pill while blank, then a 24px ghost icon
+button in extra-muted ink, named and tooltipped Add email, like the property
+panel's add-value button but with the 12px glyph these controls use. Focused, it
+brightens and takes the address pills' ring. The addresses wrap among
+themselves inside one Email group, so the add button ends the addresses' last
+line instead of taking a line of its own in Record details, and a long address
+truncates there. The add control stays one element across both forms,
 so focus returned after the first address lands on it. The company pill offers
 Add company to any contact without a company, switches only for a
 personal-provider primary with no address on the company's domain, and offers

@@ -208,8 +208,9 @@ Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 Contact properties use Tasks-style pills in the header and **Record details**.
 The email property lists every address the contact holds, the primary first,
 followed by an add control: **Add email** while blank, then a plus button named
-**Add email** beside the last address, which stays on that address's line in
-the narrow **Record details** column (long addresses truncate). Save
+**Add email** at the end of the addresses' last line, which it never leaves for
+a line of its own, even in the narrow **Record details** column (long addresses
+truncate). Save
 adds the address; Cancel or Escape discards the draft, and invalid input stays
 open. Each address pill opens its own actions: **Make primary** and **Remove**.
 Removing an address deletes nothing; the contact's Emails tab and the email

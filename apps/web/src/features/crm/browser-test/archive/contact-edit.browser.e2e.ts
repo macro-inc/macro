@@ -573,7 +573,7 @@ test('several addresses: make primary, reject a duplicate, add, remove, and keep
   ).toHaveCount(0);
 });
 
-test('Add email stays beside the last address in the header and Record details', async ({
+test('Add email ends the last line of addresses in the header and Record details', async ({
   page,
 }, info) => {
   await page.goto('/?several&long');
@@ -617,6 +617,9 @@ test('Tab reaches Add email after the addresses and focus returns to it after Es
   await options.last().focus();
   await page.keyboard.press('Tab');
   await expect(add).toBeFocused();
+  expect(
+    await add.evaluate((element) => getComputedStyle(element).boxShadow)
+  ).toContain('0px 0px 0px 2px');
   await page.keyboard.press('Enter');
   const input = page.getByRole('textbox', { name: 'Email', exact: true });
   await expect(input).toBeFocused();
