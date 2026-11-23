@@ -1,7 +1,7 @@
 import { formatDate } from '@core/util/date';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import { Show } from 'solid-js';
+import { children, type JSX, Show } from 'solid-js';
 import type { PromptOrigin } from '../state/prompt-origin';
 
 /**
@@ -89,12 +89,24 @@ export function PromptFooter(props: {
 export function ReplyFooter(props: {
   /** RFC 3339. */
   sentAt: string;
+  /** Controls after the time, such as the reply's thumbs. */
+  children?: JSX.Element;
 }) {
+  const extra = children(() => props.children);
+  // Controls that render nothing (a feature off) resolve to empty entries;
+  // only content that renders changes the footer's layout.
+  const hasExtra = () =>
+    extra.toArray().some((child) => child != null && child !== false);
   return (
-    <div class="text-xs text-ink-extra-muted" data-testid="reply-footer">
+    <div
+      class="text-xs text-ink-extra-muted"
+      classList={{ 'flex items-center gap-1': hasExtra() }}
+      data-testid="reply-footer"
+    >
       <time class="px-1" datetime={props.sentAt}>
         {formatDate(props.sentAt, { showTime: true })}
       </time>
+      {extra()}
     </div>
   );
 }

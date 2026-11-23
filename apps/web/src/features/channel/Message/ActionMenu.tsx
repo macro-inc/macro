@@ -1,3 +1,4 @@
+import { MessageFeedbackToolbar } from '@app/features/agent-feedback/views/message-feedback-toolbar';
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import type {
   MessageActionEvent,
@@ -199,6 +200,7 @@ function ActionMenuContent(props: ActionMenuProps) {
             <Timestamp format="time" class="px-1.5 whitespace-nowrap" />
             <Toolbar.Divider />
           </Show>
+          <MessageFeedbackToolbar />
           <Show when={hasReactAction()}>
             <Toolbar.Group>
               <For each={QUICK_REACTION_EMOJIS}>

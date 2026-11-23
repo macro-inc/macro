@@ -378,7 +378,10 @@ function SessionContent(props: {
                     class="transcript-host @min-[900px]/agent-session:pr-(--details-clearance)"
                   >
                     <AgentConnections>
-                      <Transcript searchTarget={searchTarget()} />
+                      <Transcript
+                        searchTarget={searchTarget()}
+                        feedbackSurface="agents_view"
+                      />
                     </AgentConnections>
                   </SessionClearance>
                   <AgentComposerRegion>

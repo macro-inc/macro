@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import ArrowRightIcon from '@icon/system/regular/arrow-right.svg';
 import { Button } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { PriorityRow } from '../components/priority-row';
 import { TodayTimeline } from '../components/today-timeline';
 import type { DayEvent, DayStrip } from '../core/day';
@@ -15,6 +15,8 @@ export function HomePrioritiesView(props: {
   /** Undefined without a calendar. */
   today?: { date: Date; strip: DayStrip; failed?: boolean };
   priorities: Suggestion[];
+  /** Rating one suggestion, for the production page; fixtures leave it out. */
+  feedback?: (suggestionId: string) => JSX.Element;
   onOpenEvent(event: DayEvent): void;
   onOpenSuggestion(suggestion: Suggestion): void;
   onOpenAll(): void;
@@ -47,6 +49,7 @@ export function HomePrioritiesView(props: {
               {(suggestion) => (
                 <PriorityRow
                   suggestion={suggestion}
+                  feedback={props.feedback?.(suggestion.id)}
                   onOpen={() => props.onOpenSuggestion(suggestion)}
                 />
               )}

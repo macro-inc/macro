@@ -1,13 +1,27 @@
 import { t } from '@app/lib/i18n';
-import { Show } from 'solid-js';
+import { children, type JSX, Show } from 'solid-js';
 import type { Suggestion } from '../core/suggestion';
+import { rendersSomething } from './suggestion-row';
 import { SuggestionTile } from './suggestion-tile';
 import { waitingLabel } from './waiting';
 
 /** One of Home's priorities: the suggestion's tile, title and a one-line reason. */
-export function PriorityRow(props: { suggestion: Suggestion; onOpen(): void }) {
+export function PriorityRow(props: {
+  suggestion: Suggestion;
+  /** Rating the suggestion, beside the row's button. */
+  feedback?: JSX.Element;
+  onOpen(): void;
+}) {
+  const feedback = children(() => props.feedback);
+  // Without thumbs (feedback off or refused) the row is as it was.
+  const hasFeedback = () => rendersSomething(feedback.toArray());
+
   return (
-    <li>
+    <li
+      classList={{
+        'group/priority flex min-w-0 items-center gap-1': hasFeedback(),
+      }}
+    >
       <button
         type="button"
         class="group flex w-full min-w-0 items-center gap-3 rounded-xl px-3 py-2.5 text-left outline-none not-touch:hover:bg-hover focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-edge-focus"
@@ -56,6 +70,11 @@ export function PriorityRow(props: { suggestion: Suggestion; onOpen(): void }) {
           {t('suggestions.openItem')}
         </span>
       </button>
+      <Show when={hasFeedback()}>
+        <span class="shrink-0 opacity-0 transition-opacity group-focus-within/priority:opacity-100 not-touch:group-hover/priority:opacity-100">
+          {feedback()}
+        </span>
+      </Show>
     </li>
   );
 }

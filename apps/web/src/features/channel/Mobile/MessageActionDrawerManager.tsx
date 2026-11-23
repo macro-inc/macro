@@ -1,5 +1,6 @@
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { MessageParent } from '@service-storage/messages';
 import { createSignal, type JSX } from 'solid-js';
 import { ActionDrawer } from './ActionDrawer';
 import {
@@ -21,14 +22,21 @@ export function MaybeMessageActionDrawerManager(props: {
   const [isOpen, setIsOpen] = createSignal(false);
   const [message, setMessage] = createSignal<MessageData | undefined>();
   const [actions, setActions] = createSignal<MessageActions | undefined>();
+  const [parent, setParent] = createSignal<MessageParent | undefined>();
 
   const ctx: MessageActionDrawerState = {
     isOpen,
     message,
     actions,
-    open: (msg: MessageData, acts: MessageActions | undefined) => {
+    parent,
+    open: (
+      msg: MessageData,
+      acts: MessageActions | undefined,
+      messageParent?: MessageParent
+    ) => {
       setMessage(() => msg);
       setActions(() => acts);
+      setParent(() => messageParent);
       setIsOpen(true);
     },
     close: () => setIsOpen(false),

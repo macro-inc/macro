@@ -8,7 +8,14 @@ import RepeatIcon from '@icon/system/regular/repeat.svg';
 import WarningCircleIcon from '@icon/system/regular/warning-circle.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { Button, cn, Item, Spinner, Tooltip } from '@ui';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  children,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { SuggestionItemParts } from '../context/suggestions-source';
 import type { Suggestion, SuggestionStatus } from '../core/suggestion';
 import { ageLabel, sinceLabel } from './waiting';
@@ -22,6 +29,8 @@ type RowState = {
   failed: boolean;
   /** It was rewritten since the row showed it; the action took nothing up. */
   changed: boolean;
+  /** Rating the suggestion, shown with the row's buttons. */
+  feedback?: JSX.Element;
   onDismiss(): void;
 };
 
@@ -42,6 +51,11 @@ export type ToDoRowProps = RowState & {
    */
   onMarkDone?: () => void;
 };
+
+/** Resolved children that put something on screen; a control that is off renders none. */
+export function rendersSomething(resolved: unknown[]): boolean {
+  return resolved.some((child) => child != null && child !== false);
+}
 
 /**
  * One line of text, cut where the row ends; pointing at a cut line shows all
@@ -184,6 +198,7 @@ function RowEnd(props: RowState & { time: string; children: JSX.Element }) {
   return (
     <Item.Actions class="relative min-w-20 justify-end">
       <span class="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
+        {props.feedback}
         {props.children}
         <DismissButton {...props} />
       </span>
@@ -491,10 +506,18 @@ export function ToDoRow(props: ToDoRowProps) {
  * A finished suggestion, as a quiet row: what it was, what was done, and
  * when. Pressing its text opens what it left.
  */
-export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
+export function DoneRow(props: {
+  suggestion: Suggestion;
+  /** Rating the suggestion, shown when pointing at or focusing in the row. */
+  feedback?: JSX.Element;
+  onOpen(): void;
+}) {
   const titleId = () => `suggestion-title-${props.suggestion.id}`;
   const line = () =>
     routineSentence(props.suggestion) ?? props.suggestion.summary;
+  const feedback = children(() => props.feedback);
+  // Without thumbs (feedback off or refused) the row is as it was.
+  const hasFeedback = () => rendersSomething(feedback.toArray());
 
   return (
     <Item
@@ -503,7 +526,10 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
       aria-labelledby={titleId()}
       data-suggestion={props.suggestion.id}
       data-suggestion-status="done"
-      class="border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover"
+      class={cn(
+        'border-0 has-focus-visible:bg-hover not-touch:hover:bg-hover',
+        hasFeedback() && 'group/suggestion'
+      )}
     >
       <Item.Icon class="text-success [&>svg]:size-3.5" aria-hidden="true">
         <CheckCircleIcon />
@@ -520,6 +546,11 @@ export function DoneRow(props: { suggestion: Suggestion; onOpen(): void }) {
           </Show>
         </RowText>
       </Item.Content>
+      <Show when={hasFeedback()}>
+        <Item.Actions class="opacity-0 transition-opacity group-focus-within/suggestion:opacity-100 not-touch:group-hover/suggestion:opacity-100">
+          {feedback()}
+        </Item.Actions>
+      </Show>
       <Item.Metadata class="text-ink-placeholder" data-suggestion-time>
         {formatTime(props.suggestion.stateChangedAt)}
       </Item.Metadata>

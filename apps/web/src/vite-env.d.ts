@@ -34,6 +34,7 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_ROUTINE_BACKGROUND_DRAFTS?: string;
   readonly VITE_ENABLE_ROUTINE_SUGGESTIONS?: string;
   readonly VITE_ENABLE_SUGGESTIONS?: string;
+  readonly VITE_ENABLE_AGENT_RESPONSE_FEEDBACK?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTIONS?: string;
   readonly VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS?: string;
   readonly VITE_ENABLE_CHAT_SIDEBAR_SECTION_RESIZE?: string;

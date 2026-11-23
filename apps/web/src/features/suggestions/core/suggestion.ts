@@ -112,6 +112,8 @@ export function doneWhenTakenUp(suggestion: Suggestion): boolean {
 
 /** Where a saved reply draft came from: its thread, and what else its suggestion cites. */
 export type DraftOrigin = {
+  /** The suggestion whose session wrote the draft. */
+  suggestionId: string;
   thread: SuggestionTarget;
   /** The suggestion's other items, without the draft's own thread. */
   sources: SuggestionTarget[];
@@ -132,6 +134,7 @@ export function draftOrigin(
     if (draft?.partId !== draftId) continue;
 
     return {
+      suggestionId: suggestion.id,
       thread: { entityType: draft.entityType, entityId: draft.entityId },
       sources: suggestion.about.filter(
         (target) =>

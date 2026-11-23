@@ -1748,6 +1748,20 @@ a task in a different project is left unchanged. Both actions require edit acces
 to the project and each task. Removal stops on access or service failures, so
 previous tasks in the same batch may already have been removed.
 
+## Rating agent responses
+
+Behind the `enable-agent-response-feedback` flag (`VITE_ENABLE_AGENT_RESPONSE_FEEDBACK=true`
+locally), a finished agent reply shows thumbs up and down after its time; a
+channel, DM or thread message from an agent has them in its hover toolbar
+(touch: the long-press sheet), a routine run in its detail header, and a
+suggestion (For you rows, Home's top priorities, and the "Drafted by Macro"
+bar under a reply draft) shows them, on rows when pointed at. A switch to the other
+thumb drops the note, which was about the old rating. A
+rating opens an optional note dialog (Save or Skip); clicking the pressed
+thumb removes the rating, and the pencil (or a rated message's small filled
+thumb) edits the note. With the flag off nothing renders and no
+`/agent-feedback` request is made.
+
 ## Agent sessions asking a question
 
 For manual testing on local or deployed development environments, send

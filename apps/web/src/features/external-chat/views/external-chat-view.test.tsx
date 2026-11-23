@@ -38,6 +38,11 @@ vi.mock('@components/app/split-layout/layout', async (importOriginal) => {
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|me@example.test',
 }));
+// Channel rows read the agent feedback flag; WhatsApp messages have no agent
+// responses to rate, so the flag stays off.
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false, loading: false }),
+}));
 vi.mock('@core/component/UserIcon', () => ({
   UserIcon: () => <span data-testid="macro-avatar" />,
 }));

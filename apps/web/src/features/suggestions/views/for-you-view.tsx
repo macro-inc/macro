@@ -136,6 +136,8 @@ export function ForYouView(props: {
   feed: SuggestionsFeed;
   parts: SuggestionItemParts;
   focusedId?: string;
+  /** Rating one suggestion, for the production page; fixtures leave it out. */
+  feedback?: (suggestionId: string) => JSX.Element;
   onRetry(): void;
 }) {
   const entries = () => {
@@ -174,65 +176,72 @@ export function ForYouView(props: {
 
   // Rows are kept by suggestion id, so a feed read or a busy flag updates a
   // row in place: focus stays, and the scroll to the one asked for runs once.
-  const row = (entry: Accessor<FeedEntry>) => (
-    <li
-      class="scroll-mt-4"
-      ref={(element) => {
-        if (untrack(entry).suggestion.id !== props.focusedId) return;
+  const row = (entry: Accessor<FeedEntry>) => {
+    // Keyed by id, so the row's thumbs stay one control across feed reads.
+    const feedback = () => props.feedback?.(untrack(entry).suggestion.id);
+    return (
+      <li
+        class="scroll-mt-4"
+        ref={(element) => {
+          if (untrack(entry).suggestion.id !== props.focusedId) return;
 
-        onElementConnect(element, () =>
-          element.scrollIntoView({ block: 'start' })
-        );
-      }}
-    >
-      <Switch>
-        <Match when={entry().dismissed}>
-          <DismissedSuggestion
-            suggestion={entry().suggestion}
-            wasRunning={entry().status === 'running'}
-            busy={entry().busy}
-            failed={entry().failed}
-            onUndo={() => props.feed.undoDismiss(entry().suggestion)}
-          />
-        </Match>
-        <Match when={entry().status === 'done'}>
-          <DoneRow
-            suggestion={entry().suggestion}
-            onOpen={() => props.feed.open(entry().suggestion)}
-          />
-        </Match>
-        <Match when={entry().suggestion.kind === 'entity'}>
-          <ToDoRow
-            suggestion={entry().suggestion}
-            status={entry().status}
-            busy={entry().busy}
-            failed={entry().failed}
-            changed={entry().changed}
-            parts={props.parts}
-            onOpen={() => props.feed.accept(entry().suggestion)}
-            onMarkDone={
-              doneWhenTakenUp(entry().suggestion)
-                ? () => props.feed.markDone(entry().suggestion)
-                : undefined
-            }
-            onDismiss={() => props.feed.dismiss(entry().suggestion)}
-          />
-        </Match>
-        <Match when={entry().suggestion.kind !== 'entity'}>
-          <MacroRow
-            suggestion={entry().suggestion}
-            status={entry().status}
-            busy={entry().busy}
-            failed={entry().failed}
-            changed={entry().changed}
-            onAccept={() => props.feed.accept(entry().suggestion)}
-            onLook={() => props.feed.look(entry().suggestion)}
-            onDismiss={() => props.feed.dismiss(entry().suggestion)}
-          />
-        </Match>
-      </Switch>
-    </li>
-  );
+          onElementConnect(element, () =>
+            element.scrollIntoView({ block: 'start' })
+          );
+        }}
+      >
+        <Switch>
+          <Match when={entry().dismissed}>
+            <DismissedSuggestion
+              suggestion={entry().suggestion}
+              wasRunning={entry().status === 'running'}
+              busy={entry().busy}
+              failed={entry().failed}
+              onUndo={() => props.feed.undoDismiss(entry().suggestion)}
+            />
+          </Match>
+          <Match when={entry().status === 'done'}>
+            <DoneRow
+              suggestion={entry().suggestion}
+              feedback={feedback()}
+              onOpen={() => props.feed.open(entry().suggestion)}
+            />
+          </Match>
+          <Match when={entry().suggestion.kind === 'entity'}>
+            <ToDoRow
+              suggestion={entry().suggestion}
+              status={entry().status}
+              busy={entry().busy}
+              failed={entry().failed}
+              changed={entry().changed}
+              feedback={feedback()}
+              parts={props.parts}
+              onOpen={() => props.feed.accept(entry().suggestion)}
+              onMarkDone={
+                doneWhenTakenUp(entry().suggestion)
+                  ? () => props.feed.markDone(entry().suggestion)
+                  : undefined
+              }
+              onDismiss={() => props.feed.dismiss(entry().suggestion)}
+            />
+          </Match>
+          <Match when={entry().suggestion.kind !== 'entity'}>
+            <MacroRow
+              suggestion={entry().suggestion}
+              status={entry().status}
+              busy={entry().busy}
+              failed={entry().failed}
+              changed={entry().changed}
+              feedback={feedback()}
+              onAccept={() => props.feed.accept(entry().suggestion)}
+              onLook={() => props.feed.look(entry().suggestion)}
+              onDismiss={() => props.feed.dismiss(entry().suggestion)}
+            />
+          </Match>
+        </Switch>
+      </li>
+    );
+  };
 
   return (
     <section

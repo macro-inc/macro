@@ -213,7 +213,10 @@ function AgentBlockContent(props: {
                 class="flex min-h-0 flex-1 @min-[900px]/agent-session:pr-(--details-clearance)"
               >
                 <AgentConnections>
-                  <Transcript searchTarget={searchTarget()} />
+                  <Transcript
+                    searchTarget={searchTarget()}
+                    feedbackSurface="agent_block"
+                  />
                 </AgentConnections>
               </AgentPanelClearance>
               {/* The mobile composer owns the bottom accessory; the session

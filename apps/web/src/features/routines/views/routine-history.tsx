@@ -52,6 +52,8 @@ type RoutineHistoryProps = {
   onOpenRoutine?: (id: string) => void;
   /** Opens the item an event run was about. */
   onOpenItem?: (item: RunItem, newSplit: boolean) => void;
+  /** Controls for the selected run's header, such as rating it. */
+  runActions?: (record: Accessor<HistoryRecord>) => JSX.Element;
 };
 
 function OutcomeIcon(props: { outcome: RunOutcome }) {
@@ -537,6 +539,7 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
                 startLine={props.describeStart?.(record())}
                 onOpenItem={openItem()}
                 onOpenRoutine={props.onOpenRoutine}
+                actions={props.runActions?.(record)}
                 onOpenConversation={
                   resource()
                     ? () => {

@@ -14,6 +14,7 @@ import { onCleanup, Show } from 'solid-js';
 import { forYouSearch } from './for-you-search';
 import { createSuggestionsFeed } from './primitives/feed';
 import { createRefresh } from './primitives/refresh';
+import { SuggestionFeedback } from './suggestion-feedback';
 import { SUGGESTION_ITEM_PARTS } from './suggestion-items';
 import { useSuggestions } from './suggestions';
 import { useSuggestionsFlag } from './use-suggestions-flag';
@@ -46,6 +47,12 @@ function ForYouPage() {
           feed={feed}
           parts={SUGGESTION_ITEM_PARTS}
           focusedId={search.suggestion}
+          feedback={(suggestionId) => (
+            <SuggestionFeedback
+              suggestionId={suggestionId}
+              surface="suggestion_row"
+            />
+          )}
           onRetry={source.retry}
         />
       </ViewShell.Main>

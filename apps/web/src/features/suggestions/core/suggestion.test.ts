@@ -40,6 +40,7 @@ describe('draftOrigin', () => {
 
   it('finds the suggestion that wrote a draft and leaves its thread out of the sources', () => {
     expect(draftOrigin(feed, 'draft-1')).toEqual({
+      suggestionId: drafted.id,
       thread: { entityType: 'email_thread', entityId: 'thread-1' },
       sources: [{ entityType: 'document', entityId: 'document-9' }],
     });

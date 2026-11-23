@@ -1,3 +1,5 @@
+import { ResponseFeedback } from '@app/features/agent-feedback/agent-feedback';
+import type { FeedbackSubject } from '@app/features/agent-feedback/core/subject';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
@@ -64,6 +66,16 @@ function lastRunTime(records: readonly HistoryRecord[]): string | undefined {
         minute: '2-digit',
       })
     : formatRelativeDate(latest);
+}
+
+/** A finished run, rated as the routine's response; undefined before it has ids. */
+function routineRunFeedbackSubject(
+  routine: { id?: string | null } | undefined,
+  record: HistoryRecord
+): FeedbackSubject | undefined {
+  const routineId = routine?.id;
+  if (!routineId || !record.id || !record.endedAt) return undefined;
+  return { kind: 'routine_run', routineId, runId: record.id };
 }
 
 /** Whether the routine's edits have reached the server, and if not, why. */
@@ -521,6 +533,12 @@ export function RoutineDetailView(props: {
                 createChatMetadata={props.slots.createChatMetadata}
                 createAgentMetadata={props.slots.createAgentMetadata}
                 onOpen={props.onOpenRun}
+                runActions={(record) => (
+                  <ResponseFeedback
+                    subject={routineRunFeedbackSubject(schedule(), record())}
+                    surface="routine_run"
+                  />
+                )}
               />
             </>
           }

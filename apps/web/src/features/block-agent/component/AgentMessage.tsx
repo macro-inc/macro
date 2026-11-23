@@ -9,6 +9,11 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { ResponseFeedback } from '@app/features/agent-feedback/agent-feedback';
+import type {
+  FeedbackSubject,
+  FeedbackSurface,
+} from '@app/features/agent-feedback/core/subject';
 import { AgentReplyLinks } from '@components/app/split-layout/split-router/agent-reply-links';
 import { useSessionActivity } from '@core/agent-session/session-activity';
 import { useUserId } from '@core/context/user';
@@ -446,10 +451,39 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
+/**
+ * Thumbs on a finished agent reply, for the host that names its surface. A
+ * replayed reply has no send time, so the reply's end decides, not `postedAt`.
+ */
+function ReplyFeedback(props: {
+  message: FoldedMessage;
+  surface: FeedbackSurface | undefined;
+}) {
+  const subject = (): FeedbackSubject | undefined => {
+    const message = props.message;
+    if (message.author.kind !== 'agent' || !message.stop) return undefined;
+    return {
+      kind: 'agent_session_turn',
+      sessionId: message.agentSessionId,
+      turn: message.turn,
+    };
+  };
+
+  return (
+    <Show when={props.surface}>
+      {(surface) => (
+        <ResponseFeedback subject={subject()} surface={surface()} />
+      )}
+    </Show>
+  );
+}
+
 export function Message(props: {
   message: FoldedMessage;
   /** This is the running turn's reply, by the session's one `working` truth. */
   inFlight: boolean;
+  /** Where agent replies can be rated from; unset hosts show no thumbs. */
+  feedbackSurface?: FeedbackSurface;
 }) {
   const inFlight = () => props.inFlight;
   const segments = createMemo(() => segmentParts(props.message.parts));
@@ -540,8 +574,25 @@ export function Message(props: {
                 </Show>
               )}
             </Show>
-            <Show when={!inFlight() && replySentAt(props.message)}>
-              {(sentAt) => <ReplyFooter sentAt={sentAt()} />}
+            <Show when={!inFlight()}>
+              <Show
+                when={replySentAt(props.message)}
+                fallback={
+                  <ReplyFeedback
+                    message={props.message}
+                    surface={props.feedbackSurface}
+                  />
+                }
+              >
+                {(sentAt) => (
+                  <ReplyFooter sentAt={sentAt()}>
+                    <ReplyFeedback
+                      message={props.message}
+                      surface={props.feedbackSurface}
+                    />
+                  </ReplyFooter>
+                )}
+              </Show>
             </Show>
           </div>
         </AgentReplyLinks>
