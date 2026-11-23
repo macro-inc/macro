@@ -1,7 +1,8 @@
 use super::is_share_deep_link;
 use super::shared::{
-    STAGED_SHARED_FILE_NOT_FOUND_ERROR, is_staged_shared_file_not_found_error,
-    sanitize_shared_filename, share_filenames_from_url,
+    STAGED_SHARED_FILE_NOT_FOUND_ERROR, UNCLAIMED_SHARE_MAX_AGE, collect_unclaimed_shared_files,
+    is_staged_shared_file_not_found_error, merge_pending_share_filenames, sanitize_shared_filename,
+    share_filenames_from_url,
 };
 use super::{PendingShareFilesState, ShareTargetPlatform, StagedSharedFile};
 use crate::staged_upload::{
@@ -147,48 +148,39 @@ fn mime_type_from_path(path: &std::path::Path) -> &'static str {
 }
 
 impl ShareTargetPlatform for ShareTargetPlatformImpl {
+    /// Every share waiting for this app: the files the latest `macro://share`
+    /// link named, then any other recent file the Share Extension saved. The
+    /// second part recovers shares whose link never arrived, which happens
+    /// when iOS does not let the extension open the app.
     fn get_pending_share_filenames(app: AppHandle, state: &PendingShareFilesState) -> Vec<String> {
-        let pending = state.with_data(|f| f.clone());
+        let Some(container_path) = ios_app_group_container_path() else {
+            state.with_data(|files| files.clear());
+            return Vec::new();
+        };
+        let container_path = std::path::Path::new(&container_path);
 
-        if !pending.is_empty() {
-            if let Some(container_path) = ios_app_group_container_path() {
-                let container_path = std::path::Path::new(&container_path);
-                let existing_pending: Vec<String> = pending
-                    .into_iter()
-                    .filter(|name| container_path.join(name).is_file())
-                    .collect();
-
-                let existing_pending_clone = existing_pending.clone();
-                state.with_data(|files| {
-                    *files = existing_pending_clone;
-                });
-
-                if !existing_pending.is_empty() {
-                    return existing_pending;
-                }
-            } else {
-                state.with_data(|files| *files = Vec::new());
-                return vec![];
-            }
+        let mut linked = state.with_data(|files| files.clone());
+        if linked.is_empty()
+            && let Ok(Some(urls)) = app.deep_link().get_current()
+            && let Some(url) = urls.first()
+            && is_share_deep_link(url)
+        {
+            linked = share_filenames_from_url(url);
         }
 
-        match app.deep_link().get_current() {
-            Ok(Some(urls)) => {
-                if let Some(url) = urls.first()
-                    && is_share_deep_link(url)
-                {
-                    let filenames = share_filenames_from_url(url);
-                    let filenames_clone = filenames.clone();
-                    state.with_data(|files| {
-                        *files = filenames_clone;
-                    });
-                    return filenames;
-                }
-            }
-            Ok(None) | Err(_) => {}
-        }
+        let unclaimed = collect_unclaimed_shared_files(
+            container_path,
+            std::time::SystemTime::now(),
+            UNCLAIMED_SHARE_MAX_AGE,
+        );
+        let pending: Vec<String> = merge_pending_share_filenames(linked, unclaimed)
+            .into_iter()
+            .filter(|name| container_path.join(name).is_file())
+            .collect();
 
-        Vec::new()
+        let pending_clone = pending.clone();
+        state.with_data(|files| *files = pending_clone);
+        pending
     }
 
     fn pop_shared_files(

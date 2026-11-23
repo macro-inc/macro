@@ -39,22 +39,8 @@ export interface UploadPendingShareFileArgs {
   mimeType: string;
 }
 
-interface ShareFilesReadyPayload {
-  filenames: string[];
-}
-
 function isSharedTextMimeType(mimeType: string): boolean {
   return mimeType === 'text/uri-list' || mimeType === 'text/plain';
-}
-
-function shareFileNamesMatch(
-  left: readonly string[],
-  right: readonly string[]
-): boolean {
-  return (
-    left.length === right.length &&
-    left.every((name, index) => name === right[index])
-  );
 }
 
 async function getPendingShareFilenames(): Promise<string[]> {
@@ -126,9 +112,6 @@ export function ShareTargetProvider(props: {
   const [pendingShareFiles, setPendingShareFiles] = createSignal<
     PendingShareFile[]
   >([]);
-  const [pendingShareFileNames, setPendingShareFileNames] = createSignal<
-    string[]
-  >([]);
 
   const clearPendingShareFiles = async (
     tokens: readonly string[] = pendingShareFiles().map((file) => file.token)
@@ -139,7 +122,6 @@ export function ShareTargetProvider(props: {
       setPendingShareFiles((current) =>
         current.filter((file) => !tokens.includes(file.token))
       );
-      if (pendingShareFiles().length === 0) setPendingShareFileNames([]);
     };
     if (props.os !== 'android') clearMatchingFiles();
 
@@ -160,90 +142,76 @@ export function ShareTargetProvider(props: {
 
   if (props.os === 'android') useAndroidShares(setPendingShareFiles);
 
-  const clearLoadedPendingShare = (files: readonly PendingShareFile[]) => {
-    setPendingShareFiles([]);
-    setPendingShareFileNames([]);
-
-    if (files.length > 0) {
-      void clearSharedFiles(files.map((file) => file.token)).catch(() => {});
-    }
-  };
-
   onMount(() => {
     if (props.os !== 'ios') {
       return;
     }
 
-    let nextRequestId = 0;
-
-    const loadPendingShareFiles = async (filenames: string[]) => {
-      if (filenames.length === 0) return;
-
-      const requestId = ++nextRequestId;
-
-      const previousFilenames = pendingShareFileNames();
-      const previousFiles = pendingShareFiles();
-      const isSamePendingShare = shareFileNamesMatch(
-        previousFilenames,
-        filenames
-      );
-
-      if (isSamePendingShare && pendingShareFiles().length > 0) {
-        return;
-      }
-
+    // Native code is the source of truth: `pop_shared_files` takes files out
+    // of the pending set, so asking again finds only shares not loaded yet.
+    // Loads run one at a time; overlapping triggers (the share link, the app
+    // returning to the foreground, mount) would otherwise race for the same
+    // files and the loser would drop the winner's result.
+    const loadUnclaimedShareFiles = async () => {
       try {
+        const filenames = await getPendingShareFilenames();
+        if (filenames.length === 0) return;
+
         const files = await popSharedFiles(filenames);
+        if (files.length === 0) return;
 
-        if (requestId !== nextRequestId) return;
-
-        if (files.length === 0) {
-          clearLoadedPendingShare(previousFiles);
-          return;
-        }
-
+        // A new share replaces the one on screen, as a new link always has.
+        const previousFiles = pendingShareFiles();
         setPendingShareFiles(files);
-        setPendingShareFileNames(filenames);
-        if (previousFiles.length > 0 && !isSamePendingShare) {
-          void clearSharedFiles(previousFiles.map((file) => file.token)).catch(
-            () => {}
+        if (previousFiles.length > 0) {
+          fireAndForget(
+            clearSharedFiles(previousFiles.map((file) => file.token)),
+            'share-target'
           );
         }
       } catch (error) {
-        if (requestId !== nextRequestId) return;
-        clearLoadedPendingShare(previousFiles);
         console.error('failed to load pending share files', error);
       }
     };
 
-    const unlisten = listen<ShareFilesReadyPayload>(
-      'share-files-ready',
-      (event) =>
-        fireAndForget(
-          loadPendingShareFiles(event.payload.filenames),
-          'share-target'
-        )
+    let queue: Promise<void> = Promise.resolve();
+    const syncPendingShareFiles = () => {
+      const previous = queue;
+      queue = (async () => {
+        await previous;
+        await loadUnclaimedShareFiles();
+      })();
+      return queue;
+    };
+
+    const unlisten = listen('share-files-ready', () =>
+      fireAndForget(syncPendingShareFiles(), 'share-target')
     );
+
+    // A share whose link never arrived (iOS refused to open the app from the
+    // Share Extension) is picked up when the person opens Macro themselves.
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        fireAndForget(syncPendingShareFiles(), 'share-target');
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     fireAndForget(
       (async () => {
-        try {
-          await unlisten;
-          const filenames = await getPendingShareFilenames();
-          await loadPendingShareFiles(filenames);
-        } catch (error) {
-          console.error('failed to initialize iOS share target', error);
-        }
+        await unlisten;
+        await syncPendingShareFiles();
       })(),
       'share-target'
     );
 
-    onCleanup(() =>
+    onCleanup(() => {
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       fireAndForget(
         unlisten.then((fn) => fn()),
         'share-target'
-      )
-    );
+      );
+    });
   });
 
   const value: ShareTargetContextValue = {
