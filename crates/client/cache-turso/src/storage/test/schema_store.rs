@@ -588,27 +588,72 @@ fn queued_writes_without_records_are_still_sorted() {
 
 #[test]
 fn a_change_that_fails_drops_every_record_and_keeps_the_queue() {
+    /// The statement the Types tier drops a changed type's records with.
+    const RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
+    // A statement that fails, or storage that fills up partway, rolls the
+    // tier back, and dropping every record takes its place.
+    for (name, error) in [
+        ("statement", TursoStorageError::Database),
+        (
+            "storage-full",
+            TursoStorageError::PhysicalResetRequired(PhysicalResetReason::StorageFull),
+        ),
+    ] {
+        block_on(async {
+            let database = TursoMemoryDatabase::new(format!("schema-failed-{name}.db"));
+            let mut storage = populate(database.open("scope").unwrap()).await;
+            driver::arm_statement_failure(RECORDS_DELETE, error);
+            let adoption = adopt(&storage, RETYPED, &ProjectionInputs::every());
+            assert_eq!(
+                adoption.change,
+                Some(Tier::Reset(ResetReason::Failed)),
+                "case {name}"
+            );
+            assert_eq!(adoption.outcome(), "reset");
+            assert_eq!(
+                adoption.reset_reason().map(<&'static str>::from),
+                Some("failed")
+            );
+            assert_eq!(adoption.schema.hash(), schema(RETYPED).hash());
+            assert_eq!(adoption.retired_overlays, 2);
+            assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
+            assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+            assert!(sources(&mut storage).await.iter().all(is_retired));
+            storage.try_close().unwrap();
+
+            // The file opens again as it was left, with its queue.
+            let storage = database.open("scope").unwrap();
+            assert_eq!(
+                adopt(&storage, RETYPED, &ProjectionInputs::every()).change,
+                None
+            );
+            assert_eq!(
+                storage.load_mutation_queue().await.unwrap().len(),
+                2,
+                "case {name}"
+            );
+        });
+    }
+
+    // A file whose state is in doubt is replaced, not reset in place.
     block_on(async {
-        let mut storage = populate(TursoStorage::open_in_memory("schema-failed").unwrap()).await;
-        // Dropping every document's facts keeps the others in a table of
-        // this name, so the change's own tier fails.
-        raw_execute(
-            &storage,
-            "CREATE TABLE schema_change_kept_exact_facts (planted)",
-            vec![],
+        let storage =
+            populate(TursoStorage::open_in_memory("schema-failed-corrupt").unwrap()).await;
+        driver::arm_statement_failure(
+            RECORDS_DELETE,
+            TursoStorageError::PhysicalResetRequired(PhysicalResetReason::Corruption),
         );
-        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::every());
-        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Failed)));
-        assert_eq!(adoption.outcome(), "reset");
+        let error = storage
+            .adopt_schema(
+                &schema(RETYPED),
+                &ProjectionInputs::every(),
+                Unrecorded::Guess,
+            )
+            .unwrap_err();
         assert_eq!(
-            adoption.reset_reason().map(<&'static str>::from),
-            Some("failed")
+            error.physical_reset_reason(),
+            Some(PhysicalResetReason::Corruption)
         );
-        assert_eq!(adoption.schema.hash(), schema(RETYPED).hash());
-        assert_eq!(adoption.retired_overlays, 2);
-        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
-        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
-        assert!(sources(&mut storage).await.iter().all(is_retired));
     });
 }
 

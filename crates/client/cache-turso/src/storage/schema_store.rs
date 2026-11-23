@@ -15,9 +15,9 @@
 //!   drops the storage generation).
 //! - [`Tier::Reset`] drops every record but the identity and authority, by
 //!   dropping and creating each table again, with every queued projection
-//!   and overlay. A tier that fails rolls back and resets instead
-//!   ([`ResetReason::Failed`]); so does a native file of another schema
-//!   compatibility epoch ([`leave_epoch`]).
+//!   and overlay. A tier whose statement fails, or that runs out of space,
+//!   rolls back and resets instead ([`ResetReason::Failed`]); so does a
+//!   native file of another schema compatibility epoch ([`leave_epoch`]).
 //!
 //! Queued writes are always kept: their mutations are still sent. Their
 //! index shadows are composed again over what is left.
@@ -271,19 +271,29 @@ pub(super) fn adopt(
         )
     });
     match sorted {
-        // The tier rolled back. Dropping every record reads none of them.
-        Err(error) if !error.requires_physical_reset() => {
-            driver::write_transaction(connection, || {
-                let reset = SchemaChange {
-                    tier: Tier::Reset(ResetReason::Failed),
-                    stored: Arc::clone(incoming),
-                };
-                apply(connection, reset, incoming)
-            })
-        }
+        // The tier rolled back. Dropping every record reads none of them,
+        // and frees the pages they held for what the cache writes next.
+        Err(error) if resets_after(error) => driver::write_transaction(connection, || {
+            let reset = SchemaChange {
+                tier: Tier::Reset(ResetReason::Failed),
+                stored: Arc::clone(incoming),
+            };
+            apply(connection, reset, incoming)
+        }),
         sorted => sorted,
     }
     .map_err(TursoStorageError::initialization)
+}
+
+/// Whether a tier that failed with `error` resets the cache in place: a
+/// statement failed, or storage filled up, and the transaction rolled back
+/// (a rollback that fails leaves the outcome uncertain instead). A file that
+/// is corrupt, or whose last write is in doubt, is replaced.
+fn resets_after(error: TursoStorageError) -> bool {
+    match error.physical_reset_reason() {
+        None | Some(PhysicalResetReason::StorageFull) => true,
+        Some(_) => false,
+    }
 }
 
 /// Whether the cache holds no record and no queued write: nothing a schema
