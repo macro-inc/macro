@@ -102,10 +102,11 @@ when `cache-turso/src/storage/migration.rs` registers a chain of steps from its
 version to the current one. Each step runs in one write transaction that also
 advances `meta.storage_schema_version`, so a stopped upgrade resumes from the
 last committed step. The last step's transaction also runs the frozen-schema
-checks every reopen runs, so the current version is committed only for a file
-with exactly the tables and indexes a fresh file has; a chain that would produce
-anything else rolls back to the version before its last step. The open then
-runs the queue checks as every reopen does. Records, queued mutations,
+checks, so the current version is committed only for a file with exactly the
+tables and indexes a fresh file has; a chain that would produce anything else
+rolls back to the version before its last step. Later opens find a fresh
+file's schema digest and skip those checks, as they do for a fresh file. The
+open then runs the queue checks as every reopen does. Records, queued mutations,
 optimistic layers and the storage generation stay, so the upgrade refetches
 nothing and loses no queued write; a format migration that runs after it (above)
 still drops the refetchable rows. A file whose `meta` names another scope, or a cache

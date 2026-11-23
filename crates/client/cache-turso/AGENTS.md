@@ -74,8 +74,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   `storage/migration.rs`, which is upgraded in place, never silently: one write
   transaction per step, which also advances `meta.storage_schema_version`, so an
   interrupted upgrade resumes. The last step's transaction runs the frozen-schema
-  checks every open runs, so a rejected chain leaves the version before its
-  last step. The browser hands that back to the older build only when it is
+  checks (later opens skip them on finding a fresh file's schema digest), so a
+  rejected chain leaves the version before its last step. The browser hands that back to the older build only when it is
   the version the file moved at, that is, when no earlier step committed. Bumping
   `STORAGE_SCHEMA_VERSION` without a step fails to compile; clearing `STEPS`
   declares that older files reset. Freeze a step's SQL when registering it:

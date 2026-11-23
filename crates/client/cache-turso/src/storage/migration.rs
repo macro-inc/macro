@@ -5,11 +5,12 @@
 //! transaction that also advances `meta.storage_schema_version`. A process
 //! stopped during an upgrade therefore leaves the last committed step behind,
 //! and the next open resumes from there. The last step's transaction also runs
-//! the frozen-schema checks every reopen runs, so an upgraded file must have
-//! exactly the tables and indexes a fresh file has before the current version
-//! is committed: a chain that would produce anything else rolls back and leaves
-//! the file at the version before its last step, which the browser can still
-//! hand back to the build that wrote it.
+//! the frozen-schema checks, so an upgraded file must have exactly the tables
+//! and indexes a fresh file has before the current version is committed: a
+//! chain that would produce anything else rolls back and leaves the file at the
+//! version before its last step, which the browser can still hand back to the
+//! build that wrote it. Later opens then find a fresh file's schema digest and
+//! skip those checks.
 //!
 //! A version with no complete chain of steps, a newer version, and a failing
 //! step are all classified for physical reset, as every version change was
