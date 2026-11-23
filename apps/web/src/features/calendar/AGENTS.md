@@ -122,10 +122,12 @@ host lives in `../block-calendar/`.
   its temporary year/date state in `primitives/create-month-picker.ts`; navigation
   uses the workspace navigation context. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`; `SnapPager` owns native horizontal scrolling on phone
-  and desktop. Re-date only recycled pages after settling, never gate swipes on the
-  render queue, share active vertical scroll with all buffers, and lock horizontal
-  paging during FullCalendar drag/resize. Explicit date selections prepare only the
-  hidden destination before sliding, then update the date anchor at settlement.
+  and desktop. Disable snapping during native momentum; align smoothly after
+  `scrollend`, then recycle pages and resume queued FullCalendar work. Slow drags
+  require half a page; clear flicks can commit sooner. Retain native scrolling
+  on old engines with a 350ms quiet fallback. Share active vertical scroll with all
+  buffers, and lock horizontal paging during FullCalendar drag/resize.
+  Prepare only the hidden destination for an explicit date, then update the date anchor at settlement.
   Accumulate rapid period commands in SnapPager and prepare only the quiet final
   range; headers follow the requested date immediately. Calendar history captures
   the visible date plus grid scroll or Agenda window/day offset; restore that
@@ -141,11 +143,14 @@ host lives in `../block-calendar/`.
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Paint dark-only composer edges with a `border-secondary` inset outline on the
   actual outer host, above its child fills; preserve light frames and avoid glass rim dependency.
-- Use `border-tertiary` for live and loading grid boundaries and `divider` for
-  half-hour lines; never derive grid lines from surface colors or local opacity mixes.
+- Use `border-tertiary` for live/loading grid boundaries; remove half-hour and
+  Month inner sublines while retaining hourly and date-cell dividers.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range. Assign day columns explicitly so spans cannot move the cells. Compact each day's all-day/multi-day spans before its timed titles; join adjacent same-row span segments and never reserve overflow for an empty lane. Derive complete 14px rows on a 16px pitch from measured height, including header and border clearance; reserve the last slot for the full hidden count. Tapping the count or day opens the existing `MobileDrawer` day sheet. Keep the old PhoneMonth unwired and desktop overflow unchanged. Let day taps and sheet dismissal retire pending focus requests, announce every event title, and preserve bounded sources and focus navigation.
+  Center highlighted date numbers, mute only neighboring-month dates, keep
+  neighboring-month events opaque, and place chips within 1px of cell edges.
+  Use `button-accent-ink` at full opacity for focused event times.
   The phone month island uses `../calendar-view/views/mobile/month-drawer.tsx` with
   shared month/year wheels over `primitives/create-month-wheel-picker.ts`: months
   loop independently, years span 1970–2100, and settling navigates without

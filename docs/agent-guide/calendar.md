@@ -37,15 +37,18 @@ card with an accent time in its gutter. Only the timed card has the shared 32px 
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
 Calendar grid boundaries use the theme's quieter tertiary border in both loading
-and live grids; half-hour lines use its still-quieter divider token. This covers
-day columns, month cells, and retained all-day boundaries without restoring
-intentionally hidden chrome. The hover-time guide remains a distinct secondary border.
+and live grids. Day/Week have hourly boundaries only, without half-hour sublines;
+Month has only date-cell boundaries, without internal subdivisions. The hover-time
+guide remains a distinct secondary border.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
 on phone and desktop. A single unhurried arrow animates through native scrolling.
 Rapid arrows accumulate without dropping presses and jump to the latest target;
-only the final quiet target prepares data. Native snapping permits multi-page
-flings. Far date jumps wait for a running gesture to settle; reduced motion skips
-smooth scrolling. Buffer rendering never refuses a second swipe. Each page keeps its own
+only the final quiet target prepares data. Dragging disables CSS snap until native
+`scrollend`; slow drags commit beyond half a page, while clear flicks can commit
+sooner. Native smooth alignment finishes before page rotation or queued data/render
+work. Trackpads follow the same path; engines without `scrollend` use a 350ms quiet
+fallback. Reduced motion skips alignment animation. Far date jumps wait for a
+running gesture to settle. Buffer rendering never refuses a second swipe. Each page keeps its own
 vertical scroller, synchronized to the active one. Event drag/resize temporarily
 locks horizontal paging. The external hour gutter does not move horizontally.
 Desktop and phone all-day rows start at one 24px lane, grow for overlapping events,
@@ -53,8 +56,11 @@ and keep a 48px ceiling with FullCalendar's more link for overflow; no extra emp
 creation lane is reserved. The drawer's Agenda, Day, 3 days, Week, and Month rows
 are text-only and retain their selected state.
 Phone Month uses a Sunday-start five/six-week grid. Weekday letters sit above
-its card; today has an accent circle, other-month dates are tertiary, and their
-events are dimmed. All-day and multi-day segments join across adjacent cells
+its card; today has an accent circle, other-month date numbers are tertiary, and
+all event titles and bars keep their full strength. Highlighted date numbers are
+centered in both axes. Event chips sit within 1px of the date-cell edges.
+Focused event time uses `button-accent-ink` at full opacity over the accent fill.
+All-day and multi-day segments join across adjacent cells
 while they share a row; continuing events move up when an earlier span ends.
 Timed events stack vertically beneath them in calendar color, one truncated
 line per event. Complete rows fit the measured cell height; when events overflow,
