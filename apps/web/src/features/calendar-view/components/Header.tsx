@@ -4,7 +4,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
-import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
+import { MonthYearPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { CalendarViewTabs } from '@app/features/calendar/components/view-tabs/CalendarViewTabs';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
@@ -13,7 +13,7 @@ import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-ho
 import { useCalendarSearchUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import { beginInteraction } from '@app/observability/flow';
 import { calendarSearchRoute } from '@app/routes/routes';
@@ -30,6 +30,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
@@ -150,13 +151,13 @@ export function Header(props: {
   onCleanup(clearSearchExpansionTimer);
   const [monthPicker, setMonthPicker] = createStore({
     open: false,
-    focusDateEntry: false,
+    focusGoToDate: false,
   });
-  const goToDate = () => setMonthPicker({ open: true, focusDateEntry: true });
+  const goToDate = () => setMonthPicker({ open: true, focusGoToDate: true });
   const selectDate = (date: Date) => {
     const interaction = beginInteraction('calendar.date.jump');
     try {
-      setMonthPicker({ open: false, focusDateEntry: false });
+      setMonthPicker({ open: false, focusGoToDate: false });
       navigation.navigateToDate(date);
     } finally {
       interaction.end();
@@ -293,7 +294,7 @@ export function Header(props: {
           />
           <span
             aria-hidden="true"
-            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-[10px] font-bold leading-none"
+            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-xxs font-bold leading-none"
           >
             {today().getDate()}
           </span>
@@ -422,15 +423,26 @@ export function Header(props: {
           </div>
           <div class="flex min-h-9 min-w-0 basis-full items-center gap-2">
             <h1 class="-ml-1 min-w-0 flex-1">
-              <MonthPickerPopover
-                date={currentDate()}
+              <MonthYearPickerPopover
+                value={currentDate()}
                 open={monthPicker.open}
-                focusDateEntry={monthPicker.focusDateEntry}
+                focusGoToDate={monthPicker.focusGoToDate}
                 onOpenChange={(open) =>
-                  setMonthPicker({ open, focusDateEntry: false })
+                  setMonthPicker({ open, focusGoToDate: false })
                 }
-                onSelect={selectDate}
-              />
+                onChange={selectDate}
+                onGoToDate={selectDate}
+                showGoToDateHotkey
+                triggerSize="md"
+              >
+                <span class="min-w-0 truncate text-xl font-semibold text-ink">
+                  {new Intl.DateTimeFormat(formatLocale(), {
+                    month: 'long',
+                    year: 'numeric',
+                  }).format(currentDate())}
+                </span>
+                <CaretDownIcon class="size-3 text-ink-muted" />
+              </MonthYearPickerPopover>
             </h1>
             <div
               class="flex shrink-0 items-center gap-2"

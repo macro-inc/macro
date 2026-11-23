@@ -42,7 +42,7 @@ export function CalendarMainSkeleton(
           />
         </div>
         <div class="flex min-h-9 min-w-0 basis-full items-center gap-2">
-          <h1 class="min-w-0 flex-1 truncate pl-1 text-[22px] font-semibold leading-7">
+          <h1 class="min-w-0 flex-1 truncate pl-1 text-xl font-semibold">
             {props.title}
           </h1>
           <Show when={!shell.breakpoints.narrow?.()}>

@@ -6,6 +6,7 @@ import {
 import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
 import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
+import { MonthYearPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
 import { useCalendarNavigation } from '@app/features/calendar/context/calendar-navigation-context';
@@ -24,7 +25,7 @@ import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/rou
 import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { TutorialSidebarItem } from '@app/features/video-tutorials';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -32,7 +33,13 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { createCalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
 import { Key } from '@solid-primitives/keyed';
-import { Button, Checkbox, cn, Calendar as MiniCalendar } from '@ui';
+import {
+  Button,
+  type CalendarMonthSelectorProps,
+  Checkbox,
+  cn,
+  Calendar as MiniCalendar,
+} from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { addDays, format, getDaysInMonth, startOfWeek } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
@@ -48,6 +55,29 @@ import {
 import { CalendarCreateMenu } from './CalendarCreateMenu';
 import { ConnectCalendarsPromotion } from './ConnectCalendarsPromotion';
 
+function MiniMonthControl(props: CalendarMonthSelectorProps) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <MonthYearPickerPopover
+      value={props.month}
+      open={open()}
+      onOpenChange={setOpen}
+      triggerSize="sm"
+      onChange={props.onChange}
+      onGoToDate={(date) =>
+        props.onChange(new Date(date.getFullYear(), date.getMonth(), 1))
+      }
+    >
+      <span class="min-w-0 truncate">
+        {new Intl.DateTimeFormat(formatLocale(), {
+          month: 'long',
+          year: 'numeric',
+        }).format(props.month)}
+      </span>
+      <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
+    </MonthYearPickerPopover>
+  );
+}
 export function CalendarMiniCalendar() {
   const calendarView = useCalendarView();
   const navigation = useCalendarNavigation();
@@ -76,6 +106,7 @@ export function CalendarMiniCalendar() {
   // Keep focus local and clamp month-end dates so shorter months stay tabbable.
   return (
     <MiniCalendar
+      monthControl={MiniMonthControl}
       required
       fixedWeeks
       startOfWeek={calendarView.displaySettings.weekStartsOn}

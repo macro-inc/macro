@@ -8,6 +8,7 @@ import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import {
+  type Component,
   createMemo,
   createSignal,
   onCleanup,
@@ -41,6 +42,8 @@ export type CalendarProps = Omit<
   highlightedRange?: CalendarHighlightedRange;
   /** Event colors keyed by local YYYY-MM-DD day; omit for an unmarked calendar. */
   markersByDay?: ReadonlyMap<string, readonly string[]>;
+  /** Optional month header control; the default remains the shared month menu. */
+  monthControl?: Component<CalendarMonthSelectorProps>;
 };
 
 /**
@@ -53,6 +56,7 @@ export function Calendar(props: CalendarProps) {
     'class',
     'highlightedRange',
     'markersByDay',
+    'monthControl',
   ]);
   const initialFallbackDate = calendarProps.value ?? new Date();
 
@@ -67,10 +71,25 @@ export function Calendar(props: CalendarProps) {
         <div class={cn('w-full min-w-0 text-ink', local.class)}>
           <div class="flex items-center gap-2">
             <CorvuCalendar.Label class="min-w-0 flex-1">
-              <CalendarMonthDropdown
-                month={calendar.month}
-                onChange={calendar.setMonth}
-              />
+              <Show
+                when={local.monthControl}
+                fallback={
+                  <CalendarMonthDropdown
+                    month={calendar.month}
+                    onChange={calendar.setMonth}
+                  />
+                }
+              >
+                {(Control) => {
+                  const MonthControl = Control();
+                  return (
+                    <MonthControl
+                      month={calendar.month}
+                      onChange={calendar.setMonth}
+                    />
+                  );
+                }}
+              </Show>
             </CorvuCalendar.Label>
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               <CorvuCalendar.Nav

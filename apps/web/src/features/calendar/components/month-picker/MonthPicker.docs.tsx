@@ -1,36 +1,49 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { createSignal } from 'solid-js';
-import { MonthPickerPopover } from './MonthPickerPopover';
+import { MonthYearPicker } from './MonthPicker';
+import { MonthYearPickerPopover } from './MonthPickerPopover';
 
-// #region demo:months
 function MonthPickerDemo() {
   const [date, setDate] = createSignal(new Date(2026, 10, 13));
   const [open, setOpen] = createSignal(false);
   return (
-    <MonthPickerPopover
-      date={date()}
+    <MonthYearPickerPopover
+      value={date()}
       open={open()}
       onOpenChange={setOpen}
-      onSelect={(date) => {
-        setDate(date);
-        setOpen(false);
-      }}
-    />
+      triggerSize="md"
+      onChange={setDate}
+      onGoToDate={setDate}
+    >
+      Choose month
+    </MonthYearPickerPopover>
   );
 }
-// #endregion
-
+function InlineDemo() {
+  const [date, setDate] = createSignal(new Date(2026, 10, 13));
+  return (
+    <div class="w-74 p-3">
+      <MonthYearPicker
+        value={date()}
+        initialFocus="none"
+        onChange={setDate}
+        onGoToDate={setDate}
+      >
+        <MonthYearPicker.Header />
+        <MonthYearPicker.Grid />
+        <MonthYearPicker.Footer />
+      </MonthYearPicker>
+    </div>
+  );
+}
 export default defineDoc({
-  name: 'Month picker',
+  name: 'Month and year picker',
   category: 'Inputs',
   description:
-    'Browse a year without navigating, then pick a month or enter a local date.',
-  propTypes: ['MonthPickerProps', 'MonthPickerPopoverProps'],
+    'Browse months and years without navigating; pick a month or search for a date.',
+  propTypes: ['MonthYearPickerProps', 'MonthYearPickerPopoverProps'],
   demos: [
-    {
-      id: 'months',
-      title: 'Month and year navigation',
-      render: MonthPickerDemo,
-    },
+    { id: 'months', title: 'Popover', render: MonthPickerDemo },
+    { id: 'inline', title: 'Inline', render: InlineDemo },
   ],
 });

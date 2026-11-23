@@ -1,90 +1,124 @@
 import { formatLocale, t } from '@app/lib/i18n';
 import { Button, cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For } from 'solid-js';
 import { useMonthPicker } from './month-picker-context';
 
-export interface MonthPickerGridProps {
-  selectedDate: Date;
-  columns?: 3 | 4;
-}
-
-export function MonthPickerGrid(props: MonthPickerGridProps) {
+export function MonthPickerGrid() {
   const picker = useMonthPicker();
-  const months = Array.from({ length: 12 }, (_, month) => month);
-  const buttons: HTMLButtonElement[] = [];
-  const columns = () => props.columns ?? 4;
-  const isSelected = (month: number) =>
-    props.selectedDate.getFullYear() === picker.state.year &&
-    props.selectedDate.getMonth() === month;
-  const monthLabel = (month: number, style: 'short' | 'long') =>
+  const years = () => picker.state.mode === 'years';
+  const cells = () =>
+    Array.from({ length: 12 }, (_, i) =>
+      years() ? picker.state.yearPageStart + i : i
+    );
+  const selected = (value: number) =>
+    years()
+      ? value === picker.state.year
+      : picker.props.value.getFullYear() === picker.state.year &&
+        picker.props.value.getMonth() === value;
+  const current = (value: number) =>
+    years()
+      ? value === picker.today.getFullYear()
+      : picker.state.year === picker.today.getFullYear() &&
+        value === picker.today.getMonth();
+  const focused = (value: number) =>
+    value === (years() ? picker.state.focusedYear : picker.state.focusedMonth);
+  const label = (month: number, style: 'short' | 'long') =>
     new Intl.DateTimeFormat(formatLocale(), { month: style }).format(
       new Date(2000, month, 1)
     );
-
-  const move = (event: KeyboardEvent) => {
-    let offset: number;
+  const keyDown = (event: KeyboardEvent) => {
+    let offset: number | undefined;
     switch (event.key) {
-      case 'ArrowRight':
-        offset = 1;
-        break;
       case 'ArrowLeft':
         offset = -1;
         break;
-      case 'ArrowDown':
-        offset = columns();
+      case 'ArrowRight':
+        offset = 1;
         break;
       case 'ArrowUp':
-        offset = -columns();
+        offset = -4;
+        break;
+      case 'ArrowDown':
+        offset = 4;
+        break;
+      case 'Home':
+        offset = years()
+          ? picker.state.yearPageStart - picker.state.focusedYear
+          : -picker.state.focusedMonth;
+        break;
+      case 'End':
+        offset = years()
+          ? picker.state.yearPageStart + 11 - picker.state.focusedYear
+          : 11 - picker.state.focusedMonth;
+        break;
+      case 'PageUp':
+      case 'PageDown': {
+        const direction = event.key === 'PageUp' ? -1 : 1;
+        if (years()) picker.pageYears(direction);
+        else picker.changeYear(direction * (event.shiftKey ? 10 : 1));
+        break;
+      }
+      case 't':
+      case 'T':
+        picker.goToToday();
         break;
       default:
         return;
     }
     event.preventDefault();
-    buttons[picker.moveFocus(offset)]?.focus();
+    event.stopPropagation();
+    if (offset !== undefined) {
+      if (years()) picker.moveYearFocus(offset);
+      else picker.moveFocus(offset);
+    }
+    picker.focusGrid();
   };
-
   return (
     <div
+      id={picker.gridId}
+      data-month-picker-grid
       role="group"
-      aria-label={t('calendar.chooseMonth')}
-      class={cn('grid gap-2', columns() === 4 ? 'grid-cols-4' : 'grid-cols-3')}
-      onKeyDown={move}
+      aria-label={
+        years() ? t('calendar.chooseYear') : t('calendar.chooseMonth')
+      }
+      class="grid grid-cols-4 gap-1"
+      onKeyDown={keyDown}
     >
-      <For each={months}>
-        {(month) => (
-          <div
+      <For each={cells()}>
+        {(value) => (
+          <Button
+            variant="ghost"
+            appearance="bare"
+            size="lg"
             class={cn(
-              'rounded-lg',
-              isSelected(month)
-                ? 'bg-accent/20 text-accent'
-                : 'text-ink hover:bg-hover'
+              'h-9 rounded-lg text-sm font-normal hover:bg-hover focus-visible:bg-hover',
+              selected(value) && 'bg-selected text-accent font-medium',
+              !selected(value) && current(value) && 'text-accent'
             )}
+            aria-label={
+              years()
+                ? String(value)
+                : `${label(value, 'long')} ${picker.state.year}`
+            }
+            aria-current={
+              current(value) && !selected(value) ? 'date' : undefined
+            }
+            aria-pressed={selected(value)}
+            tabindex={focused(value) ? 0 : -1}
+            onFocus={() =>
+              years()
+                ? picker.setFocusedYear(value)
+                : picker.setFocusedMonth(value)
+            }
+            onClick={() => {
+              if (years()) {
+                picker.chooseYear(value);
+                picker.focusGrid();
+              } else picker.chooseMonth(value);
+            }}
           >
-            <Button
-              ref={(element) => {
-                buttons[month] = element;
-              }}
-              variant="ghost"
-              appearance="bare"
-              size="lg"
-              fullWidth
-              aria-pressed={isSelected(month)}
-              aria-label={`${monthLabel(month, 'long')} ${picker.state.year}`}
-              tabIndex={picker.state.focusedMonth === month ? 0 : -1}
-              onFocus={() => picker.setFocusedMonth(month)}
-              onClick={() => picker.chooseMonth(month)}
-            >
-              <span class="relative min-w-0 text-sm">
-                <span class="block truncate">{monthLabel(month, 'short')}</span>
-                <Show when={isSelected(month)}>
-                  <span
-                    aria-hidden="true"
-                    class="absolute top-full left-1/2 mt-0.5 size-1 -translate-x-1/2 rounded-full bg-current"
-                  />
-                </Show>
-              </span>
-            </Button>
-          </div>
+            {years() ? value : label(value, 'short')}
+          </Button>
         )}
       </For>
     </div>

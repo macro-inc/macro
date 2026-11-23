@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Header } from './Header';
@@ -12,6 +18,7 @@ const state = vi.hoisted(() => ({
   previous: vi.fn(),
   next: vi.fn(),
   today: vi.fn(),
+  navigateToDate: vi.fn(),
   changeView: vi.fn(),
   width: (): number => 1200,
   navigate: vi.fn(() => Promise.resolve()),
@@ -33,6 +40,8 @@ vi.mock('@ui', async () => ({
     .ButtonGroup,
   Layer: (await import('@app/components/ui/components/Layer')).Layer,
   Tabs: (await import('@app/components/ui/components/Tabs')).Tabs,
+  Input: (await import('@app/components/ui/components/Input')).Input,
+  Hotkey: (await import('@app/components/ui/components/Hotkey')).Hotkey,
   cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
 vi.mock('@app/components/view-shell', () => ({
@@ -72,6 +81,7 @@ vi.mock('@app/features/calendar/context/calendar-navigation-context', () => ({
     navigateToToday: state.today,
     changeView: state.changeView,
     periodView: () => 'timeGridWeek',
+    navigateToDate: state.navigateToDate,
   }),
 }));
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
@@ -91,19 +101,6 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('../views/mobile/month-drawer', () => ({
   MonthDrawer: () => <button>Choose month</button>,
 }));
-vi.mock(
-  '@app/features/calendar/components/month-picker/MonthPickerPopover',
-  () => ({
-    MonthPickerPopover: (props: { date: Date }) => (
-      <span>
-        {new Intl.DateTimeFormat('en-US', {
-          month: 'long',
-          year: 'numeric',
-        }).format(props.date)}
-      </span>
-    ),
-  })
-);
 vi.mock('@app/features/calendar/components/PeriodSelector', () => ({
   PeriodSelector: () => <button>Choose calendar view</button>,
 }));
@@ -149,9 +146,33 @@ afterEach(() => {
   state.width = () => 1200;
   vi.unstubAllGlobals();
   vi.clearAllMocks();
+  document.documentElement.removeAttribute('data-touch-device');
 });
 
 describe('calendar headers', () => {
+  it.each([320, 640, 1280])(
+    'renders the real month/year trigger at desktop width %i',
+    async (width) => {
+      vi.stubGlobal('scrollTo', vi.fn());
+      state.width = () => width;
+      document.documentElement.setAttribute('data-touch-device', 'false');
+      render(() => <Header presentation="workspace" />);
+      const heading = screen.getByRole('heading', { name: 'October 2026' });
+      const trigger = screen.getByRole('button', { name: 'Choose month' });
+      expect(heading.contains(trigger)).toBe(true);
+      expect(trigger.textContent).toContain('October 2026');
+      fireEvent.click(trigger);
+      await waitFor(() =>
+        expect(
+          screen
+            .getByRole('button', { name: 'October 2026' })
+            .getAttribute('aria-pressed')
+        ).toBe('true')
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'March 2026' }));
+      expect(state.navigateToDate).toHaveBeenCalledWith(new Date(2026, 2, 1));
+    }
+  );
   it.each(['workspace', 'preview'] as const)(
     'keeps date navigation and creation in the shared desktop %s header',
     (presentation) => {

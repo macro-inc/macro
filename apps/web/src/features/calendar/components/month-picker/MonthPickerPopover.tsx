@@ -1,31 +1,22 @@
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
-import { MonthPicker } from './MonthPicker';
-import { MonthPickerDateEntry } from './MonthPickerDateEntry';
-import { MonthPickerGrid } from './MonthPickerGrid';
-import { MonthPickerHeader } from './MonthPickerHeader';
+import { type JSX, Show } from 'solid-js';
+import { MonthYearPicker, type MonthYearPickerProps } from './MonthPicker';
 
-export interface MonthPickerPopoverProps {
-  date: Date;
+export interface MonthYearPickerPopoverProps
+  extends Omit<MonthYearPickerProps, 'children' | 'onCancel' | 'initialFocus'> {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelect: (date: Date) => void;
-  focusDateEntry?: boolean;
+  focusGoToDate?: boolean;
+  triggerSize: 'md' | 'sm';
+  children: JSX.Element;
 }
 
-/** Desktop placement of the shared month/year picker parts. */
-export function MonthPickerPopover(props: MonthPickerPopoverProps) {
-  let content: HTMLDivElement | undefined;
-  const title = () =>
-    new Intl.DateTimeFormat(formatLocale(), {
-      month: 'long',
-      year: 'numeric',
-    }).format(props.date);
-
+/** The same picker parts work here or directly in an inline host. */
+export function MonthYearPickerPopover(props: MonthYearPickerPopoverProps) {
+  const close = () => props.onOpenChange(false);
   return (
     <Popover
       open={props.open}
@@ -34,39 +25,46 @@ export function MonthPickerPopover(props: MonthPickerPopoverProps) {
       gutter={8}
       flip
       slide
+      modal
     >
       <Popover.Trigger
         as={Button}
         variant="ghost"
-        size="md"
-        class="max-w-full min-w-0 justify-start"
+        size={props.triggerSize}
+        class="max-w-full min-w-0 justify-start aria-expanded:bg-control"
         aria-label={t('calendar.chooseMonth')}
       >
-        <span class="min-w-0 truncate text-[22px] font-semibold leading-7 text-ink">
-          {title()}
-        </span>
-        <CaretDownIcon class="size-3 text-ink-muted" />
+        {props.children}
       </Popover.Trigger>
-      {/* The focus scope must mount with real content, not a closed portal. */}
       <Show when={props.open}>
         <ScopedPortal scope="local">
           <Popover.Content
-            ref={content}
-            class="menu-surface z-action-menu w-[304px] max-w-[calc(100vw-1rem)] p-3"
-            onOpenAutoFocus={(event) => {
-              if (!props.focusDateEntry) return;
-              event.preventDefault();
-              content?.querySelector<HTMLInputElement>('input')?.focus();
-            }}
+            class="menu-surface z-action-menu w-74 max-w-[calc(100vw-1rem)] p-3"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+            onEscapeKeyDown={(event) => event.preventDefault()}
           >
             <Popover.Title class="sr-only">
               {t('calendar.chooseMonth')}
             </Popover.Title>
-            <MonthPicker date={props.date} onSelect={props.onSelect}>
-              <MonthPickerHeader />
-              <MonthPickerGrid selectedDate={props.date} />
-              <MonthPickerDateEntry />
-            </MonthPicker>
+            <MonthYearPicker
+              value={props.value}
+              today={props.today}
+              initialFocus={props.focusGoToDate ? 'goToDate' : 'month'}
+              showGoToDateHotkey={props.showGoToDateHotkey}
+              onCancel={close}
+              onChange={(date) => {
+                close();
+                props.onChange(date);
+              }}
+              onGoToDate={(date) => {
+                close();
+                props.onGoToDate?.(date);
+              }}
+            >
+              <MonthYearPicker.Header />
+              <MonthYearPicker.Grid />
+              <MonthYearPicker.Footer />
+            </MonthYearPicker>
           </Popover.Content>
         </ScopedPortal>
       </Show>

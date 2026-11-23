@@ -33,7 +33,7 @@ export function CalendarTable(props: {
             {(weekday) => (
               <CorvuCalendar.HeadCell
                 abbr={longWeekday().format(weekday())}
-                class="h-7 text-center text-[10px] font-medium text-ink-extra-muted"
+                class="h-7 text-center text-xxs font-medium text-ink-extra-muted"
               >
                 {narrowWeekday().format(weekday())}
               </CorvuCalendar.HeadCell>
@@ -48,7 +48,7 @@ export function CalendarTable(props: {
               <Index each={week()}>
                 {(day) => (
                   <CorvuCalendar.Cell
-                    class="p-0 text-center data-highlighted-range:bg-accent/10 data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
+                    class="p-0 text-center data-highlighted-range:bg-selected data-highlighted-range-start:rounded-l-md data-highlighted-range-end:rounded-r-md"
                     data-highlighted-range={
                       isInRange(day(), props.highlightedRange) ? '' : undefined
                     }

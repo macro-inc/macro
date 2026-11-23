@@ -103,7 +103,7 @@ export function useCalendarHotkeys(handlers: CalendarHotkeyHandlers) {
     group.add(
       registerHotkey({
         scopeId: handlers.scopeId,
-        hotkey: 'g',
+        hotkey: 'y',
         hotkeyToken: TOKENS.calendar.goToDate,
         description: () => t('calendar.goToDate'),
         keyDownHandler: () => {

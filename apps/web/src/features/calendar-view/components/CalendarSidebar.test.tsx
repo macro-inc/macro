@@ -148,6 +148,7 @@ const toggle = () =>
 const scrollIntoView = vi.fn();
 beforeEach(() => {
   Element.prototype.scrollIntoView = scrollIntoView;
+  vi.stubGlobal('scrollTo', vi.fn());
 });
 
 afterEach(() => {
@@ -157,6 +158,7 @@ afterEach(() => {
   setOverlayVisible(false);
   vi.useRealTimers();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe('CalendarMiniCalendar', () => {
@@ -178,6 +180,28 @@ describe('CalendarMiniCalendar', () => {
       endDate: '2027-01-11',
     });
     expect(gotoDate).not.toHaveBeenCalled();
+  });
+  it('changes only the mini when its month picker or Go to date submits', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 10, 13));
+    const user = userEvent.setup();
+    render(() => <CalendarMiniCalendar />);
+    await user.click(screen.getByRole('button', { name: 'Choose month' }));
+    await user.click(screen.getByRole('button', { name: 'March 2026' }));
+    expect(
+      screen.getByRole('button', { name: 'Choose month' }).textContent
+    ).toContain('March 2026');
+    expect(gotoDate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Choose month' }));
+    await user.type(
+      screen.getByRole('textbox', { name: 'Go to date' }),
+      'June 11 2031{Enter}'
+    );
+    expect(
+      screen.getByRole('button', { name: 'Choose month' }).textContent
+    ).toContain('June 2031');
+    expect(gotoDate).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Go to date' })).toBeNull();
   });
   it.each([
     {
