@@ -537,6 +537,7 @@ where
         input: SetEntityPropertyInput,
     ) -> async_graphql::Result<GraphqlProperty> {
         let writer = ctx.data::<T>()?;
+        let task_id = Uuid::parse_str(&input.entity_id).ok();
         let property_definition_id =
             parse_id(input.property_definition_id, "propertyDefinitionId")?;
         let value = input
@@ -552,7 +553,7 @@ where
                 value,
             )
             .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
 
         Ok(GraphqlProperty::new(property))
     }
@@ -608,7 +609,7 @@ where
         let mutation = writer
             .set_task_property(task_id, definition_id, value)
             .await
-            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
+            .map_err(|error| crate::task_dependencies::task_property_error(error, Some(task_id)))?;
         ids.extend(mutation.affected_task_ids);
         let property = mutation.property;
         let effects =
@@ -639,6 +640,7 @@ where
         input: UpdateEntityPropertyOptionsInput,
     ) -> async_graphql::Result<Vec<GraphqlProperty>> {
         let writer = ctx.data::<T>()?;
+        let task_id = Uuid::parse_str(&input.entity_id).ok();
         let updates = input
             .properties
             .into_iter()
@@ -652,7 +654,7 @@ where
                 updates,
             )
             .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+            .map_err(|error| crate::task_dependencies::task_property_error(error, task_id))?;
 
         Ok(properties.into_iter().map(GraphqlProperty::new).collect())
     }

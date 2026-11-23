@@ -15,6 +15,7 @@ for their fixed property catalogs.
 - `src/domain/port.rs`: the repository port.
 - `src/outbound/pgpool.rs`: the Postgres adapter.
 - `src/domain/model/constants/system_property_key.rs`: the canonical system catalog, including task-only Depends On and its Blocking inverse.
+- Propagate completion-policy rejection as `SystemPropertyError::TaskCompletionBlocked`; retain unrelated SQL failures in database reports.
 
 ## Scope
 

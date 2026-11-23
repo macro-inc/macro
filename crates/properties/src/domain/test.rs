@@ -4882,10 +4882,8 @@ async fn blocked_completion_preserves_typed_storage_rejection_without_publishing
     repo.expect_upsert_entity_property()
         .return_once(|_, _, _, _| {
             Box::pin(async {
-                Err(
-                    anyhow::Error::new(crate::domain::error::TaskCompletionBlocked)
-                        .context("atomic completion admission failed"),
-                )
+                Err(anyhow::Error::new(PropertiesErr::TaskCompletionBlocked)
+                    .context("atomic completion admission failed"))
             })
         });
     let broker = RecordingEventBroker::default();

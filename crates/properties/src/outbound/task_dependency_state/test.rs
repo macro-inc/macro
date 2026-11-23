@@ -97,7 +97,12 @@ async fn storage_guard_covers_direct_and_bulk_status_writes_and_defaults_off(
     );
     let value =
         serde_json::json!({"type":"SelectOption", "value":[StatusOption::Completed.uuid()]});
-    assert!(sqlx::query!("UPDATE entity_properties SET values = $1 WHERE entity_id = ANY($2) AND property_definition_id = $3", value, &[a.to_string()], SystemPropertyKey::STATUS_UUID).execute(&pool).await.is_err());
+    let error = sqlx::query!("UPDATE entity_properties SET values = $1 WHERE entity_id = ANY($2) AND property_definition_id = $3", value, &[a.to_string()], SystemPropertyKey::STATUS_UUID)
+        .execute(&pool).await.unwrap_err();
+    assert_eq!(
+        error.as_database_error().unwrap().constraint(),
+        Some("task_completion_blocked")
+    );
     let repository = PgTaskDependencyStateRepository::new(pool.clone());
     assert_eq!(repository.load(&[a]).await?[0].open_blocker_ids, vec![b]);
     set_status(&pool, b, StatusOption::Completed).await?;
@@ -129,3 +134,5 @@ async fn completion_admission_tries_only_its_task_endpoint(pool: PgPool) -> anyh
     set_status(&pool, a, StatusOption::Completed).await?;
     Ok(())
 }
+
+mod completion;

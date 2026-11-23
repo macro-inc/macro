@@ -8,10 +8,6 @@ use thiserror::Error;
 #[error("Stored property value is invalid for this operation")]
 pub(crate) struct InvalidStoredPropertyValue;
 
-/// Atomic storage admission rejected a blocked task's completion.
-#[derive(Debug, Error)]
-#[error("Task is blocked")]
-pub(crate) struct TaskCompletionBlocked;
 /// Domain error type for property operations.
 #[derive(Debug, Error)]
 pub enum PropertiesErr {

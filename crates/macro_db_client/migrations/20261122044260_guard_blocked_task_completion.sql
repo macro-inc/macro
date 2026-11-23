@@ -31,7 +31,8 @@ BEGIN
     IF NEW.entity_id !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
         RETURN NEW;
     END IF;
-    IF TG_OP = 'UPDATE' AND NEW.values IS NOT DISTINCT FROM OLD.values THEN
+    IF TG_OP = 'UPDATE' AND COALESCE(OLD.values->'value' @>
+        '["00000001-0000-0000-0002-000000000004"]'::jsonb, FALSE) THEN
         RETURN NEW;
     END IF;
 
@@ -44,6 +45,19 @@ BEGIN
         RETURN NEW;
     END IF;
 
+    IF TG_OP = 'INSERT' THEN
+        -- BEFORE INSERT also runs before UPSERT conflict resolution. Lock any
+        -- conflicting assignment so deletion cannot turn the bypass into a new
+        -- completion; the conflict UPDATE checks its actual OLD and NEW values.
+        PERFORM 1 FROM entity_properties existing
+        WHERE existing.entity_id = NEW.entity_id
+            AND existing.entity_type = NEW.entity_type
+            AND existing.property_definition_id = NEW.property_definition_id
+        FOR UPDATE;
+        IF FOUND THEN
+            RETURN NEW;
+        END IF;
+    END IF;
     PERFORM lock_task_dependency_endpoints(ARRAY[NEW.entity_id::uuid], TRUE);
     IF EXISTS (SELECT 1 FROM task_open_blockers(ARRAY[NEW.entity_id::uuid])) THEN
         RAISE EXCEPTION USING ERRCODE = '23514',

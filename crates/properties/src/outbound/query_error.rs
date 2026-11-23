@@ -22,25 +22,24 @@ pub enum PropertyQueryError {
     DisplayOrderOverflow(usize),
 }
 
-/// Preserve retryable PostgreSQL contention across the repository boundary.
-pub(super) fn dependency_contention(error: anyhow::Error) -> anyhow::Error {
-    if error.chain().any(|cause| {
+/// Preserve task policy rejection and retryable contention across repository boundaries.
+pub(super) fn task_write_error(error: anyhow::Error) -> anyhow::Error {
+    for cause in error.chain() {
         let sqlx_error = cause.downcast_ref::<sqlx::Error>().or_else(|| {
             match cause.downcast_ref::<PropertyQueryError>() {
                 Some(PropertyQueryError::Sqlx(error)) => Some(error),
                 _ => None,
             }
         });
-        sqlx_error.is_some_and(|error| {
-            error
-                .as_database_error()
-                .and_then(|error| error.code())
-                .as_deref()
-                == Some("40001")
-        })
-    }) {
-        anyhow::Error::new(crate::domain::error::PropertiesErr::DependencyContended)
-    } else {
-        error
+        let Some(database_error) = sqlx_error.and_then(sqlx::Error::as_database_error) else {
+            continue;
+        };
+        if database_error.constraint() == Some("task_completion_blocked") {
+            return anyhow::Error::new(crate::domain::error::PropertiesErr::TaskCompletionBlocked);
+        }
+        if database_error.code().as_deref() == Some("40001") {
+            return anyhow::Error::new(crate::domain::error::PropertiesErr::DependencyContended);
+        }
     }
+    error
 }

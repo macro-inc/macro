@@ -405,14 +405,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         value: Option<PropertyValue>,
     ) -> Result<EntityPropertyMutationSnapshot, Self::Err> {
         entity_property_queries::upsert_entity_property(
-            &self.pool, entity_id, entity_type, property_definition_id, value,
-        ).await.map_err(|error| {
-            if matches!(&error, super::query_error::PropertyQueryError::Sqlx(error)
-                if error.as_database_error().and_then(|error| error.constraint()) == Some("task_completion_blocked")) {
-                return anyhow::Error::new(crate::domain::error::TaskCompletionBlocked);
-            }
-            super::query_error::dependency_contention(anyhow::Error::from(error))
-        })
+            &self.pool,
+            entity_id,
+            entity_type,
+            property_definition_id,
+            value,
+        )
+        .await
+        .map_err(|error| super::query_error::task_write_error(anyhow::Error::from(error)))
     }
 
     #[tracing::instrument(skip(self, references), err)]
@@ -431,7 +431,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             references,
         )
         .await
-        .map_err(super::query_error::dependency_contention)
+        .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self))]
@@ -450,7 +450,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             option_id,
         )
         .await
-        .map_err(super::query_error::dependency_contention)
+        .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self))]
@@ -469,7 +469,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             option_id,
         )
         .await
-        .map_err(super::query_error::dependency_contention)
+        .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self, updates), err)]
@@ -486,7 +486,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             updates,
         )
         .await
-        .map_err(super::query_error::dependency_contention)
+        .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self))]
@@ -534,7 +534,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             desired,
         )
         .await
-        .map_err(super::query_error::dependency_contention)
+        .map_err(super::query_error::task_write_error)
     }
 
     async fn get_entity_properties(
@@ -627,7 +627,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     async fn delete_entity_property(&self, entity_property_id: Uuid) -> Result<(), Self::Err> {
         entity_property_queries::delete_entity_property(&self.pool, entity_property_id)
             .await
-            .map_err(super::query_error::dependency_contention)
+            .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -637,7 +637,7 @@ impl PropertiesRepo for PropertiesPgRepo {
     ) -> Result<Vec<crate::domain::model::EntityPropertyMutationSnapshot>, Self::Err> {
         entity_property_queries::delete_entity_properties(&self.pool, entity_reference)
             .await
-            .map_err(super::query_error::dependency_contention)
+            .map_err(super::query_error::task_write_error)
     }
 
     #[tracing::instrument(skip(self, document_ids), fields(document_count = document_ids.len()), err)]

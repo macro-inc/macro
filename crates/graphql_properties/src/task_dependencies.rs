@@ -360,8 +360,11 @@ pub async fn load_task_dependencies(
         .map(GraphqlTaskDependencyState::new))
 }
 
-/// Attach a stable recovery code and opaque task identifier to completion rejection.
-pub(crate) fn task_property_error(error: rootcause::Report, task_id: Uuid) -> async_graphql::Error {
+/// Attach stable recovery codes and the task identifier when the caller has one.
+pub(crate) fn task_property_error(
+    error: rootcause::Report,
+    task_id: Option<Uuid>,
+) -> async_graphql::Error {
     use async_graphql::ErrorExtensions;
     let message = error.to_string();
     let blocked = error.iter_reports().any(|report| {
@@ -385,7 +388,9 @@ pub(crate) fn task_property_error(error: rootcause::Report, task_id: Uuid) -> as
     if blocked {
         return async_graphql::Error::new(message).extend_with(|_, extensions| {
             extensions.set("code", "TASK_BLOCKED");
-            extensions.set("taskId", task_id.to_string());
+            if let Some(task_id) = task_id {
+                extensions.set("taskId", task_id.to_string());
+            }
         });
     }
     async_graphql::Error::new(message)
@@ -454,7 +459,7 @@ mod contention_test {
         let report =
             rootcause::report!(properties::domain::error::PropertiesErr::DependencyContended)
                 .context("task property write failed");
-        let error = super::task_property_error(report.into(), uuid::Uuid::from_u128(1));
+        let error = super::task_property_error(report.into(), Some(uuid::Uuid::from_u128(1)));
         let extensions = error.extensions.unwrap();
         assert_eq!(
             extensions.get("code"),

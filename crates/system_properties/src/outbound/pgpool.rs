@@ -344,6 +344,11 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
 // error travels inside the report.
 impl From<sqlx::Error> for crate::SystemPropertyError {
     fn from(e: sqlx::Error) -> Self {
+        if e.as_database_error().and_then(|error| error.constraint())
+            == Some("task_completion_blocked")
+        {
+            return Self::TaskCompletionBlocked;
+        }
         Self::Database(rootcause::report!(e).into_dynamic())
     }
 }

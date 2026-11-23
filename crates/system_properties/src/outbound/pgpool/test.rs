@@ -606,3 +606,60 @@ async fn copying_a_task_does_not_copy_dependency_values(
     assert_eq!(value, None);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn task_status_policy_rejection_is_typed_and_retained_completion_succeeds(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let team = uuid::Uuid::now_v7();
+    let user = uuid::Uuid::now_v7();
+    sqlx::query!("INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'owner@example.com', 'owner@example.com', 'cus_placeholder')", user).execute(&pool).await?;
+    sqlx::query!("INSERT INTO \"User\" (id, email, macro_user_id) VALUES ('macro|owner@example.com', 'owner@example.com', $1)", user).execute(&pool).await?;
+    sqlx::query!("INSERT INTO team (id, name, owner_id, prevent_completing_blocked_tasks) VALUES ($1, 'Test team', 'macro|owner@example.com', TRUE)", team).execute(&pool).await?;
+    let a = uuid::Uuid::now_v7();
+    let b = uuid::Uuid::now_v7();
+    for task in [a, b] {
+        sqlx::query!("INSERT INTO \"Document\" (id, name, owner) VALUES ($1, 'Test task', 'macro|owner@example.com')", task.to_string()).execute(&pool).await?;
+        sqlx::query!("INSERT INTO entity (id, entity_type, owner_type, owner_id) VALUES ($1, 'document', 'team', $2)", task, team.to_string()).execute(&pool).await?;
+        for definition in [
+            SystemPropertyKey::DEPENDS_ON_UUID,
+            SystemPropertyKey::BLOCKING_UUID,
+            SystemPropertyKey::STATUS_UUID,
+        ] {
+            sqlx::query!("INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id) VALUES ($1, $2, 'TASK', $3)", uuid::Uuid::now_v7(), task.to_string(), definition).execute(&pool).await?;
+        }
+    }
+    sqlx::query!(
+        "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND property_definition_id = $3",
+        serde_json::json!({"type": "EntityReference", "value": [{"entity_type": "TASK", "entity_id": b.to_string()}]}),
+        a.to_string(), SystemPropertyKey::DEPENDS_ON_UUID,
+    ).execute(&pool).await?;
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let error = repo
+        .update_task_status(&a.to_string(), StatusOption::Completed)
+        .await
+        .unwrap_err();
+    assert!(matches!(error, SystemPropertyError::TaskCompletionBlocked));
+    repo.update_task_status(&b.to_string(), StatusOption::Completed)
+        .await?;
+    repo.update_task_status(&a.to_string(), StatusOption::Completed)
+        .await?;
+    repo.update_task_status(&b.to_string(), StatusOption::InProgress)
+        .await?;
+    repo.update_task_status(&a.to_string(), StatusOption::Completed)
+        .await?;
+    let value = sqlx::query_scalar!(
+        "SELECT values FROM entity_properties WHERE entity_id = $1 AND property_definition_id = $2",
+        a.to_string(),
+        SystemPropertyKey::STATUS_UUID,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        value,
+        Some(
+            serde_json::json!({"type": "SelectOption", "value": [StatusOption::Completed.uuid()]})
+        )
+    );
+    Ok(())
+}

@@ -458,7 +458,11 @@ impl EntityPropertyWriter for RejectingCompletionWriter {
         _property_definition_id: Uuid,
         _value: Option<SetPropertyValue>,
     ) -> Result<EntityPropertyWithDefinition, rootcause::Report> {
-        Err(rootcause::report!("unexpected assignment write"))
+        Err(
+            rootcause::report!(properties::domain::error::PropertiesErr::TaskCompletionBlocked)
+                .context("property write failed")
+                .into(),
+        )
     }
 
     async fn set_task_property(
@@ -484,7 +488,11 @@ impl EntityPropertyWriter for RejectingCompletionWriter {
         _entity_id: String,
         _updates: Vec<EntityPropertyOptionDelta>,
     ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
-        Err(rootcause::report!("unexpected option write"))
+        Err(
+            rootcause::report!(properties::domain::error::PropertiesErr::TaskCompletionBlocked)
+                .context("option write failed")
+                .into(),
+        )
     }
 }
 
@@ -530,5 +538,44 @@ async fn task_completion_rejection_preserves_typed_code_through_wrapped_writer_r
         } else {
             assert!(extensions.is_none());
         }
+    }
+}
+
+#[tokio::test]
+async fn generic_property_writers_preserve_typed_completion_error_extensions() {
+    let schema = Schema::build(
+        QueryRoot,
+        PropertiesMutationRoot::<RejectingCompletionWriter>::new(),
+        EmptySubscription,
+    )
+    .data(RejectingCompletionWriter { blocked: true })
+    .finish();
+    let definition = system_properties::SystemPropertyKey::STATUS_UUID;
+    let completed = system_properties::StatusOption::Completed.uuid();
+    for operation in [
+        format!(
+            r#"setEntityProperty(input: {{
+            entityType: DOCUMENT, entityId: "task",
+            propertyDefinitionId: "{definition}",
+            value: {{ selectOption: "{completed}" }}
+        }}) {{ id }}"#
+        ),
+        format!(
+            r#"updateEntityPropertyOptions(input: {{
+            entityType: DOCUMENT, entityId: "task",
+            properties: [{{ propertyDefinitionId: "{definition}",
+                addOptionIds: ["{completed}"], removeOptionIds: [] }}]
+        }}) {{ id }}"#
+        ),
+    ] {
+        let response = schema.execute(format!("mutation {{ {operation} }}")).await;
+        assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+        assert_eq!(
+            response.errors[0]
+                .extensions
+                .as_ref()
+                .and_then(|extensions| extensions.get("code")),
+            Some(&async_graphql::value!("TASK_BLOCKED")),
+        );
     }
 }

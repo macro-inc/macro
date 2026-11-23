@@ -57,6 +57,7 @@ owner and provider on purpose, so reads never join `email_links`. List rows have
 foreign key: the contacts worker removes them on account deletion.
 
 `task_dependency_edges` is the indexed Depends On / Blocking graph owned by `properties`. Its endpoint assignment foreign keys cascade on cleanup; JSON compatibility triggers preserve deployed property writers. The backfill uses a standalone procedure CALL with 500-assignment commits, and `task_completion_guard` applies the owning team's opt-in completion policy to every Status writer.
+- Guard only transitions into Completed; lock conflicting Status assignments before bypassing UPSERT insertion admission and let the actual UPDATE evaluate OLD and NEW.
 
 ## Boundaries
 

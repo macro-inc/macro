@@ -840,13 +840,7 @@ where
             )
             .instrument(completion_span)
             .await
-            .map_err(|error| {
-                let error = anyhow::Error::from(error);
-                if error.is::<super::error::TaskCompletionBlocked>() {
-                    return PropertiesErr::TaskCompletionBlocked;
-                }
-                PropertiesErr::from(error)
-            })?;
+            .map_err(anyhow::Error::from)?;
 
         self.publish_property_event(Self::entity_property_updated_event(
             &snapshot.property,
