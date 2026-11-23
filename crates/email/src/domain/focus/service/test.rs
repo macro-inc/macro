@@ -33,6 +33,8 @@ struct FakeStore {
     syncing: Arc<Mutex<Vec<FocusInboxOwner>>>,
     /// The users other than its owner each inbox is linked to.
     delegates: Arc<Mutex<HashMap<Uuid, Vec<MacroUserIdStr<'static>>>>>,
+    /// Inboxes whose stale-thread reads fail, as one that times out does.
+    failing_reads: Arc<Mutex<HashSet<Uuid>>>,
     /// The inbox each stale-thread read was given.
     stale_reads: Arc<Mutex<Vec<Uuid>>>,
     mail_reads: Arc<Mutex<usize>>,
@@ -105,6 +107,11 @@ impl FocusStore for FakeStore {
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         self.stale_reads.lock().unwrap().push(link_id);
+        if self.failing_reads.lock().unwrap().contains(&link_id) {
+            return Err(rootcause::report!(
+                "canceling statement due to statement timeout"
+            ));
+        }
         let stale = self
             .stale
             .lock()
@@ -228,6 +235,7 @@ impl FocusNotifier for FakeNotifier {
 struct FakeClassifier {
     answers: Result<Vec<f32>, FocusClassifierError>,
     inputs: Arc<Mutex<Vec<Value>>>,
+    lanes: Arc<Mutex<Vec<ClassifierLane>>>,
 }
 
 impl FakeClassifier {
@@ -235,6 +243,7 @@ impl FakeClassifier {
         Self {
             answers,
             inputs: Arc::default(),
+            lanes: Arc::default(),
         }
     }
 }
@@ -246,9 +255,11 @@ impl FocusClassifier for FakeClassifier {
         _thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         assert_eq!(questions.len(), FOCUS_QUESTIONS.len());
         self.inputs.lock().unwrap().push(input.clone());
+        self.lanes.lock().unwrap().push(lane);
         self.answers.clone()
     }
 
@@ -612,6 +623,27 @@ async fn classifier_failures_store_nothing() {
 }
 
 #[tokio::test]
+async fn new_mail_is_asked_about_live_and_the_sweep_in_the_background() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &enrolled());
+    let arrived = insert(&store, thread(OWNER));
+    service.classify_thread(arrived).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live]
+    );
+
+    let older = insert(&store, thread(OWNER));
+    set_stale(&store, &[older], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live, ClassifierLane::Background]
+    );
+}
+
+#[tokio::test]
 async fn sweep_stops_when_the_classifier_is_down() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
@@ -648,6 +680,7 @@ async fn sweep_classifies_every_stale_thread() {
             inboxes: 1,
             inboxes_unknown: 0,
             inboxes_left: 0,
+            inboxes_failed: 0,
             candidates: 3,
             classified: 2,
             redecided: 0,
@@ -692,6 +725,32 @@ async fn sweep_covers_only_inboxes_whose_owner_is_in_the_rollout() {
     assert_eq!(*store.stale_reads.lock().unwrap(), vec![INBOX]);
     assert_eq!(store.saved.lock().unwrap()[0].thread_id, ours);
     assert!(!store.stale_reads.lock().unwrap().contains(&their_inbox));
+}
+
+#[tokio::test]
+async fn sweep_goes_on_past_an_inbox_whose_threads_cannot_be_read() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut slow = thread("other@acme.example");
+    slow.link_id = Uuid::new_v4();
+    let slow_inbox = slow.link_id;
+    let slow = insert(&store, slow);
+    let ours = insert(&store, thread(OWNER));
+    set_stale(&store, &[slow, ours], noon());
+    store.failing_reads.lock().unwrap().insert(slow_inbox);
+    let enrollment = FakeEnrollment::enrolling(&[OWNER, "other@acme.example"]);
+
+    let report = service(&store, &classifier, &enrollment)
+        .sweep(Duration::days(30), 100)
+        .await
+        .unwrap();
+    assert_eq!(
+        (report.inboxes, report.inboxes_failed, report.classified),
+        (2, 1, 1)
+    );
+    assert_eq!(store.saved.lock().unwrap()[0].thread_id, ours);
+    let reads = store.stale_reads.lock().unwrap().clone();
+    assert!(reads.contains(&slow_inbox) && reads.contains(&INBOX));
 }
 
 #[tokio::test]
