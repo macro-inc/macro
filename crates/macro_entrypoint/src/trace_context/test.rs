@@ -57,6 +57,8 @@ fn malformed_traceparents_are_still_refused() {
     for traceparent in [
         format!("00-{TRACE_ID}-{SPAN_ID}-zz"),
         format!("00-{TRACE_ID}-{SPAN_ID}-0301"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-+3"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-0B"),
         format!("00-00000000000000000000000000000000-{SPAN_ID}-03"),
         format!("00-{TRACE_ID}-0000000000000000-03"),
         "03".to_owned(),

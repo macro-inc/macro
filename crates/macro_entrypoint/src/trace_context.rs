@@ -23,6 +23,10 @@ const SAMPLED: u8 = 0x01;
 /// flag (0x02) on a sampled trace (`-03`) starts a new trace here. Cloudflare
 /// Workers instrumented with `@microlabs/otel-cf-workers` send exactly that,
 /// so every Worker request reached the service as a trace of its own.
+///
+/// The random flag is not carried on: the SDK samples and injects with the
+/// `sampled` bit alone, so these services propagate as Trace Context Level 1
+/// participants, whose unset random flag makes no claim about the trace id.
 #[derive(Debug, Default)]
 pub(crate) struct TraceContextLevel2(TraceContextPropagator);
 
@@ -61,7 +65,16 @@ fn known_flags_only(value: &str) -> Option<String> {
     if value.len() != VERSION_00_LEN || !value.starts_with("00-") {
         return None;
     }
-    let flags = u8::from_str_radix(value.get(FLAGS_AT..)?, 16).ok()?;
+    let flags = value.get(FLAGS_AT..)?;
+    // Two lowercase hex digits, as the header requires; `from_str_radix`
+    // alone would also take `+3`.
+    if !flags
+        .bytes()
+        .all(|digit| matches!(digit, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return None;
+    }
+    let flags = u8::from_str_radix(flags, 16).ok()?;
     if flags & !SAMPLED == 0 {
         return None;
     }
