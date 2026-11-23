@@ -66,7 +66,7 @@ export function useTagsQuery(): CatalogListResult<TagSetResponse> {
       ),
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
-  return catalogListResult(query, stamp.listedAt, EMPTY_TAG_SETS);
+  return catalogListResult(query, stamp, EMPTY_TAG_SETS);
 }
 
 /** Reload the tag sets on screen from the server. */

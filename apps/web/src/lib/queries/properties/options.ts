@@ -52,7 +52,7 @@ export function usePropertyOptionsQuery(
     propertyDefinitionId: () => variables()?.propertyDefinitionId,
     refresh: () => query.refetch({ requestPolicy: 'network-only' }),
   });
-  return catalogListResult(query, stamp.listedAt, EMPTY_OPTIONS);
+  return catalogListResult(query, stamp, EMPTY_OPTIONS);
 }
 
 export type AddPropertyOptionAsyncMutation = ReturnType<

@@ -29,17 +29,44 @@ export type CatalogListResult<T> = {
   refetch(): Promise<unknown>;
 };
 
-/** Stamps results that carry news: a server answer or a local write. */
-export function createListedAt() {
+export type CatalogListStamp = {
+  /** When the list last changed from anything newer than the stored cache. */
+  listedAt: () => number;
+  /** The server's refusal of the read with this operation key, if it stands. */
+  refusal: (operationKey: number | undefined) => CombinedError | null;
+};
+
+/**
+ * Follows a reader's results: stamps those that carry news (a server answer
+ * or a local write), and keeps the server's refusal of the read until the
+ * server answers it again. The cache republishes a list it still holds, with
+ * no error, whenever a record it reads changes; a list the server refused
+ * (its definition deleted, or no longer visible to the viewer) would come
+ * back on screen from the cache. TanStack kept a refused read failed until
+ * its next fetch.
+ */
+export function createListedAt(): CatalogListStamp & {
+  onResult(result: OperationResult<unknown, AnyVariables>): void;
+} {
   const [listedAt, setListedAt] = createSignal(0);
+  const [refusal, setRefusal] = createSignal<{
+    key: number;
+    error: CombinedError;
+  }>();
   return {
     listedAt,
-    onResult(result: OperationResult<unknown, AnyVariables>) {
-      if (result.data == null) return;
-      if (
-        normalizedCacheResultMetadata(result)?.source === 'normalized-cache-hit'
-      )
-        return;
+    refusal(operationKey) {
+      const refused = refusal();
+      return refused && refused.key === operationKey ? refused.error : null;
+    },
+    onResult(result) {
+      const source = normalizedCacheResultMetadata(result)?.source;
+      const key = result.operation.key;
+      if (result.error?.graphQLErrors.length)
+        setRefusal({ key, error: result.error });
+      else if (source === 'live-network' || refusal()?.key !== key)
+        setRefusal(undefined);
+      if (result.data == null || source === 'normalized-cache-hit') return;
       setListedAt(Date.now());
     },
   };
@@ -110,36 +137,38 @@ export function offlineAsSuccess<D, V extends AnyVariables, Q>(
 
 export function catalogListResult<T, V extends AnyVariables, Q>(
   source: UrqlQueryResult<T[], V, Q>,
-  listedAt: () => number,
+  stamp: CatalogListStamp,
   empty: T[]
 ): CatalogListResult<T> {
   const query = offlineAsSuccess(source);
+  // A standing refusal outlasts the cache's later rereads of the same read.
+  const error = () => stamp.refusal(source.operation?.key) ?? query.error;
   return {
     get data() {
       return query.data ?? empty;
     },
     get error() {
-      return query.error;
+      return error();
     },
     isPending: false,
     isLoading: false,
     get isSuccess() {
-      return !query.error;
+      return !error();
     },
     get isError() {
-      return !!query.error;
+      return !!error();
     },
     get isFetched() {
-      return query.data !== undefined || !!query.error;
+      return query.data !== undefined || !!error();
     },
     get isFetching() {
       return query.isFetching;
     },
     get isPlaceholderData() {
-      return query.data === undefined && !query.error;
+      return query.data === undefined && !error();
     },
     get dataUpdatedAt() {
-      return listedAt();
+      return stamp.listedAt();
     },
     refetch: () => query.refetch({ requestPolicy: 'network-only' }),
   };

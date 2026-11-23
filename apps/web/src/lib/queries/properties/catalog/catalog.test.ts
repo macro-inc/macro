@@ -14,7 +14,11 @@ import { CombinedError } from '@urql/core';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
-import { catalogListResult, offlineAsSuccess } from './list-result';
+import {
+  catalogListResult,
+  createListedAt,
+  offlineAsSuccess,
+} from './list-result';
 import {
   optionValueRecord,
   toAddOptionInput,
@@ -244,8 +248,14 @@ function fakeQuery(state: {
   data?: string[];
   error?: Error;
   isFetching?: boolean;
+  operationKey?: number;
 }) {
   return {
+    get operation() {
+      return state.operationKey === undefined
+        ? undefined
+        : { key: state.operationKey };
+    },
     get data() {
       return state.data;
     },
@@ -261,10 +271,11 @@ function fakeQuery(state: {
 
 describe('catalog list results', () => {
   const EMPTY: string[] = [];
+  const NO_STAMP = { listedAt: () => 0, refusal: () => null };
 
   it('stands in an empty list that reads as successful placeholder data', () => {
     const state: { data?: string[]; error?: Error } = {};
-    const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+    const list = catalogListResult(fakeQuery(state), NO_STAMP, EMPTY);
     expect(list.data).toBe(EMPTY);
     expect([list.isPending, list.isLoading, list.isSuccess]).toEqual([
       false,
@@ -282,7 +293,7 @@ describe('catalog list results', () => {
 
   it('reports a failure while keeping the list it has', () => {
     const state = { data: ['a'], error: new Error('offline') };
-    const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+    const list = catalogListResult(fakeQuery(state), NO_STAMP, EMPTY);
     expect([list.data, list.isError, list.isSuccess]).toEqual([
       ['a'],
       true,
@@ -294,13 +305,81 @@ describe('catalog list results', () => {
     const state: { data?: string[]; error?: Error } = {
       error: new Error('refused'),
     };
-    const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+    const list = catalogListResult(fakeQuery(state), NO_STAMP, EMPTY);
     expect([
       list.data,
       list.isError,
       list.isPlaceholderData,
       list.isFetched,
     ]).toEqual([EMPTY, true, false, true]);
+  });
+
+  it('keeps a server refusal over later cache rereads of the same read', () => {
+    createRoot((dispose) => {
+      const refused = new CombinedError({
+        graphQLErrors: ['property definition is not visible'],
+      });
+      const result = (
+        key: number,
+        source: string,
+        data: unknown,
+        error?: CombinedError
+      ) =>
+        ({
+          operation: { key },
+          data,
+          error,
+          extensions: { __macroNormalizedCache: { source } },
+        }) as unknown as Parameters<
+          ReturnType<typeof createListedAt>['onResult']
+        >[0];
+      const stamp = createListedAt();
+      const state: { data?: string[]; error?: Error; operationKey?: number } = {
+        operationKey: 1,
+      };
+      const list = catalogListResult(fakeQuery(state), stamp, EMPTY);
+
+      // The server refuses the read; the cache still holds the old list.
+      state.data = ['deleted'];
+      state.error = refused;
+      stamp.onResult(result(1, 'normalized-cache-hit', {}, refused));
+      expect([list.isError, list.error]).toEqual([true, refused]);
+
+      // A write elsewhere rereads the cached list with no error.
+      state.error = undefined;
+      stamp.onResult(result(1, 'affected-cache-reread', {}));
+      stamp.onResult(result(1, 'normalized-cache-patch', {}));
+      expect([list.isError, list.isSuccess, list.error]).toEqual([
+        true,
+        false,
+        refused,
+      ]);
+
+      // Another read (other variables) does not inherit the refusal.
+      state.operationKey = 2;
+      expect(list.isError).toBe(false);
+      state.operationKey = 1;
+      expect(list.isError).toBe(true);
+
+      // The server's next answer replaces it.
+      stamp.onResult(result(1, 'live-network', { user: {} }));
+      expect([list.isError, list.error]).toEqual([false, null]);
+      dispose();
+    });
+  });
+
+  it('keeps no refusal for a failure that reached no server', () => {
+    createRoot((dispose) => {
+      const stamp = createListedAt();
+      stamp.onResult({
+        operation: { key: 1 },
+        data: undefined,
+        error: new CombinedError({ networkError: new Error('offline') }),
+        extensions: undefined,
+      } as unknown as Parameters<typeof stamp.onResult>[0]);
+      expect(stamp.refusal(1)).toBeNull();
+      dispose();
+    });
   });
 
   it('reads an offline failure as a paused read', () => {
@@ -311,7 +390,7 @@ describe('catalog list results', () => {
         data: ['a'],
         error: offline,
       };
-      const list = catalogListResult(fakeQuery(state), () => 0, EMPTY);
+      const list = catalogListResult(fakeQuery(state), NO_STAMP, EMPTY);
       expect([list.data, list.error, list.isSuccess]).toEqual([
         ['a'],
         null,
