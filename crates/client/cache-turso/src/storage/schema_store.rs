@@ -829,11 +829,26 @@ fn load(connection: &Db) -> Result<Option<StoredRow>, TursoStorageError> {
         driver::query(connection, SELECT, Vec::new()).map_err(TursoStorageError::initialization)?;
     match rows.as_slice() {
         [] => Ok(None),
-        [row] => Ok(Some(StoredRow {
-            hash: required_text(row, 0).map_err(|_| compatibility())?,
-            incoming_hash: required_text(row, 1).map_err(|_| compatibility())?,
-            artifact: required_blob(row, 2).map_err(|_| compatibility())?,
-        })),
+        [row] => Ok(Some(
+            match (
+                required_text(row, 0),
+                required_text(row, 1),
+                required_blob(row, 2),
+            ) {
+                (Ok(hash), Ok(incoming_hash), Ok(artifact)) => StoredRow {
+                    hash,
+                    incoming_hash,
+                    artifact,
+                },
+                // Values of a type no build writes read as a schema no build
+                // can, which resets the cache and keeps its queue.
+                _ => StoredRow {
+                    hash: UNREADABLE.to_owned(),
+                    incoming_hash: UNREADABLE.to_owned(),
+                    artifact: Vec::new(),
+                },
+            },
+        )),
         _ => Err(compatibility()),
     }
 }

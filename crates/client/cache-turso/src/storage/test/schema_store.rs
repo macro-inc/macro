@@ -949,6 +949,18 @@ fn an_unreadable_stored_schema_resets() {
         let adoption = adopt(&storage, OLD, &ProjectionInputs::none());
         assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
         assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
+
+        // A row holding a value of a type no build writes reads the same.
+        let storage = populate(TursoStorage::open_in_memory("schema-mistyped").unwrap()).await;
+        raw_execute(
+            &storage,
+            "UPDATE cache_schema SET artifact = 'schema'",
+            vec![],
+        );
+        let adoption = adopt(&storage, ADDED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
+        assert_eq!(count(&storage, "SELECT count(*) FROM mutation_queue"), 2);
     });
 }
 
