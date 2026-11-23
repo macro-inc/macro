@@ -44,15 +44,33 @@ const optValue = (o) => {
   const v = o?.value;
   return String(v && typeof v === 'object' ? v.value : (v ?? ''));
 };
-function rowsOf(kind, data) {
+// Options of equal display order, each run sorted by value. The server orders
+// such a run by value under the database's collation, which the cache does not
+// reproduce while a write is pending (main kept a renamed option in place
+// until its refetch, too); the place a write gives an option is what it can
+// predict.
+const orderOf = (o) => o?.display_order ?? o?.displayOrder;
+function tiesByValue(opts) {
+  const out = [];
+  for (let i = 0; i < opts.length; ) {
+    let j = i + 1;
+    while (j < opts.length && orderOf(opts[j]) === orderOf(opts[i])) j++;
+    out.push(...opts.slice(i, j).sort((a, b) => (optValue(a) < optValue(b) ? -1 : optValue(a) > optValue(b) ? 1 : 0)));
+    i = j;
+  }
+  return out;
+}
+function rowsOf(kind, data, places = false) {
   if (!Array.isArray(data)) return data === undefined ? '(no data)' : '(not a list)';
+  const values = (opts) => (places ? tiesByValue(opts) : opts).map(optValue);
+  const list = (opts) => values(opts).join(', ');
   if (kind === 'defs')
     return data
       .map((e) => ({ d: e?.definition ?? e, opts: e?.property_options }))
       .filter(({ d }) => !d?.is_system)
-      .map(({ d, opts }) => `${d?.display_name}${Array.isArray(opts) ? ` [${opts.map(optValue).join(', ')}]` : ''}`);
-  if (kind === 'opts') return data.map(optValue);
-  if (kind === 'tags') return data.map((t) => `${t?.scope ?? t?.definition?.scope ?? '?'}: ${(t?.options ?? []).map(optValue).join(', ')}`);
+      .map(({ d, opts }) => `${d?.display_name}${Array.isArray(opts) ? ` [${list(opts)}]` : ''}`);
+  if (kind === 'opts') return values(data);
+  if (kind === 'tags') return data.map((t) => `${t?.scope ?? t?.definition?.scope ?? '?'}: ${list(t?.options ?? [])}`);
   return '(unknown)';
 }
 function labelOf(id) {
@@ -68,7 +86,8 @@ function summarize(snap) {
   for (const [id, r] of Object.entries(snap ?? {})) {
     if (id === 'callers') continue;
     const label = labelOf(id);
-    out[label] = { state: STATE.filter((f) => r?.[f]).join(',') || 'idle', rows: rowsOf(label.split(' ')[0], r?.data), error: !!r?.error };
+    const kind = label.split(' ')[0];
+    out[label] = { state: STATE.filter((f) => r?.[f]).join(',') || 'idle', rows: rowsOf(kind, r?.data), places: rowsOf(kind, r?.data, true), error: !!r?.error };
   }
   return out;
 }
@@ -76,10 +95,13 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 // Rows only: a reader that refetches shows its rows with another state.
 const rowsOnly = (s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.rows]));
 const sameRows = (a, b) => same(rowsOnly(a), rowsOnly(b));
+// Rows with each run of equal display order sorted by value (see tiesByValue).
+const placesOnly = (s) => Object.fromEntries(Object.entries(s).map(([k, v]) => [k, v.places]));
+const samePlaces = (a, b) => same(placesOnly(a), placesOnly(b));
 
 export async function runOptimism(h) {
   const { CONFIG, R, log, sleep, login, openSide, loadHarness, ev, harnessError, firstLine, STAMP } = h;
-  R.optimism = { scenarios: [], checks: {}, failures: [], oldStale: [], landMs: [] };
+  R.optimism = { scenarios: [], checks: {}, failures: [], oldStale: [], landMs: [], tieReorders: [] };
   const tag = `opt-${CONFIG.seed}-${STAMP}`;
   const email = (w) => `pc-opt-${tag}-${w}@opt-${tag}-${w}.fuzz.test`;
 
@@ -322,7 +344,9 @@ export async function runOptimism(h) {
           check('NEW shows nothing until the server answers, as on main', sameRows(nc.mid, nc.pre) && sameRows(oc.mid, oc.pre), { ...at, pre: nc.pre, mid: nc.mid, oldMid: oc.mid });
         } else {
           check('NEW shows the write while it is pending', !sameRows(nc.mid, nc.pre), { ...at, pre: nc.pre, mid: nc.mid });
-          check('NEW pending state is the settled state', sameRows(nc.mid, nc.post), { ...at, mid: nc.mid, post: nc.post });
+          check('NEW pending state is the settled state', samePlaces(nc.mid, nc.post), { ...at, mid: nc.mid, post: nc.post });
+          // the server placed it among options of equal display order by value
+          if (samePlaces(nc.mid, nc.post) && !sameRows(nc.mid, nc.post)) R.optimism.tieReorders.push({ ...at, mid: rowsOnly(nc.mid), post: rowsOnly(nc.post) });
         }
         // offline: whether it waits or tries and fails, the write reaches the server once, after the reconnect
         if (mode === 'offline') {
