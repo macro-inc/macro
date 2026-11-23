@@ -10,6 +10,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -70,6 +71,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -95,6 +97,43 @@ it('opens a selected day sheet without leaving Month, then opens its event', asy
   expect(actions.changeView).not.toHaveBeenCalled();
   fireEvent.click(sheet.querySelector('[data-calendar-month-event]')!);
   expect(actions.select).toHaveBeenCalledWith(EVENT, expect.any(HTMLElement));
+});
+
+it('opens all events from the overflow count and selects a hidden event', async () => {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      return this.classList.contains('phone-month-card')
+        ? new DOMRect(0, 0, 350, 415)
+        : new DOMRect();
+    }
+  );
+  const events = Array.from({ length: 7 }, (_, index) => ({
+    ...EVENT,
+    id: `overflow-${index}`,
+    title: `Planning ${index + 1}`,
+  }));
+  render(() => (
+    <PhoneMonthBars
+      range={undefined}
+      initialDate={new Date(2026, 10, 20)}
+      events={events}
+      showWeekends
+      timeFormat="12-hour"
+      onFocusHandled={() => {}}
+      onSelect={actions.select}
+    />
+  ));
+  const day = screen.getByRole('button', { name: 'Friday, November 20, 2026' });
+  // Three row slots fit: two events plus the five hidden events' count.
+  fireEvent.click(within(day).getByText('+5'));
+  const sheet = await screen.findByRole('dialog', { name: 'Day events' });
+  expect(sheet.querySelectorAll('[data-calendar-month-event]')).toHaveLength(7);
+  fireEvent.click(within(sheet).getByRole('button', { name: /Planning 7/ }));
+  expect(actions.select).toHaveBeenCalledWith(
+    events[6],
+    expect.any(HTMLElement)
+  );
+  expect(actions.changeView).not.toHaveBeenCalled();
 });
 
 it('opens Day only from the sheet title and creates on the selected day', async () => {

@@ -3,7 +3,13 @@ import { isSameLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatLocale, t } from '@app/lib/i18n';
 import { Layer } from '@ui';
 import { createUniqueId, For } from 'solid-js';
-import type { MonthBar, MonthDay } from '../../core/phone-month-layout';
+import {
+  type MonthBar,
+  type MonthDay,
+  PHONE_MONTH_DATE_HEIGHT,
+  PHONE_MONTH_EVENT_HEIGHT,
+  PHONE_MONTH_ROW_PITCH,
+} from '../../core/phone-month-layout';
 import './month-grid.css';
 
 export type MonthWeek = {
@@ -26,7 +32,11 @@ export function MonthGrid(props: {
   const fullDate = (date: Date) =>
     date.toLocaleDateString(formatLocale(), { dateStyle: 'full' });
   return (
-    <div class="phone-month-bars" aria-label="Month calendar">
+    <div
+      class="phone-month-bars"
+      aria-label="Month calendar"
+      style={{ '--phone-month-event-height': `${PHONE_MONTH_EVENT_HEIGHT}px` }}
+    >
       <div
         class="phone-month-weekdays"
         style={{
@@ -69,6 +79,7 @@ export function MonthGrid(props: {
                     <button
                       type="button"
                       class="phone-month-day"
+                      style={{ 'grid-column': index() + 1 }}
                       classList={{
                         'phone-month-day-selected':
                           !!props.selected &&
@@ -113,11 +124,11 @@ export function MonthGrid(props: {
                       >
                         {day.date.getDate()}
                       </span>
-                      {week.hidden[index()]! > 0 && (
+                      {props.capacity > 0 && week.hidden[index()]! > 0 && (
                         <span
                           class="phone-month-overflow"
                           style={{
-                            top: `${32 + (props.capacity - 1) * 16}px`,
+                            top: `${PHONE_MONTH_DATE_HEIGHT + (props.capacity - 1) * PHONE_MONTH_ROW_PITCH}px`,
                           }}
                         >
                           +{week.hidden[index()]}
@@ -131,9 +142,12 @@ export function MonthGrid(props: {
                     <div
                       aria-hidden="true"
                       class="phone-month-bar"
+                      classList={{
+                        'phone-month-bar-timed': bar.kind === 'timed',
+                      }}
                       style={{
                         'grid-column': `${bar.startColumn + 1} / ${bar.endColumn + 1}`,
-                        top: `${32 + bar.lane * 16}px`,
+                        top: `${PHONE_MONTH_DATE_HEIGHT + bar.lane * PHONE_MONTH_ROW_PITCH}px`,
                         '--event-calendar-color': bar.event.calendar.color,
                         'mask-image': `linear-gradient(to right, ${week.days
                           .slice(bar.startColumn, bar.endColumn)

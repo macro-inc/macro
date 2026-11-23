@@ -52,15 +52,18 @@ Desktop and phone all-day rows start at one 24px lane, grow for overlapping even
 and keep a 48px ceiling with FullCalendar's more link for overflow; no extra empty
 creation lane is reserved. The drawer's Agenda, Day, 3 days, Week, and Month rows
 are text-only and retain their selected state.
-Phone Month uses a Sunday-start five/six-week Bars grid. Weekday letters sit above
-the card; today has an accent circle, other-month dates are tertiary, and their
-bars are half-opacity. Shared week lanes keep multi-day bars continuous, and +N
-counts events that do not fit. Titles cut at whole-word boundaries. Hiding weekends
-widens the five remaining columns. Tapping a date opens its event sheet without
-leaving Month; the title opens Day and + creates on that date. Event links open the
-same visible event rows. A day tap or sheet dismissal cancels older pending event focus,
-so late data cannot reopen the previous day. Each date announces all its event titles,
-including overflow, to screen readers. Dates outside the supported occurrence range are disabled.
+Phone Month uses a Sunday-start five/six-week grid. Weekday letters sit above
+its card; today has an accent circle, other-month dates are tertiary, and their
+events are dimmed. All-day and multi-day bars keep shared horizontal spans.
+Timed events stack vertically beneath them in calendar color, one truncated
+line per event. Complete rows fit the measured cell height; when events overflow,
+the last available row becomes `+N`, counting all hidden events. Hiding weekends
+widens the five remaining columns. Tapping the count or its day opens the full
+event list in the existing phone sheet without leaving Month. Selecting a sheet
+event opens its details; the title opens Day and + creates on that date. A day
+tap or sheet dismissal cancels older pending event focus, so late data cannot
+reopen the previous day. Each date announces every event title, including
+hidden events. Dates outside the supported occurrence range are disabled.
 Desktop event creation and editing use one 384px composer, not a second split.
 Anchored, pinned, and agent-draft placements have separate view components over
 shared fields and setup; pinning retains the field tree. The registered legacy
@@ -222,7 +225,9 @@ and closes; a second island tap, scrim tap, Escape, or downward swipe dismisses.
 
 Today uses a filled accent date marker. Desktop Month rows reserve a six-pixel gap
 below the date, fit 18px event rows, and expose `+N more` in a menu-surface popover.
-Phone Month uses 14px bars on 16px lanes and opens the day's event sheet from the cell.
+Phone Month fits 14px event rows on 16px lanes below its date heading, reserving
+the final row for overflow when needed. Tapping `+N` opens that day's full event
+sheet; desktop keeps its existing overflow popover.
 
 If a permission change retires a successful create response, retain the server identity.
 When that identity cannot be read yet, close and refresh the calendar without

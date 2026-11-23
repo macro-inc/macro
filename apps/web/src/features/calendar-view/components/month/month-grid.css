@@ -26,6 +26,7 @@
   display: grid;
   position: relative;
   min-height: 0;
+  overflow: hidden;
 }
 .phone-month-week + .phone-month-week {
   border-top: 1px solid var(--border-tertiary);
@@ -34,7 +35,7 @@
   grid-row: 1;
   position: relative;
   min-width: 0;
-  min-height: 44px;
+  min-height: 0;
   padding: 6px 0 0;
   display: flex;
   justify-content: center;
@@ -66,11 +67,11 @@
 }
 .phone-month-bar {
   grid-row: 1;
-  position: relative;
+  position: absolute;
   align-self: start;
   z-index: 1;
-  height: 14px;
-  margin: 0 2px;
+  height: var(--phone-month-event-height);
+  inset-inline: 2px;
   padding: 0 3px;
   border-left: 2px solid var(--event-calendar-color);
   border-radius: 4px;
@@ -78,23 +79,31 @@
   min-width: 0;
   font-size: 10px;
   font-weight: 500;
-  line-height: 14px;
+  line-height: var(--phone-month-event-height);
   background: color-mix(in srgb, var(--event-calendar-color) 15%, var(--color-surface));
   color: var(--color-ink);
 }
-/* Normal wrapping hides later words below the first line; an oversized first word clips at the edge. */
+/* Fixed lanes and one-line labels keep a long title inside its day or span. */
 .phone-month-bar > span {
   display: block;
-  height: 14px;
+  height: var(--phone-month-event-height);
   overflow: hidden;
-  white-space: normal;
-  word-break: normal;
-  overflow-wrap: normal;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.phone-month-bar-timed {
+  border-left: 0;
+  padding: 0 2px;
+  background: none;
+  color: var(--event-calendar-color);
 }
 .phone-month-overflow {
   position: absolute;
   left: 5px;
   font-size: 10px;
   font-weight: 500;
-  line-height: 14px;
+  height: var(--phone-month-event-height);
+  line-height: var(--phone-month-event-height);
+  right: 2px;
+  overflow: hidden;
 }
