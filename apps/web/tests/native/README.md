@@ -33,7 +33,10 @@ account, Docker, sudo, or local backend stack is required.
 
 ### Expected result
 
-Both suites must pass. The full suite checks native Soup predicate evaluation via
+Both suites must pass. Both resize the window to 400px wide while online and
+expect every Email list header control, Search included, inside the header,
+then restore the size and expect the view options (the reading pane toggle) back.
+The full suite checks native Soup predicate evaluation via
 `graphql_cache_entity_filter`, including filter combinations never fetched online,
 then reloads the webview with the API still down and expects All mail to render
 from the native cache (identity comes from the persisted user-info query), with

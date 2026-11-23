@@ -39,14 +39,6 @@ function previewThreadIds(tree: GraphqlEmailExpr | null | undefined): string[] {
   throw new Error('ItemPreviews requires explicit thread IDs');
 }
 
-// The fixture user joined no channels: the sidebar's unread presence, the
-// channel backfill lane and the directory's network fallback read none.
-const EMPTY_CHANNEL_OPERATIONS = [
-  'ChannelUnreadPresence',
-  'SoupChannelDirectoryBackfill',
-  'ChannelDirectoryPage',
-];
-
 type MetadataLane = 'signal' | 'noise';
 
 /** Fixture timestamps are fixed, so the recency cutoff is required but not applied. */
@@ -154,7 +146,10 @@ export function startFixtureServer(port = 0, filterMatrix = false) {
     if (
       operation === 'SoupNotifications' ||
       operation === 'HomeUnreadPresence' ||
-      (EMPTY_CHANNEL_OPERATIONS.includes(operation) && excludesMail(input))
+      // The fixture user is in no channels.
+      operation === 'SoupChannelDirectoryBackfill' ||
+      operation === 'ChannelDirectoryPage' ||
+      (operation === 'ChannelUnreadPresence' && excludesMail(input))
     )
       return { items: [], nextCursor: null };
     if (operation === 'Soup') {
