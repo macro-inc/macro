@@ -1,0 +1,16 @@
+# Committed changes to every channel the viewer participates in. The client
+# applies a change to a channel the device holds and closes gaps with
+# ChannelChanges.
+subscription ChannelTimelineUpdates {
+	channelTimelineUpdates {
+		channelId
+		seq
+		messages {
+			...ChannelMessageFields
+		}
+		activities {
+			...ChannelTimelineActivityFields
+		}
+		removedIds
+	}
+}

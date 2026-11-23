@@ -1,3 +1,4 @@
+import { analytics } from '@app/lib/analytics';
 import {
   enableChannelLocalSync,
   isFeatureEnabled,
@@ -28,6 +29,11 @@ export function markChannelCacheAnswered(host: CacheHost): void {
   answeredHosts.add(host);
 }
 
+/** Whether a host can serve channel timelines, as far as it has answered. */
+export function channelCacheSupported(host: CacheHost): boolean {
+  return !host.disabled && !unsupportedHosts.has(host);
+}
+
 export function channelCacheAnswered(host: CacheHost): boolean {
   return answeredHosts.has(host);
 }
@@ -41,7 +47,7 @@ export function channelCacheAnswered(host: CacheHost): boolean {
 export function channelCacheHost(): CacheHost | undefined {
   // No host is the common REST case and needs no flag read.
   const host = getGraphqlSoupCacheHost();
-  if (!host || host.disabled || unsupportedHosts.has(host)) return undefined;
+  if (!host || !channelCacheSupported(host)) return undefined;
   if (!isFeatureEnabled(enableChannelLocalSync) || !graphqlCacheEnabled()) {
     return undefined;
   }
@@ -53,4 +59,9 @@ export function channelCacheHostFor(parent: {
   type: string;
 }): CacheHost | undefined {
   return parent.type === 'channel' ? channelCacheHost() : undefined;
+}
+
+/** Calls `listener` each time feature flags load or change. */
+export function onChannelFlagsChanged(listener: () => void): () => void {
+  return analytics.posthog.onFeatureFlags(() => listener());
 }

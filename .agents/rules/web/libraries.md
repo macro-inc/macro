@@ -73,6 +73,7 @@ under `services/` throw and validate with zod; elsewhere in `apps/web` and
 - **FE-46** Reuse the house helpers instead of re-implementing them: `deepEqual`
   (`@core/util/compareUtils`), `structuredClone` for copies, and
   `@tanstack/pacer` (`AsyncBatcher`, `Queuer`) for request coalescing. `effect`
-  stays inside `lib/graphql-cache/worker/**` and `lib/queries/soup/backfill.ts`
-  and is never mixed with neverthrow in one module. Don't add lodash, immer,
+  stays inside `lib/graphql-cache/worker/**`, `lib/queries/soup/backfill.ts`
+  and `lib/queries/messages/local/channel-sync-runtime.ts` (the channel sync
+  runtime), and is never mixed with neverthrow in one module. Don't add lodash, immer,
   axios, ky, or another validator.
