@@ -230,6 +230,10 @@ if (params.get('view') === 'page') {
 
 const UPDATED_AT = '2026-11-18T10:00:00Z';
 
+// `?follows=1`: the agent follows Macro's permissions, so its cards are
+// read-only.
+const FOLLOWS = params.get('follows') === '1';
+
 function view(): AgentToolPermissions {
   const rules: ToolPermissionRule[] = [
     ...Object.entries(defaults).map(([action, state]) => ({
@@ -255,6 +259,26 @@ function view(): AgentToolPermissions {
     canEdit: VIEWER === OWNER,
     canTighten: true,
     canSetSource: false,
+    ...(FOLLOWS
+      ? {
+          source: {
+            policyId: '0195dbd2-6539-7000-8000-0000000000b1',
+            kind: 'persona' as const,
+            agent: {
+              id: 'macro',
+              name: 'Macro',
+              handle: 'macro',
+              avatarUrl: null,
+              deleted: false,
+            },
+            scope: { kind: 'personal' as const },
+            status: 'live' as const,
+            inScope: true,
+            canEdit: true,
+            via: [],
+          },
+        }
+      : {}),
     version: CATALOG.version,
     restricted: Object.keys(saved).length,
     defaults: ACTIONS.map((action) => ({

@@ -16,7 +16,7 @@ import type {
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Switch } from 'solid-js';
-import { FollowingNote } from '../components/following-note';
+import { FollowingNote, sourceMention } from '../components/following-note';
 import {
   PermissionsLoadError,
   PermissionsReadOnlyNote,
@@ -105,6 +105,11 @@ export function AgentPermissionsPanel(props: {
     return settingCounts(current.catalog, current.view.rules);
   };
   // Reset clears hidden rules too, so it's offered while any rule is saved.
+  // Reset on a follower removes only its own restrictions.
+  const followedMention = () => {
+    const source = ready()?.view.source;
+    return source ? sourceMention(source) : undefined;
+  };
   const anySaved = () => (ready()?.view.rules.length ?? 0) > 0;
 
   const changes = usePermissionChanges({
@@ -238,7 +243,9 @@ export function AgentPermissionsPanel(props: {
                       onClick={() => setConfirmingReset(true)}
                     >
                       <ArrowCounterClockwiseIcon class="size-3.5 shrink-0 pointer-events-none" />
-                      {t('agentPermissions.reset')}
+                      {ready()?.view.source
+                        ? t('agentPermissions.removeRestrictions')
+                        : t('agentPermissions.reset')}
                     </Button>
                   </Show>
                 </div>
@@ -252,6 +259,8 @@ export function AgentPermissionsPanel(props: {
         open={confirmingReset()}
         agent={props.agentName}
         byAgent={counts().byAgent}
+        follows={followedMention()}
+        followed={ready()?.view.kind === 'persona'}
         pending={resetMutation.isPending}
         onOpenChange={setConfirmingReset}
         onConfirm={() => fireAndForget(reset(), 'agent-permissions')}

@@ -96,6 +96,11 @@ export default {
   resetBodyEnd:
     "Limits {{agent}} set for a single session stay until that session ends. This can't be undone.",
   resetConfirm: 'Reset',
+  resetBodyFollowers: 'Agents that follow these permissions change too.',
+  removeRestrictions: 'Remove restrictions',
+  removeRestrictionsTitle: 'Remove {{agent}}’s own restrictions?',
+  removeRestrictionsBody:
+    'Removes this agent’s own restrictions. It keeps following {{source}}’s permissions.',
   cancel: 'Cancel',
 
   restrictedByAgent: 'Restricted by the agent: {{state}}',

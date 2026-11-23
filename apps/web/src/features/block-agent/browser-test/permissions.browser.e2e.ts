@@ -262,6 +262,20 @@ test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
   await expect(send.getByRole('radio', { name: 'Allow' })).toBeChecked();
 });
 
+test('a following agent’s ShowPermissions card is read-only', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto(fixture('pending=0&follows=1'));
+  const card = page.getByRole('region', { name: 'Scout’s permissions' });
+  const send = card.getByRole('radiogroup', { name: 'Email: Send' });
+  await expect(send.getByRole('radio', { name: 'Never' })).toBeDisabled();
+  await expect(card).toContainText(
+    'Scout follows @macro’s permissions: change what it follows in its settings.'
+  );
+  await shot(page, 'show-permissions-following', isMobile);
+});
+
 test('someone else sees the cards read-only and can only stop waiting', async ({
   page,
   isMobile,

@@ -1285,7 +1285,10 @@ panel then shows the source's card (picture, name, @handle, `Personal` or
 to @handle.` (with `@handle follows @other.` for a longer chain), and the
 component read-only: inherited exceptions listed, and the agent's own
 restrictions marked on their rows (`Restricted by the agent: Ask`) with a ✕
-(`Remove the restriction on <row>`) for people who may edit it. A deleted
+(`Remove the restriction on <row>`) for people who may edit it. Its Reset
+reads **Remove restrictions** and removes only the agent's own restrictions
+(it keeps following); Reset on Macro's row adds that agents following it
+change too. A deleted
 source stays followed as it was; a lost one (gone for good) makes the agent
 ask before everything; one out of scope says to pick another. The agent
 form's **Permissions** section has two tabs (radio group `Permissions`):

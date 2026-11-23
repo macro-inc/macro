@@ -111,6 +111,8 @@ export default {
   cardTitle: '{{agent}}’s permissions',
   cardBody: '{{agent}} asked you to look at these.',
   allPermissions: 'All permissions',
+  cardFollows:
+    '{{agent}} follows {{source}}’s permissions: change what it follows in its settings.',
   cardSaves: 'Changes save right away and apply to {{agent}} everywhere.',
   cardReadOnly: 'Only people who can edit {{agent}} can change these.',
   cardUnavailable: 'Permissions aren’t available here.',

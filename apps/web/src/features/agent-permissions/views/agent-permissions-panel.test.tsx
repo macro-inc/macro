@@ -15,7 +15,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ENTITY_CATALOG, ENTITY_VIEW } from '../tests/fixtures';
+import { ENTITY_CATALOG, ENTITY_VIEW, FOLLOWING_VIEW } from '../tests/fixtures';
 import { AgentPermissionsPanel } from './agent-permissions-panel';
 
 const client = vi.hoisted(() => ({
@@ -296,5 +296,18 @@ describe('AgentPermissionsPanel', () => {
     expect(
       await screen.findByRole('region', { name: 'Send exceptions' })
     ).toBeTruthy();
+  });
+
+  it('offers a follower only removing its own restrictions', async () => {
+    renderPanel(FOLLOWING_VIEW);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Remove restrictions' })
+    );
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Remove Scout’s own restrictions?');
+    expect(dialog.textContent).toContain(
+      'Removes this agent’s own restrictions. It keeps following @scout’s permissions.'
+    );
+    expect(dialog.textContent).not.toContain('goes back to Allow');
   });
 });
