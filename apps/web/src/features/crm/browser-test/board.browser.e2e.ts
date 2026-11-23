@@ -317,6 +317,9 @@ test('keeps the reading position and unsaved input when the text size changes', 
   await page.getByRole('button', { name: 'New group', exact: true }).click();
   const name = page.getByLabel('New group name');
   await name.fill('Renewals');
+  // On a slow device the virtualizer's scroll-end timer from the scroll above
+  // can fire after the text grows: it must not take the board back.
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 8 });
   await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
   await expect
     .poll(() =>
@@ -328,6 +331,7 @@ test('keeps the reading position and unsaved input when the text size changes', 
   });
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('Renewals');
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   await cdp.detach();
 });
 

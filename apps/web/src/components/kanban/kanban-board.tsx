@@ -357,7 +357,12 @@ function Columns(props: {
     virtualizer.scrollOffset = target;
     columnWidth = width;
     virtualizer.measure();
-    if (viewport) viewport.scrollLeft = target;
+    if (!viewport || viewport.scrollLeft === target) return;
+    viewport.scrollLeft = target;
+    // The virtualizer's scroll-end timer, still pending after a scroll just
+    // before, would put back the offset that scroll read and unmount the lanes
+    // in view. A scroll event now makes it read this one.
+    viewport.dispatchEvent(new Event('scroll'));
   }
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
