@@ -522,18 +522,35 @@ Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
 
-## Idle WAL checkpoint
+## WAL checkpoints
 
-Turso copies the WAL into the database file inside the COMMIT that takes it to
-1,000 frames, so one write pays for the others. After a request that can
-write, the browser engine worker calls `checkpointIfDue` once nothing has run
-for 100 ms, and cache-turso copies from 500 frames there instead. Each request
-that runs re-arms the wait, so the reads a page sends after an open or a
-write run first. A request that arrives during a copy waits for it, as it
-waited for the write that used to carry it; a drain cancels a copy not yet
-started and waits for one under way.
+Every checkpoint changes the WAL's state, and Turso then drops the
+connection's page cache at its next read, so the requests after a copy read
+their pages back from the file. Native hosts keep Turso's own checkpoint,
+which copies the WAL inside the COMMIT that takes it to 1,000 frames, and
+their idle call copies from 500. The browser's connection (turso-opfs) turns
+Turso's checkpoint off, and cache-turso copies the WAL itself, at fewer
+points:
 
-A copy that ran is reported as `graphql_cache.wal_checkpoint` with
+- After a request that can write, the browser engine worker calls
+  `checkpointIfDue` once nothing has run for 100 ms, and cache-turso copies
+  from 4,000 frames (16 MB). Each request that runs re-arms the wait, so the
+  reads a page sends after an open or a write run first. A request that
+  arrives during a copy waits for it, as it waited for the write that used to
+  carry it; a drain cancels a copy not yet started and waits for one under
+  way.
+- A COMMIT that takes the WAL to 10,000 frames (40 MB) copies it right after,
+  as part of that write, so a backfill that never goes quiet still bounds the
+  WAL and what an open after a crash reads back.
+- A healthy close copies the WAL and empties its file.
+
+Each of these is a passive checkpoint followed by a restart checkpoint with
+nothing left to copy. The restart starts the log over and keeps the
+connection's view of it current, so the page cache survives the copy.
+Turso's restart checkpoint alone would start the log over before it syncs the
+database file.
+
+An idle copy that ran is reported as `graphql_cache.wal_checkpoint` with
 `cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
 in the WAL when it ran; a count below it is a partial copy). A failed copy is
 reported with its error class and retried once the next request has run; it
