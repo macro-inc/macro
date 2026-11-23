@@ -36,45 +36,48 @@ export function ChannelPin(props: {
   onActivate: (event: MouseEvent) => void;
 }) {
   return (
-    <button
-      type="button"
-      class="flex w-full min-w-0 flex-col items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      onClick={(event) => props.onActivate(event)}
-    >
-      <span class="relative size-22 shrink-0">
-        <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface-2 text-ink-muted [&_img]:size-full [&_img]:object-cover [&_svg]:size-9">
-          <Entity.Icon
-            entity={props.channel}
-            suppressClick
-            showTooltip={false}
-          />
-        </span>
-        <Switch>
-          <Match when={(props.mentions ?? 0) > 0}>
-            {/* A one-digit count is a 20px circle centered on the dot's center. */}
-            <ChannelMentionCount
-              count={props.mentions ?? 0}
-              class="absolute top-px left-px h-5 min-w-5 border-2 border-panel"
-            />
-          </Match>
-          <Match when={props.unread}>
-            <span
-              aria-label="Unread"
-              class="absolute top-1 left-1 size-3.5 rounded-full border-2 border-panel bg-accent"
-            />
-          </Match>
-        </Switch>
-      </span>
-      <span
-        class={cn(
-          'max-w-full truncate px-1 text-xs',
-          props.unread || (props.mentions ?? 0) > 0
-            ? 'text-ink'
-            : 'text-ink-muted'
-        )}
+    // The tile around the pin is its touch press surface (rowPress.ts).
+    <div data-soup-entity data-press-surface class="rounded-xl py-1">
+      <button
+        type="button"
+        class="flex w-full min-w-0 flex-col items-center gap-2 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={(event) => props.onActivate(event)}
       >
-        {props.channel.name}
-      </span>
-    </button>
+        <span class="relative size-22 shrink-0">
+          <span class="grid size-full place-items-center overflow-hidden rounded-full bg-surface-2 text-ink-muted [&_img]:size-full [&_img]:object-cover [&_svg]:size-9">
+            <Entity.Icon
+              entity={props.channel}
+              suppressClick
+              showTooltip={false}
+            />
+          </span>
+          <Switch>
+            <Match when={(props.mentions ?? 0) > 0}>
+              {/* A one-digit count is a 20px circle centered on the dot's center. */}
+              <ChannelMentionCount
+                count={props.mentions ?? 0}
+                class="absolute top-px left-px h-5 min-w-5 border-2 border-panel"
+              />
+            </Match>
+            <Match when={props.unread}>
+              <span
+                aria-label="Unread"
+                class="absolute top-1 left-1 size-3.5 rounded-full border-2 border-panel bg-accent"
+              />
+            </Match>
+          </Switch>
+        </span>
+        <span
+          class={cn(
+            'max-w-full truncate px-1 text-xs',
+            props.unread || (props.mentions ?? 0) > 0
+              ? 'text-ink'
+              : 'text-ink-muted'
+          )}
+        >
+          {props.channel.name}
+        </span>
+      </button>
+    </div>
   );
 }

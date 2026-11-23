@@ -418,6 +418,29 @@ then edit or clear a due date: loaded rows move between buckets immediately,
 and refetches correct complete counts and previously absent tasks. Gantt's
 saved-date semantics do not change.
 
+## Time logged
+
+Behind `enable-time-tracking`. A task's property row has a Time pill
+(`InlineTaskTimeLogged` in `Notebook.tsx`, from `features/time-tracking`)
+showing Time logged, the sum of the task's entries, or "Time" when nothing is
+logged. On desktop it opens a popover: a length input that reads `1h 30m`,
+`1.5h`, `90m`, `1:30` or a bare number of hours and shows what it understood
+(Enter logs it for today), one-tap 15m/30m/1h/2h, Custom entry (length, day,
+optional start and end, note) and the entries by day with day totals. On
+touch it opens a bottom sheet with the one-tap lengths, Custom entry and the
+entries; swipe one's own entry right to edit it, left to delete it. Only
+people with edit access log; everyone who can see the task sees its entries;
+only an entry's author changes or deletes it. Time logged never shows as a
+generic property row or details row, and the Add property picker never offers
+it; with the flag off nothing about time shows. Typed entries save at once and wait offline in the durable
+queue; the entry id is the replay key.
+
+Verify on a local stack at desktop 1440 and phone 390 with touch, as an editor
+and a view-only teammate (a task shared with the team at view level, its edit
+link turned off): log each accepted form, a one-tap length and a custom entry
+on another day; edit and delete one's own; the teammate sees entries and no
+input; a log made offline lands once after reconnecting.
+
 ## Import from Linear
 
 Use **Import from Linear** in the Tasks tour/actions menu, or open
