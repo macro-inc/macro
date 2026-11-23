@@ -262,3 +262,37 @@ it('updates the length in the footer while the picker stays open', async () => {
   await waitFor(() => expect(screen.getByText('3 days')).toBeTruthy());
   expect(field('Start')).toBe('StartWed, Nov 25');
 });
+
+it('saves the due date first when a new start time passes the saved due date', async () => {
+  const onSave = vi.fn(async () => {});
+  const { saveOther } = setup(onSave);
+  fireEvent.click(screen.getByRole('button', { name: /^Add time/ }));
+  fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Change day' }));
+  fireEvent.click(screen.getByRole('button', { name: '27' }));
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenLastCalledWith(start, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 27, 11),
+      hasTime: true,
+    })
+  );
+
+  fireEvent.click(screen.getByRole('option', { name: '2:00 PM' }));
+
+  await waitFor(() =>
+    expect(saveOther).toHaveBeenLastCalledWith(start, {
+      valueType: 'DATE',
+      value: new Date(2026, 10, 27, 14),
+      hasTime: true,
+    })
+  );
+  const dueSave = onSave.mock.invocationCallOrder.at(-1) ?? 0;
+  const startSave = saveOther.mock.invocationCallOrder.at(-1) ?? 0;
+  expect(onSave).toHaveBeenLastCalledWith(due, {
+    valueType: 'DATE',
+    value: new Date(2026, 10, 27, 15),
+    hasTime: true,
+  });
+  expect(dueSave).toBeLessThan(startSave);
+});

@@ -84,11 +84,19 @@ function StartDueEditorBody(
   // Saves run in the order they were made, so an older one never lands last.
   let pending: Promise<void> = Promise.resolve();
 
+  // The server keeps a start on or before the saved due date, so a start
+  // moving past that due date waits until the new due date is saved.
+  const saveOrder = (next: StartDue, changed: DateField[]): DateField[] =>
+    changed.includes('due') && next.start && saved.due && next.start > saved.due
+      ? ['due', ...changed.filter((end) => end !== 'due')]
+      : changed;
+
   const commit = async (
     next: StartDue,
-    changed: DateField[],
+    ends: DateField[],
     made: Record<DateField, number>
   ) => {
+    const changed = saveOrder(next, ends);
     for (const [index, field] of changed.entries()) {
       const result = await ResultAsync.fromPromise(
         save(field, next),
