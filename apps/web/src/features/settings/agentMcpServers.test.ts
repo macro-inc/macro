@@ -13,8 +13,8 @@ describe('agentMcpServers', () => {
   it('reduces a catalog entry to the stored shape', () => {
     expect(
       catalogEntryToMcpServer({
-        app_slug: 'linear',
-        display_name: 'Linear',
+        slug: 'linear',
+        name: 'Linear',
       })
     ).toEqual(linear);
   });

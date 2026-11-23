@@ -556,7 +556,7 @@ fn stream_and_save_message(
     tracing::trace!(request=?request, "streaming chat request");
     let tool_context = ctx.tool_service_context.clone();
     let static_tools = ctx.all_tools.clone();
-    let mcp_selector = ctx.mcp_selector.clone();
+    let connectors = ctx.connectors.clone();
 
     let ctx_outer = ctx.clone();
     // Pull the token out so the select below can reference it without moving
@@ -586,7 +586,7 @@ fn stream_and_save_message(
         let toolset = crate::cognition::api::tool_selection::service_tools(
             &tool_selection,
             static_tools,
-            &mcp_selector,
+            &connectors,
             &user_id,
         )
         .await;
