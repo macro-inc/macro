@@ -1,17 +1,18 @@
 /* Homepage product sections: the feature-page chapter layout with a captured app window. */
 .macro-homepage .feature-page-section { isolation: isolate; }
 .macro-homepage .feature-page-section::after {
+  --glow-width: min(1120px, 100vw);
   content: '';
   position: absolute;
   z-index: -1;
   pointer-events: none;
-  top: 32%;
+  top: calc(32% + 5px);
   left: 50%;
-  width: min(1120px, 100vw);
-  aspect-ratio: 3 / 1;
+  width: calc(var(--glow-width) + 48px);
+  height: calc(var(--glow-width) / 3 - 10px);
   transform: translate(-50%, -50%);
   background-color: color-mix(in srgb, var(--page-aura-primary) 12%, transparent);
-  background-image: radial-gradient(color-mix(in srgb, var(--page-aura-primary) 20%, transparent) .7px, transparent .7px);
+  background-image: radial-gradient(color-mix(in srgb, var(--page-aura-primary) 16%, transparent) .7px, transparent .7px);
   background-size: 8px 8px;
   mask-image: radial-gradient(ellipse closest-side, black, #0009 25%, #0003 55%, transparent);
 }
