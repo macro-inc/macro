@@ -19,11 +19,13 @@ import type {
   FetchChannelServerPage,
 } from '../channel-pages';
 import { createChannelTouches } from '../channel-pages';
+import { whileNoFills } from '../channel-resets';
 import {
   type ChannelTimelineRuntime,
   createLocalChannelTimeline,
   type LocalChannelTimeline,
 } from '../channel-timeline';
+import { fakeLocks } from './fake-locks';
 import {
   CHANNEL_ID,
   fakeHost,
@@ -438,6 +440,50 @@ describe('createLocalChannelTimeline', () => {
     runtime.changed();
     await waitFor(() => timeline.entries().length === 3);
     mounted.dispose();
+  });
+
+  it('reads a page again once a delete in another tab is done, holding it then', async () => {
+    vi.stubGlobal('navigator', { locks: fakeLocks() });
+    try {
+      let finishDelete!: () => void;
+      const deleting = whileNoFills(
+        () =>
+          new Promise<void>((resolve) => {
+            finishDelete = resolve;
+          }),
+        { waitMs: 60_000 }
+      );
+      const rows = messages(2);
+      const fetchPage = vi.fn<FetchChannelServerPage>(async () => ({
+        page: {
+          __typename: 'GraphqlChannelTimelinePage',
+          entries: [...rows].reverse(),
+          olderCursor: null,
+          newerCursor: null,
+          seq: '9',
+        } as never,
+        cached: Promise.resolve(),
+      }));
+      const mounted = mount({ rows, held: false, fetchPage });
+      await waitFor(() => mounted.timeline.entries().length === 2);
+      await settle();
+      // Shown, but neither covered nor followed while the delete may take it.
+      expect(fetchPage).toHaveBeenCalledTimes(1);
+      expect(mounted.host.commits).toEqual([]);
+      expect(mounted.runtime.noteServerRead).not.toHaveBeenCalled();
+
+      finishDelete();
+      await deleting;
+      await waitFor(
+        () => vi.mocked(mounted.runtime.noteServerRead).mock.calls.length > 0
+      );
+      expect(fetchPage).toHaveBeenCalledTimes(2);
+      expect(mounted.host.commits).toHaveLength(1);
+      expect(mounted.timeline.entries()).toHaveLength(2);
+      mounted.dispose();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('reports a missing target from the server', async () => {

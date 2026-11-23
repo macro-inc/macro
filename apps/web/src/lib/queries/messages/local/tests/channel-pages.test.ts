@@ -14,6 +14,7 @@ import {
   serverPageCoverage,
 } from '../channel-pages';
 import {
+  FILL_HOLD_LIMIT_MS,
   noteChannelReset,
   noteChannelsEvicted,
   whileNoFills,
@@ -305,10 +306,45 @@ describe('loadChannelPage across tabs', () => {
     if (loaded === 'unsupported') throw new Error('unexpected');
     storeRecords();
 
-    expect(await loaded.stored).toEqual({ kind: 'stored', seq: null });
+    // The view reads again once the delete is done.
+    expect(await loaded.stored).toEqual({ kind: 'yielded' });
     expect(host.commits).toEqual([]);
     finishDelete();
     await deleting;
+  });
+
+  it('lets a reset through once a fill has held the fence too long, and commits nothing after', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      vi.stubGlobal('navigator', { locks: fakeLocks() });
+      const { host, fetchPage, storeRecords } = fill();
+      const loaded = await loadChannelPage(
+        { host, touches: { due: () => undefined }, fetchPage },
+        { channelId: CHANNEL_ID, limit: 50 }
+      );
+      if (loaded === 'unsupported') throw new Error('unexpected');
+
+      // A reset in another tab waits longer than any fill may hold.
+      const order: string[] = [];
+      const resetting = whileNoFills(
+        async () => {
+          order.push('reset');
+        },
+        { waitMs: 60_000 }
+      );
+      await vi.advanceTimersByTimeAsync(FILL_HOLD_LIMIT_MS - 1);
+      expect(order).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      await resetting;
+      expect(order).toEqual(['reset']);
+
+      // The records land after the reset erased the channel: no coverage.
+      storeRecords();
+      expect(await loaded.stored).toEqual({ kind: 'yielded' });
+      expect(host.commits).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

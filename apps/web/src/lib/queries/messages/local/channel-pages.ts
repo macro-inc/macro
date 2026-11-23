@@ -71,12 +71,15 @@ export interface ChannelPage {
 
 /**
  * What storing a page left on the device: the sequence it holds for the
- * channel (null when it does not hold the page), or that the cache session
- * changed first and the page must be read again.
+ * channel (null when it does not hold the page), that the cache session
+ * changed first and the page must be read again, or that a delete in some tab
+ * came first (`yielded`): the page was shown but not held, and is read again
+ * once no delete is pending (`afterDeletes`).
  */
 export type PageStored =
   | { kind: 'stored'; seq: string | null }
-  | { kind: 'session-changed' };
+  | { kind: 'session-changed' }
+  | { kind: 'yielded' };
 export type LoadedChannelPage = {
   page: ChannelPage;
   /**
@@ -433,14 +436,14 @@ async function loadPage(
   const { page, cached } = fetched;
   span.setAttr('page.entries', page.entries.length);
   const coverage = serverPageCoverage(request, page);
-  const commit = async (): Promise<string | null> => {
+  const commit = async (): Promise<string | null | 'yielded'> => {
     try {
       return await commitPage();
     } finally {
       release();
     }
   };
-  const commitPage = async (): Promise<string | null> => {
+  const commitPage = async (): Promise<string | null | 'yielded'> => {
     await cached;
     // A cold host is asked again once it can answer.
     const held = device === 'not-ready' ? await read : device;
@@ -450,9 +453,13 @@ async function loadPage(
     }
     if (held.kind === 'failed') return null;
     markChannelCacheAnswered(host as CacheHost);
-    // Deleted meanwhile, here or in another tab: the records the page stored
-    // may be gone with it, and coverage would show them as held.
-    if (!hold || !unchangedSince(host, request.channelId, resets)) return null;
+    // A delete in another tab came first, or the hold ran past its limit,
+    // which a reset stops waiting for: the records the page stored may be
+    // gone. Nothing tells this view when that delete is done, so it reads
+    // again after it. Nothing awaits from here to the send.
+    if (!hold?.current()) return 'yielded';
+    // Deleted here meanwhile: the reset or eviction rereads the views itself.
+    if (!unchangedSince(host, request.channelId, resets)) return null;
     const touchedAtMs = deps.touches.due(
       request.channelId,
       (deps.now ?? Date.now)()
@@ -489,11 +496,15 @@ async function loadPage(
  * change are reported here.
  */
 async function storedOutcome(
-  commit: Promise<string | null>,
+  commit: Promise<string | null | 'yielded'>,
   span: Span
 ): Promise<PageStored> {
   try {
     const seq = await commit;
+    if (seq === 'yielded') {
+      span.setAttr('page.stored', 'yielded');
+      return { kind: 'yielded' };
+    }
     span.setAttr('page.stored', seq === null ? 'unheld' : 'held');
     return { kind: 'stored', seq };
   } catch (error) {

@@ -75,7 +75,8 @@ export function cacheSessionChanged(error: unknown): boolean {
 
 /**
  * Times a view reads again because the cache session changed before the
- * device stored what it read, as startup's first owner proof does.
+ * device stored what it read, as startup's first owner proof does, or
+ * because a delete in some tab came first and the view was left unheld.
  */
 export const SESSION_CHANGE_RELOADS = 2;
 

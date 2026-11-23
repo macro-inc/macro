@@ -23,6 +23,7 @@ import {
   loadChannelPage,
   readDeviceChannelPage,
 } from './channel-pages';
+import { afterDeletes } from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Entries a page asks for, as the REST timeline does. */
@@ -252,9 +253,9 @@ export function createLocalChannelTimeline(
     loaded: LoadedChannelPage,
     epoch: number,
     token: number
-  ): Promise<'held' | 'unheld' | 'session-changed'> => {
+  ): Promise<'held' | 'unheld' | 'session-changed' | 'yielded'> => {
     const stored = await loaded.stored;
-    if (stored.kind === 'session-changed') return 'session-changed';
+    if (stored.kind !== 'stored') return stored.kind;
     const seq = stored.seq;
     if (token !== loadToken) return 'unheld';
     if (loaded.source === 'device') {
@@ -279,6 +280,7 @@ export function createLocalChannelTimeline(
     const token = ++loadToken;
     abort?.abort();
     abort = new AbortController();
+    const signal = abort.signal;
     held = false;
     anchorId = around;
     if (reloads === 0)
@@ -301,7 +303,7 @@ export function createLocalChannelTimeline(
           limit: CHANNEL_PAGE_LIMIT,
           ...(around !== undefined && { aroundMessageId: around }),
         },
-        abort.signal
+        signal
       );
     } catch (error) {
       if (token !== loadToken) return;
@@ -322,9 +324,12 @@ export function createLocalChannelTimeline(
     });
     const settled = await settle(loaded, epoch, token);
     if (token !== loadToken) return;
-    if (settled === 'session-changed') {
-      // The new session can store what the old one could not.
+    if (settled === 'session-changed' || settled === 'yielded') {
+      // The new session can store what the old one could not, and a read
+      // after the delete can hold what it reads.
       if (reloads < SESSION_CHANGE_RELOADS) {
+        if (settled === 'yielded' && !(await afterDeletes(signal))) return;
+        if (token !== loadToken) return;
         currentLoad = loadWindow(around, reloads + 1);
         await currentLoad;
       }

@@ -32,6 +32,7 @@ import {
   storeFailure,
 } from './channel-network';
 import {
+  afterDeletes,
   channelResetMark,
   holdAgainstDeletes,
   unchangedSince,
@@ -172,6 +173,7 @@ async function fetchServerThread(
       seq: string | null;
       readSeq: string;
       sessionChanged: boolean;
+      yielded?: boolean;
     }
   | undefined
 > {
@@ -234,10 +236,20 @@ async function fetchServerThread(
     try {
       const failed = (await Promise.all(stored)).find(Boolean);
       if (failed) throw failed.error;
-      // Deleted meanwhile, here or in another tab: coverage would show
-      // records that may be gone.
-      if (!hold || !unchangedSince(host, channelId, resets)) {
-        return { thread, seq: null, readSeq: seq, sessionChanged: false };
+      // A delete in another tab came first, or the hold ran past its limit,
+      // which a reset stops waiting for: coverage would show records that
+      // may be gone, and the thread reads again after the delete. Deleted
+      // here, the reset rereads it itself. Nothing awaits from here to the
+      // send.
+      const yielded = !hold?.current();
+      if (yielded || !unchangedSince(host, channelId, resets)) {
+        return {
+          thread,
+          seq: null,
+          readSeq: seq,
+          sessionChanged: false,
+          yielded,
+        };
       }
       const result = await host.channelTimelineCommit(
         {
@@ -273,6 +285,11 @@ export type LoadedChannelThread = {
   seq: string | null;
   /** The cache session changed before the device could store the thread. */
   sessionChanged?: boolean;
+  /**
+   * A delete in some tab came first: the thread shows but is not held, and is
+   * read again once no delete is pending (`afterDeletes`).
+   */
+  yielded?: boolean;
   /** The sequence the server read the thread at; absent for a device read. */
   readSeq?: string;
 };
@@ -377,6 +394,9 @@ export function createLocalChannelThread(
   });
   let token = 0;
   let held = false;
+  // The load in flight. A reload starts after an await, outside any Solid
+  // owner, so closing the thread aborts it through here, not `onCleanup`.
+  let abort: AbortController | undefined;
 
   const show = (thread: MessageThread) =>
     setState('replies', reconcile(thread.replies, { key: 'id' }));
@@ -384,13 +404,14 @@ export function createLocalChannelThread(
   const load = async (root: string, reloads = 0): Promise<void> => {
     const current = ++token;
     held = false;
-    const abort = new AbortController();
-    onCleanup(() => abort.abort());
+    abort?.abort();
+    abort = new AbortController();
+    const signal = abort.signal;
     const epoch = deps.runtime.epoch();
     try {
       const loaded = await loadChannelThread(deps.host, channelId, root, {
         fetchPage: deps.fetchPage,
-        signal: abort.signal,
+        signal,
       });
       if (current !== token) return;
       if (loaded === 'unsupported') {
@@ -405,9 +426,12 @@ export function createLocalChannelThread(
         fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-thread');
         return;
       }
-      if (loaded.sessionChanged) {
-        // The new session can store what the old one could not.
-        if (reloads < SESSION_CHANGE_RELOADS) await load(root, reloads + 1);
+      if (loaded.sessionChanged || loaded.yielded) {
+        // The new session can store what the old one could not, and a read
+        // after the delete can hold what it reads.
+        if (reloads >= SESSION_CHANGE_RELOADS) return;
+        if (loaded.yielded && !(await afterDeletes(signal))) return;
+        if (current === token) await load(root, reloads + 1);
         return;
       }
       deps.runtime.noteServerRead(
@@ -468,6 +492,7 @@ export function createLocalChannelThread(
       );
       onCleanup(() => {
         token += 1;
+        abort?.abort();
         stop();
         release();
       });
