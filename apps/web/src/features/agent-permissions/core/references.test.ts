@@ -122,7 +122,7 @@ describe('defaultCandidate', () => {
             policyId: 'policy-team',
             kind: 'team',
             team: { id: 'team-1', name: 'Acme' },
-            scope: { kind: 'team', team_id: 'team-1', team_name: 'Acme' },
+            scope: { kind: 'team', teamId: 'team-1', teamName: 'Acme' },
             current: false,
           },
         ],

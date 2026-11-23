@@ -250,7 +250,6 @@ export function NewAgentPermissions(props: {
                   <PolicySourceCard
                     kind={source().kind}
                     agent={source().agent}
-                    team={source().team}
                     scope={source().scope}
                     title={t('agentPermissions.useSamePermissionsAs')}
                     action={

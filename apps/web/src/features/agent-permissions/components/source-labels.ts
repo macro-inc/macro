@@ -5,22 +5,14 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { match } from 'ts-pattern';
 
-/**
- * Whose a policy is: "Personal", "Team · Acme", or "Team" when the team's
- * name couldn't be read. The name comes from the policy's `team` (the
- * scope's own name field isn't relied on).
- */
-export function scopeLabel(policy: {
-  scope?: ToolPermissionSourceScope | null;
-  team?: { name: string } | null;
-}): string | undefined {
-  const scope = policy.scope;
+/** Whose a policy is: "Personal", "Team · Acme", or "Team" when the team's name couldn't be read. */
+export function scopeLabel(
+  scope: ToolPermissionSourceScope | null | undefined
+): string | undefined {
   if (!scope) return undefined;
   if (scope.kind === 'personal') return t('agentPermissions.scopePersonal');
-  const name =
-    policy.team?.name ?? ('team_name' in scope ? scope.team_name : undefined);
-  return name
-    ? t('agentPermissions.scopeTeam', { team: name })
+  return 'teamName' in scope && scope.teamName
+    ? t('agentPermissions.scopeTeam', { team: scope.teamName })
     : t('agentPermissions.scopeTeamOnly');
 }
 

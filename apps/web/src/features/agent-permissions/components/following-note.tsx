@@ -40,7 +40,6 @@ export function FollowingNote(props: {
         <PolicySourceCard
           kind={props.source.kind}
           agent={props.source.agent}
-          team={props.source.team}
           scope={props.source.scope}
           title={props.title}
           action={props.action}
