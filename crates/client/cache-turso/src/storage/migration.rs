@@ -8,13 +8,16 @@
 //! the frozen-schema checks, so an upgraded file must have exactly the tables
 //! and indexes a fresh file has before the current version is committed: a
 //! chain that would produce anything else rolls back and leaves the file at the
-//! version before its last step, which the browser can still hand back to the
-//! build that wrote it. Later opens then find a fresh file's schema digest and
-//! skip those checks.
+//! version before its last step. Later opens then find a fresh file's schema
+//! digest and skip those checks.
 //!
 //! A version with no complete chain of steps, a newer version, and a failing
 //! step are all classified for physical reset, as every version change was
 //! before steps existed.
+//!
+//! Only native files reach a step: a browser database's name embeds the
+//! storage version, so a browser build opens a new database instead
+//! (`cache_core::codec::cache_database_name`).
 //!
 //! A step's SQL is frozen when the step is registered: it must not use the
 //! current schema constants, because a later version may change them while the
@@ -61,20 +64,6 @@ const fn steps_reach_current_version() -> bool {
         index += 1;
     }
     STEPS[STEPS.len() - 1].from + 1 == STORAGE_SCHEMA_VERSION
-}
-
-/// The oldest storage version this build upgrades in place, if any.
-#[must_use]
-pub fn oldest_upgradable_storage_version() -> Option<u32> {
-    STEPS.first().map(|step| step.from)
-}
-
-/// Whether a database written at storage `version` is upgraded in place by
-/// this build instead of being reset.
-#[must_use]
-pub fn storage_version_upgradable(version: u32) -> bool {
-    version < STORAGE_SCHEMA_VERSION
-        && oldest_upgradable_storage_version().is_some_and(|oldest| oldest <= version)
 }
 
 /// Upgrades an existing database to the current storage version. Returns the
@@ -136,7 +125,7 @@ pub(super) fn run_steps(
 
 /// The storage version a database says it was written at, or `None` when it
 /// does not say so readably. Never writes.
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 pub(super) fn stored_storage_version(connection: &Db) -> Option<u32> {
     stored_version(connection).ok()
 }
@@ -284,37 +273,6 @@ pub mod test_hooks {
             driver::execute(
                 &connection,
                 "CREATE TABLE unknown_to_every_version (value INTEGER)",
-                Vec::new(),
-            )?;
-            Ok(())
-        }))
-    }
-
-    /// Removes every queued write's optimistic layer, so the next open of
-    /// this database finds its queue inconsistent and must reset it, after
-    /// any upgrade step has committed. Only cache-wasm's browser tests call
-    /// it, through the feature.
-    #[cfg(feature = "migration-test-hooks")]
-    pub fn drop_optimistic_layers(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
-        storage.require_healthy()?;
-        let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
-            driver::execute(&connection, "DELETE FROM optimistic_layers", Vec::new())?;
-            Ok(())
-        }))
-    }
-
-    /// Removes the row that says which storage version wrote this database,
-    /// so no open can tell, and the next open of it must reset it. Only
-    /// cache-wasm's browser tests call it, through the feature.
-    #[cfg(feature = "migration-test-hooks")]
-    pub fn forget_storage_version(storage: &mut TursoStorage) -> Result<(), TursoStorageError> {
-        storage.require_healthy()?;
-        let connection = storage.connection();
-        storage.latch_result(driver::write_transaction(&connection, || {
-            driver::execute(
-                &connection,
-                "DELETE FROM meta WHERE key = 'storage_schema_version'",
                 Vec::new(),
             )?;
             Ok(())

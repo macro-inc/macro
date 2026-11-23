@@ -34,7 +34,6 @@ import {
   parseStorageGeneration,
 } from '../protocol';
 import {
-  type CacheTelemetryObservation,
   type CacheTelemetryRecorderLike,
   classifyCacheError,
   describeCacheError,
@@ -52,23 +51,6 @@ import {
   loadCacheWasm,
 } from './wasm-module';
 
-type StorageHistory = Pick<
-  CacheTelemetryObservation,
-  'fromStorageVersion' | 'carryForward'
->;
-
-/** Payload-free storage history of an open, for its `schema_init` event. */
-const storageHistory = (opened: CacheOpenResult): StorageHistory => {
-  const fromStorageVersion =
-    opened.fromStorageVersion ?? opened.carryForwardStorageVersion;
-  return {
-    ...(fromStorageVersion === undefined ? {} : { fromStorageVersion }),
-    ...(opened.carryForward === undefined
-      ? {}
-      : { carryForward: opened.carryForward }),
-  };
-};
-
 const isOwnerLockUnavailable = (error: unknown): boolean =>
   typeof error === 'object' &&
   error !== null &&
@@ -81,13 +63,6 @@ const isStorageBusy = (error: unknown): boolean =>
   error !== null &&
   'cacheStorageBusy' in error &&
   error.cacheStorageBusy === true;
-
-/** A WASM recovery open kept files a storage upgrade moved, undecided. */
-const isRecoveryDeferred = (error: unknown): boolean =>
-  typeof error === 'object' &&
-  error !== null &&
-  'cacheRecoveryDeferred' in error &&
-  error.cacheRecoveryDeferred === true;
 
 type PortLike = {
   postMessage(msg: unknown): void;
@@ -119,10 +94,6 @@ export interface CacheWorkerCoreOptions {
   /** Called when opening gave up on database files another context kept
    * open. The failed request's response carries only the message. */
   onStorageBusy?: () => void;
-  /** Called when a recovery open kept the files a storage upgrade moved here
-   * because it could not yet decide whether they go back to the older build.
-   * It wiped nothing. */
-  onRecoveryDeferred?: () => void;
   /** Reports the bounded open outcome to the coordinator transport. */
   onInitializationOutcome?: (outcome: CacheOpenOutcome) => void;
   /**
@@ -456,7 +427,8 @@ export class CacheWorkerCore {
           durationMs,
         });
       }
-      this.reportFailureKind(error);
+      this.reportResetRequired(error);
+      if (isStorageBusy(error)) this.options.onStorageBusy?.();
       respond({
         id: request.id,
         ok: false,
@@ -1555,7 +1527,6 @@ export class CacheWorkerCore {
         : undefined;
       try {
         let openOutcome: CacheOpenOutcome;
-        let openHistory: StorageHistory = {};
         if (awaitStorageGrant && onOwnerLockBusy) {
           const open = this.options.recoveryOpen
             ? wasm.openCacheForRecoveryWithOutcome
@@ -1580,7 +1551,6 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
-          openHistory = storageHistory(opened);
         } else if (this.options.recoveryOpen) {
           if (wasm.openCacheForRecoveryWithOutcome) {
             const opened = await wasm.openCacheForRecoveryWithOutcome(
@@ -1590,7 +1560,6 @@ export class CacheWorkerCore {
             );
             this.engine = opened.engine;
             openOutcome = opened.outcome;
-            openHistory = storageHistory(opened);
           } else {
             this.engine = await wasm.openCacheForRecovery(scope, hotCapacity);
             openOutcome = 'reset-storage-uncertain';
@@ -1603,7 +1572,6 @@ export class CacheWorkerCore {
           );
           this.engine = opened.engine;
           openOutcome = opened.outcome;
-          openHistory = storageHistory(opened);
         } else {
           this.engine = await wasm.openCache(scope, hotCapacity);
           openOutcome = 'opened-existing';
@@ -1619,7 +1587,6 @@ export class CacheWorkerCore {
           outcome: 'success',
           errorCode: 'none',
           openOutcome,
-          ...openHistory,
           durationMs: this.now() - schemaStartedAt,
         });
         await this.refreshQueueDiagnostics(true);
@@ -1649,13 +1616,6 @@ export class CacheWorkerCore {
         await onOwnerLockBusy(attempt);
       }
     }
-  }
-
-  /** Tells the transport what kind of storage failure `error` was. */
-  private reportFailureKind(error: unknown): void {
-    this.reportResetRequired(error);
-    if (isStorageBusy(error)) this.options.onStorageBusy?.();
-    if (isRecoveryDeferred(error)) this.options.onRecoveryDeferred?.();
   }
 
   private reportResetRequired(error: unknown): void {

@@ -71,25 +71,12 @@ export type CacheTelemetryOutcome = (typeof CACHE_TELEMETRY_OUTCOMES)[number];
 
 export const CACHE_OPEN_OUTCOMES = [
   'opened-existing',
-  'upgraded-existing',
   'opened-new',
   'reset-incompatible',
   'reset-corrupt',
   'reset-storage-uncertain',
 ] as const;
 export type CacheOpenOutcome = (typeof CACHE_OPEN_OUTCOMES)[number];
-
-export const CACHE_CARRY_FORWARDS = [
-  'moved',
-  'resumed',
-  'older-in-use',
-  'unsupported',
-  'unreadable',
-  'failed',
-  'returned',
-  'discarded',
-] as const;
-export type CacheCarryForward = (typeof CACHE_CARRY_FORWARDS)[number];
 
 export const CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY = [
   'available',
@@ -165,7 +152,6 @@ export const CACHE_OWNER_EVENTS = [
   'multiple-owner-detected',
   'owner-lock-unavailable',
   'storage-busy',
-  'recovery-deferred',
   'takeover-granted',
   'superseded',
   'stale-databases-removed',
@@ -277,9 +263,6 @@ export type CacheTelemetryObservation = {
   ownerEvent?: CacheOwnerEvent;
   persistence?: 'granted' | 'denied' | 'unknown';
   openOutcome?: CacheOpenOutcome;
-  /** Storage version an upgraded or carried-forward database was written at. */
-  fromStorageVersion?: number;
-  carryForward?: CacheCarryForward;
   queueDiagnosticsAvailability?: CacheQueueDiagnosticsAvailability;
   revisionCategory?: CacheRevisionCategory;
   resetAttempt?: 'wipe-before-open';
@@ -391,15 +374,6 @@ function sanitizeObservation(
     ...(input.openOutcome !== undefined &&
     CACHE_OPEN_OUTCOMES.includes(input.openOutcome)
       ? { openOutcome: input.openOutcome }
-      : {}),
-    ...(input.fromStorageVersion !== undefined &&
-    Number.isSafeInteger(input.fromStorageVersion) &&
-    input.fromStorageVersion >= 0
-      ? { fromStorageVersion: input.fromStorageVersion }
-      : {}),
-    ...(input.carryForward !== undefined &&
-    CACHE_CARRY_FORWARDS.includes(input.carryForward)
-      ? { carryForward: input.carryForward }
       : {}),
     ...(input.queueDiagnosticsAvailability !== undefined &&
     CACHE_QUEUE_DIAGNOSTICS_AVAILABILITY.includes(
@@ -876,8 +850,6 @@ export function isCacheTelemetryObservation(
       'ownerEvent',
       'persistence',
       'openOutcome',
-      'fromStorageVersion',
-      'carryForward',
       'queueDiagnosticsAvailability',
       'revisionCategory',
       'resetAttempt',

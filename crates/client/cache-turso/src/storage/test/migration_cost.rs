@@ -113,7 +113,7 @@ fn file_bytes(path: &Path) -> u64 {
 }
 
 #[test]
-#[ignore = "needs CACHE_MIGRATION_DB=<a cache-bench database> (CACHE_MIGRATION_OUT=<dir> keeps the shapes the browser measurement loads); run in release with --ignored --nocapture"]
+#[ignore = "needs CACHE_MIGRATION_DB=<a cache-bench database>; run in release with --ignored --nocapture"]
 fn upgrade_cost_on_a_retained_cache() {
     let Some(source) = std::env::var_os("CACHE_MIGRATION_DB").map(PathBuf::from) else {
         return;
@@ -178,14 +178,6 @@ fn upgrade_cost_on_a_retained_cache() {
         source.display(),
         file_bytes(&current),
     );
-    // The browser measurement in cache-wasm loads these over HTTP.
-    if let Some(out) = std::env::var_os("CACHE_MIGRATION_OUT").map(PathBuf::from) {
-        std::fs::create_dir_all(&out).unwrap();
-        copy_pair(&current, &out.join("current.turso"));
-        copy_pair(&older, &out.join("older.turso"));
-        copy_pair(&derived, &out.join("derived.turso"));
-    }
-
     let database = TursoFileDatabase::new(&live).unwrap();
     for run in 1..=runs {
         copy_pair(&current, &live);

@@ -153,9 +153,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
             };
             // Validate persisted metadata before opening or modifying user storage.
             crate::engine::persist_schema(&schema_path, &schema)?;
-            let database =
-                TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
-            let storage = database.open_or_reset(&scope).map_err(|e| e.to_string())?;
+            let storage = open_storage(&dir.join("cache.turso"), &scope)?;
             let events = app.clone();
             let handle = EngineHandle::with_schema(storage, hot_capacity, schema)
                 .with_authority_listener(scope.clone(), move |authority| {
@@ -173,6 +171,25 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
         }
     };
     handle.install_schema(&incoming, &schema_path).await
+}
+
+/// Opens the cache file for `scope`, replacing it when it is incompatible or
+/// uncertain. A file an older build wrote at an earlier storage version is
+/// upgraded in place first; the span records the version it came from.
+#[tracing::instrument(
+    name = "graphql_cache.native.open",
+    skip_all,
+    fields(graphql_cache.storage.upgraded_from = tracing::field::Empty),
+    err
+)]
+fn open_storage(path: &std::path::Path, scope: &str) -> Result<cache_turso::TursoStorage, String> {
+    let storage = TursoFileDatabase::new(path)
+        .and_then(|database| database.open_or_reset(scope))
+        .map_err(|e| e.to_string())?;
+    if let Some(version) = storage.upgraded_from_storage_version() {
+        tracing::Span::current().record("graphql_cache.storage.upgraded_from", version);
+    }
+    Ok(storage)
 }
 
 /// Returns the current in-memory cache revision as a decimal string.

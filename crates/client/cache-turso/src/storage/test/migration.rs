@@ -312,7 +312,7 @@ fn a_file_this_scope_does_not_own_is_never_upgraded() {
 
 /// The frozen-schema checks run inside the last step's transaction: a chain
 /// whose result they reject leaves the file exactly as the older build wrote
-/// it, still at the older version, so the browser can hand it back.
+/// it, still at the older version, until the reset that follows.
 #[test]
 fn a_rejected_upgrade_leaves_the_older_file_untouched() {
     block_on(async {
@@ -341,6 +341,45 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
         assert_eq!(schema_rows(&connection), schema);
         assert_eq!(table_rows(&connection), rows);
         connection.close().unwrap();
+    });
+}
+
+/// A native open reports the version it upgraded the file from, also when the
+/// same open carries a previous format forward and swaps in a compacted copy,
+/// whose own open finds nothing left to upgrade.
+#[test]
+fn a_native_open_reports_the_upgrade_across_compaction() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+        for previous_format in [false, true] {
+            let mut storage = database.open("scope").unwrap();
+            populate(&mut storage).await;
+            downgrade_to_storage_11(&mut storage);
+            if previous_format {
+                raw_execute(
+                    &storage,
+                    "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+                    vec![text(&cache_namespace_at(
+                        "scope",
+                        MIGRATABLE_CACHE_FORMAT_VERSIONS[0],
+                    ))],
+                );
+            }
+            storage.try_close().unwrap();
+
+            let storage = database.open("scope").unwrap();
+            assert_eq!(
+                storage.upgraded_from_storage_version(),
+                Some(11),
+                "previous format: {previous_format}"
+            );
+            storage.try_close().unwrap();
+            let storage = database.open("scope").unwrap();
+            assert_eq!(storage.upgraded_from_storage_version(), None);
+            storage.try_close().unwrap();
+            database.physical_reset().unwrap();
+        }
     });
 }
 

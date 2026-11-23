@@ -50,7 +50,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - The `web` wasm test target checks streamed search over real OPFS; use the [browser runner](../turso-opfs/README.md#repeatable-verification).
 - `cargo test --release -p cache-turso --lib compare_search_scan_options -- --ignored --nocapture`: isolate prepared-statement, covering-index, and borrowed-row costs on a temporary database, without changing production schema.
 - `cargo test --release -p cache-turso --lib generated_chains_long_run -- --ignored`: 1,000 generated storage upgrade chains with interruptions, each checked against a fresh file at the target version.
-- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib --features migration-test-hooks upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade, and each of its statements, against an ordinary reopen of the same database: any closed cache file of this build written under the `cache-bench` scope, such as the production-size p50 and p90 files the separate `cache-bench` generator writes. `CACHE_MIGRATION_OUT=<dir>` also keeps both shapes for the browser measurement in `cache-wasm`.
+- `CACHE_MIGRATION_DB=<bench database> cargo test --release -p cache-turso --lib upgrade_cost_on_a_retained_cache -- --ignored --nocapture`: time the 11 to 12 upgrade, and each of its statements, against an ordinary reopen of the same database: any closed cache file of this build written under the `cache-bench` scope, such as the production-size p50 and p90 files the separate `cache-bench` generator writes.
 
 ## Gotchas
 
@@ -76,8 +76,9 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   transaction per step, which also advances `meta.storage_schema_version`, so an
   interrupted upgrade resumes. The last step's transaction runs the frozen-schema
   checks (later opens skip them on finding a fresh file's schema digest), so a
-  rejected chain leaves the version before its last step. The browser hands that back to the older build only when it is
-  the version the file moved at, that is, when no earlier step committed. Bumping
+  rejected chain leaves the version before its last step. Only native files
+  reach a step: browser database names embed the storage version, so a browser
+  build opens a new database instead. Bumping
   `STORAGE_SCHEMA_VERSION` without a step fails to compile; clearing `STEPS`
   declares that older files reset. Freeze a step's SQL when registering it:
   never use the current schema constants, which a later version changes. Each

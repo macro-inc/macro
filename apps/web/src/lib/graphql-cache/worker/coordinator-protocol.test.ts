@@ -844,38 +844,6 @@ describe('coordinator runtime protocol', () => {
         kind: 'activation-failed',
         tabId: 'tab',
         ownerEpoch: 1,
-        reason: 'cache recovery kept the files an upgrade moved here',
-        failureCode: 'storage-busy',
-        movedFilesKept: true,
-      }).ok
-    ).toBe(true);
-    expect(
-      validateEngineToCoordinatorEnvelope({
-        ...version,
-        kind: 'activation-failed',
-        tabId: 'tab',
-        ownerEpoch: 1,
-        reason: 'cache recovery kept the files an upgrade moved here',
-        failureCode: 'recovery-deferred',
-      }).ok
-    ).toBe(false);
-    expect(
-      validateEngineToCoordinatorEnvelope({
-        ...version,
-        kind: 'activation-failed',
-        tabId: 'tab',
-        ownerEpoch: 1,
-        reason: 'cache recovery kept the files an upgrade moved here',
-        failureCode: 'recovery-open-failed',
-        movedFilesKept: 'yes',
-      }).ok
-    ).toBe(false);
-    expect(
-      validateEngineToCoordinatorEnvelope({
-        ...version,
-        kind: 'activation-failed',
-        tabId: 'tab',
-        ownerEpoch: 1,
         reason: 'open failed',
         failureCode: 'busy',
       }).ok

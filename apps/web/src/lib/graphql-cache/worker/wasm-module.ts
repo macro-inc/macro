@@ -62,8 +62,6 @@ export interface CacheStorageResetRequiredError extends Error {
 
 export type CacheOpenOutcome =
   | 'opened-existing'
-  /** An existing database of an older storage version, upgraded in place. */
-  | 'upgraded-existing'
   | 'opened-new'
   | 'reset-incompatible'
   | 'reset-corrupt'
@@ -90,31 +88,9 @@ export type CacheQueueDiagnostics =
       oldestCreatedAtMs: null;
     };
 
-/** What happened to an older storage version's database when this build had
- * none of its own: moved here and opened (`moved`, or `resumed` after an
- * earlier open stopped partway), left where it was (`older-in-use`,
- * `unsupported`, `unreadable`, `failed`), or, when its first open here never
- * finished, handed back to the older build (`returned`) or reset
- * (`discarded`). */
-export type CacheCarryForward =
-  | 'moved'
-  | 'resumed'
-  | 'older-in-use'
-  | 'unsupported'
-  | 'unreadable'
-  | 'failed'
-  | 'returned'
-  | 'discarded';
-
 export interface CacheOpenResult {
   engine: CacheEngine;
   outcome: CacheOpenOutcome;
-  /** With `upgraded-existing`: the storage version the database was written at. */
-  fromStorageVersion?: number;
-  /** Absent when this build's database existed or no older one did. */
-  carryForward?: CacheCarryForward;
-  /** Absent when the older storage version is unknown. */
-  carryForwardStorageVersion?: number;
 }
 
 export type CacheEngineHydrationResult = WriteResult &

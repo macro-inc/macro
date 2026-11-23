@@ -20,7 +20,7 @@ pub use driver::{WalCheckpoint, WalPosition};
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
     QueuedMutationCount, STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome,
-    TursoStorageOpenOutcome, oldest_upgradable_storage_version, storage_version_upgradable,
+    TursoStorageOpenOutcome,
 };
 
 #[cfg(feature = "migration-test-hooks")]

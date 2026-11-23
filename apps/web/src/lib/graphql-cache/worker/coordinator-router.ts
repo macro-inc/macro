@@ -17,7 +17,6 @@ import {
   type CoordinatorAction,
   CoordinatorCore,
   type CoordinatorSnapshot,
-  type CoordinatorState,
   startupPhaseMayTouchStorage,
 } from './coordinator-core';
 import {
@@ -281,22 +280,6 @@ export class CoordinatorRouter {
   private nextRecoveryResetReason: CacheResetReason | undefined;
   private readonly resetRequiredEpochs = new Set<number>();
   private recoveryAttemptCount = 0;
-  /** Whether an open since the last accepted readiness kept files a storage
-   * upgrade moved here because it could not decide on them
-   * (`movedFilesKept`). Until an open succeeds those files may hold the
-   * only copy of an older build's queue, so this scope is never given up. */
-  private movedFilesKept = false;
-  /** Whether an open that may have reached storage ended without saying
-   * what it did there: a watchdog, a lost tab or worker, a fatal error, a
-   * rejected readiness proof. It may have kept moved files no report named, so
-   * until an open that reaches storage reports (a busy exit says nothing), or
-   * one succeeds, this scope is not given up either. */
-  private storageOutcomeUnknown = false;
-  /** Whether a retry cycle already ended in a deferral since the last
-   * accepted readiness. Each later registration then gets one recovery
-   * attempt rather than a full cycle, so a page retrying its cache waits for
-   * one open, not five, before it runs uncached again. */
-  private recoveryDeferredBefore = false;
   private recoveryRetryTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly now = (): number =>
     globalThis.performance?.now() ?? Date.now();
@@ -728,7 +711,6 @@ export class CoordinatorRouter {
         );
         break;
       case 'engine-ready': {
-        const before = core.state;
         const actions = core.engineReady({
           ...message,
           expectedOwnerLockName: databaseOwnerLockName(core.scope),
@@ -738,12 +720,7 @@ export class CoordinatorRouter {
         );
         if (!violated) {
           // Accepted readiness proves the storage outcome even if visibility
-          // immediately drains this epoch or publishing its actions fails:
-          // any moved files were decided, and a later failure starts afresh.
-          this.resetRecoveryRetries();
-          this.movedFilesKept = false;
-          this.storageOutcomeUnknown = false;
-          this.recoveryDeferredBefore = false;
+          // immediately drains this epoch or publishing its actions fails.
           const recoveryResetReason = this.pendingRecoveryResetEpochs.get(
             message.ownerEpoch
           );
@@ -765,26 +742,6 @@ export class CoordinatorRouter {
               message.openOutcome,
               false
             );
-          }
-        }
-        if (violated) {
-          // A rejected proof already ended the epoch in the core. Its
-          // recovery wipe was not proven, so the next attempt repeats it.
-          const pendingReason = this.recordPendingResetFailure(
-            message.ownerEpoch,
-            'engine readiness proof was rejected'
-          );
-          if (pendingReason !== undefined)
-            this.nextRecoveryResetReason = pendingReason;
-          if (
-            before.kind === 'activating' &&
-            before.tabId === route.tabId &&
-            before.ownerEpoch === message.ownerEpoch
-          ) {
-            // The open reached storage, and nothing it says can be trusted
-            // about the files it may have kept.
-            this.noteOpenEnded(before, undefined);
-            this.activationStarted.delete(message.ownerEpoch);
           }
         }
         this.applyActions(actions);
@@ -819,6 +776,7 @@ export class CoordinatorRouter {
               startedAt === undefined ? undefined : this.now() - startedAt,
           });
           this.clearActivationTimer();
+          this.resetRecoveryRetries();
           this.scheduleHeartbeat(message.ownerEpoch);
           this.allowStaleDatabaseRemoval(route).catch(
             reportCoordinatorTaskFailure
@@ -886,8 +844,7 @@ export class CoordinatorRouter {
             route.tabId,
             route.ownerEpoch,
             message.reason,
-            'storage-busy',
-            message.movedFilesKept === true
+            'storage-busy'
           );
           break;
         }
@@ -896,8 +853,7 @@ export class CoordinatorRouter {
           message.ownerEpoch,
           message.reason,
           undefined,
-          message.failureCode,
-          message.movedFilesKept === true
+          message.failureCode
         );
         break;
       case 'heartbeat-ack':
@@ -1295,14 +1251,12 @@ export class CoordinatorRouter {
   }
 
   /** Fails closed without touching storage again: the owner lock stayed with
-   * another context, or it kept the database files open (`storage-busy`).
-   * A busy open can also have kept files a storage upgrade moved here. */
+   * another context, or it kept the database files open (`storage-busy`). */
   private closeUnavailable(
     tabId: string,
     ownerEpoch: number,
     detail: string,
-    cause: 'owner-lock' | 'storage-busy' = 'owner-lock',
-    movedFilesKept = false
+    cause: 'owner-lock' | 'storage-busy' = 'owner-lock'
   ): void {
     const core = this.coreValue;
     if (!core) return;
@@ -1312,7 +1266,6 @@ export class CoordinatorRouter {
         ? core.storageBusy(tabId, ownerEpoch)
         : core.ownerLockUnavailable(tabId, ownerEpoch);
     if (actions.length === 0) return;
-    if (movedFilesKept) this.movedFilesKept = true;
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     // Storage was not changed, or a busy wipe removed only part of it, so a
@@ -1373,29 +1326,7 @@ export class CoordinatorRouter {
   private scheduleResetActivation(): void {
     const core = this.coreValue;
     if (!core || core.state.kind !== 'resetting-after-loss') return;
-    const retryLimit = this.recoveryDeferredBefore ? 0 : RECOVERY_RETRY_LIMIT;
-    if (this.recoveryAttemptCount >= retryLimit) {
-      if (this.movedFilesKept || this.storageOutcomeUnknown) {
-        // Giving the scope up would strand the files a recovery kept, or an
-        // open that ended without a report may have kept: the next scope's
-        // name never looks for them. That holds whatever ended this cycle,
-        // even failures that never reached storage. Run uncached and let a
-        // later attempt decide again; the engine bounds those decisions.
-        const reason = this.movedFilesKept
-          ? `cache recovery kept files it could not decide on: ${core.state.reason}`
-          : `cache recovery could not check the files an interrupted open may have kept: ${core.state.reason}`;
-        this.resetRecoveryRetries();
-        this.recoveryDeferredBefore = true;
-        this.telemetry.record({
-          name: 'graphql_cache.owner',
-          operationCategory: 'lifecycle',
-          outcome: 'error',
-          ownerEvent: 'recovery-deferred',
-          ...describeCacheError(core.state.reason),
-        });
-        this.applyActions(core.deferRecovery(reason));
-        return;
-      }
+    if (this.recoveryAttemptCount >= RECOVERY_RETRY_LIMIT) {
       const reason = `cache recovery failed after ${RECOVERY_RETRY_LIMIT} attempts: ${core.state.reason}`;
       this.clearRecoveryRetryTimer();
       this.applyActions(core.terminalFailure(reason));
@@ -1422,24 +1353,6 @@ export class CoordinatorRouter {
     this.clearRecoveryRetryTimer();
   }
 
-  /** Records what an ended activation says about files a storage upgrade
-   * moved here. `movedFilesKept` is its report, or `undefined` when it ended
-   * without one. An open that reached storage and reported settles whether
-   * an earlier one left anything unknown, since it read the adoption itself;
-   * one that ended without a report may have kept files. */
-  private noteOpenEnded(
-    state: CoordinatorState,
-    movedFilesKept: boolean | undefined
-  ): void {
-    if (movedFilesKept) this.movedFilesKept = true;
-    if (
-      state.kind !== 'activating' ||
-      !startupPhaseMayTouchStorage(state.phase)
-    )
-      return;
-    this.storageOutcomeUnknown = movedFilesKept === undefined;
-  }
-
   private clearRecoveryRetryTimer(): void {
     if (this.recoveryRetryTimer === undefined) return;
     this.clearTimeoutFn(this.recoveryRetryTimer);
@@ -1451,20 +1364,12 @@ export class CoordinatorRouter {
     ownerEpoch: number,
     reason: string,
     fatalCode?: EngineFatalCode,
-    failureCode?: ActivationFailureCode,
-    movedFilesKept = false
+    failureCode?: ActivationFailureCode
   ): void {
     const core = this.coreValue;
     if (!core) return;
-    const state = core.state;
     const actions = core.ownerLost(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
-    // Only an activation-failed report says what the open did with moved
-    // files; a watchdog, a fatal error or a violation says nothing.
-    this.noteOpenEnded(
-      state,
-      failureCode === undefined ? undefined : movedFilesKept
-    );
     this.handoff.cancel();
     this.activationStarted.delete(ownerEpoch);
     const next = core.state;
@@ -1534,7 +1439,6 @@ export class CoordinatorRouter {
     }
 
     this.activationStarted.delete(ownerEpoch);
-    this.noteOpenEnded(state, undefined);
     const interruptedResetReason =
       state.kind === 'activating' && state.databaseAction === 'wipe-before-open'
         ? this.pendingRecoveryResetEpochs.get(ownerEpoch)
@@ -1577,7 +1481,6 @@ export class CoordinatorRouter {
     ) {
       this.handoff.cancel();
       this.activationStarted.delete(state.ownerEpoch);
-      this.noteOpenEnded(state, undefined);
       if (
         state.kind !== 'activating' ||
         startupPhaseMayTouchStorage(state.phase) ||

@@ -2207,6 +2207,7 @@ fn fault_storage(io: Arc<FaultIo>) -> TursoStorage {
         health: AtomicU8::new(0),
         database,
         connection,
+        storage_upgraded_from: None,
         fault: Mutex::new(None),
     }
 }

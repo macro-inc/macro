@@ -426,47 +426,6 @@ describe('cache engine worker runtime', () => {
     }
   });
 
-  it('reports an open that kept moved files beside its failure code', async () => {
-    // Either open can keep them, and a busy open says both.
-    const cases = [
-      ['wipe-before-open', false, true, 'recovery-open-failed'],
-      ['open-existing', false, true, 'initialization-failed'],
-      ['wipe-before-open', true, true, 'storage-busy'],
-      ['open-existing', true, false, 'storage-busy'],
-      ['open-existing', false, false, 'initialization-failed'],
-      ['wipe-before-open', false, false, 'recovery-open-failed'],
-    ] as const;
-    for (const [databaseAction, busy, deferred, failureCode] of cases) {
-      const scope = new FakeWorkerScope();
-      const direct = new FakePort();
-      installRuntime({
-        scope,
-        ownerLockIsHeld: async () => true,
-        createCore: (coreOptions) => ({
-          handleRequest: async (port, request) => {
-            await coreOptions.onOwnerLockAcquired?.();
-            if (busy) coreOptions.onStorageBusy?.();
-            if (deferred) coreOptions.onRecoveryDeferred?.();
-            port.postMessage({
-              id: request.id,
-              ok: false,
-              error: 'cache recovery kept the files an upgrade moved here',
-            });
-          },
-          addPort: vi.fn(),
-          drain: vi.fn(),
-        }),
-      });
-      scope.activate(activation(databaseAction), direct);
-
-      await vi.waitFor(() =>
-        expect(messagesOfKind(direct, 'activation-failed')).toEqual([
-          expect.objectContaining({ failureCode, movedFilesKept: deferred }),
-        ])
-      );
-    }
-  });
-
   it('deletes stale databases when started as a cleanup worker', async () => {
     const scope = new FakeWorkerScope();
     const reply = new FakePort();
@@ -552,33 +511,6 @@ describe('cache engine worker runtime', () => {
       tabId: 'tab-a',
       ownerEpoch: 7,
       databaseActionProof: 'wiped-before-open',
-    });
-  });
-
-  it('tells the coordinator an in-place upgrade kept storage, as an existing open', async () => {
-    const scope = new FakeWorkerScope();
-    const direct = new FakePort();
-    installCacheEngineWorker({
-      scope,
-      ownerLockIsHeld: async () => true,
-      createCore: (options) => ({
-        addPort: vi.fn(),
-        handleRequest: async (port, request) => {
-          options.onInitializationOutcome?.('upgraded-existing');
-          port.postMessage({ id: request.id, ok: true, result: null });
-        },
-        drain: vi.fn(),
-      }),
-    });
-
-    scope.activate(activation('open-existing'), direct);
-    await vi.waitFor(() =>
-      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
-    );
-
-    expect(messagesOfKind(direct, 'engine-ready')[0]).toMatchObject({
-      databaseActionProof: 'opened-existing',
-      openOutcome: 'opened-existing',
     });
   });
 

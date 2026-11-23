@@ -345,11 +345,6 @@ export type EngineToCoordinatorEnvelope =
       ownerEpoch: OwnerEpoch;
       reason: string;
       failureCode: ActivationFailureCode;
-      /** The open, of either kind and whatever its failure code, kept files a
-       * storage upgrade moved here because it could not yet tell whether
-       * they go back to the older build; it wiped nothing. The coordinator
-       * then never gives the scope up until an open succeeds. */
-      movedFilesKept?: boolean;
     }
   | {
       coordinatorVersion: typeof CACHE_COORDINATOR_PROTOCOL_VERSION;
@@ -1534,14 +1529,11 @@ export function validateEngineToCoordinatorEnvelope(
           'ownerEpoch',
           'reason',
           'failureCode',
-          'movedFilesKept',
         ]) &&
         isNonEmptyString(value.tabId) &&
         isPositiveInteger(value.ownerEpoch) &&
         isNonEmptyString(value.reason) &&
-        isActivationFailureCode(value.failureCode) &&
-        (value.movedFilesKept === undefined ||
-          typeof value.movedFilesKept === 'boolean')
+        isActivationFailureCode(value.failureCode)
       ) {
         return pass(value as EngineToCoordinatorEnvelope);
       }

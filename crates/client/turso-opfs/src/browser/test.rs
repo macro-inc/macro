@@ -15,7 +15,6 @@ use web_sys::{FileSystemGetDirectoryOptions, FileSystemGetFileOptions, FileSyste
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
-mod adopt;
 mod write_batch;
 
 #[derive(Debug)]
@@ -131,8 +130,6 @@ async fn clean_pair(database_name: &str) {
     let root = worker_root().await.expect("worker OPFS root");
     recursive_remove(&root, database_name).await;
     recursive_remove(&root, &format!("{database_name}-wal")).await;
-    recursive_remove(&root, &format!("{database_name}{ADOPTION_MARKER_SUFFIX}")).await;
-    recursive_remove(&root, &format!("{database_name}{ATTEMPTS_SUFFIX}")).await;
 }
 
 async fn replace_poisoned_registry_for_test() {
@@ -804,10 +801,14 @@ async fn real_worker_opfs_contract_and_consuming_lifecycle() {
     clean_pair(&cancel_db).await;
 
     for (suffix, fault, expected_kind) in [
-        ("remove", ResetFault::MainRemoved, OpfsErrorKind::Remove),
+        (
+            "remove",
+            ResetFault::AfterMainRemoval,
+            OpfsErrorKind::Remove,
+        ),
         (
             "recreate",
-            ResetFault::MainRecreated,
+            ResetFault::AfterMainRecreate,
             OpfsErrorKind::Recreate,
         ),
     ] {

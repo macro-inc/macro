@@ -68,19 +68,12 @@ const SEARCH_REBUILD_RECORDS_AFTER: &str =
 
 #[cfg(feature = "migration-test-hooks")]
 pub use migration::test_hooks as migration_test_hooks;
-pub use migration::{oldest_upgradable_storage_version, storage_version_upgradable};
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TursoStorageOpenOutcome {
     /// Existing compatible storage was validated and preserved.
     OpenedExisting,
-    /// Existing storage written at an older storage version was upgraded in
-    /// place, keeping its records and queued writes, then validated.
-    UpgradedExisting {
-        /// The storage version the database was written at.
-        from_storage_version: u32,
-    },
     /// A fresh physical database was initialized.
     OpenedNew,
 }
@@ -220,6 +213,9 @@ pub struct TursoStorage {
     /// The session's connection with its prepared statements. Its statements
     /// hold connection references, so closing releases them first.
     connection: Db,
+    /// The storage version this open upgraded the file from.
+    #[cfg(not(target_arch = "wasm32"))]
+    storage_upgraded_from: Option<u32>,
     #[cfg(all(test, not(target_arch = "wasm32")))]
     fault: Mutex<Option<TestFault>>,
 }
@@ -254,51 +250,22 @@ impl TursoStorage {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = Db::uncached(session.connection());
         let result = initialize(&connection, scope, fresh);
-        // Read before the connection goes: whether a failed open left the file
-        // at the version it was written at decides whether the browser may
-        // still hand it back to the build that wrote it.
-        let stored_storage_version = result
-            .is_err()
-            .then(|| migration::stored_storage_version(&connection))
-            .flatten();
         drop(connection);
         match result {
-            Ok(initialized) => Ok((
+            Ok(_) => Ok((
                 Self {
                     health: AtomicU8::new(0),
                     connection: Db::cached(session.connection()),
                     session,
                 },
-                initialized.outcome(fresh),
+                if fresh {
+                    TursoStorageOpenOutcome::OpenedNew
+                } else {
+                    TursoStorageOpenOutcome::OpenedExisting
+                },
             )),
-            Err(error) => Err(TursoStorageOpenFailure {
-                error,
-                stored_storage_version,
-                session,
-            }),
+            Err(error) => Err(TursoStorageOpenFailure { error, session }),
         }
-    }
-
-    /// Ends the OPFS adoption that brought these files to this identity, now
-    /// that their open succeeded (`turso_opfs::ConnectedOpfsSession::finish_adoption`).
-    pub async fn finish_adoption(&self) -> Result<(), OpfsError> {
-        self.session.finish_adoption().await
-    }
-
-    /// Reads the storage version a connected session's file says it was
-    /// written at, without initializing or writing to it, then closes the
-    /// session and keeps its files. Used to decide whether files an unfinished
-    /// OPFS adoption brought here can go back to the identity they came from.
-    /// The close checkpoints, so kept files are self-contained afterwards.
-    pub fn read_storage_version_and_close(
-        session: ConnectedOpfsSession,
-    ) -> (Option<u32>, Result<OpfsOwner, OpfsError>) {
-        let version = migration::stored_storage_version(&Db::uncached(session.connection()));
-        let owner = session
-            .try_close()
-            .map_err(|failure| failure.error().clone())
-            .and_then(|closed| closed.preserve());
-        (version, owner)
     }
 
     /// Browser-test-only: whether the open-time checks could be skipped, after
@@ -608,7 +575,6 @@ impl std::error::Error for TursoStorageResetFailure {
 #[cfg(target_arch = "wasm32")]
 pub struct TursoStorageOpenFailure {
     error: TursoStorageError,
-    stored_storage_version: Option<u32>,
     session: ConnectedOpfsSession,
 }
 
@@ -619,22 +585,10 @@ impl TursoStorageOpenFailure {
         self.error
     }
 
-    /// The storage version the file said it was written at once the open
-    /// failed, or `None` when it no longer says so readably. Equal to the
-    /// version it was written at only when this open committed nothing to it:
-    /// every upgrade step advances the version in its own transaction, and the
-    /// last runs the frozen-schema checks before committing.
-    pub fn stored_storage_version(&self) -> Option<u32> {
-        self.stored_storage_version
-    }
-
     /// Consumes a non-reset failure, closes Turso, and preserves main and WAL.
     ///
     /// This accessor must only be used when [`Self::error`] does not require a
-    /// physical reset, or to hand files an unfinished OPFS adoption brought
-    /// here back to the identity they came from
-    /// (`turso_opfs::OpfsOwner::return_adoption`) before this identity is
-    /// reset. A close failure poisons the worker-local owner.
+    /// physical reset. A close failure poisons the worker-local owner.
     pub fn preserve(self) -> Result<OpfsOwner, OpfsError> {
         let closed = self
             .session
@@ -752,13 +706,17 @@ impl TursoFileDatabase {
             let _ = remove_native_file(&compact_path);
             return Ok(storage);
         }
+        // The open after the swap finds nothing left to upgrade, so it
+        // reports what this open's upgrade did.
+        let storage_upgraded_from = storage.storage_upgraded_from;
         // The compacted file is complete; a close failure cannot invalidate it.
         let _ = storage.try_close();
         if self.install_compacted(&compact_path).is_err() {
             let _ = remove_native_file(&compact_path);
-            return Ok(self.open_with_outcome(scope, false)?.0);
         }
-        Ok(self.open_with_outcome(scope, false)?.0)
+        let mut reopened = self.open_with_outcome(scope, false)?.0;
+        reopened.storage_upgraded_from = storage_upgraded_from;
+        Ok(reopened)
     }
 
     /// Move the compacted database into place while keeping the original
@@ -884,8 +842,8 @@ fn open_native_database(
         let error = TursoStorageError::turso(error);
         return Err(if fresh { error } else { error.initialization() });
     }
-    let migrated = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
-        Ok(initialized) => initialized.format_migrated,
+    let initialized = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
+        Ok(initialized) => initialized,
         Err(error) => {
             if connection.close().is_err() {
                 return Err(TursoStorageError::reset(
@@ -900,10 +858,11 @@ fn open_native_database(
             health: AtomicU8::new(0),
             database,
             connection: Db::cached(connection),
+            storage_upgraded_from: initialized.storage_upgraded_from,
             #[cfg(all(test, not(target_arch = "wasm32")))]
             fault: Mutex::new(None),
         },
-        migrated,
+        initialized.format_migrated,
     ))
 }
 
@@ -997,6 +956,14 @@ impl TursoStorage {
 
     fn connection(&self) -> Db {
         self.connection.clone()
+    }
+
+    /// The storage version this open upgraded the file from, when an older
+    /// build wrote it (`storage/migration.rs`); `None` when it was already
+    /// current or new.
+    #[must_use]
+    pub fn upgraded_from_storage_version(&self) -> Option<u32> {
+        self.storage_upgraded_from
     }
 }
 
@@ -3642,19 +3609,6 @@ struct Initialized {
     format_migrated: bool,
     /// The storage version an older database was upgraded from.
     storage_upgraded_from: Option<u32>,
-}
-
-impl Initialized {
-    #[cfg(target_arch = "wasm32")]
-    fn outcome(self, fresh: bool) -> TursoStorageOpenOutcome {
-        match (fresh, self.storage_upgraded_from) {
-            (true, _) => TursoStorageOpenOutcome::OpenedNew,
-            (false, Some(from_storage_version)) => TursoStorageOpenOutcome::UpgradedExisting {
-                from_storage_version,
-            },
-            (false, None) => TursoStorageOpenOutcome::OpenedExisting,
-        }
-    }
 }
 
 /// Validates or initializes a database, first upgrading one written at an

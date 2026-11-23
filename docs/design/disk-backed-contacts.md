@@ -39,8 +39,8 @@ Remaining in scope:
     reductions (`910c4052`). Two current full-app runs per size show about 15–21%
     lower broad search/paging latency, unchanged retained JS, roughly 26 MiB more
     disk and 5–7 s more initial sync at 100k. Extend the existing unpublished
-    schema-12 cutover, not another migration; current-shape reopen preserves queues
-    and generation. No lookahead or statement cache was added.
+    schema-12 version, not another one; current-shape reopen preserves queues
+    and generation, and native schema-11 caches upgrade in place. No lookahead or statement cache was added.
   - [ ] Address/accept the remaining broad-read latency and validate remaining
     surfaces, concurrent initial-backfill interaction and in-place account/reset
     performance.
@@ -223,9 +223,9 @@ Migrating Quick Access alone leaves other callers retaining the entire corpus.
 - SQL results stream into a top-K ranker; there is no retained text-search catalog.
 - Row fields are borrowed and a canonical-key buffer is reused; only winners are
   copied into owned documents.
-- Storage schema 12 adds covering search and contact-payload indexes. Schema-11
-  caches upgrade to it in place through the registered 11 to 12 step; do not add
-  another rollout mechanism for contacts.
+- Storage schema 12 adds covering search and contact-payload indexes. Browsers
+  open a fresh file for it and native caches upgrade in place; do not add another
+  rollout mechanism for contacts unnecessarily.
 
 See [client cache architecture](../../crates/client/README.md#streaming-text-search)
 and [search measurements](../../crates/client/search-performance.md). These are

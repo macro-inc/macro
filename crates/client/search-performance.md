@@ -63,7 +63,7 @@ samples, not the seven-sample medians above.
 The end-to-end covering prototype appended text/hash columns to the existing
 browse index on fresh disposable databases, then reverted that schema experiment.
 That measurement did not migrate an existing cache. The same layout now ships
-with schema 12, described below.
+in storage schema 12, described below.
 
 Borrowing reduces allocation churn rather than the retained footprint, which was
 already bounded by streaming. Approximate retained allocations added by the first
@@ -130,11 +130,12 @@ adds the projection revision to search replies.
 Native and real-OPFS parity tests cover Unicode, SQL wildcard escaping, NUL,
 ordering, and late winners; engine tests cover optimistic replacement and settlement.
 
-Storage schema 12 shipped as a reset of schema-11 caches. The registered 11 to
-12 step now upgrades them in place, keeping queued mutations and optimistic
-layers. In browsers that needs the schema-11 database moved to the schema-12
-name first; [storage upgrades](README.md#storage-upgrades) says when a move
-happens and what each other case does. Rollback across the native
+Storage schema 12 adds no compatibility reader or rollout gate. Native upgrades
+run the registered 11 to 12 step, which builds both indexes in the fixed cache
+file and keeps its records, queued cache mutations and optimistic layers
+([storage upgrades](README.md#storage-upgrades)). Browser upgrades open a fresh
+versioned file; cleanup still preserves older files with queued mutations, but
+those queues are not replayed by the new engine. Rollback across the native
 schema boundary uses the existing incompatible-cache reset behavior.
 That index cutover kept the schema epoch, record format, and search projection
 version unchanged; the subsequent contact projection revision is described above.
