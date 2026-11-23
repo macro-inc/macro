@@ -174,7 +174,9 @@ function mount(options: {
   const host = fakeHost(windowOver(rows, held), { records: options.rows });
   const runtime = fakeRuntime();
   const onUnsupported = vi.fn();
-  const [around, setAround] = createSignal<string | undefined>(options.around);
+  const [around, setAround] = createSignal<string | null | undefined>(
+    options.around
+  );
   let dispose = () => {};
   const timeline = createRoot((disposeRoot) => {
     dispose = disposeRoot;
@@ -263,6 +265,15 @@ describe('createLocalChannelTimeline', () => {
       graphqlMessage(2).id,
       graphqlMessage(1).id,
     ]);
+    dispose();
+  });
+
+  it('reads the window once when the view sets no target again as it mounts', async () => {
+    const { timeline, host, setAround, dispose } = mount({ rows: messages(3) });
+    setAround(null);
+    await waitFor(() => !timeline.isLoading());
+    await settle();
+    expect(host.reads).toHaveLength(1);
     dispose();
   });
 

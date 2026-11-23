@@ -421,11 +421,11 @@ export function createLocalChannelTimeline(
     }
   };
 
+  // The target is set again as the view mounts (undefined, then null): only
+  // a different message loads another window.
+  const around = createMemo(() => aroundMessageId() ?? undefined);
   createEffect(
-    on(
-      () => aroundMessageId() ?? undefined,
-      (around) => fireAndForget(load(around), 'channel-local-sync')
-    )
+    on(around, (target) => fireAndForget(load(target), 'channel-local-sync'))
   );
 
   const entries = createMemo(() => {
