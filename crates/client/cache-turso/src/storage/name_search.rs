@@ -92,10 +92,7 @@ fn incomplete(
 }
 /// Every teammate's record before the ordered scans, which then stop as if
 /// nobody left to read is a teammate. One indexed lookup per requested key.
-fn teammates(
-    connection: &Db,
-    read: &mut NameSearchRead<'_>,
-) -> Result<(), TursoStorageError> {
+fn teammates(connection: &Db, read: &mut NameSearchRead<'_>) -> Result<(), TursoStorageError> {
     let keys = read.teammate_keys();
     if keys.is_empty() {
         return Ok(());
