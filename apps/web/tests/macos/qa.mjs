@@ -239,13 +239,16 @@ const windowsOf = (pid) => {
 	};
 };
 
+// Crash reports already there when the run began. Every attempt compares with
+// this one baseline, so a report that lands between attempts is still caught.
+const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
+const reportsBefore = new Set(existsSync(reports) ? readdirSync(reports) : []);
+
 // One launch of the app on a clean HOME, with every check of that launch.
 const launchAndCheck = async () => {
 	// A clean HOME: the app creates its data directories as a first-time user.
 	const home = join(tmpdir(), `macro-qa-home-${process.pid}-${attempt}`);
 	mkdirSync(home, { recursive: true });
-	const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
-	const reportsBefore = new Set(existsSync(reports) ? readdirSync(reports) : []);
 	const appLog = join(out, named("app.log"));
 	writeFileSync(appLog, "");
 	const launchedAt = Date.now();
@@ -335,8 +338,9 @@ const launchAndCheck = async () => {
 	await sleep(3000);
 
 	await check("no-crash-report", async () => {
-		// Only reports written since this attempt began: an earlier attempt's
-		// report belongs to that attempt.
+		// Any report written since the run began. An attempt is retried only for
+		// a window or screenshot failure, so a report one attempt left behind
+		// fails the next.
 		const fresh = existsSync(reports)
 			? readdirSync(reports).filter(
 					(n) =>
@@ -346,7 +350,7 @@ const launchAndCheck = async () => {
 				)
 			: [];
 		for (const name of fresh) cpSync(join(reports, name), join(out, name));
-		return fresh.length === 0 ? pass("no crash report since launch") : fail(`crash report(s): ${fresh.join(", ")}`);
+		return fresh.length === 0 ? pass("no crash report since the run began") : fail(`crash report(s): ${fresh.join(", ")}`);
 	});
 
 	await check("clean-shutdown", async () => {
