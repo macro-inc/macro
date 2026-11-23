@@ -1,6 +1,13 @@
 /** Model controls beside the AI composers: reasoning effort and priority tier. */
 export default {
+  thinking: 'Thinking',
+  thinkingUnavailable: 'Not available for this model',
+  shortUsageFast: '2×',
+  shortUsageUltrafast: '6×',
   modelSelector: 'Choose an agent or model',
+  models: 'Models',
+  seeAll: 'See all',
+  moreModels: 'More models',
   createAgent: 'Create agent',
   model: 'Model',
   speed: 'Speed',
