@@ -1,4 +1,14 @@
-import { make, type Source } from 'wonka';
+import {
+  concat,
+  fromValue,
+  make,
+  map,
+  merge,
+  pipe,
+  type Source,
+  take,
+  toPromise,
+} from 'wonka';
 
 // `AbortSignal.any` needs Safari 17.4, newer than the webview floor in
 // apps/web/package.json `browserslist`.
@@ -44,4 +54,63 @@ export function abortedBy(signal: AbortSignal | undefined): Source<'aborted'> {
     signal.addEventListener('abort', abort, { once: true });
     return () => signal.removeEventListener('abort', abort);
   });
+}
+
+/** What `firstOrAborted` settled on. */
+export type FirstOrAborted<T> =
+  | { kind: 'value'; value: T }
+  | { kind: 'ended' }
+  | { kind: 'aborted' };
+
+/**
+ * The first value `source` emits, unless it ends without one or `signal`
+ * aborts first. Settling leaves the source, so an urql query's request ends
+ * when its signal aborts: urql replaces a `fetchOptions.signal` with its own.
+ */
+export function firstOrAborted<T>(
+  source: Source<T>,
+  signal: AbortSignal | undefined
+): Promise<FirstOrAborted<T>> {
+  return pipe(
+    merge<FirstOrAborted<T>>([
+      concat<FirstOrAborted<T>>([
+        pipe(
+          source,
+          map((value) => ({ kind: 'value' as const, value }))
+        ),
+        fromValue({ kind: 'ended' as const }),
+      ]),
+      pipe(
+        abortedBy(signal),
+        map(() => ({ kind: 'aborted' as const }))
+      ),
+    ]),
+    take(1),
+    toPromise
+  );
+}
+
+/**
+ * Settles as `work` does, or rejects with `signal`'s reason as soon as it
+ * aborts, whether or not `work` heeds the signal. What `work` settles on
+ * after that is dropped.
+ */
+export async function untilAborted<T>(
+  work: Promise<T>,
+  signal: AbortSignal
+): Promise<T> {
+  // Before the race: work that already settled would win it.
+  signal.throwIfAborted();
+  const settled = new AbortController();
+  const aborted = new Promise<never>((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(signal.reason), {
+      once: true,
+      signal: settled.signal,
+    });
+  });
+  try {
+    return await Promise.race([work, aborted]);
+  } finally {
+    settled.abort();
+  }
 }

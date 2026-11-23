@@ -16,8 +16,8 @@ use models_soup::{
     call_record::{SoupCallRecord, SoupCallRecordGuest, SoupCallRecordParticipant},
     chat::SoupChat,
     comms::{
-        ChannelMessage, ChannelParticipant, ChannelType, SoupAgentDmProfile, SoupChannel,
-        SoupChannelThread,
+        ChannelBotParticipant, ChannelMessage, ChannelParticipant, ChannelType, SoupAgentDmProfile,
+        SoupChannel, SoupChannelThread,
     },
     crm_company::SoupCrmCompany,
     database_row::SoupDatabaseRow,
@@ -109,6 +109,14 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
 
     /// Construct initiative-specific detail fields without loading them.
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges;
+
+    /// Additional fields attached only to document entities, tasks included.
+    type DocumentEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct document-specific fields without loading them; `is_task`
+    /// says whether the document is a task, so task-only fields of any other
+    /// document can answer without a read.
+    fn document_edges(document_id: Uuid, is_task: bool) -> Self::DocumentEdges;
 
     /// Additional fields attached only to agent-session entities.
     type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
@@ -447,6 +455,10 @@ pub struct GraphqlEntityMetadata {
         arg(name = "limit", ty = "Option<i32>"),
         desc = "The newest activity on this entity, newest first."
     )
+)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "a page holds a few hundred entities, resolved and dropped per request; boxing the channel variant would save little"
 )]
 pub enum GraphqlSoupEntity<E: SoupEntityEdges> {
     /// Document entity.
@@ -873,6 +885,15 @@ where
     /// The edges.
     async fn edges(&self) -> E {
         self.1.clone()
+    }
+
+    /// Document-specific fields supplied by the composition crate.
+    #[graphql(flatten)]
+    async fn document_edges(&self) -> E::DocumentEdges {
+        E::document_edges(
+            self.0.id,
+            matches!(self.0.sub_type, Some(SoupDocumentSubType::Task { .. })),
+        )
     }
 
     /// The viewer's frecency score for this entity, when loaded.
@@ -2031,6 +2052,42 @@ impl GraphqlSoupChannelParticipant {
     }
 }
 
+/// GraphQL channel bot participant.
+pub struct GraphqlSoupChannelBotParticipant(ChannelBotParticipant);
+
+/// A bot that participates in a soup channel.
+#[Object]
+impl GraphqlSoupChannelBotParticipant {
+    /// The identifier of the channel.
+    async fn channel_id(&self) -> ID {
+        ID(self.0.channel_id.0.to_string())
+    }
+
+    /// The identifier of the bot.
+    async fn bot_id(&self) -> ID {
+        ID(self.0.bot_id.to_string())
+    }
+
+    /// The role.
+    async fn role(&self) -> &'static str {
+        match self.0.role {
+            models_soup::comms::ParticipantRole::Owner => "owner",
+            models_soup::comms::ParticipantRole::Admin => "admin",
+            models_soup::comms::ParticipantRole::Member => "member",
+        }
+    }
+
+    /// The joined timestamp in RFC 3339 format.
+    async fn joined_at(&self) -> String {
+        self.0.joined_at.to_rfc3339()
+    }
+
+    /// The left timestamp in RFC 3339 format.
+    async fn left_at(&self) -> Option<String> {
+        self.0.left_at.map(|ts| ts.to_rfc3339())
+    }
+}
+
 /// Embedded, non-normalized channel-message preview.
 ///
 /// This exposes `messageId`, not `id`, so partial preview data cannot
@@ -2278,6 +2335,17 @@ where
             .iter()
             .cloned()
             .map(GraphqlSoupChannelParticipant)
+            .collect()
+    }
+
+    /// The bots that participate in the channel. `participants` lists users only.
+    async fn bot_participants(&self) -> Vec<GraphqlSoupChannelBotParticipant> {
+        self.0
+            .channel
+            .bot_participants
+            .iter()
+            .cloned()
+            .map(GraphqlSoupChannelBotParticipant)
             .collect()
     }
 

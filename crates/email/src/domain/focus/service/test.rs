@@ -12,7 +12,7 @@ use uuid::Uuid;
 use super::*;
 use crate::domain::focus::models::{
     CalendarPart, DueDateInput, FocusCategory, FocusInbox, FocusInboxOwner, FocusMail,
-    FocusMessage, FocusThread, SentNote, StoredClassification,
+    FocusMessage, FocusThread, SentNote, StoredClassification, ThreadDates,
 };
 
 /// The owner of most test threads, and the one inbox they live in.
@@ -33,6 +33,8 @@ struct FakeStore {
     syncing: Arc<Mutex<Vec<FocusInboxOwner>>>,
     /// The users other than its owner each inbox is linked to.
     delegates: Arc<Mutex<HashMap<Uuid, Vec<MacroUserIdStr<'static>>>>>,
+    /// Inboxes whose stale-thread reads fail, as one that times out does.
+    failing_reads: Arc<Mutex<HashSet<Uuid>>>,
     /// The inbox each stale-thread read was given.
     stale_reads: Arc<Mutex<Vec<Uuid>>>,
     mail_reads: Arc<Mutex<usize>>,
@@ -105,6 +107,11 @@ impl FocusStore for FakeStore {
         limit: i64,
     ) -> Result<Vec<StaleThread>, Report> {
         self.stale_reads.lock().unwrap().push(link_id);
+        if self.failing_reads.lock().unwrap().contains(&link_id) {
+            return Err(rootcause::report!(
+                "canceling statement due to statement timeout"
+            ));
+        }
         let stale = self
             .stale
             .lock()
@@ -177,7 +184,7 @@ impl ProfileSource for FakeProfiles {
 /// What the due date extractor does with a request.
 #[derive(Clone, Copy)]
 enum DueDateAnswer {
-    Finds(Option<NaiveDate>),
+    Finds(ThreadDates),
     Fails,
     Hangs,
 }
@@ -198,15 +205,15 @@ impl FakeDueDates {
 }
 
 impl DueDateExtractor for FakeDueDates {
-    async fn due_on(
+    async fn dates(
         &self,
         _owner: &MacroUserIdStr<'static>,
         _thread_id: Uuid,
         input: &DueDateInput,
-    ) -> Result<Option<NaiveDate>, Report> {
+    ) -> Result<ThreadDates, Report> {
         self.inputs.lock().unwrap().push(input.clone());
         match self.answer {
-            DueDateAnswer::Finds(due_on) => Ok(due_on),
+            DueDateAnswer::Finds(dates) => Ok(dates),
             DueDateAnswer::Fails => Err(rootcause::report!("the model is down")),
             DueDateAnswer::Hangs => std::future::pending().await,
         }
@@ -228,6 +235,7 @@ impl FocusNotifier for FakeNotifier {
 struct FakeClassifier {
     answers: Result<Vec<f32>, FocusClassifierError>,
     inputs: Arc<Mutex<Vec<Value>>>,
+    lanes: Arc<Mutex<Vec<ClassifierLane>>>,
 }
 
 impl FakeClassifier {
@@ -235,6 +243,7 @@ impl FakeClassifier {
         Self {
             answers,
             inputs: Arc::default(),
+            lanes: Arc::default(),
         }
     }
 }
@@ -246,9 +255,11 @@ impl FocusClassifier for FakeClassifier {
         _thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         assert_eq!(questions.len(), FOCUS_QUESTIONS.len());
         self.inputs.lock().unwrap().push(input.clone());
+        self.lanes.lock().unwrap().push(lane);
         self.answers.clone()
     }
 
@@ -368,7 +379,7 @@ fn notifying_service(
         FakeProfiles(Some("Owner runs finance at Acme.".to_owned()), None),
         classifier.clone(),
         notifier.clone(),
-        FakeDueDates::answering(DueDateAnswer::Finds(None)),
+        FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates::default())),
         enrollment.clone(),
     )
 }
@@ -391,6 +402,24 @@ fn due_date_service(
 
 fn friday() -> NaiveDate {
     NaiveDate::from_ymd_opt(2026, 10, 9).unwrap()
+}
+
+/// What mail says when it names only a deadline, on `day`.
+fn due(day: NaiveDate) -> ThreadDates {
+    ThreadDates {
+        due_on: Some(day),
+        event_on: None,
+    }
+}
+
+/// Days stored with an earlier classification: due Friday, about a meeting on
+/// the Monday after, in New York.
+fn stored_dates() -> FocusDates {
+    FocusDates {
+        due_on: Some(friday()),
+        due_at: Some(Utc.with_ymd_and_hms(2026, 10, 9, 4, 0, 0).unwrap()),
+        event_over_at: Some(Utc.with_ymd_and_hms(2026, 10, 13, 4, 0, 0).unwrap()),
+    }
 }
 
 fn insert(store: &FakeStore, thread: FocusThread) -> Uuid {
@@ -444,7 +473,7 @@ fn stored_at(thread: &FocusThread, rule_version: i16) -> StoredClassification {
         rule_version,
         answers,
         model: "jev-earlier".to_owned(),
-        due_on: None,
+        dates: FocusDates::default(),
     }
 }
 
@@ -594,6 +623,27 @@ async fn classifier_failures_store_nothing() {
 }
 
 #[tokio::test]
+async fn new_mail_is_asked_about_live_and_the_sweep_in_the_background() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &enrolled());
+    let arrived = insert(&store, thread(OWNER));
+    service.classify_thread(arrived).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live]
+    );
+
+    let older = insert(&store, thread(OWNER));
+    set_stale(&store, &[older], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live, ClassifierLane::Background]
+    );
+}
+
+#[tokio::test]
 async fn sweep_stops_when_the_classifier_is_down() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
@@ -630,6 +680,7 @@ async fn sweep_classifies_every_stale_thread() {
             inboxes: 1,
             inboxes_unknown: 0,
             inboxes_left: 0,
+            inboxes_failed: 0,
             candidates: 3,
             classified: 2,
             redecided: 0,
@@ -674,6 +725,32 @@ async fn sweep_covers_only_inboxes_whose_owner_is_in_the_rollout() {
     assert_eq!(*store.stale_reads.lock().unwrap(), vec![INBOX]);
     assert_eq!(store.saved.lock().unwrap()[0].thread_id, ours);
     assert!(!store.stale_reads.lock().unwrap().contains(&their_inbox));
+}
+
+#[tokio::test]
+async fn sweep_goes_on_past_an_inbox_whose_threads_cannot_be_read() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let mut slow = thread("other@acme.example");
+    slow.link_id = Uuid::new_v4();
+    let slow_inbox = slow.link_id;
+    let slow = insert(&store, slow);
+    let ours = insert(&store, thread(OWNER));
+    set_stale(&store, &[slow, ours], noon());
+    store.failing_reads.lock().unwrap().insert(slow_inbox);
+    let enrollment = FakeEnrollment::enrolling(&[OWNER, "other@acme.example"]);
+
+    let report = service(&store, &classifier, &enrollment)
+        .sweep(Duration::days(30), 100)
+        .await
+        .unwrap();
+    assert_eq!(
+        (report.inboxes, report.inboxes_failed, report.classified),
+        (2, 1, 1)
+    );
+    assert_eq!(store.saved.lock().unwrap()[0].thread_id, ours);
+    let reads = store.stale_reads.lock().unwrap().clone();
+    assert!(reads.contains(&slow_inbox) && reads.contains(&INBOX));
 }
 
 #[tokio::test]
@@ -1207,7 +1284,7 @@ async fn the_lists_apply_a_three_day_wait() {
 async fn a_focus_thread_stores_the_day_its_mail_says_it_is_due() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(due(friday())));
     let id = insert(&store, thread(OWNER));
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
@@ -1216,7 +1293,7 @@ async fn a_focus_thread_stores_the_day_its_mail_says_it_is_due() {
         .unwrap();
 
     assert!(matches!(outcome, ClassifyOutcome::Classified(_)));
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, Some(friday()));
+    assert_eq!(store.saved.lock().unwrap()[0].dates.due_on, Some(friday()));
     let inputs = due_dates.inputs.lock().unwrap();
     assert_eq!(inputs.len(), 1);
     assert_eq!(
@@ -1226,12 +1303,92 @@ async fn a_focus_thread_stores_the_day_its_mail_says_it_is_due() {
 }
 
 #[tokio::test]
+async fn the_days_take_effect_when_they_begin_for_the_owner() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    // Due Friday, about a meeting on the Monday after.
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates {
+        due_on: Some(friday()),
+        event_on: NaiveDate::from_ymd_opt(2026, 10, 12),
+    }));
+    let id = insert(&store, thread(OWNER));
+
+    due_date_service(&store, &classifier, &due_dates, Some("America/New_York"))
+        .classify_thread(id)
+        .await
+        .unwrap();
+
+    // The due day comes at the owner's midnight, and the meeting is over at
+    // the next one after its day.
+    assert_eq!(store.saved.lock().unwrap()[0].dates, stored_dates());
+}
+
+#[tokio::test]
+async fn a_meeting_counts_for_nothing_while_its_deadline_lasts_longer() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates {
+        due_on: NaiveDate::from_ymd_opt(2026, 10, 12),
+        event_on: Some(friday()),
+    }));
+    let id = insert(&store, thread(OWNER));
+
+    due_date_service(&store, &classifier, &due_dates, None)
+        .classify_thread(id)
+        .await
+        .unwrap();
+
+    let saved = store.saved.lock().unwrap()[0].dates;
+    assert_eq!(saved.due_on, NaiveDate::from_ymd_opt(2026, 10, 12));
+    // With no zone, a day counts once it has begun everywhere.
+    assert_eq!(
+        saved.due_at,
+        Some(Utc.with_ymd_and_hms(2026, 10, 12, 12, 0, 0).unwrap())
+    );
+    assert_eq!(saved.event_over_at, None);
+}
+
+#[tokio::test]
+async fn mail_the_read_never_saw_still_measures_how_far_past_the_meeting_the_thread_is() {
+    let store = FakeStore::default();
+    // Focus, with nothing for the owner to do: notes.
+    let classifier =
+        FakeClassifier::answering(Ok(vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
+    let meeting = NaiveDate::from_ymd_opt(2026, 10, 8);
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates {
+        due_on: None,
+        event_on: meeting,
+    }));
+    let mut mail = thread(OWNER);
+    // An attachment alone, written on Oct 23 at its sender's offset, the 15th day
+    // after the meeting, though still Oct 22 in New York.
+    mail.messages.push(FocusMessage {
+        id: Uuid::new_v4(),
+        at: Utc.with_ymd_and_hms(2026, 10, 23, 0, 30, 0).unwrap(),
+        body: Some(String::new()),
+        date_header: Some("Fri, 23 Oct 2026 09:30:00 +0900".to_owned()),
+        ..mail.messages[0].clone()
+    });
+    let id = insert(&store, mail);
+
+    due_date_service(&store, &classifier, &due_dates, Some("America/New_York"))
+        .classify_thread(id)
+        .await
+        .unwrap();
+
+    // The read saw only the first message; the meeting is two weeks behind the
+    // thread all the same, by the calendar the read counts in.
+    assert_eq!(due_dates.inputs.lock().unwrap()[0].messages.len(), 1);
+    assert_eq!(store.saved.lock().unwrap()[0].dates.event_over_at, None);
+}
+
+#[tokio::test]
 async fn a_thread_that_cannot_be_in_focus_makes_no_model_call() {
     let store = FakeStore::default();
     // Automated, and nobody waits on it.
     let classifier =
         FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(due(friday())));
     let id = insert(&store, thread(OWNER));
 
     let outcome = due_date_service(&store, &classifier, &due_dates, None)
@@ -1244,7 +1401,7 @@ async fn a_thread_that_cannot_be_in_focus_makes_no_model_call() {
     };
     assert!(!verdict.is_focus && !verdict.awaiting_reply);
     assert!(due_dates.inputs.lock().unwrap().is_empty());
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, None);
+    assert_eq!(store.saved.lock().unwrap()[0].dates.due_on, None);
 }
 
 #[tokio::test]
@@ -1253,7 +1410,7 @@ async fn a_thread_only_awaiting_a_reply_still_gets_a_due_date() {
     // Reads as automated, so only the wait can bring it in.
     let classifier =
         FakeClassifier::answering(Ok(vec![0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(due(friday())));
     let mut waiting = thread(OWNER);
     let mut reply = waiting.messages[0].clone();
     reply.id = Uuid::new_v4();
@@ -1274,17 +1431,17 @@ async fn a_thread_only_awaiting_a_reply_still_gets_a_due_date() {
         panic!("expected a classification, got {outcome:?}");
     };
     assert!(!verdict.is_focus && verdict.awaiting_reply);
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, Some(friday()));
+    assert_eq!(store.saved.lock().unwrap()[0].dates.due_on, Some(friday()));
 }
 
 #[tokio::test]
-async fn deciding_again_keeps_the_stored_date_and_calls_no_model() {
+async fn deciding_again_keeps_the_stored_dates_and_calls_no_model() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Err(FocusClassifierError::Unavailable));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates::default()));
     let mut legacy = thread(OWNER);
     legacy.classified = Some(StoredClassification {
-        due_on: Some(friday()),
+        dates: stored_dates(),
         ..stored_at(&legacy, 0)
     });
     let id = insert(&store, legacy);
@@ -1297,21 +1454,21 @@ async fn deciding_again_keeps_the_stored_date_and_calls_no_model() {
     assert!(matches!(outcome, ClassifyOutcome::Redecided(_)));
     assert!(due_dates.inputs.lock().unwrap().is_empty());
     assert!(classifier.inputs.lock().unwrap().is_empty());
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, Some(friday()));
+    assert_eq!(store.saved.lock().unwrap()[0].dates, stored_dates());
 }
 
 #[tokio::test]
-async fn new_mail_with_no_deadline_clears_the_stored_date() {
+async fn new_mail_with_no_deadline_or_meeting_clears_the_stored_dates() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates::default()));
     let mut stale = thread(OWNER);
     stale.classified = Some(StoredClassification {
         message_id: Uuid::new_v4(),
         rule_version: FOCUS_RULE_VERSION,
         answers: None,
         model: "jev-earlier".to_owned(),
-        due_on: Some(friday()),
+        dates: stored_dates(),
     });
     let id = insert(&store, stale);
 
@@ -1322,7 +1479,7 @@ async fn new_mail_with_no_deadline_clears_the_stored_date() {
 
     assert!(matches!(outcome, ClassifyOutcome::Classified(_)));
     assert_eq!(due_dates.inputs.lock().unwrap().len(), 1);
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, None);
+    assert_eq!(store.saved.lock().unwrap()[0].dates, FocusDates::default());
 }
 
 #[tokio::test]
@@ -1343,7 +1500,7 @@ async fn a_failed_extraction_leaves_the_classification_intact() {
     assert!(verdict.is_focus && verdict.needs_reply);
     let saved = store.saved.lock().unwrap();
     assert_eq!(saved.len(), 1);
-    assert_eq!(saved[0].due_on, None);
+    assert_eq!(saved[0].dates.due_on, None);
 }
 
 #[tokio::test(start_paused = true)]
@@ -1361,14 +1518,14 @@ async fn a_hung_extraction_only_costs_the_timeout() {
 
     assert!(matches!(outcome, ClassifyOutcome::Classified(_)));
     assert_eq!(started.elapsed(), DUE_DATE_TIMEOUT);
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, None);
+    assert_eq!(store.saved.lock().unwrap()[0].dates.due_on, None);
 }
 
 #[tokio::test]
 async fn a_thread_with_no_words_of_its_own_makes_no_model_call() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(due(friday())));
     let mut quoted = thread(OWNER);
     quoted.messages[0].body = Some("> Please send it by Friday.".to_owned());
     let id = insert(&store, quoted);
@@ -1379,14 +1536,14 @@ async fn a_thread_with_no_words_of_its_own_makes_no_model_call() {
         .unwrap();
 
     assert!(due_dates.inputs.lock().unwrap().is_empty());
-    assert_eq!(store.saved.lock().unwrap()[0].due_on, None);
+    assert_eq!(store.saved.lock().unwrap()[0].dates.due_on, None);
 }
 
 #[tokio::test]
 async fn the_owners_time_zone_sets_the_day_a_message_counts_from() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates::default()));
     let mut late_evening = thread(OWNER);
     late_evening.messages[0].at = Utc.with_ymd_and_hms(2026, 10, 8, 2, 0, 0).unwrap();
     let id = insert(&store, late_evening);
@@ -1406,7 +1563,7 @@ async fn the_owners_time_zone_sets_the_day_a_message_counts_from() {
 async fn an_unknown_time_zone_falls_back_without_failing() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(None));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(ThreadDates::default()));
     let mut late_evening = thread(OWNER);
     late_evening.messages[0].at = Utc.with_ymd_and_hms(2026, 10, 8, 2, 0, 0).unwrap();
     let id = insert(&store, late_evening);
@@ -1581,7 +1738,7 @@ async fn the_sweep_leaves_an_inbox_being_backfilled_to_the_backfill() {
 async fn a_backfill_reads_due_dates_only_for_threads_active_since_its_cutoff() {
     let store = FakeStore::default();
     let classifier = FakeClassifier::answering(Ok(relevant()));
-    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(Some(friday())));
+    let due_dates = FakeDueDates::answering(DueDateAnswer::Finds(due(friday())));
     let old: Vec<_> = (0..3).map(|_| insert(&store, thread(OWNER))).collect();
     set_stale(&store, &old, noon() - Duration::days(10));
     // Mail arriving while the pass runs is newer than the cutoff.
@@ -1617,7 +1774,7 @@ async fn a_backfill_reads_due_dates_only_for_threads_active_since_its_cutoff() {
     let saved = store.saved.lock().unwrap();
     for record in saved.iter() {
         let expected = (record.thread_id == recent).then(friday);
-        assert_eq!(record.due_on, expected, "{}", record.thread_id);
+        assert_eq!(record.dates.due_on, expected, "{}", record.thread_id);
     }
 }
 

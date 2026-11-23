@@ -123,6 +123,7 @@ describe('local grouped Soup projection', () => {
       value: {
         __typename: 'GraphqlDatePropertyValue',
         dateValue: '2026-10-31T23:59:59Z',
+        dateHasTime: false,
       },
     };
     const b = { ...a, id: 'b' };
@@ -134,6 +135,7 @@ describe('local grouped Soup projection', () => {
           value: {
             __typename: 'GraphqlDatePropertyValue' as const,
             dateValue: '2026-11-01T00:00:00Z',
+            dateHasTime: false,
           },
         },
       ],

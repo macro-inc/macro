@@ -16,6 +16,7 @@ export function ComposeRecipientInput(
       openOnFocus={props.openOnFocus ?? false}
       hideMenuOnEscape
       showChipAddresses
+      markAlreadyAdded
       class={cn('bg-transparent [&_input]:ml-0!', props.class)}
     />
   );

@@ -116,6 +116,7 @@ export function RecordItemList(props: {
               <CrmListRetry
                 message="Couldn't load this list."
                 onRetry={() => props.source.refetch()}
+                inline
               />
             }
           >
@@ -136,9 +137,9 @@ export function RecordItemList(props: {
                   <Show
                     when={props.narrowLayout !== 'condensed'}
                     fallback={
-                      <div class="p-3 text-xs text-ink-muted">
+                      <p class="text-xs text-ink-muted">
                         {props.empty ?? 'No items yet.'}
-                      </div>
+                      </p>
                     }
                   >
                     {props.emptyContent ?? (

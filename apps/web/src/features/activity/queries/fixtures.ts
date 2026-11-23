@@ -93,6 +93,17 @@ export const callStartedEvent: ActivityEventFieldsFragment = {
   },
 };
 
+export const timeLoggedEvent: ActivityEventFieldsFragment = {
+  ...BASE,
+  id: 'evt-15',
+  action: {
+    __typename: 'GraphqlActivityTimeLogged',
+    minutes: 90,
+    entryDate: '2026-11-20',
+    source: 'TIMER',
+  },
+};
+
 export const unknownActionEvent: ActivityEventFieldsFragment = {
   ...BASE,
   id: 'evt-11',

@@ -70,6 +70,7 @@ export function TimeInput(props: TimeInputProps) {
     options,
     selectedId,
     disabled: () => props.disabled ?? false,
+    timeFormat: () => props.timeFormat,
     onChange: (option) => props.onChange(option),
   });
   const display = () =>

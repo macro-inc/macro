@@ -108,6 +108,14 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
 
 ## Gotchas
 
+- `entity_access`, `"Document"`, `"Chat"`, `"Project"` and `document_sub_type`
+  carry the `source_items` triggers. Each commit that wrote one of them takes
+  ACCESS SHARE on all five, so DDL that needs ACCESS EXCLUSIVE on any of them
+  (`ALTER TABLE`, a non-concurrent index) also stalls writers to the other
+  four: give it a short `lock_timeout`. A mass update of these tables rewrites
+  its items' `source_items` rows at commit while holding their buckets; update
+  in small committed batches, or remove the triggers, update, and backfill
+  (`docs/runbooks/source-items.md`). Writers must use READ COMMITTED.
 - `document_email` has a statement-level `AFTER DELETE` trigger
   (`document_email_release`, migration `20261116200143`) that queues each
   document a statement unlinks in `released_email_attachment_documents`, even
@@ -137,7 +145,7 @@ owner-only Notion mirror. No existing folders or import rows are backfilled.
   rolling compatibility. `crm_email_backfill_outbox_due` orders durable recovery
   signals by `(requested_at, team_id, user_id)`; it adds no email-table index.
 
-- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans.
+- `user::get_user_name::get_user_names_with_email` is shared by authentication and bounded contact-directory enrichment; preserve viewer-only address-book fallback and keep its IDs/names off tracing spans. Its SQL (`user/get_user_name/names_with_email.sql`) reads the viewer's mailboxes once, into an array, and probes `email_contacts` by `(link_id, email_address)`. Don't join `email_links` per requested id again: with statistics that say most mailboxes are the viewer's, that plan searches every mailbox's contacts through the trigram index, seconds for one page of ids. `address_book_names_are_read_through_the_viewers_mailboxes` covers it.
 - `contacts_connections` keeps its raw forward/reverse paging indexes; upstream migration `20261101055556` owns `idx_contacts_connections_user2_user1`, so do not add a duplicate branch migration. Migrations `20261105044718` and `20261105044750` add `(raw viewer, lower(peer COLLATE "C"))` point-lookup indexes with a strict peer `macro|` prefix predicate. They preserve stored rows, edge constraints and cursor order; bounded directory reads belong to `crates/contacts`. Apply both before new readers, with a short session `lock_timeout` (for SQLx CLI, e.g. `PGOPTIONS='-c lock_timeout=5s'`). An interrupted concurrent build must be inspected/repaired before retrying; these migrations do not hide an existing invalid index with `IF NOT EXISTS`.
 
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)

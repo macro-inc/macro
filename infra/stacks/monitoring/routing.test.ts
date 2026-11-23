@@ -234,6 +234,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'sqs-dlq-inflow',
     'sqs-email-backfill-age',
     'sqs-email-backfill-backlog-anomaly',
+    'sqs-link-maintenance-age',
     'sqs-work-queue-age',
     'storage-pool-wait',
   ]);

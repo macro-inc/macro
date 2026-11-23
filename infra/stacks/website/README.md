@@ -99,6 +99,14 @@ emits noindex redirect fallbacks for static hosts. Deploy this stack with the
 website when changing the manifest. The separate `apps/docs/docs.json` records
 cover the old docs hostname; publish those only after the destination site is live.
 
+`apps/marketing/seo/download-redirects.json` maps `/download/mac` and
+`/download/linux` to the fixed-name desktop installers on the `desktop-stable`
+GitHub release. The handler answers them first, with a `302` and
+`Cache-Control: no-store`, so the target can move without browsers keeping the
+old one; the desktop publish job keeps those assets current
+(`apps/web/tauri/src-tauri/README.md`, Desktop native updates). Local serving
+and the prerendered static fallbacks use the same map.
+
 Keep executable redirect helpers in this package: Pulumi uses CommonJS, so it
 cannot import TypeScript from the marketing package's ES module scope. Reading
 the shared JSON manifest is safe across this boundary.

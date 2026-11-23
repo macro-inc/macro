@@ -36,6 +36,8 @@ import { SchedulingDrawerHeader } from './scheduling-drawer-header';
 export function BookingCard(props: {
   booking: Booking;
   timeZone: string;
+  /** A 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
   canManageBookings: boolean;
   currentUserId: string;
   busyId: string;
@@ -106,7 +108,7 @@ export function BookingCard(props: {
         60000
     );
   const time = createMemo(() =>
-    bookingTimeRangeDisplay(props.booking, props.timeZone)
+    bookingTimeRangeDisplay(props.booking, props.timeZone, props.hour12)
   );
   const date = (options: Intl.DateTimeFormatOptions) =>
     new Intl.DateTimeFormat(undefined, {

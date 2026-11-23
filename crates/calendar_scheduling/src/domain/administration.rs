@@ -55,7 +55,9 @@ pub trait SchedulingAdministration: Send + Sync + 'static {
         date: NaiveDate,
     ) -> impl Future<Output = Result<Vec<Slot>, Error>> + Send;
 }
-impl<R: Repository, C: Calendars, D: Directory> SchedulingAdministration for Service<R, C, D> {
+impl<R: Repository, C: Calendars + BookingAccounts, D: Directory> SchedulingAdministration
+    for Service<R, C, D>
+{
     async fn settings(&self, user: &str, team: Option<Uuid>) -> Result<Profile, Error> {
         self.settings(user, team).await
     }

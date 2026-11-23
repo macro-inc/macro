@@ -114,15 +114,34 @@ Only admins/owners can change visibility. Company archive cascades to all people
 and disables email syncing; company restore explicitly confirms restoring every
 person, including individually archived people, while email syncing stays off.
 A person under an archived company routes to that company before restoration.
-Both information panels start with Record details and References; company-only
-Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
+Both information panels take their order from `RECORD_PANEL_ORDER`
+(`core/record.ts`): Record details, Properties, the company-only Lists and Email
+sharing, then References last, so Properties sit ahead of References as in the
+app's other side panels; neither has a duplicate visibility toggle. Record
+details rows use the side panel's label/value grid
+(`SidePanel.Grid`/`SidePanel.Row`), so their labels and values share the
+Properties rows' text size, muted label style and label column; long names and
+domains wrap. The References empty and error states are muted lines at the
+section's text edge, like the Lists section's. A company's Properties pin
+Stage, Owner and Revenue before the team's custom properties; a contact's list
+only custom properties (a phone number, a LinkedIn link), since the built-in CRM
+properties are company-only. Both use the shared `EntityPropertiesSection` and
+the same edit rule.
 
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
 pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another. The company pill offers Add company to any contact
-without a company, switches only for a personal-provider primary with no
-address on the company's domain, and offers Remove company whenever no address
+control adds another: an Add email pill while blank, then a 24px ghost icon
+button in extra-muted ink, named and tooltipped Add email, like the property
+panel's add-value button but with the 12px glyph these controls use. Focused, it
+brightens and takes the address pills' ring. The addresses wrap among
+themselves inside one Email group, so the add button ends the addresses' last
+line instead of taking a line of its own in Record details, and a long address
+truncates there. The add control stays one element across both forms,
+so focus returned after the first address lands on it. The company pill offers
+Add company to any contact without a company, switches only for a
+personal-provider primary with no address on the company's domain, and offers
+Remove company whenever no address
 is on the company's domain (`companyDomain === false`), behind the shared
 confirmation dialog. The single address in `companyDomainEmails`
 shows no Remove, and a company-domain contact keeps a read-only company value

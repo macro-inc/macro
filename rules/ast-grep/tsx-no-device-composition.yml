@@ -65,6 +65,7 @@ ignores:
   - apps/web/src/features/block-md/component/DocumentDiscussion.tsx
   - apps/web/src/features/tasks-view/components/TasksDetailView.tsx
   - apps/web/src/features/settings/TeamMembers.tsx
+  - apps/web/src/features/time-tracking/task-time-pill.tsx
   # Not yet split.
   - apps/web/src/features/activity/views/my-activity-view.tsx
   - apps/web/src/features/agent-session-activity/components/activity-row.tsx
@@ -227,7 +228,6 @@ ignores:
   - apps/web/src/features/scheduling/views/booking-workspace-view.tsx
   - apps/web/src/features/scheduling/views/event-details-view.tsx
   - apps/web/src/features/scheduling/views/scheduling-mobile-header.tsx
-  - apps/web/src/features/settings/MobileApp.tsx
   - apps/web/src/features/settings/Settings.tsx
   - apps/web/src/features/settings/components/runtime-options.tsx
   - apps/web/src/features/settings/computers/components/computer-actions-menu.tsx

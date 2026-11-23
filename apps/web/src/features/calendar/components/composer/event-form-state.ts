@@ -18,7 +18,6 @@ export interface EventFormProps {
   controller: CalendarEventFormController;
   /** Whether this host can create and attach Macro call links. */
   macroCallsEnabled: boolean;
-  timeFormat?: CalendarTimeFormat;
   isEdit?: boolean;
   disabledFields?: EventEditorDisabledFields;
   /** The viewer may add guests but not remove the event's current ones. */
@@ -39,6 +38,8 @@ export interface EventFormProps {
    */
   detailsReadOnlyReason?: string;
   showRecurringEditNotice?: boolean;
+  /** The clock the start and end times read in; the locale's when unset. */
+  timeFormat?: CalendarTimeFormat;
   /** Disable interaction without presenting the form as an in-flight save. */
   disabled?: boolean;
   pending: boolean;

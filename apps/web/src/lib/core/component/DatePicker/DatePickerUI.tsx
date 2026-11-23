@@ -13,6 +13,8 @@ type DatePickerUIProps = {
   disablePriorToDate?: Date;
   disableAfterDate?: Date;
   showTimePicker?: boolean;
+  /** Days to mark as a range: both ends selected, the days between tinted. */
+  range?: { start: Date | null; end: Date | null };
 };
 
 const MONTHS = [
@@ -137,13 +139,28 @@ export function DatePickerUI(props: DatePickerUIProps) {
     );
   };
 
+  const isSameDay = (day: number, date: Date) =>
+    displayYear() === date.getFullYear() &&
+    displayMonth() === date.getMonth() &&
+    day === date.getDate();
+
   const isSelected = (day: number) => {
-    const val = props.showTimePicker ? selectedDate() : props.value;
-    return (
-      displayYear() === val.getFullYear() &&
-      displayMonth() === val.getMonth() &&
-      day === val.getDate()
-    );
+    if (props.range) {
+      const { start, end } = props.range;
+      return (
+        (start !== null && isSameDay(day, start)) ||
+        (end !== null && isSameDay(day, end))
+      );
+    }
+    return isSameDay(day, props.showTimePicker ? selectedDate() : props.value);
+  };
+
+  const isWithinRange = (day: number) => {
+    const start = props.range?.start;
+    const end = props.range?.end;
+    if (!start || !end) return false;
+    const date = getDateForDay(day);
+    return isAfter(date, endOfDay(start)) && isBefore(date, startOfDay(end));
   };
 
   const daysInMonth = () => getDaysInMonth(displayYear(), displayMonth());
@@ -235,6 +252,7 @@ export function DatePickerUI(props: DatePickerUIProps) {
                   class="size-8 rounded-md transition-colors disabled:opacity-40"
                   classList={{
                     'bg-accent text-surface': isSelected(day!),
+                    'bg-accent-hover': isWithinRange(day!),
                     'hover:bg-active': !isSelected(day!),
                     'ring ring-accent': isToday(day!),
                   }}

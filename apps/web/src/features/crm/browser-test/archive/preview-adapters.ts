@@ -4,7 +4,10 @@ import type { CrmContactResponse } from '@service-storage/generated/schemas/crmC
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
-import type { CompanyContactsFilter } from '../../context/crm-sources';
+import type {
+  CompanyContactsFilter,
+  ItemListSource,
+} from '../../context/crm-sources';
 import {
   useCompanyQuery,
   useSetCompanyHiddenMutation,
@@ -26,6 +29,9 @@ import { companyContactsPage } from '../company-contacts-page';
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
 export async function invalidateCachedCrmContacts() {}
+export async function fetchCrmContacts() {
+  return { contacts: [], nextCursor: null };
+}
 // This fixture verifies REST/UI integration; normalized-cache fencing has separate exchange tests.
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
@@ -103,9 +109,12 @@ let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
       : [
           `person${index + 1}@${domain}`,
           ...(params.has('several') && index === 0
-            ? [`person1@${PERSONAL_DOMAIN}`, 'person1.alt@example.org'].filter(
-                (email) => email !== `person1@${domain}`
-              )
+            ? [
+                `person1@${PERSONAL_DOMAIN}`,
+                params.has('long')
+                  ? 'person1.with.a.much.longer.mailbox.name@example.org'
+                  : 'person1.alt@example.org',
+              ].filter((email) => email !== `person1@${domain}`)
             : []),
         ];
     const full = identity(
@@ -324,6 +333,18 @@ export const useCrmContext = () => ({
   editContactEmail: () => useSetContactEmailMutation(deps),
   editContactCompany: () => useSetContactCompanyMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
+  createRecordReferences: (): ItemListSource => ({
+    isPending: false,
+    isEnabled: true,
+    isLoading: false,
+    data: { entities: [] },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isError: false,
+    isFetchNextPageError: false,
+    fetchNextPage: async () => undefined,
+    refetch: async () => undefined,
+  }),
   createNavigation: () => ({
     openWithSplit(target: { id: string }) {
       location.search = `?kind=company&companyArchived&opened=${target.id}`;

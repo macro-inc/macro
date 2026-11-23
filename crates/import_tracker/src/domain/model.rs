@@ -180,7 +180,7 @@ pub enum TrackerError {
         /// Bounded provider explanation.
         message: String,
     },
-    /// Pipedream or connection store error.
+    /// The connection lookup or the call through it failed.
     #[error("Issue tracker transport failed: {0}")]
     Transport(rootcause::Report),
 }

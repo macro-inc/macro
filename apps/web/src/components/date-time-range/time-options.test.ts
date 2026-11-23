@@ -55,6 +55,17 @@ describe('explicit clock preference', () => {
       typedTimeOption(endTimeOptions('20:00', '12-hour'), '9a')
     ).toMatchObject({ value: '09:00', dayOffset: 1 });
   });
+  it('retains stable clock choices and formats exact off-step typed times', () => {
+    expect(dayTimeOptions()).toBe(DAY_TIME_OPTIONS);
+    expect(dayTimeOptions('24-hour')).toBe(dayTimeOptions('24-hour'));
+    expect(endTimeOptions('', '24-hour')).toBe(dayTimeOptions('24-hour'));
+    expect(
+      typedTimeOption(endTimeOptions('09:00', '24-hour'), '3:10', '24-hour')
+    ).toMatchObject({ value: '15:10', label: '15:10' });
+    expect(
+      typedTimeOption(endTimeOptions('09:00', '12-hour'), '3:10', '12-hour')
+    ).toMatchObject({ value: '15:10', label: '3:10pm' });
+  });
 });
 
 describe('formatDuration', () => {

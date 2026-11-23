@@ -23,11 +23,8 @@ const DEFAULT_VIEW: ConversationListViewState = {
 
 const SORTS: readonly ConversationSort[] = ['updated', 'created'];
 // Retained only for the old phone composition; the desktop ignores grouping.
-const LEGACY_GROUPINGS: readonly ConversationGrouping[] = [
-  'none',
-  'status',
-  'type',
-];
+// A saved grouping this build no longer offers (Type) falls back to the default.
+const LEGACY_GROUPINGS: readonly ConversationGrouping[] = ['none', 'status'];
 
 function stringsOf<Value extends string>(
   value: unknown,
@@ -77,8 +74,11 @@ function parseView(raw: string | null): ConversationListViewState | undefined {
 }
 
 /** The Agents sidebar's filters and sort, remembered per user. */
-export function createConversationListView(userId: string | undefined) {
-  const storage = createUserScopedStorage('agents-conversation-list-view-v1');
+export function createConversationListView(
+  userId: string | undefined,
+  storageKey = 'agents-conversation-list-view-v1'
+) {
+  const storage = createUserScopedStorage(storageKey);
   const [view, setView] = makePersistedState(
     createSignal<ConversationListViewState>(DEFAULT_VIEW),
     {

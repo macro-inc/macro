@@ -7,6 +7,7 @@ import {
   typedTimeCandidates,
   typedTimeOption,
 } from '../time-options';
+import type { ClockFormat } from './clock-format';
 
 interface TimeInputState {
   mode: 'closed' | 'list' | 'typing';
@@ -23,6 +24,7 @@ export function createTimeInput(options: {
   selectedId: Accessor<string>;
   disabled: Accessor<boolean>;
   onChange: (option: TimeOption) => void;
+  timeFormat?: Accessor<ClockFormat | undefined>;
 }) {
   const [state, setState] = createStore<TimeInputState>({
     mode: 'closed',
@@ -59,7 +61,14 @@ export function createTimeInput(options: {
   };
   const commit = () => {
     if (state.typed !== undefined) {
-      choose(highlighted() ?? typedTimeOption(options.options(), state.typed));
+      choose(
+        highlighted() ??
+          typedTimeOption(
+            options.options(),
+            state.typed,
+            options.timeFormat?.()
+          )
+      );
       return;
     }
     choose(state.navigated ? highlighted() : undefined);

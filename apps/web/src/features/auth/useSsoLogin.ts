@@ -1,5 +1,6 @@
 import type { AnalyticsProvider } from '@app/lib/analytics';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { appendMetaClickIds } from '@app/lib/analytics/metaClickIds';
 import {
   createNativeAuthSession,
   DESKTOP_AUTH_CALLBACK_URL,
@@ -157,6 +158,7 @@ export function useSsoLogin(opts?: {
 
     if (referral_code) authUrl.searchParams.set('referral_code', referral_code);
     if (opts?.isAgent) authUrl.searchParams.set('is_agent', 'true');
+    appendMetaClickIds(authUrl);
 
     const desktop = isPlatform('desktop');
 

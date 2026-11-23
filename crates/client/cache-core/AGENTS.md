@@ -18,13 +18,14 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Start here
 
 - `src/engine.rs`: the `CacheEngine` — the crate's entry point, owns queued
-  mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction.
+  mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction. `normalize_network` normalizes a response before its write (schema and parsed documents only, no storage) so a host derives its projections from the same records; `write_normalized_query` / `hydrate_normalized_query(_in_scope)` take that result instead of normalizing again, and hydration never installs its dependencies.
 - `src/engine/window_observation.rs`: bounded immutable predicate-window proofs
   over the complete change journal, selected dependencies and catalog input fields;
   unknown evidence never suppresses invalidation.
 - `src/normalize.rs` / `src/denormalize.rs`: GraphQL response ↔ normalized record
   transforms.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
+- `src/engine/pass_reads.rs`: reads for a write's projection passes, each stored key once, kept for the write; the write uses them only if `Storage::write_position` has not moved, and otherwise rereads everything it takes from storage in one batch.
 - `src/engine/authority.rs`: an opaque durable policy and one response generation, compared under the owner lock without read admission. Cache the authority alongside the identity in the single-owner engine and invalidate both on reset. Let the application decide whether a transition needs retirement; initial non-denials preserve offline snapshots. Carry an unfinished policy across account-witness binding and keep the closed marker until required application retirement completes; retire projection-only sources and persist rebuilt layers without changing commands or unrelated projection shadows. Generate Rust/TypeScript transport schemas with `bun run gen-cache-authority-schema --rust` from `apps/web`.
 - `src/engine/retirement.rs`: selective record/optimistic cleanup that preserves authored commands, fresh query revalidations, and canonical identity metadata; recompute affected projection shadows from every surviving layer in the same storage transaction.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
@@ -36,6 +37,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/people/references.rs`: complete cached-directory label matching with at most two witnesses per requested label. Exact/preferred-full-name/any-name modes preserve caller ambiguity rules; malformed matching records cannot establish uniqueness. `resolve_people_references` is scoped/read-only and needs ready context only when excluding secondary inboxes. The browser/native reference transport is used by migrated planners. Foreign-viewer keys are discarded before private-name matching and cannot affect completeness flags. A completed cache scan is not proof of authoritative server membership.
 - `src/search/ranking.rs`: incremental top-K ranking over borrowed storage rows and optimistic shadows; copy only winners and never retain a full text-search bucket. Unicode normalization and subsequence matching live in the WASM-safe `subsequence_match` crate shared with server contact search.
 - `src/engine/hydration.rs`: admission checks expected/response identity and durable generation without rebinding accounts or recreating cleared metadata. Contact writes also require a pre-fetch `contactFence`; accepted fenced responses (even identical values) consume it. Unfenced network/optimistic contact writes reject. Call under the same engine lock as persistence.
+- `src/engine/staged_hydrate.rs`: a query hydrate computed while it only reads (`stage_hydrate`: the merge, projection changes and records to write) and written in a short step after (`commit_staged_hydrate`). It stages nothing when the hydrate would bind or switch the account, compose with optimistic layers, or fail admission; it holds only while `staged_hydrate_current` (revision, optimistic layers, contact fence, identity) and the host's storage check both pass. `persist_updates` is `plan_persist` then `apply_persist` for the same reason.
 - `src/engine/people/sync.rs`: capture the single-owner engine's contact write fence, optionally scan at most 500 raw contact records by key, and reconcile complete exact-ID evidence. Never delete from scan omissions; reject stale fences, foreign/duplicate evidence and omitted self. Removal clears durable/hot records and invalidates dependent reads; context-only stubs are not membership. Engine replacement, clear and contact invalidation/deletion invalidate admission.
 - `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
@@ -52,7 +54,8 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 
 ## Boundaries
 
-- Depends on: `apollo-compiler`/`apollo-parser` (GraphQL parsing), `predicate-index`,
+- Depends on: `cache-schema` (schema metadata, as `meta`), `apollo-parser`
+  (GraphQL parsing), `predicate-index`,
   `maybe_send`, and the WASM-safe `database_sql` compiler.
 - Used by: `cache-turso`, `cache-wasm`.
 

@@ -352,6 +352,38 @@ it('moves the end with the start even after the end is picked', async () => {
   ).toBeNull();
 });
 
+it('shows and lists times on the calendar’s 24-hour clock', async () => {
+  const user = userEvent.setup();
+  showForm({ timeFormat: '24-hour' });
+  const start = screen.getByRole<HTMLInputElement>('combobox', {
+    name: 'event start time',
+  });
+  const end = screen.getByRole<HTMLInputElement>('combobox', {
+    name: 'event end time',
+  });
+  expect(start.value).toBe('12:00');
+  expect(end.value).toBe('13:00');
+
+  await user.click(start);
+  expect(screen.getByRole('option', { name: /^14:00/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /PM/ })).toBeNull();
+  await user.keyboard('3p{Enter}');
+  expect(start.value).toBe('15:00');
+  expect(end.value).toBe('16:00');
+
+  await user.click(end);
+  expect(screen.getByRole('option', { name: /^16:15.*15min/ })).toBeTruthy();
+  expect(screen.queryByRole('option', { name: /PM/ })).toBeNull();
+});
+
+it('keeps a 12-hour calendar’s times on the 12-hour clock', () => {
+  showForm({ timeFormat: '12-hour' });
+  expect(
+    screen.getByRole<HTMLInputElement>('combobox', { name: 'event start time' })
+      .value
+  ).toBe('12:00pm');
+});
+
 const TEAMS_REMOVAL_NOTICE =
   'Outlook can’t remove Teams from an existing event. To drop it, replace the event: guests get a new invitation with your changes and respond again.';
 

@@ -20,6 +20,7 @@ export default defineConfig({
     'email-participants.browser.e2e.ts',
     'search-buckets.browser.e2e.ts',
     'people-references.browser.e2e.ts',
+    'people-list-order.browser.e2e.ts',
   ],
   timeout: 90_000,
   fullyParallel: false,

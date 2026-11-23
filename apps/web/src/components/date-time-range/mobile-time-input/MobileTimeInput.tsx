@@ -54,6 +54,7 @@ export function MobileTimeInput(props: MobileTimeInputProps) {
     options,
     selectedId,
     disabled: () => props.disabled ?? false,
+    timeFormat: () => props.timeFormat,
     onChange: (option) => props.onChange(option),
   });
   const display = () =>

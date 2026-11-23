@@ -89,14 +89,24 @@ function timeOption(
   };
 }
 
-/** Every quarter-hour in a day, in the requested clock format. */
-export function dayTimeOptions(format?: ClockFormat): TimeOption[] {
+function createDayTimeOptions(format?: ClockFormat): TimeOption[] {
   return Array.from({ length: minutesInDay / SLOT_MINUTES }, (_, index) =>
     timeOption(index * SLOT_MINUTES, 0, undefined, format)
   );
 }
 
-export const DAY_TIME_OPTIONS: TimeOption[] = dayTimeOptions();
+export const DAY_TIME_OPTIONS = createDayTimeOptions();
+const DAY_TIME_OPTIONS_BY_CLOCK = {
+  '12-hour': createDayTimeOptions('12-hour'),
+  '24-hour': createDayTimeOptions('24-hour'),
+};
+
+/** Stable quarter-hour choices in the requested display format. */
+export function dayTimeOptions(format?: ClockFormat): TimeOption[] {
+  return format === undefined
+    ? DAY_TIME_OPTIONS
+    : DAY_TIME_OPTIONS_BY_CLOCK[format];
+}
 
 /**
  * Quarter-hours from 15 minutes to 23h45min after `startTime`, each labelled
@@ -196,7 +206,8 @@ export function matchTypedTime(
  */
 export function typedTimeOption(
   options: TimeOption[],
-  text: string
+  text: string,
+  format?: ClockFormat
 ): TimeOption | undefined {
   const matched = matchTypedTime(options, text);
   if (matched) return matched;
@@ -206,7 +217,9 @@ export function typedTimeOption(
   const [soonest] = typedTimeCandidates(text).sort(
     (left, right) => after(left) - after(right)
   );
-  return soonest === undefined ? undefined : timeOption(soonest, 0);
+  return soonest === undefined
+    ? undefined
+    : timeOption(soonest, 0, undefined, format);
 }
 
 /**

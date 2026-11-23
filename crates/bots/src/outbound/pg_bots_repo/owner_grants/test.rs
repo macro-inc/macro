@@ -25,7 +25,7 @@ async fn deleted_bots_keep_their_sponsor_not_their_creator(pool: PgPool) {
     for (bot, sponsor) in cases {
         let expected = vec![Owner::Bot(bot), sponsor];
         assert_eq!(policy.grants_for(&Owner::Bot(bot)).await.unwrap(), expected);
-        assert!(repo.delete_bot(bot).await.unwrap());
+        assert!(repo.delete_bot(bot).await.unwrap().is_some());
         assert!(repo.get_bot(bot).await.unwrap().is_none());
         assert_eq!(policy.grants_for(&Owner::Bot(bot)).await.unwrap(), expected);
     }
