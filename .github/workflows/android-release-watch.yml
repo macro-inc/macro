@@ -169,7 +169,7 @@ jobs:
           play_publish_runs() {
             local workflow count total=0
             for workflow in android-play-publish.yml publish-android-play.yml; do
-              count=$(gh run list --repo "$GH_REPO" --workflow "$workflow" --json status \
+              count=$(gh run list --repo "$GH_REPO" --workflow "$workflow" --limit 100 --json status \
                 --jq '[.[] | select(.status != "completed")] | length') || return 1
               total=$(( total + count ))
             done
