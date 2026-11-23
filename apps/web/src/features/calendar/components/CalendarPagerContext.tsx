@@ -105,16 +105,19 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
 
   const pager = createSnapPager({
     pageCount: CALENDAR_PAGE_IDS.length,
+    onScrollStart() {
+      renderQueue.clear();
+    },
     onNavigationCancel() {
       setPendingAnchor(undefined);
       setRequestedDate(undefined);
       todayTarget = undefined;
-      synchronizePages();
+      if (pager.phase() === 'idle') synchronizePages();
     },
     onSettle(moved) {
       const interaction = beginInteraction('calendar.page');
       try {
-        props.onNavigate();
+        if (moved !== 0) props.onNavigate();
         const pending = pendingAnchor();
         if (pending?.position === pager.position()) {
           setAnchor(pending);
@@ -173,12 +176,14 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
   // Recycled pages alone get new dates. Read their latest position inside each
   // job, so another native swipe never waits on or commits an obsolete buffer.
   function synchronizePages(force = false) {
+    if (pager.phase() !== 'idle') return;
     for (const id of pageOrder()) {
       if (!handles.has(id)) continue;
       if (!force && rendered.get(id) === signature(pageDate(id))) continue;
       renderQueue.enqueue(
         `page:${id}`,
         () => {
+          if (pager.phase() !== 'idle') return;
           const handle = handles.get(id);
           const api = handle?.api();
           if (!api) return;

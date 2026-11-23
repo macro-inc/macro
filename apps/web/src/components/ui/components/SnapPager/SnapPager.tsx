@@ -12,9 +12,10 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import './snap-pager.css';
+import { settleTarget } from './settle-target';
 
-// Wait beyond brief momentum pauses before recycling a native scroll track.
-export const SNAP_SETTLE_DELAY_MS = 180;
+// Only older engines without scrollend use a quiet-time fallback.
+export const SNAP_SETTLE_DELAY_MS = 350;
 // Repeated controls jump to their aggregate target instead of replaying slides.
 export const SNAP_RAPID_PRESS_MS = 180;
 
@@ -42,6 +43,8 @@ export interface SnapPagerOptions {
   onSettle?: (moved: number) => void;
   /** A later gesture superseded a pending programmatic request. */
   onNavigationCancel?: () => void;
+  /** Pause caller-owned render work before native scrolling begins. */
+  onScrollStart?: () => void;
 }
 
 export interface SnapPagerController {
@@ -117,6 +120,29 @@ export function createSnapPager(
   let lastCommandAt: number | undefined;
   let rapidNavigation = false;
   let unreportedMovement = 0;
+  let alignmentTarget: number | undefined;
+  let releaseVelocity = 0;
+  let scrollObserved = false;
+  let nativeEndedWhileHeld = false;
+  let sample = { left: 0, at: 0, velocity: 0 };
+  const beginNativeScroll = () => {
+    if (locked()) return;
+    if (nativeScroll && alignmentTarget === undefined) return;
+    nativeScroll = true;
+    alignmentTarget = undefined;
+    scrollObserved = false;
+    nativeEndedWhileHeld = false;
+    releaseVelocity = 0;
+    sample = { left: attached?.scrollLeft ?? 0, at: Date.now(), velocity: 0 };
+    clearFrame();
+    if (attached) attached.style.scrollSnapType = 'none';
+    setPhase('scrolling');
+    options.onScrollStart?.();
+    cancelNavigation();
+  };
+  const captureRelease = () => {
+    releaseVelocity = Date.now() - sample.at <= 80 ? sample.velocity : 0;
+  };
   const reportSettle = () => {
     const moved = unreportedMovement;
     unreportedMovement = 0;
@@ -125,7 +151,6 @@ export function createSnapPager(
   const cancelNavigation = () => {
     lastCommandAt = undefined;
     rapidNavigation = false;
-    if (unreportedMovement !== 0) reportSettle();
     if (pending === 0 && queuedJump === undefined) return;
     pending = 0;
     queuedJump = undefined;
@@ -135,41 +160,50 @@ export function createSnapPager(
   const gestureHeld = () => touchHeld || pointerHeld;
 
   const scheduleSettle = () => {
+    if (
+      attached &&
+      'onscrollend' in attached &&
+      scrollObserved &&
+      !rapidNavigation
+    )
+      return;
     clearTimer();
-    timer = setTimeout(settle, SNAP_SETTLE_DELAY_MS);
+    timer = setTimeout(
+      settle,
+      rapidNavigation ? SNAP_RAPID_PRESS_MS : SNAP_SETTLE_DELAY_MS
+    );
   };
   // These passive lifecycle listeners never drive scrolling. They only prevent
   // a fallback timer from recycling pages beneath a finger that stopped moving.
   const touchStart = () => {
     touchHeld = true;
-    nativeScroll = true;
-    cancelNavigation();
+    beginNativeScroll();
     clearTimer();
   };
   const touchEnd = (event: TouchEvent) => {
     if (event.touches.length > 0) return;
     touchHeld = false;
-    scheduleSettle();
+    captureRelease();
+    if (!scrollObserved || nativeEndedWhileHeld) settle();
+    else scheduleSettle();
   };
   const pointerStart = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
     pointerHeld = true;
-    nativeScroll = true;
-    cancelNavigation();
+    beginNativeScroll();
     clearTimer();
   };
   const pointerEnd = (event: PointerEvent) => {
     if (event.pointerType === 'touch') return;
     pointerHeld = false;
-    scheduleSettle();
+    captureRelease();
+    if (!scrollObserved || nativeEndedWhileHeld) settle();
+    else scheduleSettle();
   };
   const onWheel = (event: WheelEvent) => {
     if (locked() || (event.deltaX === 0 && !event.shiftKey)) return;
-    // Trackpads have no held pointer lifecycle. New horizontal input takes
-    // ownership away from a button burst without interrupting native momentum.
-    if (!nativeScroll) cancelNavigation();
-    nativeScroll = true;
-    setPhase('scrolling');
+    // Trackpad input has no held pointer lifecycle. Keep its native inertia.
+    beginNativeScroll();
     scheduleSettle();
   };
   const performJump = (target: number, deferReport = false) => {
@@ -201,7 +235,8 @@ export function createSnapPager(
     clearFrame();
     frame = requestAnimationFrame(() => {
       frame = undefined;
-      if (!locked()) element.style.scrollSnapType = '';
+      if (!locked() && !nativeScroll && !gestureHeld())
+        element.style.scrollSnapType = '';
     });
   };
 
@@ -281,18 +316,39 @@ export function createSnapPager(
       }
     }
     rapidNavigation = false;
-    nativeScroll = false;
     const hadMovement = phase() !== 'idle' || pending !== 0;
-    const moved = Math.max(
-      -middle,
-      Math.min(
-        middle,
-        Math.round(element.scrollLeft / element.clientWidth) - middle
-      )
-    );
+    const moved =
+      alignmentTarget ??
+      settleTarget({
+        distance: element.scrollLeft - middle * element.clientWidth,
+        width: element.clientWidth,
+        releaseVelocity,
+        maxPages: middle,
+      });
+    // Native momentum has ended. Align smoothly first, then recycle on the
+    // alignment's scrollend. Never round and jump a partially visible page.
+    const targetLeft = (middle + moved) * element.clientWidth;
+    if (Math.abs(element.scrollLeft - targetLeft) > 1) {
+      alignmentTarget = moved;
+      setPhase('settling');
+      const reduced =
+        window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ??
+        false;
+      element.scrollTo({
+        left: targetLeft,
+        behavior: reduced ? 'instant' : 'smooth',
+      });
+      if (reduced) settle();
+      else scheduleSettle();
+      return;
+    }
+    alignmentTarget = undefined;
+    releaseVelocity = 0;
+    nativeScroll = false;
     if (moved === 0) {
       pending = 0;
       setPhase('idle');
+      element.style.scrollSnapType = '';
       if (queuedJump !== undefined) performJump(queuedJump);
       else if (hadMovement || unreportedMovement !== 0) reportSettle();
       return;
@@ -315,7 +371,19 @@ export function createSnapPager(
       attached.scrollLeft === middle * attached.clientWidth
     )
       return;
-    if (phase() === 'idle' && pending === 0) nativeScroll = true;
+    if (phase() === 'idle' && pending === 0) beginNativeScroll();
+    scrollObserved = true;
+    nativeEndedWhileHeld = false;
+    if (nativeScroll && gestureHeld()) {
+      const now = Date.now();
+      const left = attached?.scrollLeft ?? 0;
+      const elapsed = now - sample.at;
+      sample = {
+        left,
+        at: now,
+        velocity: elapsed > 0 ? (left - sample.left) / elapsed : 0,
+      };
+    }
     if (
       gestureHeld() &&
       queuedJump !== undefined &&
@@ -326,7 +394,13 @@ export function createSnapPager(
     clearTimer();
     scheduleSettle();
   };
-  const onScrollEnd = () => settle();
+  const onScrollEnd = () => {
+    if (gestureHeld()) {
+      nativeEndedWhileHeld = true;
+      return;
+    }
+    settle();
+  };
 
   const command = (offset: number) => {
     if (locked() || !Number.isInteger(offset) || offset === 0) return;
@@ -366,6 +440,8 @@ export function createSnapPager(
     touchHeld = false;
     pointerHeld = false;
     nativeScroll = false;
+    alignmentTarget = undefined;
+    releaseVelocity = 0;
     element.style.scrollSnapType = '';
     clearTimer();
     clearFrame();
@@ -412,6 +488,8 @@ export function createSnapPager(
       lastCommandAt = undefined;
       rapidNavigation = false;
       nativeScroll = false;
+      alignmentTarget = undefined;
+      releaseVelocity = 0;
       unreportedMovement = 0;
       batch(() => {
         slots.forEach(([, setSlot], index) => setSlot(index));
@@ -426,6 +504,8 @@ export function createSnapPager(
       if (value === locked()) return;
       if (value) cancelNavigation();
       nativeScroll = false;
+      alignmentTarget = undefined;
+      releaseVelocity = 0;
       pending = 0;
       queuedJump = undefined;
       clearTimer();

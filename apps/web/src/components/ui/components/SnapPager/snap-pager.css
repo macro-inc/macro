@@ -2,7 +2,7 @@
   position: relative;
   overflow-x: auto;
   overflow-y: hidden;
-  scroll-snap-type: x mandatory;
+  scroll-snap-type: x proximity;
   scrollbar-width: none;
   overscroll-behavior-x: contain;
 }
@@ -29,7 +29,7 @@
   width: 100%;
   min-width: 0;
   scroll-snap-align: start;
-  /* Let native momentum cross pages; mandatory snapping still aligns at rest. */
+  /* Do not trap native momentum at each period boundary. */
   scroll-snap-stop: normal;
 }
 

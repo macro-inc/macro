@@ -1,11 +1,11 @@
 # SnapPager
 
-A generic, endless, native horizontal scroll-snap ring. Import `SnapPager` and
-`createSnapPager` from `./SnapPager`. The browser owns drag, momentum, and snap:
-there are no touchmove handlers, transforms, preventDefault calls, or custom inertia.
-Passive start/end/cancel listeners defer settlement during a held gesture.
-Horizontal wheel input identifies trackpad ownership without driving the track;
-vertical wheel input leaves the pager alone.
+A generic, endless, native horizontal scroll ring. Import `SnapPager` and
+`createSnapPager` from `./SnapPager`. The browser owns drag and momentum: there
+are no touchmove handlers, transforms, preventDefault calls, or custom inertia.
+Passive gesture listeners temporarily disable CSS snapping. Once native scrolling
+ends, the pager requests native smooth alignment before recycling any page.
+Horizontal wheel input follows the same path; vertical input is ignored.
 
 ```tsx
 const pager = createSnapPager({
@@ -44,12 +44,15 @@ A request during a native gesture waits until it settles instead of moving the
 track under a finger. A later gesture cancels pending commands through
 `onNavigationCancel`.
 
-Native snapping remains mandatory with `scroll-snap-stop: normal`, allowing
-strong flings to cross several pages. `scrollend` commits at rest; the fallback
-waits `SNAP_SETTLE_DELAY_MS` (180ms) after the last scroll instead of 100ms, so
-brief momentum pauses do not recycle the track early. Neither path recycles a
-held gesture. A canceled programmatic move reports zero; re-centering itself
-does not report another move.
+At rest, CSS uses proximity snapping with `scroll-snap-stop: normal`. During a
+gesture it is disabled so it cannot force an early page decision. A slow drag
+commits only beyond half a page. A release faster than 0.5 CSS px/ms, sampled
+within 80ms and traveling at least 10% of a page (capped at 40px), is a flick.
+Native momentum can cross multiple pages. `scrollend` starts smooth alignment;
+only its final `scrollend` recycles the ring and reports the move. Engines without
+`scrollend` use a 350ms quiet fallback. No timer substitutes for native `scrollend`
+when supported. Held gestures do not settle. `onScrollStart` lets callers pause
+queued render work; even a zero-move settlement releases that pause.
 Update recycled content without remounting the stable page key. `reset()` explicitly
 returns to the initial ring without calling `onSettle`. `setLocked(true)` freezes
 horizontal navigation; unlock settles the current location. Locked resizes retain

@@ -224,6 +224,23 @@ describe('calendar Today navigation', () => {
 
 // Native scroll events commit the same five mounted FullCalendar instances used by the workspace.
 describe('calendar native paging', () => {
+  it('pauses queued FullCalendar date changes through a long native scroll pause', async () => {
+    const { pages, viewport, pager } = mountCalendar();
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    const changes = [...pages.values()].map(({ calendar }) =>
+      vi.spyOn(calendar, 'gotoDate')
+    );
+    viewport.dispatchEvent(new WheelEvent('wheel', { deltaX: 60 }));
+    viewport.scrollLeft = 300;
+    viewport.dispatchEvent(new Event('scroll'));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(pager().pager.position()).toBe(0);
+    for (const change of changes) expect(change).not.toHaveBeenCalled();
+    viewport.dispatchEvent(new Event('scrollend'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(pager().pager.position()).toBe(1);
+    expect(changes.some((change) => change.mock.calls.length > 0)).toBe(true);
+  });
   it.each([
     ['timeGridDay', new Date(2026, 10, 2), new Date(2026, 10, 3)],
     ['timeGridWeek', new Date(2026, 10, 8), new Date(2026, 10, 15)],

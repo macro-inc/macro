@@ -259,9 +259,12 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() =>
-    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
-  );
+  // Hold the rendered projection during horizontal momentum. Cached responses
+  // can finish, but they must not redraw FullCalendar beneath the gesture.
+  const visibleEvents = createMemo<CalendarEvent[]>((current) => {
+    if (current && pager.pager.phase() !== 'idle') return current;
+    return mergeCalendarOverlays(data.visibleEvents(), teamOoo.events());
+  });
   const eventsById = createMemo(
     () => new Map(visibleEvents().map((event) => [event.id, event]))
   );

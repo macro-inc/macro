@@ -18,12 +18,22 @@ function viewport() {
   return element;
 }
 
+const scrollEndDescriptor = Object.getOwnPropertyDescriptor(
+  HTMLElement.prototype,
+  'onscrollend'
+);
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  if (scrollEndDescriptor)
+    Object.defineProperty(
+      HTMLElement.prototype,
+      'onscrollend',
+      scrollEndDescriptor
+    );
 });
 
 describe('SnapPager', () => {
@@ -68,6 +78,7 @@ describe('SnapPager', () => {
   });
 
   it('waits through short momentum pauses before fallback settlement', () => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'onscrollend');
     const moved = vi.fn();
     const pager = createSnapPager({ onSettle: moved });
     const element = viewport();
@@ -78,7 +89,7 @@ describe('SnapPager', () => {
     expect(moved).not.toHaveBeenCalled();
     element.scrollLeft = 300;
     element.dispatchEvent(new Event('scroll'));
-    vi.advanceTimersByTime(179);
+    vi.advanceTimersByTime(349);
     expect(moved).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
     expect(moved).toHaveBeenCalledExactlyOnceWith(1);
@@ -108,6 +119,8 @@ describe('SnapPager', () => {
     const element = viewport();
     pager.attachViewport(element);
     element.scrollLeft = 1000;
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(0);
     element.dispatchEvent(new Event('scrollend'));
     expect(pager.position()).toBe(1);
     pager.goTo(12);
@@ -282,6 +295,7 @@ describe('SnapPager', () => {
   });
 
   it('does not recycle pages while a touch remains held after scrollend or debounce', () => {
+    Reflect.deleteProperty(HTMLElement.prototype, 'onscrollend');
     const moved = vi.fn();
     const pager = createSnapPager({ onSettle: moved });
     const element = viewport();
@@ -294,7 +308,7 @@ describe('SnapPager', () => {
     expect(pager.position()).toBe(0);
     expect(moved).not.toHaveBeenCalled();
     window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
-    vi.advanceTimersByTime(180);
+    vi.advanceTimersByTime(350);
     expect(pager.position()).toBe(1);
     expect(moved).toHaveBeenCalledExactlyOnceWith(1);
   });
