@@ -189,7 +189,7 @@ macro_rules! filter_expr_input {
         #[doc = concat!("The two operands of a recursive `", $type_name, "` binary expression.")]
         #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
         #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
+        #[serde(deny_unknown_fields, rename_all = "camelCase")]
         struct $binary_name {
             /// Left expression.
             left: Box<$name>,
@@ -240,7 +240,7 @@ filter_expr_input!(
 /// GraphQL input for matching a property value on an entity.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
     property_definition_id: ID,
@@ -289,7 +289,7 @@ enum GraphqlFilterPropertyMatchValue {
 /// Explicit UTC bounds for a DATE property.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct GraphqlPropertyDateRange {
     /// Inclusive UTC start, or no lower bound.
     start: Option<String>,
@@ -1516,6 +1516,8 @@ enum GraphqlInitiativeLiteral {
     DueAfter(String),
     /// Exact notification state for the requester; also opts in.
     NotificationState(GraphqlNotificationState),
+    /// A property condition that composes with initiative ownership.
+    Property(GraphqlFilterPropertiesLiteral),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1533,6 +1535,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
             Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
+            Self::Property(property) => InitiativeLiteral::Property(property.into_literal()?),
         };
         Ok(Expr::val(literal))
     }

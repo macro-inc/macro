@@ -80,6 +80,7 @@ transform before route Back, even when the route changes during a pane drag.
 A view opts in by calling `useViewRestoration()` in its stable route component.
 The default key comes from `viewRestorationKey`: Agents conversations normalize
 to `agents`, and Tasks-hosted project routes use `projects` instead of `tasks`.
+Legacy creator tabs normalize before choosing the Tasks or Projects destination.
 The mounted workspace re-registers when that key changes. Pass an explicit key
 to override that grouping.
 

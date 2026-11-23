@@ -662,7 +662,7 @@ async fn explain_first_page(
     filter: &EntityFilterAst,
 ) -> anyhow::Result<serde_json::Value> {
     let sort = DynamicSort::from(SimpleSortMethod::UpdatedAt);
-    let mut transaction = begin_dynamic_query(pool).await?;
+    let mut transaction = begin_dynamic_query(pool, filter).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, viewer).await?;
     let mut document_ids = DocumentIdArrays::starting_at(first_document_id_slot(sort, false));
     let builder = build_query(
@@ -791,6 +791,7 @@ mod bounded_access;
 mod counted_grants;
 mod name_sort;
 mod option_filter;
+mod personal_lists;
 mod property_sort;
 
 #[test]

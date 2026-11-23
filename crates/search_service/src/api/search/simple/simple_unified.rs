@@ -526,6 +526,9 @@ async fn search_unified_sources(
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
+    // Validate every expression branch before any source lookup or execution.
+    let filter_expression = super::filter_expression::compile(req.filter_expression)?;
+    let has_filter_expression = filter_expression.is_some();
     let user_id = MacroUserId::parse_from_str(&user_id)
         .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
         .lowercase();
@@ -583,7 +586,10 @@ async fn search_unified_sources(
     let crm_company_filters = req.filters.crm_company_filters.clone();
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    if has_filter_expression {
+        super::filter_expression::restrict_sources(&mut search_filters);
+    }
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -611,7 +617,7 @@ async fn search_unified_sources(
     // read after the caller's turn, so the membership is current when the
     // search runs however long the turn took.
     let crm_access = crm_company::resolve_crm_team_receipt(ctx, user_context, include_crm).await?;
-    let should_include_crm = crm_access.is_some() && !tags_active;
+    let should_include_crm = crm_access.is_some() && !tags_active && !has_filter_expression;
     let agent_sessions = ctx
         .agent_session_search()
         .scope(
@@ -750,6 +756,7 @@ async fn search_unified_sources(
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_document_response.match_all_tags = match_all_tags;
+    filter_document_response.filter_expression = filter_expression;
     filter_document_response.term_matching = document_term_matching;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();

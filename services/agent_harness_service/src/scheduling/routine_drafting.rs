@@ -139,6 +139,7 @@ impl SearchNames {
                 query: query.to_owned(),
                 match_type: MatchType::Exact,
                 filters: entity_filters_from_include(indexes.clone(), Default::default()),
+                filter_expression: None,
                 search_on: SearchOn::Name,
                 include_crm: false,
                 calendar_event_scope: Default::default(),

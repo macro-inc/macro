@@ -52,9 +52,8 @@ this feature does not add one.
   with presentation and navigation state. Do not persist that entire object.
 - [Task query construction](../../apps/web/src/features/tasks-view/queries/task-query.ts)
   and [client predicates](../../apps/web/src/features/tasks-view/filters/task-predicates.ts)
-  both apply tab scope and facets. My Tasks adds a viewer-relative assignee
-  condition; Created by me adds a viewer-relative creator condition. All Tasks
-  does not add a team-ID restriction.
+  both apply tab scope and facets. My Tasks matches creator OR assignee;
+  All Tasks does not add a team-ID restriction.
 - [Tags](../../apps/web/src/features/soup/filters/facets/tag-facet.ts) currently
   require loaded tag metadata to resolve an option to its property definition.
   An unresolved tag stops filtering today. Saved views must not inherit that
@@ -148,13 +147,17 @@ This intentionally stores a consumer-owned definition rather than a fully
 compiled Soup AST. A compiled AST bakes in the current user, requires reverse
 parsing to restore editable controls, and couples persisted definitions to query
 transport details. Reuse the existing compiler at execution time instead.
+Task list and text search share that compiled document/property expression.
+Search accepts the existing GraphQL Soup Boolean shape and rejects unsupported
+scopes or predicates rather than dropping saved conditions.
 
 ### Project definition v1
 
-Projects use `kind: "projects"`, `version: 1`, a viewer-relative `scope` (`all`,
-`assigned-to-me`, or `created-by-me`), and `settings` containing layout, status,
-priority, assigned-to-me refinement, due-date bounds, sort, and grouping. The
-existing GraphQL saved-view API accepts this consumer kind without backend or
+Projects use `kind: "projects"`, `version: 1`, a viewer-relative `scope` (`all`
+or `assigned-to-me`), and `settings` containing layout, status,
+priority, assigned-to-me refinement, due-date bounds, sort, and grouping. The personal
+scope matches owner OR assignee; legacy `created-by-me` scopes decode to it.
+The existing GraphQL saved-view API accepts this consumer kind without backend or
 schema changes. Project views reuse shared queries, dialogs, menu/list components,
 and draft reconciliation rather than creating another persistence API.
 
@@ -193,9 +196,9 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
 }
 ```
 
-- Save My Tasks by adding a viewer reference to Assignee; save Created by me by
-  adding one to Created by. All Tasks adds neither. There is no separate Scope
-  control or persisted scope field.
+- Save My Tasks with optional `scope: "my-tasks"`, preserving creator OR assignee
+  independently of all explicit filters. All Tasks omits this field. There is no
+  separate Scope control. Legacy `scope: "created-by-me"` reads as My Tasks.
 - Person references are either `{ "type": "viewer" }` or
   `{ "type": "user", "id": "..." }`. The picker distinguishes the relative
   **Me** option from a fixed person. Its tooltip reads “Matches whoever opens this
@@ -209,13 +212,13 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   Unavailable project metadata does not remove a selected ID or its predicate.
 - Capture the actual open-status selection when present. Do not depend on
   whatever default statuses a future client chooses.
-- Capturing My Tasks with an additional assignee uses normal OR matching: tasks
-  assigned to either person. Created by me follows the same rule for creators.
-- Accept only this final definition format. Earlier experimental Scope-based
-  configurations are not deployed contracts and have no upgrade path.
+- Capturing My Tasks with an additional assignee keeps the personal scope and
+  ANDs the explicit assignee filter with it. Existing filter-only definitions
+  retain their explicit assignee and creator predicates.
+- Accept only the supported v1 fields and the deployed legacy scope alias.
 
-Materialization always uses the All Tasks tab and restores every restriction as
-an editable facet. Viewer references resolve at query time. The same definition
+Materialization uses My Tasks for its saved scope and All Tasks otherwise.
+Viewer references resolve at query time. The same definition
 must feed list, board, Gantt, client predicates, and temporary text-search
 requests. Search text is not saved, but search results must satisfy every saved
 filter. In particular, search must use stored tag bindings rather than silently

@@ -394,7 +394,8 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Start local
+  Redis and set `REDIS_URI` for runtime-command and model-probe tests. Add
   `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
   routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).

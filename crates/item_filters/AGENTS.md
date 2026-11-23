@@ -63,6 +63,7 @@ logically-combinable query form.
 - `EmailLiteral::Subject` holds a `SubjectQuery`: trimmed, 1-200 characters;
   deserialization rejects anything else. `Attachment` kinds serialize as
   `pdf`, `image`, `document`.
+- Compose task membership from the existing subtype, owner, and system-Assignees property literals; keep completion independent instead of using the legacy inclusive incomplete-task override.
 - Represent DATE presence as `DateRange` with both bounds open and absence as its negation; `start` is inclusive and `end` exclusive.
 - Export filter intervals as `PropertyDateFilterRange` in schemas to distinguish half-open optional bounds from stored, inclusive `models_properties::DateRange` values.
 - Keep DATE evaluation in Soup/OpenSearch; call, email, and frecency treat date literals as false and preserve ordinary boolean negation.

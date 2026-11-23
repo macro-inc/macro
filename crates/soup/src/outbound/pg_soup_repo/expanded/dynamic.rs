@@ -8,6 +8,7 @@ mod database_row;
 mod document_ids;
 mod feed;
 mod initiative;
+mod membership;
 mod property_filter;
 
 use database_row::{build_database_row_filter, database_row_opted_in, database_row_top_clause};
@@ -501,6 +502,9 @@ fn grouped_calendar_event_top_clause(sort_method: SimpleSortMethod, name_sort: b
 
 // -- Detail clauses: full columns, joined back from TopItems --
 
+// Keep subtype and Assignees detail probes correlated with OFFSET 0.
+// Stale or generic plans otherwise scan or hash entire tables instead of
+// probing the returned document IDs through their indexes.
 static DOCUMENT_DETAIL_CLAUSE: &str = r#"
         SELECT
             'document' as "item_type",
@@ -536,6 +540,7 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
                         AND ep_assignees_projection.values->'value' @> jsonb_build_array(
                             jsonb_build_object('entity_id', $1)
                         )
+                    OFFSET 0
                 )
             ) as "is_important",
             ARRAY(
@@ -564,7 +569,10 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             NULL::jsonb as "database_row"
         FROM TopItems t
         INNER JOIN "Document" d ON d.id = t.id
-        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN LATERAL (
+            SELECT sub_type FROM document_sub_type
+            WHERE document_id = d.id OFFSET 0
+        ) dt ON true
         LEFT JOIN entity_properties ep_status
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id
@@ -704,6 +712,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
                         AND ep_assignees_projection.values->'value' @> jsonb_build_array(
                             jsonb_build_object('entity_id', $1)
                         )
+                    OFFSET 0
                 )
             ) as "is_important",
             ARRAY(
@@ -736,7 +745,10 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             gi.row_in_group as "row_in_group"
         FROM GroupedItems gi
         INNER JOIN "Document" d ON d.id = gi.id
-        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
+        LEFT JOIN LATERAL (
+            SELECT sub_type FROM document_sub_type
+            WHERE document_id = d.id OFFSET 0
+        ) dt ON true
         LEFT JOIN entity_properties ep_status
             ON dt.sub_type = 'task'
             AND ep_status.entity_id = d.id
@@ -1235,25 +1247,50 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
 /// free parameter slots.
 pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
     ast: Option<&Expr<DocumentLiteral>>,
-    id_arrays: Option<&mut DocumentIdArrays>,
+    mut id_arrays: Option<&mut DocumentIdArrays>,
 ) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
     let expr = push_not_inward(expr, false);
-    let formatting = match id_arrays {
-        Some(id_arrays) => document_ids::render(&expr, id_arrays, document_literal_sql),
-        None => expr.collapse_frames(|frame| match frame {
-            filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
-            filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
-            filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
-            filter_ast::ExprFrame::Literal(literal) => document_literal_sql(literal),
-        }),
-    };
+    let personal_membership = membership::bounds_documents(Some(&expr));
+    let formatting = render_document_expression(&expr, &mut id_arrays, personal_membership);
     if formatting.is_empty() {
         String::new()
     } else {
         format!(" AND {}", formatting)
+    }
+}
+
+fn render_document_expression(
+    expr: &Expr<DocumentLiteral>,
+    id_arrays: &mut Option<&mut DocumentIdArrays>,
+    personal_membership: bool,
+) -> String {
+    if let Some(predicate) = membership::document_predicate(expr) {
+        return predicate;
+    }
+    if personal_membership && let Expr::And(left, right) = expr {
+        let left = render_document_expression(left, id_arrays, personal_membership);
+        let right = render_document_expression(right, id_arrays, personal_membership);
+        return format!("({left} AND {right})");
+    }
+    // A personal set already bounds the rows. Keep subtype probes on those IDs
+    // instead of allowing a stale-statistics merge join over every subtype.
+    let literal_sql = |literal| match literal {
+        DocumentLiteral::SubType(sub_type) if personal_membership => format!(
+            "EXISTS (SELECT 1 FROM document_sub_type dst_f WHERE dst_f.document_id = d.id AND dst_f.sub_type = '{sub_type}' OFFSET 0)"
+        ),
+        literal => document_literal_sql(literal),
+    };
+    match id_arrays.as_deref_mut() {
+        Some(id_arrays) => document_ids::render(expr, id_arrays, literal_sql),
+        None => expr.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
+            filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
+            filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
+            filter_ast::ExprFrame::Literal(literal) => literal_sql(literal),
+        }),
     }
 }
 
@@ -1991,13 +2028,14 @@ impl DocumentGrants {
 
 /// Whether the document arm checks access against the caller's counted
 /// grants. It does not when it can return no document, when it checks its
-/// named documents after its filters ([`DocumentArmAccess::AfterFilters`]),
-/// or when its filter requires a folder or a notification
+/// named documents or indexed personal membership after its filters
+/// ([`DocumentArmAccess::AfterFilters`]), or when its filter requires a folder or a notification
 /// ([`requires_a_folder_or_notification`]).
 fn document_arm_gates_on_count(filter: &EntityFilterAst) -> bool {
     let document_filter = filter.document_filter.as_deref();
     DynamicArms::new(filter).documents
         && !names_few_documents(document_filter)
+        && !membership::bounds_documents(document_filter)
         && !requires_a_folder_or_notification(document_filter)
 }
 
@@ -2072,8 +2110,8 @@ fn names_few_documents(ast: Option<&Expr<DocumentLiteral>>) -> bool {
 /// semi-join: [`counted_document_access_semi_join`] when the caller's grants
 /// were counted, [`bound_access_semi_join`] otherwise, so Postgres can hash
 /// the caller's grants or probe them per candidate. An arm bounded by at
-/// most [`MAX_NAMED_CANDIDATES`] named ids reads its candidates and their
-/// own filters behind an `OFFSET` fence and probes `entity_access` once per
+/// most [`MAX_NAMED_CANDIDATES`] named ids, or by indexed personal membership,
+/// reads its candidates and their own filters behind an `OFFSET` fence and probes `entity_access` once per
 /// survivor afterwards ([`bounded_access_probe`]): Postgres otherwise checks
 /// access first, on every listed id, and pays a grant lookup for each
 /// document the sub-type, file-type and property filters then reject.
@@ -2087,7 +2125,11 @@ enum DocumentArmAccess {
 impl DocumentArmAccess {
     fn new(document_filter: Option<&Expr<DocumentLiteral>>, grants: DocumentGrants) -> Self {
         match grants {
-            _ if names_few_documents(document_filter) => Self::AfterFilters,
+            _ if names_few_documents(document_filter)
+                || membership::bounds_documents(document_filter) =>
+            {
+                Self::AfterFilters
+            }
             DocumentGrants::Counted(grants) => Self::Counted(grants),
             DocumentGrants::Estimated => Self::Joined,
         }
@@ -3001,8 +3043,12 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 /// `parallel_setup_cost` callers with a few thousand grants ran twice as slow
 /// in parallel; the raised cost keeps parallel plans for the largest callers.
 /// Its statements read one snapshot, so the grants [`DocumentGrants::count`]
-/// counts are the rows [`counted_document_access_semi_join`] reads.
-async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
+/// counts are the rows [`counted_document_access_semi_join`] reads. Personal
+/// membership and exact-count work also receive a statement timeout.
+async fn begin_dynamic_query(
+    db: &PgPool,
+    filter: &EntityFilterAst,
+) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
     let mut transaction = db
         .begin_with("BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         .instrument(tracing::info_span!(
@@ -3014,6 +3060,23 @@ async fn begin_dynamic_query(db: &PgPool) -> Result<Transaction<'static, Postgre
     sqlx::query!("SET LOCAL parallel_setup_cost = 10000")
         .execute(&mut *transaction)
         .await?;
+    if membership::bounds_documents(filter.document_filter.as_deref())
+        || membership::bounds_initiatives(filter.initiative_filter.as_deref())
+    {
+        // Stale ownership statistics can otherwise turn the indexed membership
+        // union into a scan of every document or initiative. Keep this hint
+        // transaction-local, and retain the timeout if no usable index exists.
+        sqlx::query!("SET LOCAL enable_seqscan = off")
+            .execute(&mut *transaction)
+            .await?;
+    }
+    if membership::contains_documents(filter.document_filter.as_deref())
+        || membership::contains_initiatives(filter.initiative_filter.as_deref())
+    {
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *transaction)
+            .await?;
+    }
     Ok(transaction)
 }
 
@@ -3046,7 +3109,7 @@ async fn expanded_dynamic_cursor_soup_hydrated(
         return Ok(Vec::new());
     }
 
-    let mut transaction = begin_dynamic_query(db).await?;
+    let mut transaction = begin_dynamic_query(db, cursor.filter()).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let document_grants =
         DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;
@@ -3624,7 +3687,7 @@ pub async fn expanded_dynamic_cursor_soup_grouped(
     let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
-    let mut transaction = begin_dynamic_query(db).await?;
+    let mut transaction = begin_dynamic_query(db, cursor.filter()).await?;
     let source_ids = fetch_user_source_ids(&mut transaction, user_id.as_ref()).await?;
     let document_grants =
         DocumentGrants::count(&mut transaction, cursor.filter(), &source_ids).await?;

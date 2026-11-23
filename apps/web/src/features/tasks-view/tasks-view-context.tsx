@@ -406,13 +406,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         const restored = config
           ? materializeTaskSavedView(config)
           : {
+              tab: 'team-tasks' as const,
               facets: DEFAULT_TASK_FACET_SELECTION,
               layout: 'list' as const,
               groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
               sort: [{ id: 'updated_at' as const }],
               dueDate: undefined,
             };
-        applyTaskFacets('team-tasks', restored.facets);
+        applyTaskFacets(restored.tab, restored.facets);
         setState({
           layout: restored.layout,
           groupBy: restored.groupBy,
@@ -455,9 +456,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       creating: () => Boolean(newSavedView()),
       state: persistedState,
       facetContext,
-      apply: ({ facets, layout, groupBy, sort, dueDate }) =>
+      apply: ({ tab, facets, layout, groupBy, sort, dueDate }) =>
         batch(() => {
-          applyTaskFacets('team-tasks', facets);
+          applyTaskFacets(tab, facets);
           setState('dueDate', dueDate);
           setState('layout', layout);
           setState('groupBy', groupBy);

@@ -171,6 +171,10 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.
 - Extend the existing dynamic query for property sorts and date-range groups; do not rebuild its source UNION in a candidate pipeline.
+- Resolve creator-or-assignee membership through indexed owner and system-Assignees candidate legs before access, grouping, sorting, and pagination; keep explicit property filters independent, retain the personal query's transaction-local sequential-scan guard and 15-second timeout, and measure fresh and stale statistics. Allow exact counts and arbitrary sorts to read the complete personal set; never silently cap membership or approximate counts.
+- Keep personal subtype filters and document subtype/Assignees detail projections correlated with `OFFSET 0`; stale or generic plans must probe member IDs, not scan subtype rows or hash every assignment.
+- Apply the membership timeout inside broader OR/NOT expressions; restrict narrowed-plan guards to positive membership conjuncts.
+- Recognize explicit property namespaces in document owner-or-assignee expressions, and retain that namespace in the indexed assignment leg so the plan guard and timeout preserve exact filter semantics.
 - Keep property definition IDs unchecked like existing filters/grouping; enforce item visibility through the existing source access gates.
 - Order property pages by typed key with explicit ASC/DESC and NULLS LAST, then update timestamp and descending ID; keep timestamp SQL unchanged.
 - Validate caller DATE ranges in REST/GraphQL input conversion; render typed UTC bounds with `to_rfc3339()` and map numeric range indices to caller keys in Rust.

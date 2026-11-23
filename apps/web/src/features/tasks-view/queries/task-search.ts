@@ -3,20 +3,13 @@ import {
   NIL_UUID,
   type SoupSearchMatchType,
 } from '@app/features/soup';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { makeGraphqlFilters } from '@queries/soup/graphql/ast';
 import type { SearchSoupQueryArgs } from '@queries/soup/search';
-import type {
-  EntityFilters,
-  PropertyFilter as SearchPropertyFilter,
-} from '@service-search/generated/models';
+import type { EntityFilters } from '@service-search/generated/models';
 import type { TaskDatePredicate } from '../core/task-due-date';
-import {
-  EMPTY_TASK_FACET_CONTEXT,
-  getTaskFacetOption,
-  resolveTaskPersonId,
-  type TaskFacetContext,
-} from '../filters/task-facets';
+import type { TaskFacetContext } from '../filters/task-facets';
 import type { TaskReferenceScope, TaskTab } from '../types';
+import { buildTaskQuery } from './task-query';
 
 const nonTaskFilters: EntityFilters = {
   calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
@@ -30,64 +23,6 @@ const nonTaskFilters: EntityFilters = {
   project_filters: { project_ids: [NIL_UUID] },
 };
 
-const selectedCreators = (
-  selection: FacetSelection,
-  tab: TaskTab,
-  userId: string | undefined
-): string[] | undefined => {
-  const selected = [
-    ...new Set(
-      (selection['created-by'] ?? []).map((id) =>
-        resolveTaskPersonId(id, {
-          ...EMPTY_TASK_FACET_CONTEXT,
-          viewerId: userId,
-        })
-      )
-    ),
-  ];
-  if (tab !== 'created-by-me') {
-    return selected.length > 0 ? selected : undefined;
-  }
-  if (!userId) return [NIL_UUID];
-  if (selected.length > 0 && !selected.includes(userId)) return [NIL_UUID];
-  return [userId];
-};
-
-const selectedPropertyFilters = (
-  selection: FacetSelection,
-  context: TaskFacetContext
-): SearchPropertyFilter[] =>
-  Object.entries(selection).flatMap(([facetId, optionIds]) => {
-    if (facetId === 'created-by' || facetId === 'tags') return [];
-
-    const resolved = optionIds.flatMap((optionId) => {
-      const option = getTaskFacetOption(facetId, optionId, context);
-      return option ? [option] : [];
-    });
-    const propertyDefinitionId = resolved[0]?.propertyDefinitionId;
-    if (!propertyDefinitionId) return [];
-
-    const optionIdsForProperty = resolved.flatMap((option) =>
-      option.propertyOptionId ? [option.propertyOptionId] : []
-    );
-    const entityIdsForProperty = resolved.flatMap((option) =>
-      option.propertyEntityId ? [option.propertyEntityId] : []
-    );
-
-    return [
-      {
-        property_definition_id: propertyDefinitionId,
-        entity_type: 'TASK',
-        ...(optionIdsForProperty.length > 0
-          ? { option_ids: optionIdsForProperty }
-          : {}),
-        ...(entityIdsForProperty.length > 0
-          ? { entity_ids: entityIdsForProperty }
-          : {}),
-      },
-    ];
-  });
-
 export function buildTaskSearchRequest(options: {
   query: string;
   matchType: SoupSearchMatchType;
@@ -98,42 +33,19 @@ export function buildTaskSearchRequest(options: {
   reference?: TaskReferenceScope;
   dueDate?: TaskDatePredicate;
 }): SearchSoupQueryArgs {
-  const facetContext = {
-    ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
-    viewerId: options.userId,
-  };
-  const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
-  if (options.dueDate) {
-    const value = options.dueDate;
-    propertyFilters.push({
-      property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
-      entity_type: 'TASK',
-      ...('dateRange' in value
-        ? { date_range: value.dateRange }
-        : { has_date: value.hasDate }),
-    });
-  }
-
-  if (options.tab === 'my-tasks') {
-    propertyFilters.push({
-      property_definition_id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      entity_type: 'TASK',
-      entity_ids: [options.userId ?? NIL_UUID],
-    });
-  }
-  if (options.reference) {
-    propertyFilters.push({
-      property_definition_id: options.reference.propertyDefinitionId,
-      entity_type: 'TASK',
-      entity_ids: [options.reference.entityId],
-    });
-  }
-
-  const owners = selectedCreators(options.facets, options.tab, options.userId);
-  // Saved views supply stored bindings even when tag labels are unavailable.
-  const tagOptionIds = [...new Set(options.facets.tags ?? [])].filter((id) =>
-    facetContext.tagPropertyDefinitionByOptionId.has(id)
-  );
+  // Use the list's expressions rather than rebuilding membership or flattening
+  // OR groups into required owner and property filters.
+  const list = buildTaskQuery({
+    tab: options.tab,
+    userId: options.userId,
+    facets: options.facets,
+    facetContext: options.facetContext,
+    reference: options.reference,
+    dueDate: options.dueDate,
+    groupBy: 'none',
+    sort: [{ id: 'updated_at' }],
+  });
+  const { documentFilter, propertiesFilter } = makeGraphqlFilters(list.body);
 
   return {
     params: { cursor: null, page_size: 100 },
@@ -143,17 +55,9 @@ export function buildTaskSearchRequest(options: {
       search_on: 'name_content',
       filters: {
         ...nonTaskFilters,
-        document_filters: {
-          sub_types: ['task'],
-          ...(owners ? { owners } : {}),
-        },
-        ...(propertyFilters.length > 0
-          ? { property_filters: propertyFilters }
-          : {}),
-        ...(tagOptionIds.length > 0
-          ? { tag_option_ids: tagOptionIds, tag_filter_mode: 'any' }
-          : {}),
+        document_filters: { sub_types: ['task'] },
       },
+      filter_expression: { documentFilter, propertiesFilter },
     },
   };
 }

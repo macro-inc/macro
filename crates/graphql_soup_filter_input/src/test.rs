@@ -238,6 +238,34 @@ fn initiative_property_filters_preserve_entity_scope() {
 }
 
 #[test]
+fn initiative_membership_preserves_owner_or_property_composition() {
+    let ast = materialize_graphql_filter(json!({
+        "initiativeFilter": {"or": {
+            "left": {"literal": {"owner": "macro|viewer@example.com"}},
+            "right": {"literal": {"property": {
+                "propertyDefinitionId": "00000001-0000-0000-0000-000000000001",
+                "entityType": "INITIATIVE",
+                "value": {"entityRef": "macro|viewer@example.com"}
+            }}}
+        }}
+    }))
+    .unwrap();
+    assert_eq!(
+        serde_json::to_value(ast.initiative_filter.unwrap()).unwrap(),
+        json!({
+            "|": [
+                {"l": {"o": "macro|viewer@example.com"}},
+                {"l": {"prop": {
+                    "pd": "00000001-0000-0000-0000-000000000001",
+                    "et": "INITIATIVE",
+                    "v": {"er": "macro|viewer@example.com"}
+                }}}
+            ]
+        })
+    );
+}
+
+#[test]
 fn database_row_include_materializes_and_false_is_rejected() {
     let input = json!({"databaseRowFilter": {"literal": {"include": true}}});
     let ast = materialize_graphql_filter(input.clone()).unwrap();

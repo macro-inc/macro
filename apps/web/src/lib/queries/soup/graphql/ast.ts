@@ -102,7 +102,7 @@ function unsupported(message: string): never {
 }
 
 function compileExpr<TLiteral>(
-  ast: RestAst,
+  ast: unknown,
   mapLiteral: LiteralMapper<TLiteral>
 ): GraphqlExprInput<TLiteral> {
   return compileExprWithLeaf(ast, (literal) => ({
@@ -125,13 +125,27 @@ const MAX_EXPR_DEPTH = 62;
  * shape, so their variables and normalized-cache entries stay the same.
  */
 function compileExprWithLeaf<TLiteral>(
-  ast: RestAst,
+  value: unknown,
   mapLeaf: (literal: unknown) => GraphqlExprInput<TLiteral>
 ): GraphqlExprInput<TLiteral> {
+  if (!isRestAst(value)) unsupported('invalid expression shape');
+  const ast = value;
   const compiled = compileExprNode(ast, mapLeaf);
   return jsonDepth(compiled) > MAX_EXPR_DEPTH
     ? compileExprNode(balanceOperatorRuns(ast), mapLeaf)
     : compiled;
+}
+
+function isRestAst(value: unknown): value is RestAst {
+  if (typeof value !== 'object' || value === null) return false;
+  if (Object.keys(value).length !== 1) return false;
+  if ('l' in value) return true;
+  if ('!' in value) return isRestAst(value['!']);
+  if (!('&' in value || '|' in value)) return false;
+
+  const [pair] = Object.values(value);
+  if (!Array.isArray(pair) || pair.length !== 2) return false;
+  return pair.every(isRestAst);
 }
 
 function compileExprNode<TLiteral>(
@@ -443,6 +457,7 @@ function mapInitiativeLiteral(literal: unknown): GraphqlInitiativeLiteralInput {
   if (field === 'id') return { id: mapString(value, 'id') };
   if (field === 'o') return { owner: mapString(value, 'owner') };
   if (field === 'ns') return { notificationState: mapNotificationState(value) };
+  if (field === 'prop') return { property: mapPropertiesLiteral(value) };
   return unsupported(`initiative literal ${field}`);
 }
 
@@ -831,7 +846,9 @@ function mapEmailView(
   }
 }
 
-function assertGraphqlCompatibleBody(body: AstBody): void {
+function assertGraphqlCompatibleBody(
+  body: Pick<SoupAstBody, 'eca' | 'ecd'>
+): void {
   if (body.eca !== undefined) {
     unsupported(
       'CRM-scoped email address filters are not supported by GraphQL Soup yet'
@@ -844,7 +861,9 @@ function assertGraphqlCompatibleBody(body: AstBody): void {
   }
 }
 
-function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
+export function makeGraphqlFilters(
+  body: SoupAstBody
+): GraphqlEntityFilterAstInput {
   assertGraphqlCompatibleBody(body);
   const filters: GraphqlEntityFilterAstInput = {};
   if (body.favorites_only !== undefined)

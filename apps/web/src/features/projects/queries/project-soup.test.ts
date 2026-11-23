@@ -62,6 +62,39 @@ afterEach(() => {
 });
 
 describe('project Soup source', () => {
+  it('keeps personal membership as an OR separate from editable assignee filters', () => {
+    const input = projectSoupInput({
+      ownerOrAssignee: 'viewer',
+      assignee: 'colleague',
+    });
+    expect(input.initial?.limit).toBe(50);
+    expect(input.initial?.filters?.initiativeFilter).toEqual({
+      and: {
+        left: { literal: { include: true } },
+        right: {
+          or: {
+            left: { literal: { owner: 'viewer' } },
+            right: {
+              literal: {
+                property: {
+                  entityType: 'INITIATIVE',
+                  propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+                  value: { entityRef: 'viewer' },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    expect(input.initial?.filters?.propertiesFilter).toEqual({
+      literal: {
+        entityType: 'INITIATIVE',
+        propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+        value: { entityRef: 'colleague' },
+      },
+    });
+  });
   it('reuses cached projects on remount while refreshing in the background', async () => {
     const refresh = Promise.withResolvers<void>();
     let networkReads = 0;
@@ -364,7 +397,7 @@ describe('project Soup source', () => {
       },
     });
   });
-  it('combines created-by-me with name, dates, status, and assignee predicates', () => {
+  it('combines owner with name, dates, status, and assignee predicates', () => {
     const input = projectSoupInput({
       owner: 'creator',
       query: 'Launch',

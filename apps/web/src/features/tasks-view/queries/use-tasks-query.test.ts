@@ -678,8 +678,6 @@ it('pauses task reads across project views and resumes when returning to tasks',
       );
       const options = fixture.calls[0]?.options;
       expect(options?.()).toMatchObject({ enabled: false });
-      setTab('created-projects');
-      expect(options?.()).toMatchObject({ enabled: false });
       setTab('projects');
       expect(options?.()).toMatchObject({ enabled: false });
       setTab('my-tasks');

@@ -7,7 +7,7 @@ Search uses the same 40px glass island as Filters. Tasks and Projects lists rese
 
 The main Tasks list (List layout, not project or CRM task lists) starts with the Tasks `TutorialRow` (from `features/video-tutorials`) once that video is in its catalog; it sits outside the virtualized rows, so list keyboard focus skips it.
 
-`Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
+`Go to Tasks` → `/app/component/tasks`. Task views: `My tasks` and `All tasks`. My tasks includes tasks assigned to or created by the viewer, once each, with the existing completion and other filters.
 The single-row desktop header contains the title, `Filter`, a separate
 `Task layout` single-select icon group for `List`, `Board`, and enabled `Gantt`,
 `Sort`, `Group`, `New`, and an expandable Search icon
@@ -51,12 +51,12 @@ the rows and hovering a submenu hands focus to it as usual. The mobile drawer ha
 AI box.
 Search the Tasks or Projects list from the header's expandable Search icon; the
 desktop sidebar has no search field.
+Task text search executes the same document/property filter expression as the list, including creator-or-assignee membership, saved-view refinements, and missing-date negation.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available
 when the user has a team. The Projects list uses the same menu. The collapsible
-**Projects** section contains **My projects** (assigned to the viewer), **All
-projects**, and **Created by me**. Its plus opens the project composer.
+**Projects** section contains **My projects** (assigned to or owned by the viewer) and **All projects**. Its plus opens the project composer.
 Saved project views follow those built-in views inside the same section, with
 **Create view** last. Saved task views likewise follow the built-in task views.
 Both lists appear in the shared desktop sidebar and **Show sidebar** touch drawer.
@@ -154,7 +154,7 @@ to read the full value. On desktop, an assignee's hover card in a list row or a
 board card offers **Filter by <name>** for each assignee, as a tag chip's card
 does for its tag: it replaces the current filters, the default status filter
 included, with that one assignee and keeps the tab, so on **My tasks** it lists
-the tasks you share with them and on **All tasks** all of theirs, completed ones
+their tasks that you created or are also assigned to, and on **All tasks** all of theirs, completed ones
 too. A filtered assignee outside the team keeps their
 name in the Assignee filter.
 Editable property controls use ghost-button hover styling. Empty values are
@@ -405,8 +405,8 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 With `enableEntityAppearance` enabled, owners can choose **Change icon** in a saved view's sidebar or header action menu. Desktop embeds the shared icon/color picker; touch opens its sheet. Pick an icon, change its color, choose an emoji, then Remove: every choice saves immediately and Remove preserves the color. Confirm sidebar and breadcrumb agree, including with unsaved filters. Disable the flag: saved appearance remains, but editing disappears and open pickers close. Another team member can see a shared view's appearance but cannot edit it.
 
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
-- When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
-- Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
+- When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. Saving My tasks preserves its viewer-relative creator-or-assignee scope independently of the editable filters. Values within each person filter use OR matching; separate filters still combine with AND.
+- Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that explicit person filter, not a captured My tasks membership scope.
 - Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. On desktop, right-click a sidebar view or use its hover/focus **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete**. On touch, long-press the saved-view row to open these options in a sheet without selecting the view. On desktop, the selected view's topbar shows its saved icon and color before its name and an unframed ghost overflow button immediately after it. On touch, the sidebar sheet's rows carry those menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
 - **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name and the original icon and color; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Edit and Delete leave the current selection unchanged; Duplicate immediately selects its new draft.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
@@ -1128,7 +1128,7 @@ Disable the flag and confirm the original task-button behavior remains unchanged
 
 Choose a view in the `Projects` section in Tasks, or open
 `/app/component/tasks-projects` for All projects. Project view links use the Tasks
-search namespace: `tasks.tab=my-projects`, `projects`, or `created-projects`.
+search namespace: `tasks.tab=my-projects` or `projects`. Legacy `created-projects` links and stored tabs open My projects; `created-by-me` task links open My tasks.
 The collection header keeps its title/navigation on the left and search/filter
 controls on the right. Built-in scopes and saved views stay in the shared Tasks
 sidebar, without header tabs or a saved-view selector. In project detail, the phone title island shows the project appearance
@@ -1388,8 +1388,7 @@ Use **Create view**, after the built-in project views and any saved views in
 layout, then choose **Save view**. Name the view and optionally share it with
 the current team. The same list appears in the desktop sidebar and shared
 hamburger drawer on touch, without a project header picker or built-in tab strip.
-Opening it reapplies its settings; search text and scroll are not saved. Assigned
-to me and Created by me remain relative to whoever opens the definition.
+Opening it reapplies its settings; search text and scroll are not saved. My projects stays relative to whoever opens the definition. Old saved creator scopes open My projects without rewriting the server definition on load.
 On touch, hold a saved row for its options sheet; desktop keeps the hover More
 menu. Rename changes its name/sharing, Duplicate creates a private copy, and
 Delete requires confirmation.
@@ -1602,7 +1601,7 @@ tags start expanded. Filter-menu options continue to show full tag names.
 
 ## Tasks — `/app/component/tasks`
 
-Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
+Task navigation uses `My Tasks` and `All Tasks`. The desktop
 sidebar has the full-width `New` menu and a collapsible list of task favorites;
 tag filtering lives in the `Filter` menu. Favorite rows open their tasks.
 Normal row and favorite activation replaces the list with the editable task

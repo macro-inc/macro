@@ -10,6 +10,7 @@ use name_search::NameSearchError;
 use opensearch_client::error::OpensearchClientError;
 
 pub(in crate::api) mod filter;
+mod filter_expression;
 pub(in crate::api) mod simple_calendar_event;
 pub(in crate::api) mod simple_call_record;
 pub(in crate::api) mod simple_channel;
@@ -36,6 +37,9 @@ pub enum SearchError {
     /// Invalid page size
     #[error("page_size must be between 0 and 100")]
     InvalidPageSize,
+    /// The additional filter expression is invalid or cannot be indexed faithfully.
+    #[error("unsupported or invalid search filter expression")]
+    InvalidFilterExpression,
     /// The query holds no search term
     #[error("query must not be empty")]
     EmptyQuery,
@@ -100,6 +104,7 @@ impl IntoResponse for SearchError {
             | SearchError::InternalAccessRequired
             | SearchError::InvalidUserId(_) => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
+            | SearchError::InvalidFilterExpression
             | SearchError::EmptyQuery
             | SearchError::TooManyTerms
             | SearchError::InvalidCursor

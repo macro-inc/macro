@@ -4837,6 +4837,9 @@
           "collapse": {
             "type": ["boolean", "null"]
           },
+          "filter_expression": {
+            "description": "Additional document/property expression in the GraphQL Soup filter shape.\nRestricts results to documents; supports Boolean composition and is ANDed\nwith flat filters and access checks.\nUnsupported scopes and predicates are rejected rather than ignored."
+          },
           "filters": {
             "$ref": "#/components/schemas/EntityFilters",
             "description": "Entity filters in the same shape as soup. Entity types with a NIL UUID in their primary ID field are excluded from search."

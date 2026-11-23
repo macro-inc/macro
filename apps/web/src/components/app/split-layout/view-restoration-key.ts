@@ -1,5 +1,8 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import { isProjectTab } from '@app/features/tasks-view/core/task-navigation';
+import {
+  isProjectTab,
+  normalizeTaskTab,
+} from '@app/features/tasks-view/core/task-navigation';
 import type { SplitLocation } from '@app/lib/split-router';
 
 /** Group Tasks workspace entries by dock destination, not their shared content id. */
@@ -19,7 +22,7 @@ export function viewRestorationKey(
         match.id === 'tasks-project-task'
     ) ||
     (matches?.at(-1)?.id === 'view-tasks' &&
-      isProjectTab(location?.search?.tasks?.tab?.[0]))
+      isProjectTab(normalizeTaskTab(location?.search?.tasks?.tab?.[0])))
   ) {
     return 'projects';
   }

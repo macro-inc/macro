@@ -189,6 +189,7 @@ fn request_defaults() -> UnifiedSearchRequest {
         query: String::new(),
         match_type: MatchType::Exact,
         filters: EntityFilters::default(),
+        filter_expression: None,
         search_on: SearchOn::default(),
         include_crm: false,
         calendar_event_scope: Default::default(),

@@ -1,12 +1,14 @@
 import { createTagFacetContext } from '@app/features/soup';
+import { makeGraphqlFilters } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDateBucketBoundaries,
   taskDueDatePredicate,
 } from '../core/task-due-date';
-import { taskMatchesView } from '../filters/task-predicates';
+import { taskMatchesTab, taskMatchesView } from '../filters/task-predicates';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
+import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
 vi.mock('@app/features/soup', async () => ({
@@ -57,28 +59,55 @@ const requestFor = (facets: Record<string, string[]>, withTagSets = true) => {
     facets,
     facetContext: withTagSets ? createTagFacetContext(TAG_SETS) : undefined,
   });
-  if (!body.filters) throw new Error('search request has no filters');
-
-  return body.filters;
+  return body.filter_expression;
 };
 
 describe('buildTaskSearchRequest', () => {
-  it('sends selected tags as an entity-wide filter', () => {
-    const filters = requestFor({ tags: ['urgent', 'urgent'] });
-
-    expect(filters.tag_option_ids).toEqual(['urgent']);
-    expect(filters.tag_filter_mode).toBe('any');
+  it('sends selected tags through the same property expression as the list', () => {
+    expect(requestFor({ tags: ['urgent', 'urgent'] })).toMatchObject({
+      propertiesFilter: {
+        literal: {
+          propertyDefinitionId: 'tag-definition',
+          value: { selectOption: 'urgent' },
+        },
+      },
+    });
   });
 
-  it('drops a selected tag that no longer exists, like the list query', () => {
-    expect(
-      requestFor({ tags: ['urgent', 'deleted-tag'] }).tag_option_ids
-    ).toEqual(['urgent']);
-
-    const unresolved = requestFor({ tags: ['deleted-tag'] }, false);
-    expect(unresolved.tag_option_ids).toBeUndefined();
-    expect(unresolved.tag_filter_mode).toBeUndefined();
+  it('drops unavailable tags like the list query', () => {
+    expect(requestFor({ tags: ['urgent', 'deleted-tag'] })).toEqual(
+      requestFor({ tags: ['urgent'] })
+    );
+    expect(requestFor({ tags: ['deleted-tag'] }, false)).toMatchObject({
+      propertiesFilter: undefined,
+    });
   });
+});
+
+it('matches assigned-only, created-only, overlapping, and unrelated tasks', () => {
+  for (const [ownerId, assigned, expected] of [
+    ['someone-else', true, true],
+    ['viewer', false, true],
+    ['viewer', true, true],
+    ['someone-else', false, false],
+  ] as const) {
+    const task = {
+      ...boardEntity(
+        'task',
+        assigned
+          ? [
+              boardProperty('00000001-0000-0000-0000-000000000001', {
+                type: 'EntityReference',
+                value: [{ entity_type: 'USER', entity_id: 'viewer' }],
+              }),
+            ]
+          : []
+      ),
+      ownerId,
+    };
+    expect(taskMatchesTab(task, 'my-tasks', 'viewer')).toBe(expected);
+    expect(taskMatchesTab(task, 'my-tasks', undefined)).toBe(false);
+  }
 });
 
 it('compiles the same DST range for remote and local search without changing text ordering', () => {
@@ -95,16 +124,20 @@ it('compiles the same DST range for remote and local search without changing tex
     facets: {},
     dueDate,
   });
-  expect(request.body.filters?.property_filters).toEqual([
-    {
-      property_definition_id: '00000001-0000-0000-0000-000000000004',
-      entity_type: 'TASK',
-      date_range: {
-        start: '2026-03-08T05:00:00.000Z',
-        end: '2026-03-09T04:00:00.000Z',
+  expect(request.body.filter_expression).toMatchObject({
+    propertiesFilter: {
+      literal: {
+        propertyDefinitionId: '00000001-0000-0000-0000-000000000004',
+        entityType: 'TASK',
+        value: {
+          dateRange: {
+            start: '2026-03-08T05:00:00.000Z',
+            end: '2026-03-09T04:00:00.000Z',
+          },
+        },
       },
     },
-  ]);
+  });
   expect(request.body).not.toHaveProperty('sort');
   const context = {
     tab: 'team-tasks' as const,
@@ -148,11 +181,59 @@ it('sends explicit false presence rather than omitting the no-date filter', () =
     facets: {},
     dueDate: { hasDate: false },
   });
-  expect(request.body.filters?.property_filters).toEqual([
-    {
-      property_definition_id: '00000001-0000-0000-0000-000000000004',
-      entity_type: 'TASK',
-      has_date: false,
+  expect(request.body.filter_expression).toMatchObject({
+    propertiesFilter: {
+      not: {
+        literal: {
+          propertyDefinitionId: '00000001-0000-0000-0000-000000000004',
+          entityType: 'TASK',
+          value: { dateRange: {} },
+        },
+      },
     },
-  ]);
+  });
 });
+
+it.each(['my-tasks', 'team-tasks'] as const)(
+  'uses the list expression for %s with all refinements',
+  (tab) => {
+    const options = {
+      tab,
+      userId: 'macro|viewer@example.com',
+      facets: {
+        assignees: ['macro|colleague@example.com'],
+        'created-by': ['macro|creator@example.com'],
+        tags: ['urgent'],
+      },
+      facetContext: createTagFacetContext(TAG_SETS),
+      reference: {
+        propertyDefinitionId: '00000001-0000-0000-0000-000000000014',
+        entityId: '10000000-0000-0000-0000-000000000001',
+      },
+      dueDate: { hasDate: false } as const,
+    };
+    const list = makeGraphqlFilters(
+      buildTaskQuery({
+        ...options,
+        groupBy: 'none',
+        sort: [{ id: 'updated_at' }],
+      }).body
+    );
+    const search = buildTaskSearchRequest({
+      ...options,
+      query: 'launch',
+      matchType: 'partial',
+    });
+    expect(search.body.filter_expression).toEqual({
+      documentFilter: list.documentFilter,
+      propertiesFilter: list.propertiesFilter,
+    });
+    expect(search.body.filters?.document_filters).toEqual({
+      sub_types: ['task'],
+    });
+    expect(
+      search.body.filters?.calendar_event_filters?.calendar_event_ids
+    ).toEqual(['00000000-0000-0000-0000-000000000000']);
+    expect(search.body.query).toBe('launch');
+  }
+);

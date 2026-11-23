@@ -1,3 +1,5 @@
+/// General Boolean filtering over indexed document fields and properties.
+pub mod filter_expression;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::{
@@ -114,6 +116,7 @@ pub(crate) struct DocumentQueryBuilder {
     tag_option_ids: Vec<String>,
     match_all_tags: bool,
     term_matching: DocumentTermMatching,
+    filter_expression: Option<filter_expression::CompiledFilterExpression>,
 }
 
 impl DocumentQueryBuilder {
@@ -126,6 +129,7 @@ impl DocumentQueryBuilder {
             tag_option_ids: Vec::new(),
             match_all_tags: false,
             term_matching: DocumentTermMatching::default(),
+            filter_expression: None,
         }
     }
 
@@ -170,6 +174,14 @@ impl DocumentQueryBuilder {
         self
     }
 
+    pub fn filter_expression(
+        mut self,
+        expression: Option<filter_expression::CompiledFilterExpression>,
+    ) -> Self {
+        self.filter_expression = expression;
+        self
+    }
+
     /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must`, or a single passage clause under
     /// [`DocumentTermMatching::Dynamic`]. Parent metadata filters (owner, ids,
@@ -203,6 +215,14 @@ impl DocumentQueryBuilder {
         // Optional sub_type filter (parent field).
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
+        }
+
+        if let Some(expression) = &self.filter_expression {
+            bool_query.filter(expression.to_query().map_err(|error| {
+                crate::error::OpensearchClientError::ValidationFailed {
+                    details: error.to_string(),
+                }
+            })?);
         }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
@@ -392,7 +412,14 @@ impl DocumentQueryBuilder {
 /// a parent matches when it has a nested entry with `definition_id` equal to
 /// the filter's id AND `values` containing any of the filter's values.
 /// Returns `None` when the filter carries no values.
-fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>> {
+pub(super) fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>> {
+    build_property_filter_with_constraint(filter, None)
+}
+
+pub(super) fn build_property_filter_with_constraint<'a>(
+    filter: &PropertyFilterArg,
+    constraint: Option<QueryType<'a>>,
+) -> Option<QueryType<'a>> {
     if filter.values.is_empty() && filter.date_range.is_none() && filter.has_date.is_none() {
         return None;
     }
@@ -405,6 +432,9 @@ fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>
             filter.definition_id.clone(),
         ));
         inner.filter(value_query);
+        if let Some(constraint) = &constraint {
+            inner.filter(constraint.clone());
+        }
         NestedQuery::new(PROPERTIES_PATH, inner.build().into())
             .ignore_unmapped(true)
             .into()
@@ -518,6 +548,8 @@ pub struct DocumentSearchArgs {
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
     pub term_matching: DocumentTermMatching,
+    /// Required Boolean expression over indexed document fields and properties.
+    pub filter_expression: Option<filter_expression::CompiledFilterExpression>,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -536,6 +568,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .tag_option_ids(args.tag_option_ids)
             .match_all_tags(args.match_all_tags)
             .term_matching(args.term_matching)
+            .filter_expression(args.filter_expression)
     }
 }
 
