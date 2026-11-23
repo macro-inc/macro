@@ -1,0 +1,35 @@
+apps/web/src/features/agent-permissions/components/reset-permissions-dialog.tsx
+  s_9aaadd038e8bff::t_c101da09ad04bd 7-9,16-19,30-41,46-50,57-60
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.test.tsx
+  s_9aaadd038e8bff::t_2ac1956db00e16 18,300-312
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.tsx
+  s_9aaadd038e8bff::t_9e082a1a576bd3 19,108-112,246-248,262-263
+apps/web/src/features/agent-permissions/views/show-permissions-card.test.tsx
+  s_9aaadd038e8bff::t_a4e61ab09f1859 19,154-166
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_9aaadd038e8bff::t_54fbccf08d96d5 7,21,94-97,227,275-297
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_9aaadd038e8bff::t_73a0445118a54f 114-115
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_9aaadd038e8bff::t_26aaad60bbb86a 99-103
+docs/agent-guide/ai-chat.md
+  s_9aaadd038e8bff::t_a71c4332a43378 1882-1884
+docs/agent-guide/settings.md
+  s_9aaadd038e8bff::t_e29a0d05f310b2 1288-1291
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6d47b9454b52f0f9d678c8d462a9faa5e9d133d4",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
