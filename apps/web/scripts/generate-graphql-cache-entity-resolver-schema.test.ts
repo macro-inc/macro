@@ -121,6 +121,30 @@ describe('GraphQL cache entity resolver schema generator', () => {
     );
   });
 
+  it('keeps argument paths on one line where the formatter does', () => {
+    const output = renderEntityResolverSchema({
+      Root: {
+        pair: { targets: ['Entity'], argumentPaths: [['channelId'], ['messageId']] },
+        wide: {
+          targets: ['Entity'],
+          argumentPaths: [
+            ['input', 'id'],
+            ['input', 'teamId'],
+          ],
+        },
+      },
+    });
+    expect(output).toContain("      argumentPaths: [['channelId'], ['messageId']],\n");
+    expect(output).toContain(
+      [
+        '      argumentPaths: [',
+        "        ['input', 'id'],",
+        "        ['input', 'teamId'],",
+        '      ],',
+      ].join('\n')
+    );
+  });
+
   it('renders deterministically regardless of SDL declaration order', () => {
     const reordered = `
       type Embedded { name: String }
