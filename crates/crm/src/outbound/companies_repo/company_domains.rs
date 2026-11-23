@@ -185,7 +185,9 @@ impl CompaniesRepositoryImpl {
 
     /// The team's company other than `company_id` that tracks `domain`, named
     /// as listings name it: the team's name, else its primary domain's
-    /// directory name, else that domain.
+    /// directory name, else that domain. The domain is unique in the team, so
+    /// the fenced probe yields at most one company, read by its key rather
+    /// than by scanning the team.
     async fn other_domain_holder(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         team_id: &Uuid,
@@ -195,8 +197,16 @@ impl CompaniesRepositoryImpl {
         let row = sqlx::query!(
             r#"SELECT c.id, c.hidden,
                       COALESCE(c.custom_name, primary_domain.name, primary_domain.domain) AS name
-               FROM crm_domains d
-               JOIN crm_companies c ON c.id = d.company_id
+               FROM (
+                   SELECT company_id FROM crm_domains
+                   WHERE team_id = $1 AND LOWER(domain) = $2
+                   OFFSET 0
+               ) d
+               CROSS JOIN LATERAL (
+                   SELECT id, team_id, hidden, custom_name FROM crm_companies
+                   WHERE id = d.company_id
+                   OFFSET 0
+               ) c
                LEFT JOIN LATERAL (
                    SELECT pd.domain, dd.name
                    FROM crm_domains pd
@@ -205,9 +215,7 @@ impl CompaniesRepositoryImpl {
                    ORDER BY pd.created_at, pd.id
                    LIMIT 1
                ) primary_domain ON TRUE
-               WHERE d.team_id = $1 AND c.team_id = $1
-                 AND LOWER(d.domain) = $2 AND c.id <> $3
-               LIMIT 1"#,
+               WHERE c.team_id = $1 AND c.id <> $3"#,
             team_id,
             domain,
             company_id,
