@@ -5,6 +5,7 @@ use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod claim_order;
+mod claim_windows;
 mod crm_cleanup;
 mod imap;
 mod imap_startup;
@@ -69,6 +70,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &first,
@@ -85,6 +87,7 @@ async fn a_round_records_the_reader_revision_it_started_at(db: PgPool) {
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &next,
@@ -119,6 +122,7 @@ async fn checkpoint_commits_with_deduplicated_changes_and_folder_removals(db: Pg
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&lease, &page()).await.unwrap();
     let row = sqlx::query!(
@@ -148,6 +152,7 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_sync_streams SET lease_until = now() - interval '1 second' WHERE id = $1",
@@ -160,6 +165,7 @@ async fn stale_worker_cannot_advance_cursor_or_enqueue_work(db: PgPool) {
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert!(current.fence > stale.fence);
     assert!(matches!(
@@ -184,12 +190,14 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_sync_streams SET next_run_at = now() WHERE id = $1",
@@ -202,6 +210,7 @@ async fn wakeup_arriving_during_reconciliation_survives_old_acknowledgement(db: 
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     repo.complete_message(&work).await.unwrap();
@@ -218,12 +227,14 @@ async fn expired_stream_reset_preserves_other_streams_and_pending_work(db: PgPoo
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let known = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.ingest(
         &known,
@@ -243,6 +254,7 @@ async fn expired_stream_reset_preserves_other_streams_and_pending_work(db: PgPoo
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.reset_stream(&lease).await.unwrap();
     let row = sqlx::query!(
@@ -277,6 +289,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_catalog(
         &lease,
@@ -309,6 +322,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_catalog(
         &rediscovery,
@@ -367,12 +381,14 @@ async fn ingestion_commits_content_state_and_outbox_without_treating_categories_
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let state = MailboxState {
         in_inbox: true,
@@ -418,12 +434,14 @@ async fn stale_ingestion_cannot_overwrite_a_reconnected_mailbox(db: PgPool) {
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_links SET sync_generation = sync_generation + 1 WHERE id = $1",
@@ -460,12 +478,14 @@ async fn projection_ack_keeps_version_watermark_and_exposes_normalized_state(db:
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let work = repo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let state = email_api_client::domain::models::MailboxState {
         in_inbox: true,
@@ -568,12 +588,14 @@ async fn mailbox_previews_distinguish_categories_trash_and_imported_drafts(db: P
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let repo = crate::outbound::EmailPgRepo::new(db.clone());
     let state = email_api_client::domain::models::MailboxState {
@@ -693,10 +715,20 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             total_items: None,
         },
     ];
-    let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+    let catalog = repo
+        .claim_catalog(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.commit_catalog(&catalog, &folders).await.unwrap();
     sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'same-message',true)",link).execute(&db).await.unwrap();
-    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let initial = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.ingest(
         &initial,
         snapshot(
@@ -712,9 +744,19 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
     for deleted in [true, false] {
         folders[1].parent_id = deleted.then(|| ProviderId::new("trash").unwrap());
         sqlx::query!("UPDATE email_sync_streams SET next_run_at=now() WHERE link_id=$1 AND kind='folder_catalog'",link).execute(&db).await.unwrap();
-        let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+        let catalog = repo
+            .claim_catalog(Uuid::new_v4())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         repo.commit_catalog(&catalog, &folders).await.unwrap();
-        let work = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+        let work = repo
+            .claim_message(Uuid::new_v4())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         assert_eq!(work.provider_id.as_str(), "same-message");
         repo.ingest(
             &work,
@@ -761,10 +803,20 @@ async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db
             total_items: None,
         },
     ];
-    let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+    let catalog = repo
+        .claim_catalog(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.commit_catalog(&catalog, &folders).await.unwrap();
     sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
-    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let initial = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.ingest(
         &initial,
         snapshot(link, "stored", MailboxState::default(), "etag"),
@@ -777,7 +829,12 @@ async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db
 
     folders[1].parent_id = Some(ProviderId::new("trash").unwrap());
     sqlx::query!("UPDATE email_sync_streams SET next_run_at=now() WHERE link_id=$1 AND kind='folder_catalog'",link).execute(&db).await.unwrap();
-    let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+    let catalog = repo
+        .claim_catalog(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.commit_catalog(&catalog, &folders).await.unwrap();
 
     // The move is a live change: a read Graph answers 404 right after it is
@@ -792,7 +849,12 @@ async fn a_404_read_before_a_newer_change_leaves_the_message_for_that_change(db:
     use email_api_client::domain::models::MailboxState;
     let (repo, link) = fixture(&db).await;
     sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
-    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let initial = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.ingest(
         &initial,
         snapshot(link, "stored", MailboxState::default(), "etag"),
@@ -801,7 +863,12 @@ async fn a_404_read_before_a_newer_change_leaves_the_message_for_that_change(db:
     .unwrap();
     repo.complete_message(&initial).await.unwrap();
     sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
-    let recheck = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let recheck = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
 
     // While Graph answers the recheck's read with 404, a live change to the
     // message is queued on the same row.
@@ -827,6 +894,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
         .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -842,7 +910,12 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
     )
     .await
     .unwrap();
-    let incoming = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let incoming = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(incoming.provider_id.as_str(), "a-incoming");
     let mut received = snapshot(link, "a-incoming", MailboxState::default(), "received-v1");
     received.content.message.from = Some(ContactInfo {
@@ -864,7 +937,12 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
         .unwrap()
         .is_empty()
     );
-    let sent = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    let sent = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut sent_message = snapshot(link, "z-sent", MailboxState::default(), "sent-v1");
     sent_message.content.message.provider_thread_id = Some("different-conversation".into());
     sent_message.content.message.is_sent = true;
@@ -912,7 +990,12 @@ async fn native_outlook_attachment_identity_survives_metadata_collisions_and_emp
         (4, vec![]),
     ] {
         sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'native-draft',false)",link).execute(&db).await.unwrap();
-        let work = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+        let work = repo
+            .claim_message(Uuid::new_v4())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         let mut message = snapshot(
             link,
             "native-draft",
@@ -956,7 +1039,12 @@ async fn message_claims_take_due_live_changes_before_imports_and_skip_backed_off
             ($1,1,'live-due',false,now() - interval '1 minute')
     "#,link).execute(&db).await.unwrap();
     let mut claimed = Vec::new();
-    while let Some(work) = repo.claim_message(Uuid::new_v4()).await.unwrap() {
+    while let Some(work) = repo
+        .claim_message(Uuid::new_v4())
+        .await
+        .unwrap()
+        .into_lease()
+    {
         claimed.push(work.provider_id.as_str().to_owned());
     }
     assert_eq!(claimed, ["live-due", "import-due"]);

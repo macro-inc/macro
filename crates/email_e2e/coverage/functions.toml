@@ -190,7 +190,7 @@ also = [
   "provider outlook:messages.get",
   "provider outlook:attachments.list",
   "loop mailbox_sync_worker::run",
-  "loop mailbox_sync_worker::run_projection_recovery",
+  "loop mailbox_sync_worker::run_parked_work_recovery",
 ]
 
 [F-018]  # Show a new message in the open list without reloading

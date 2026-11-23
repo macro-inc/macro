@@ -459,26 +459,21 @@ The changed reconnect-health and scheduler queries have measured plans on
 110,000 synthetic links/accounts and 22,000 live owners:
 [credential-health query plans](../design/imap-credential-health-query-plans.json).
 
-## Legacy mailbox-work provider repair
+## Legacy mailbox-work provider routing
 
 Work provider columns use constant Outlook defaults without rewriting existing
-heaps. Pre-existing streams were Outlook-only; legacy reconciliation can include
-Gmail cleanup work. Derivation triggers read each immutable link's provider so
-both old and new inserts get correct routing. Existing link-id foreign keys
-retain parent ownership; no composite provider keys or cascading updates are
-needed. Claims still check the authoritative link provider during repair.
+heaps. Streams were Outlook-only; legacy reconciliation can include Gmail
+cleanup. Derivation triggers read each immutable link's provider for old and new
+inserts; link-id foreign keys retain ownership. Reconciliation claims relabel
+at most 64 mismatches in their due window and return maintenance progress. This
+also handles rows that become due later, so no repair job, dedicated connection
+or completion marker is needed. A corrupt wrong-provider stream is parked
+without changing routing; the trigger and provider immutability exclude this
+state from normal writes. Recovery can re-park unsupported corruption once per
+five-minute wrap without adding another index.
 
-One leased repair uses durable parent/child keyset cursors. Each transaction
-selects at most 1,000 parent or message keys before filtering, and commits repair
-with its cursor under the same fence. Non-Outlook parents drive child scans
-through the link-leading primary key. A separate pool adds at most one connection
-per pubsub replica until completion. Pages have ten-second statement/idle limits,
-a one-second lock limit and 250 ms pacing. Scan exhaustion writes the durable
-completion marker; there is no runtime validation phase, growing-table validation
-scan or operator step. Progress/failure spans contain counts, never message data.
-
-The [repair runbook](../runbooks/email-provider-repair.md) describes bounded
-inspection and the local migration-history compatibility limit.
+The [routing runbook](../runbooks/email-provider-routing.md) records one-time
+transition costs and the preserved preview's migration-history limitation.
 
 ## Host catch-up after restart
 

@@ -86673,5 +86673,14 @@
    "invalidIndexes": 0
   },
   "heapIdentityUnchanged": true
+ },
+ "roundOneClaimRevisionNote": {
+  "historicalClaimControls": [
+   "catalog_claim",
+   "import_claim",
+   "live_claim"
+  ],
+  "note": "These three claim controls describe the earlier source at baseCommit and are superseded by the bounded two-statement claim rewrite. Their runs remain historical evidence only. The never-deployed provider claim indexes 20261120233254/255/256 are removed by that rewrite; use its source-hashed round-one measurement receipt for current claim costs.",
+  "unchangedSelectionPaths": "The startup catch-up, pending hint and wake selection plans in this receipt do not use the removed provider claim indexes. Their source hashes and recorded index set identify the earlier measurement environment."
  }
 }

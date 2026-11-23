@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT link_id AS \"link_id!\" FROM (\n                    (SELECT link_id FROM email_projection_outbox\n                        WHERE parked_at IS NOT NULL AND link_id > $1\n                        ORDER BY link_id LIMIT 1)\n                    UNION ALL\n                    (SELECT link_id FROM email_sync_streams\n                        WHERE parked_at IS NOT NULL AND link_id > $1\n                        ORDER BY link_id LIMIT 1)\n                    UNION ALL\n                    (SELECT link_id FROM email_message_reconciliation\n                        WHERE parked_at IS NOT NULL AND link_id > $1\n                        ORDER BY link_id LIMIT 1)\n                ) next_links ORDER BY link_id LIMIT 1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "26a3717dfddcc118d556a4284e98bad92d8a25ef0d67b99d63ad2de6afbbd8b1"
+}

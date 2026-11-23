@@ -68,8 +68,31 @@ in their transaction and again after commit to catch a concurrent insert. The
 post-commit wake is best effort: its failure is logged while the committed
 finish stays successful. Wakes write only when clearing a deferral. The
 backstop covers an interruption between those transactions and old binaries.
-Inactive work parks outside the due index and a bounded recovery sweep visits
-parked links rather than their whole backlogs.
+Inactive work parks outside the due index. Catalog, folder/live streams and
+reconciliation use bounded 64-row due windows followed by a fresh-snapshot claim;
+independent folders and messages have no per-mailbox FIFO floor. Exact indexed
+eligibility includes the lease deadline, real due time and provider retry floor.
+A bounded maintenance step relabels legacy reconciliation routing to the link's
+provider in the claim itself, without a background repair or completion gate. A legacy mislabelled due prefix
+can delay Outlook reconciliation once after deploy: the local synthetic
+measurement is about 17–18 seconds per 100k rows. Hosted dev has zero such rows;
+production is unmeasured and requires explicit authorization to count. Fresh renewals
+read the lease fence without rewriting its indexed expiry. Sync claims take
+no fleet-wide advisory lock: live work is first per claimer, with a momentary
+inversion across claimers. A locked 64-row live window can divert concurrent
+claims to imports for its short transaction, more readily than main's one-row
+lock. Mutation claims serialize per provider,
+with Outlook alone retaining the old key first for rolling compatibility
+until the rollback baseline is retired (`mac-imap-smtp.89`). Initially
+ineligible due rows also require a one-time bounded parking drain; hosted dev
+has zero in all five work classes. Production counts remain unmeasured.
+
+The parked-work recovery sweep visits parked links rather than their backlogs,
+using one next-link index probe per family and one shared cursor. Its 64-row
+page shares quota among projection, streams and reconciliation, then borrows
+unused room once; this guarantees room for each family with at most six updates.
+New activation and recovery paths clear bounded pages immediately; old-binary
+link changes converge through the five-minute sweep.
 
 The email domain's `ImapConnectionService` accepts only the actor's independently
 verified sign-in address. Logging in to an arbitrary mail server does not prove

@@ -557,6 +557,7 @@ async fn generation_bumps_delete_superseded_sync_work(db: PgPool) {
         repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_some()
     );
 
@@ -614,6 +615,7 @@ async fn final_shared_disconnect_freezes_ingestion_and_keeps_revocation_after_ca
         repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     sqlx::query!("DELETE FROM email_links WHERE id = $1", link)
@@ -675,6 +677,7 @@ async fn outlook_resync_fences_page_workers_and_never_creates_a_gmail_backfill(d
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         "UPDATE email_sync_streams SET initial_complete = true,attachments_rechecked=true WHERE link_id = $1",

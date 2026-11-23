@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH keys AS MATERIALIZED (\n                SELECT unnest($1::uuid[]) AS id\n            ), candidate AS MATERIALIZED (\n                SELECT s.id FROM keys k\n                -- Keep one PK probe per held key, never a whole due-index scan.\n                CROSS JOIN LATERAL (\n                    SELECT s.id, s.next_run_at, s.provider_retry_at, s.lease_until\n                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id\n                    WHERE s.id = k.id AND s.kind = 'folder_catalog'\n                    AND s.parked_at IS NULL\n                    AND s.provider = $3::text::email_user_provider_enum\n                    AND l.provider = s.provider AND l.sync_generation = s.generation\n                    AND l.is_sync_active AND NOT l.needs_reauth\n                    AND GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()\n                    LIMIT 1\n                ) s\n                ORDER BY GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id\n                LIMIT 1\n            )\n            UPDATE email_sync_streams s\n            SET lease_id = $2, lease_until = now() + interval '3 minutes',\n                lease_started_at = clock_timestamp(),\n                leased_notification_revision = s.notification_revision,\n                provider_retry_at = NULL, fence = s.fence + 1\n            FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id\n            RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.fence\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "fence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "98b2420a6856a5021c4979c80764a9749b0a0409b00e3c081337a79969c707e1"
+}

@@ -419,6 +419,7 @@ async fn a_removed_folder_takes_its_live_pass_with_it(db: PgPool) {
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
 
     repo.commit_catalog(&catalog, &[]).await.unwrap();

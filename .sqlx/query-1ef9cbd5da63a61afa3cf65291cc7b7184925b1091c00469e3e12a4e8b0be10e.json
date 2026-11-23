@@ -1,0 +1,86 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH keys AS MATERIALIZED (\n                SELECT unnest($1::uuid[]) AS id\n            ), candidate AS MATERIALIZED (\n                SELECT s.id, s.notified_traceparent\n                FROM keys k\n                -- Preserve a bounded unique-key re-read even in generic plans.\n                CROSS JOIN LATERAL (\n                    SELECT s.id, s.notified_traceparent, s.kind, s.initial_complete,\n                        s.next_run_at, s.provider_retry_at, s.lease_until\n                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id\n                    WHERE s.id = k.id AND s.parked_at IS NULL\n                    AND s.kind = $3\n                    AND s.provider = $4::text::email_user_provider_enum\n                    AND l.provider = s.provider AND l.sync_generation = s.generation\n                    AND l.is_sync_active AND NOT l.needs_reauth\n                    AND l.mailbox_unavailable_at IS NULL\n                    AND GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()\n                    LIMIT 1\n                ) s\n                ORDER BY GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz))\n                    - CASE WHEN s.kind = 'mail_folder' AND NOT s.initial_complete\n                        THEN make_interval(secs => $5) ELSE interval '0' END,\n                    s.id\n                LIMIT 1\n            )\n            UPDATE email_sync_streams s\n            SET lease_id = $2, lease_until = now() + interval '3 minutes',\n                lease_started_at = clock_timestamp(),\n                leased_notification_revision = s.notification_revision,\n                provider_retry_at = NULL, fence = s.fence + 1,\n                notified_traceparent = NULL\n            FROM candidate c, email_links l\n            WHERE s.id = c.id AND l.id = s.link_id\n            RETURNING s.id, s.link_id, s.generation, l.grant_generation,\n                s.scope_id, s.position, s.initial_complete, s.fence,\n                s.notified_at, c.notified_traceparent, s.import_started_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "scope_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "position",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "initial_complete",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "fence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "notified_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "notified_traceparent",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "import_started_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "1ef9cbd5da63a61afa3cf65291cc7b7184925b1091c00469e3e12a4e8b0be10e"
+}

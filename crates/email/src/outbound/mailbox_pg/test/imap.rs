@@ -30,6 +30,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
         .claim_stream(Uuid::from_u128(44), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(immediate.mailbox.link_id, imap_link);
     imap.release_stream(&immediate, SyncRetry::Local(0))
@@ -39,6 +40,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
         .claim_stream(Uuid::from_u128(45), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(lease.mailbox.link_id, outlook_link);
     assert!(
@@ -46,6 +48,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
             .claim_stream(Uuid::from_u128(46), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     // Graph's missing-mailbox diagnosis must not pause the IMAP inbox.
@@ -67,6 +70,7 @@ async fn imap_and_outlook_workers_claim_their_own_provider_without_rollout_evalu
         .claim_stream(Uuid::from_u128(47), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(lease.mailbox.link_id, imap_link);
     let backlogs = imap.backlogs().await.unwrap();
@@ -86,12 +90,14 @@ async fn blocked_imap_ingestion_records_one_recoverable_move_with_the_message(db
         .claim_stream(Uuid::from_u128(100), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
     let work = repo
         .claim_message(Uuid::from_u128(101))
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sqlx::query!(
         r#"
@@ -473,7 +479,12 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
             total_items: Some(1),
         },
     ];
-    let catalog = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
+    let catalog = repo
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.commit_catalog(&catalog, &folders).await.unwrap();
     sqlx::query!(
         r#"
@@ -485,7 +496,12 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
     .execute(&db)
     .await
     .unwrap();
-    let work = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.ingest(
         &work,
         snapshot(
@@ -520,7 +536,12 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
         .execute(&db)
         .await
         .unwrap();
-        let catalog = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
+        let catalog = repo
+            .claim_catalog(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         repo.commit_catalog(&catalog, &folders).await.unwrap();
         let retained = repo.folders(catalog.mailbox).await.unwrap();
         assert_eq!(
@@ -558,7 +579,11 @@ async fn imap_excluded_trash_and_ancestors_preserve_roles_without_scheduling_bod
         .unwrap();
         assert_eq!(active, Some(0));
         assert!(
-            repo.claim_message(Uuid::now_v7()).await.unwrap().is_none(),
+            repo.claim_message(Uuid::now_v7())
+                .await
+                .unwrap()
+                .into_lease()
+                .is_none(),
             "pausing a folder must not schedule downloads of retained message bodies"
         );
         let state = sqlx::query_scalar!(

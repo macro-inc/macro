@@ -202,6 +202,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.release_stream(&first, SyncRetry::Provider(120))
         .await
@@ -249,6 +250,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .is_none()
     );
     // Move this isolated fixture's clock-dependent deadlines into the past.
@@ -267,6 +269,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let cleared = sqlx::query_scalar!(
         "SELECT provider_retry_at FROM email_sync_streams WHERE id = $1",
@@ -286,6 +289,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .is_none()
     );
     notifications.receive(notice).await.unwrap();
@@ -296,6 +300,7 @@ async fn newer_hints_yield_local_backoff_but_never_shorten_a_provider_floor(db: 
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(prompt.id, ids[0]);
     assert_eq!(prompt.position.as_ref().unwrap().expose(), "kept-cursor");
@@ -372,6 +377,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.release_stream(&stream, SyncRetry::Provider(3600))
         .await
@@ -392,6 +398,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
         )
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_ne!(other.id, stream.id);
     assert!(
@@ -401,6 +408,7 @@ async fn a_health_wake_cannot_bypass_the_provider_floor_and_pending_work_keeps_q
         )
         .await
         .unwrap()
+        .into_lease()
         .is_none(),
         "a health wake must not consume a future provider floor"
     );

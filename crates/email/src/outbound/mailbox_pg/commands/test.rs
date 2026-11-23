@@ -18,12 +18,14 @@ async fn setup(
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
     let work = sync
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.ingest(
         &work,
@@ -48,6 +50,34 @@ async fn setup(
 }
 fn owner() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("outlook-test@example.com").unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_old_binary_command_lease_is_not_claimed_again_after_its_commit(db: PgPool) {
+    let (sync, repo, work, thread) = setup(&db).await;
+    let messages = repo
+        .mailbox_action_messages(work.mailbox.link_id, thread)
+        .await
+        .unwrap();
+    let id = repo
+        .enqueue_mailbox_action(
+            work.mailbox.link_id,
+            owner(),
+            &MailboxAction::Read(true),
+            &MailboxAction::Read(true).targets(&messages),
+        )
+        .await
+        .unwrap();
+    let mut old = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *old).await.unwrap();
+    // Main's lease write holds the command row as well as its legacy key.
+    sqlx::query!("UPDATE email_mailbox_commands SET status='running',lease_id=$2,lease_until=now()+interval '3 minutes' WHERE id=$1",id,Uuid::now_v7())
+        .execute(&mut *old).await.unwrap();
+    // The held-key probe tests establish exclusion. Once the old lease
+    // commits, a new claimer must respect it rather than lease it again.
+    old.commit().await.unwrap();
+    assert!(sync.claim_command(Uuid::now_v7()).await.unwrap().is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -634,7 +664,7 @@ async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
     let (sync, _) = fixture(&db).await;
 
     let mut claim = db.begin().await.unwrap();
-    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.mailbox.mutation-claims:OUTLOOK',0))")
         .fetch_one(&mut *claim)
         .await
         .unwrap();

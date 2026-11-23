@@ -649,17 +649,17 @@ tools — hexagonal, heavily feature-gated.
   after their own failures don't count, so they never hold the walk. The count
   reads the partial index `email_message_reconciliation_import_queued`; keep
   its predicate and the query's identical, or a mailbox with fewer due rows
-  than the cap reads the whole table. Message claims are first in, first out
+  than the cap reads the whole table. Message claims take the oldest due work
   across mailboxes, so a walk that ran ahead would put every other mailbox's
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
   A mail folder claim takes an import round ahead of finished folders that
   came due less than five minutes before it (`IMPORT_ROUND_HEAD_START_SECONDS`
-  in `claim_stream`, which picks the earlier of two one-row candidates). The
-  import round comes off the partial index
-  `email_sync_streams_import_round_claim`; keep its predicate and the query's
-  identical, or each claim reads every due finished folder. Polls of every
+  in `claim_stream`, which merges two bounded 32-row index windows). The
+  import window uses `email_sync_streams_unparked_import_due`; its predicate
+  and exact eligibility expression must match the query so finished folders
+  and held leases stay outside that walk. Polls of every
   finished folder share the sync loops and run minutes late, and a round that
   waited behind them read a page only every few minutes while its import sat
   empty. A round waiting for room reads nothing: paced, or its page refused
@@ -751,9 +751,18 @@ tools — hexagonal, heavily feature-gated.
   A crash or failed wake between the transactions, or an old binary without
   either wake, needs the jittered one-to-two-hour backstop. Activation clears
   one FIFO page atomically,
-  then bounded pages after commit. The separately fenced projection recovery
-  sweep walks parked links every five minutes, including old-binary activations;
-  dead-link cost is one index probe per cycle, independent of backlog size.
+  then bounded pages after commit. The separately fenced parked-work recovery
+  sweep shares one cursor across projection, streams and reconciliation every
+  five minutes, including old-binary activations. Find the next link using one
+  LIMIT 1 probe per family's parked partial index; dead-link cost is three
+  probes per cycle, independent of backlog size. A page clears at most 64 rows
+  total, sharing initial quota across all three families when at least three
+  slots remain, then borrowing
+  unused room once (at most six UPDATEs). A family with zero initial quota
+  still participates in borrowing so a one- or two-slot page cannot falsely
+  report an empty link. Projection heads receive room even
+  beside a hot reconciliation backlog; streams and reconciliation receive room
+  beside a hot projection backlog.
   Commit its cursor per probe; isolate known-link work with a short timeout and
   halve timed-out unpark pages down to one row before skipping a failed link
   until wrap, recording failed probes, consecutive skips and no progress.
@@ -793,7 +802,9 @@ tools — hexagonal, heavily feature-gated.
   `is_import` on a row it merges into (`ON CONFLICT ... is_import = false`, or
   `AND EXCLUDED.is_import` for folder pages); keep that in a new one.
 - Outlook sync claims (catalog, folder streams, messages, contacts) skip a
-  link with `needs_reauth`; clearing the flag resumes them.
+  link with `needs_reauth`; current credential and Google-consent/token-success
+  paths clear the flag and resume bounded parked pages. Old binaries, or an
+  interrupted recovery tail, converge through the five-minute sweep.
 - A folder discovery that Graph answers 404 at the Inbox
   (`MailFolderCatalog::NoMailbox`: the account has no mailbox Graph serves)
   marks the link `mailbox_unavailable_at` (`defer_reason=no_mailbox`, the
@@ -847,7 +858,10 @@ tools — hexagonal, heavily feature-gated.
   and Sent first, through the Outlook resync's reset limited to those folders;
   a new query that copies or resets streams keeps the column consistent.
   `PgMailboxSync::with_imports_paused` makes `claim_message` take only live
-  rows (`is_import IN (false,$2)` keeps both values named for the claim index).
+  rows through the constant `is_import = false` index walk. With imports enabled,
+  a serial Append fills the live branch first and uses imports only for the
+  remaining room under the outer 64-row limit; never replace these constant
+  branches with an IN/range that sorts the entire due queue under custom plans.
 - Import counts for the health snapshot stay in memory (`ImportTally`) and are
   flushed once a minute to `email_mailbox_import_minutes`; never write per
   imported message for telemetry.
@@ -876,6 +890,56 @@ reclassifies retained Trash descendants and schedules unwanted body downloads.
   failed gateway handoffs independently of new-message notification policy.
 
 
+Non-FIFO catalog, folder/live streams and reconciliation claims use a bounded
+64-row due window, then re-read only those locked keys in a fresh READ COMMITTED
+statement. Reconciliation keeps live work first per claimer with separate
+constant-kind index walks under one outer limit, and its second statement uses
+fenced unique-key probes rather than a hash join over due work. Keep the due predicate and order identical to the partial-index
+GREATEST expression, including the lease deadline and provider floor. Ineligible
+or stale-generation rows are parked lazily; bounded activation, credential and
+catalog recovery clears parking without lowering real retry times or leases.
+A maintenance-only claim returns `SyncClaim::Progress`; only `Idle` sleeps, and
+the host yields and checks cancellation after at most 32 progress turns.
+Sync claims take no advisory lock: live work is first per claimer, with a
+momentary inversion across claimers. Unlike main's one-row lock, a locked live
+window can divert overlapping claims to imports for that short transaction.
+Mutation claims use `email.mailbox.mutation-claims:<provider>`. Outlook takes
+its legacy key first, then the provider key, until the rollback baseline is
+retired; remove that compatibility acquisition under `mac-imap-smtp.89`.
+IMAP never takes the Outlook legacy key.
+Nonempty windows open `email.mailbox.claim` with provider, work kind, window size,
+maintained row count and outcome; empty polling creates no claim span.
+
+Validate both claim statements together at 1k/10k/100k links with fresh/stale
+statistics and custom/generic plans. The standard matrix gate is at most 3,500
+buffers on vacuumed tables, 4,000 on unvacuumed stale-statistics tables, 2x growth,
+128 row locks and no timeouts. Measure bulk transition prefixes separately,
+including their dead-index reads and vacuum cadence; the
+[routing runbook](../../docs/runbooks/email-provider-routing.md) records those
+single-claimer fixture costs.
+
+Reconciliation claims relabel at most 64 legacy routing mismatches to the link's
+provider within the due window. No completion marker gates live mail. A
+provider-bound Gmail repository test proves routing only: legacy Gmail
+reconciliation rows have no running consumer on main or here. Keep RELABEL rather
+than deleting that legacy data. The measured one-time Outlook reconciliation
+prefix delay is about 17–18 seconds per 100k legacy mislabelled due rows after the
+deploy in the synthetic fixture; hosted dev has zero, and production is
+unmeasured (requires explicit authorization). The same one-time drain applies to initially
+unparked ineligible due rows; the authorized hosted dev aggregate is zero for
+catalog, folder, live-pass and live/import reconciliation. The claim-time
+relabel also handles rows that become due later; no repair job or completion
+marker is needed. Claim, release and an actual lease extension update indexed eligibility and can be non-HOT; renewals within the first 30
+seconds perform only a fenced read, with no tuple rewrite or row lock.
+
+Keep main's claim indexes for rolling binaries. The undeployed provider-prefixed
+claim indexes in migrations 254–256 are superseded by the exact eligibility
+indexes; do not recreate both generations and pay for unused indexes on writes.
+Drop main's three legacy claim indexes only after the rollback baseline is
+retired (`mac-imap-smtp.89`), together with the Outlook compatibility key.
+A local database that applied the removed migrations retains its historical
+ledger; use the documented scoped preview procedure, never edit that ledger.
+
 Mailbox claim queues carry parent-derived provider routing metadata. Keep both
 the queue index predicate and the authoritative link/provider/generation/health
 checks, and keep claim transactions bounded by their statement timeout.
@@ -901,14 +965,15 @@ IMAP notifications project optional mailbox health and retry time under the exis
 
 An IMAP credentials_unreadable issue requires reconnect but is not a provider password rejection. Project needs_reauth under the same active-binding fence without stamping last_sync_error_at; emit the existing reauthorization event and preserve the separate reason.
 
-`domain/mailbox/provider_repair.rs` owns automatic legacy reconciliation
-provider repair: bounded committed pages, durable lease/cursors and completion,
-with progress/failure spans and no runtime DDL or constraint validation. The
-provider-derivation trigger keeps new legacy-writer inserts correct. Initialize
-test links with their final provider before creating work; test setup must not
-rely on a provider-change cascade. See the
-[repair runbook](../../docs/runbooks/email-provider-repair.md), including the
-fresh-database requirement for local databases that applied removed migrations.
+New work derives provider metadata through the trigger; initialize test links
+with their final provider rather than depending on a cascade. Streams were
+Outlook-only before rollout. A corrupt wrong-provider stream is parked without
+changing its provider; recovery can unpark and re-park it once per five-minute
+wrap. This unsupported corruption cannot arise through normal writers or a
+provider change, and does not justify another index. A provider mismatch alone never parks a reconciliation row, so claim-time
+relabeling can repair its routing.
+See the [routing runbook](../../docs/runbooks/email-provider-routing.md) for
+removed, undeployed migrations and the preserved preview's local limitation.
 
 Draft retry timing keeps local AccountBusy separate from provider pacing: cap
 local-contention release delays from five seconds, doubling to sixty using a

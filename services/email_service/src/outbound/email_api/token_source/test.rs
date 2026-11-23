@@ -43,9 +43,43 @@ async fn needs_reauth(pool: &PgPool, link_id: Uuid) -> bool {
 async fn reauth_flagged_row_is_cleared_after_a_successful_fetch(pool: PgPool) {
     let link_id = insert_link_needing_reauth(&pool).await;
 
+    let event = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox(id,link_id,generation,payload,parked_at) SELECT $1,id,sync_generation,'{\"kind\":\"link_changed\"}'::jsonb,now() FROM email_links WHERE id=$2",
+        event,link_id,
+    ).execute(&pool).await.unwrap();
+    // Unlike projections, stream recovery requires the reauth clear to be
+    // committed before resume_link opens its own transaction.
+    let stream = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id,parked_at) SELECT $1,id,sync_generation,'mail_folder','auth-recovery',now() FROM email_links WHERE id=$2",
+        stream,link_id,
+    ).execute(&pool).await.unwrap();
     clear_stale_reauth_flag(&pool, link_id).await;
 
     assert!(!needs_reauth(&pool, link_id).await);
+    let resumed = sqlx::query_scalar!(
+        r#"SELECT parked_at IS NULL AS "resumed!" FROM email_projection_outbox WHERE id=$1"#,
+        event,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        resumed,
+        "a successful token fetch must resume parked work immediately"
+    );
+    let stream_resumed = sqlx::query_scalar!(
+        r#"SELECT parked_at IS NULL AS "resumed!" FROM email_sync_streams WHERE id=$1"#,
+        stream,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        stream_resumed,
+        "resume must follow the committed reauth clear"
+    );
 }
 
 /// Pins the full token-health decision table. The DB effects of each action

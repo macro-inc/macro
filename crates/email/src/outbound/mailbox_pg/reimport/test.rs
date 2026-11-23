@@ -130,6 +130,7 @@ async fn inbox_and_sent_restart_alone_and_the_rest_waits_for_their_import(db: Pg
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(round.folder.as_str(), "inbox-id");
     repo.commit_page(
@@ -189,6 +190,7 @@ async fn paused_imports_leave_import_rows_and_keep_live_changes_flowing(db: PgPo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(live.provider_id.as_str(), "new-message");
     assert!(
@@ -196,6 +198,7 @@ async fn paused_imports_leave_import_rows_and_keep_live_changes_flowing(db: PgPo
             .claim_message(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
 
@@ -203,6 +206,7 @@ async fn paused_imports_leave_import_rows_and_keep_live_changes_flowing(db: PgPo
         .claim_message(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(import.provider_id.as_str(), "old-message");
 }
@@ -225,6 +229,7 @@ async fn a_restart_rechecks_the_mail_its_folders_already_hold(db: PgPool) {
             .claim_message(macro_uuid::generate_uuid_v7())
             .await
             .unwrap()
+            .into_lease()
             .unwrap();
         repo.ingest(
             &work,

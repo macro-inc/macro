@@ -122,6 +122,7 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
         .claim_stream(Uuid::from_u128(1000), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(next.id, ids[2]);
     assert_eq!(next.position.as_ref().unwrap().expose(), "kept-cursor");
@@ -140,6 +141,7 @@ async fn imap_startup_catchup_wakes_current_cursors_without_stealing_leases(db: 
         .claim_catalog(Uuid::from_u128(1001))
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(catalog.id, ids[3]);
 }
@@ -167,8 +169,14 @@ async fn successful_imap_commits_preserve_hints_even_when_their_timestamps_prece
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
-    let catalog = repo.claim_catalog(Uuid::now_v7()).await.unwrap().unwrap();
+    let catalog = repo
+        .claim_catalog(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     // Model a new generation stamped by a clock behind the lease holder.
     sqlx::query!(
         r#"

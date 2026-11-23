@@ -1,6 +1,7 @@
 //! Provider-scoped due-work selection; provider IO starts after leases commit.
 
 use super::*;
+use tracing::Instrument;
 
 /// How far ahead of finished folders' polls a mail folder's import round is
 /// claimed. Polls of every finished folder of every mailbox share the sync
@@ -31,436 +32,99 @@ impl PgMailboxSync {
         &self,
         lease_id: Uuid,
         kind: StreamKind,
-    ) -> Result<Option<StreamLease>, MailboxError> {
+    ) -> Result<SyncClaim<StreamLease>, MailboxError> {
         let mut tx = self.begin_claim().await?;
-        let row = match kind {
-            // The longest-due import round goes ahead as if it had come due
-            // IMPORT_ROUND_HEAD_START_SECONDS earlier, so the next page of an
-            // import is read as soon as its mailbox has room instead of behind
-            // every finished folder's poll. A poll due longer than that comes
-            // first again. Each candidate is one row off its own index.
-            // The floor skips old work for ineligible links. The first raw
-            // index head avoids per-link probes in the healthy case; otherwise
-            // read-only per-link heads locate the earliest eligible due row.
-            // Locking stays in the global ordered scan so a locked head cannot
-            // hide another eligible stream of the same mailbox.
-            StreamKind::MailFolder => {
-                sqlx::query_as!(
-                    ClaimedStream,
-                    r#"
-                    WITH import_round AS (
-                        SELECT
-                            s.id,
-                            s.notified_traceparent,
-                            s.next_run_at - make_interval(secs => $2) AS claim_order
-                        FROM
-                            email_sync_streams s
-                            JOIN email_links l ON l.id = s.link_id
-                        WHERE
-                            l.is_sync_active
-                            AND NOT l.needs_reauth
-                            AND l.mailbox_unavailable_at IS NULL
-                            AND l.provider = $3::text::email_user_provider_enum
-                            AND s.provider = $3::text::email_user_provider_enum
-                            AND s.generation = l.sync_generation
-                            AND s.kind = 'mail_folder'
-                            AND NOT s.initial_complete
-                            AND s.next_run_at <= now()
-                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
-                            AND (s.next_run_at,
-                                s.id) >= (
-                                SELECT
-                                    COALESCE(h.due, raw.due),
-                                    COALESCE(h.id, raw.id)
-                                FROM (
-                                    SELECT
-                                        r.next_run_at AS due,
-                                        r.id,
-                                        r.link_id,
-                                        r.generation,
-                                        r.lease_until
-                                    FROM
-                                        email_sync_streams r
-                                    WHERE
-                                        r.provider = $3::text::email_user_provider_enum
-                                        AND r.kind = 'mail_folder'
-                                        AND NOT r.initial_complete
-                                        AND r.next_run_at <= now()
-                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                    ORDER BY
-                                        r.next_run_at,
-                                        r.id
-                                    LIMIT 1) raw
-                            LEFT JOIN email_links ok ON ok.id = raw.link_id
-                                AND ok.sync_generation = raw.generation
-                                AND ok.provider = $3::text::email_user_provider_enum
-                                AND ok.is_sync_active
-                                AND NOT ok.needs_reauth
-                                AND ok.mailbox_unavailable_at IS NULL
-                                AND (raw.lease_until IS NULL
-                                    OR raw.lease_until < now())
-                            LEFT JOIN LATERAL (
-                                SELECT
-                                    first.due,
-                                    first.id
-                                FROM
-                                    email_links l
-                                    CROSS JOIN LATERAL (
-                                        SELECT
-                                            scoped.due,
-                                            scoped.id
-                                        FROM (
-                                            SELECT
-                                                r.next_run_at AS due,
-                                                r.id
-                                            FROM
-                                                email_sync_streams r
-                                            WHERE
-                                                r.link_id = l.id
-                                                AND r.generation = l.sync_generation
-                                                AND r.kind = 'mail_folder'
-                                                AND NOT r.initial_complete
-                                                AND r.next_run_at <= now()
-                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                                AND (r.lease_until IS NULL
-                                                    OR r.lease_until < now())
-                                                OFFSET 0) scoped
-                                        ORDER BY
-                                            scoped.due,
-                                            scoped.id
-                                        LIMIT 1)
-                                    first
-                                WHERE
-                                    ok.id IS NULL
-                                    AND l.provider = $3::text::email_user_provider_enum
-                                    AND l.is_sync_active
-                                    AND NOT l.needs_reauth
-                                    AND l.mailbox_unavailable_at IS NULL
-                                ORDER BY
-                                    first.due,
-                                    first.id
-                                LIMIT 1) h ON true
-                        WHERE
-                            ok.id IS NOT NULL
-                            OR h.id IS NOT NULL)
-                        AND (s.lease_until IS NULL
-                            OR s.lease_until < now())
-                    ORDER BY
-                        s.next_run_at,
-                        s.id
-                    LIMIT 1
-                    FOR UPDATE
-                        OF s SKIP LOCKED
-                    ),
-                    longest_due AS (
-                        SELECT
-                            s.id,
-                            s.notified_traceparent,
-                            s.next_run_at AS claim_order
-                        FROM
-                            email_sync_streams s
-                            JOIN email_links l ON l.id = s.link_id
-                        WHERE
-                            l.is_sync_active
-                            AND NOT l.needs_reauth
-                            AND l.mailbox_unavailable_at IS NULL
-                            AND l.provider = $3::text::email_user_provider_enum
-                            AND s.provider = $3::text::email_user_provider_enum
-                            AND s.generation = l.sync_generation
-                            AND s.kind = 'mail_folder'
-                            AND s.next_run_at <= now()
-                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
-                            AND (s.next_run_at,
-                                s.id) >= (
-                                SELECT
-                                    COALESCE(h.due, raw.due),
-                                    COALESCE(h.id, raw.id)
-                                FROM (
-                                    SELECT
-                                        r.next_run_at AS due,
-                                        r.id,
-                                        r.link_id,
-                                        r.generation,
-                                        r.lease_until
-                                    FROM
-                                        email_sync_streams r
-                                    WHERE
-                                        r.provider = $3::text::email_user_provider_enum
-                                        AND r.kind = 'mail_folder'
-                                        AND r.next_run_at <= now()
-                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                    ORDER BY
-                                        r.next_run_at,
-                                        r.id
-                                    LIMIT 1) raw
-                            LEFT JOIN email_links ok ON ok.id = raw.link_id
-                                AND ok.sync_generation = raw.generation
-                                AND ok.provider = $3::text::email_user_provider_enum
-                                AND ok.is_sync_active
-                                AND NOT ok.needs_reauth
-                                AND ok.mailbox_unavailable_at IS NULL
-                                AND (raw.lease_until IS NULL
-                                    OR raw.lease_until < now())
-                            LEFT JOIN LATERAL (
-                                SELECT
-                                    first.due,
-                                    first.id
-                                FROM
-                                    email_links l
-                                    CROSS JOIN LATERAL (
-                                        SELECT
-                                            scoped.due,
-                                            scoped.id
-                                        FROM (
-                                            SELECT
-                                                r.next_run_at AS due,
-                                                r.id
-                                            FROM
-                                                email_sync_streams r
-                                            WHERE
-                                                r.link_id = l.id
-                                                AND r.generation = l.sync_generation
-                                                AND r.kind = 'mail_folder'
-                                                AND r.next_run_at <= now()
-                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                                AND (r.lease_until IS NULL
-                                                    OR r.lease_until < now())
-                                                OFFSET 0) scoped
-                                        ORDER BY
-                                            scoped.due,
-                                            scoped.id
-                                        LIMIT 1)
-                                    first
-                                WHERE
-                                    ok.id IS NULL
-                                    AND l.provider = $3::text::email_user_provider_enum
-                                    AND l.is_sync_active
-                                    AND NOT l.needs_reauth
-                                    AND l.mailbox_unavailable_at IS NULL
-                                ORDER BY
-                                    first.due,
-                                    first.id
-                                LIMIT 1) h ON true
-                        WHERE
-                            ok.id IS NOT NULL
-                            OR h.id IS NOT NULL)
-                        AND (s.lease_until IS NULL
-                            OR s.lease_until < now())
-                    ORDER BY
-                        s.next_run_at,
-                        s.id
-                    LIMIT 1
-                    FOR UPDATE
-                        OF s SKIP LOCKED
-                    ),
-                    candidate AS (
-                        SELECT
-                            c.id,
-                            c.notified_traceparent
-                        FROM (
-                            SELECT
-                                *
-                            FROM
-                                import_round
-                            UNION ALL
-                            SELECT
-                                *
-                            FROM
-                                longest_due) c
-                        ORDER BY
-                            c.claim_order,
-                            c.id
-                        LIMIT 1)
-                    -- The trace context is handed over once: retries get traces of
-                    -- their own, so a long deferral can't grow the webhook's trace.
-                    UPDATE
-                        email_sync_streams s
-                    SET
-                        lease_id = $1,
-                        lease_until = now() + interval '3 minutes',
-                    lease_started_at = clock_timestamp(),
-                    leased_notification_revision = s.notification_revision,
-                    provider_retry_at = NULL,
-                    fence = fence + 1,
-                    notified_traceparent = NULL
-                    FROM
-                        candidate c,
-                        email_links l
-                    WHERE
-                        s.id = c.id
-                        AND l.id = s.link_id
-                    RETURNING
-                        s.id,
-                        s.link_id,
-                        s.generation,
-                        l.grant_generation,
-                        s.scope_id,
-                        s.position,
-                        s.initial_complete,
-                        s.fence,
-                        s.notified_at,
-                        c.notified_traceparent,
-                        s.import_started_at
-                    "#,
-                    lease_id,
-                    f64::from(IMPORT_ROUND_HEAD_START_SECONDS),
-                    self.provider.as_str(),
-                )
-                .fetch_optional(&mut *tx)
-                .await
-            }
-            StreamKind::LivePass => {
-                sqlx::query_as!(
-                    ClaimedStream,
-                    r#"
-                    WITH candidate AS (
-                        SELECT
-                            s.id,
-                            s.notified_traceparent
-                        FROM
-                            email_sync_streams s
-                            JOIN email_links l ON l.id = s.link_id
-                        WHERE
-                            l.is_sync_active
-                            AND NOT l.needs_reauth
-                            AND l.mailbox_unavailable_at IS NULL
-                            AND l.provider = $3::text::email_user_provider_enum
-                            AND s.provider = $3::text::email_user_provider_enum
-                            AND s.generation = l.sync_generation
-                            AND s.kind = $2
-                            AND s.next_run_at <= now()
-                            AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
-                            AND (s.next_run_at,
-                                s.id) >= (
-                                SELECT
-                                    COALESCE(h.due, raw.due),
-                                    COALESCE(h.id, raw.id)
-                                FROM (
-                                    SELECT
-                                        r.next_run_at AS due,
-                                        r.id,
-                                        r.link_id,
-                                        r.generation,
-                                        r.lease_until
-                                    FROM
-                                        email_sync_streams r
-                                    WHERE
-                                        r.provider = $3::text::email_user_provider_enum
-                                        AND r.kind = $2
-                                        AND r.next_run_at <= now()
-                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                    ORDER BY
-                                        r.next_run_at,
-                                        r.id
-                                    LIMIT 1) raw
-                            LEFT JOIN email_links ok ON ok.id = raw.link_id
-                                AND ok.sync_generation = raw.generation
-                                AND ok.provider = $3::text::email_user_provider_enum
-                                AND ok.is_sync_active
-                                AND NOT ok.needs_reauth
-                                AND ok.mailbox_unavailable_at IS NULL
-                                AND (raw.lease_until IS NULL
-                                    OR raw.lease_until < now())
-                            LEFT JOIN LATERAL (
-                                SELECT
-                                    first.due,
-                                    first.id
-                                FROM
-                                    email_links l
-                                    CROSS JOIN LATERAL (
-                                        SELECT
-                                            scoped.due,
-                                            scoped.id
-                                        FROM (
-                                            SELECT
-                                                r.next_run_at AS due,
-                                                r.id
-                                            FROM
-                                                email_sync_streams r
-                                            WHERE
-                                                r.link_id = l.id
-                                                AND r.generation = l.sync_generation
-                                                AND r.kind = $2
-                                                AND r.next_run_at <= now()
-                                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                                AND (r.lease_until IS NULL
-                                                    OR r.lease_until < now())
-                                                OFFSET 0) scoped
-                                        ORDER BY
-                                            scoped.due,
-                                            scoped.id
-                                        LIMIT 1)
-                                    first
-                                WHERE
-                                    ok.id IS NULL
-                                    AND l.provider = $3::text::email_user_provider_enum
-                                    AND l.is_sync_active
-                                    AND NOT l.needs_reauth
-                                    AND l.mailbox_unavailable_at IS NULL
-                                ORDER BY
-                                    first.due,
-                                    first.id
-                                LIMIT 1) h ON true
-                        WHERE
-                            ok.id IS NOT NULL
-                            OR h.id IS NOT NULL)
-                        AND (s.lease_until IS NULL
-                            OR s.lease_until < now())
-                    ORDER BY
-                        s.next_run_at,
-                        s.id
-                    LIMIT 1
-                    FOR UPDATE
-                        OF s SKIP LOCKED)
-                    -- The trace context is handed over once: retries get traces of
-                    -- their own, so a long deferral can't grow the webhook's trace.
-                    UPDATE
-                        email_sync_streams s
-                    SET
-                        lease_id = $1,
-                        lease_until = now() + interval '3 minutes',
-                    lease_started_at = clock_timestamp(),
-                    leased_notification_revision = s.notification_revision,
-                    provider_retry_at = NULL,
-                    fence = fence + 1,
-                    notified_traceparent = NULL
-                    FROM
-                        candidate c,
-                        email_links l
-                    WHERE
-                        s.id = c.id
-                        AND l.id = s.link_id
-                    RETURNING
-                        s.id,
-                        s.link_id,
-                        s.generation,
-                        l.grant_generation,
-                        s.scope_id,
-                        s.position,
-                        s.initial_complete,
-                        s.fence,
-                        s.notified_at,
-                        c.notified_traceparent,
-                        s.import_started_at
-                    "#,
-                    lease_id,
-                    kind.as_str(),
-                    self.provider.as_str(),
-                )
-                .fetch_optional(&mut *tx)
-                .await
-            }
+        let work = match kind {
+            StreamKind::MailFolder => StreamWork::Folder,
+            StreamKind::LivePass => StreamWork::Live,
+        };
+        let window = self.lock_stream_window(&mut tx, work).await?;
+        if window.ids.is_empty() {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(SyncClaim::Idle);
         }
-        .map_err(db_error)?;
-        tx.commit().await.map_err(db_error)?;
-        row.map(|row| {
+        // Empty polls have no span; a nonempty maintained window is work
+        // even when it does not produce a provider lease.
+        let claim_span = tracing::info_span!(
+            "email.mailbox.claim",
+            mailbox.provider = self.provider.as_str(),
+            mailbox.work = kind.as_str(),
+            mailbox.window_rows =
+                i64::try_from(window.ids.len()).map_err(|_| MailboxError::Persistence)?,
+            mailbox.window_maintained = window.maintained,
+            mailbox.link_id = tracing::field::Empty,
+            mailbox.outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let result: Result<SyncClaim<StreamLease>, MailboxError> = async {
+            let row = sqlx::query_as!(
+                ClaimedStream,
+                r#"
+            WITH keys AS MATERIALIZED (
+                SELECT unnest($1::uuid[]) AS id
+            ), candidate AS MATERIALIZED (
+                SELECT s.id, s.notified_traceparent
+                FROM keys k
+                -- Preserve a bounded unique-key re-read even in generic plans.
+                CROSS JOIN LATERAL (
+                    SELECT s.id, s.notified_traceparent, s.kind, s.initial_complete,
+                        s.next_run_at, s.provider_retry_at, s.lease_until
+                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                    WHERE s.id = k.id AND s.parked_at IS NULL
+                    AND s.kind = $3
+                    AND s.provider = $4::text::email_user_provider_enum
+                    AND l.provider = s.provider AND l.sync_generation = s.generation
+                    AND l.is_sync_active AND NOT l.needs_reauth
+                    AND l.mailbox_unavailable_at IS NULL
+                    AND GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
+                    LIMIT 1
+                ) s
+                ORDER BY GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz))
+                    - CASE WHEN s.kind = 'mail_folder' AND NOT s.initial_complete
+                        THEN make_interval(secs => $5) ELSE interval '0' END,
+                    s.id
+                LIMIT 1
+            )
+            UPDATE email_sync_streams s
+            SET lease_id = $2, lease_until = now() + interval '3 minutes',
+                lease_started_at = clock_timestamp(),
+                leased_notification_revision = s.notification_revision,
+                provider_retry_at = NULL, fence = s.fence + 1,
+                notified_traceparent = NULL
+            FROM candidate c, email_links l
+            WHERE s.id = c.id AND l.id = s.link_id
+            RETURNING s.id, s.link_id, s.generation, l.grant_generation,
+                s.scope_id, s.position, s.initial_complete, s.fence,
+                s.notified_at, c.notified_traceparent, s.import_started_at
+            "#,
+                &window.ids,
+                lease_id,
+                kind.as_str(),
+                self.provider.as_str(),
+                f64::from(IMPORT_ROUND_HEAD_START_SECONDS),
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            tx.commit().await.map_err(db_error)?;
+            let Some(row) = row else {
+                return Ok(if window.maintained > 0 {
+                    SyncClaim::Progress
+                } else {
+                    SyncClaim::Idle
+                });
+            };
             let pass = match kind {
                 StreamKind::MailFolder => FolderPass::Folder,
                 StreamKind::LivePass => FolderPass::Live {
                     received_since: row.import_started_at.ok_or(MailboxError::Persistence)?,
                 },
             };
-            Ok(StreamLease {
+            Ok(SyncClaim::Acquired(StreamLease {
                 id: row.id,
                 mailbox: MailboxKey {
                     link_id: row.link_id,
@@ -474,214 +138,212 @@ impl PgMailboxSync {
                 lease_id,
                 fence: row.fence,
                 notification: notification(row.notified_at, row.notified_traceparent),
-            })
-        })
-        .transpose()
+            }))
+        }
+        .instrument(claim_span.clone())
+        .await;
+        let outcome = match &result {
+            Ok(SyncClaim::Acquired(lease)) => {
+                claim_span.record(
+                    "mailbox.link_id",
+                    tracing::field::display(lease.mailbox.link_id),
+                );
+                "acquired"
+            }
+            Ok(SyncClaim::Progress) => "progress",
+            Ok(SyncClaim::Idle) => "idle",
+            Err(_) => {
+                claim_span.record("otel.status_code", "ERROR");
+                "failed"
+            }
+        };
+        claim_span.record("mailbox.outcome", outcome);
+        result
+    }
+
+    pub(super) async fn lock_stream_window(
+        &self,
+        connection: &mut sqlx::PgConnection,
+        work: StreamWork,
+    ) -> Result<StreamWindow, MailboxError> {
+        let (kind, imports) = match work {
+            StreamWork::Catalog => ("folder_catalog", false),
+            StreamWork::Folder => ("mail_folder", true),
+            StreamWork::Live => ("mail_folder_live", false),
+        };
+        // Each index walk locks at most 32 rows when imports have priority,
+        // otherwise the sole walk locks 64. Duplicates are removed afterward.
+        sqlx::query_as!(
+            StreamWindow,
+            r#"
+            WITH imports AS MATERIALIZED (
+                SELECT s.id,
+                    GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz))
+                        - make_interval(secs => $5) AS claim_order
+                FROM email_sync_streams s
+                WHERE $3 AND s.provider = $1::text::email_user_provider_enum
+                    AND s.kind = 'mail_folder' AND NOT s.initial_complete
+                    AND s.parked_at IS NULL
+                    AND GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
+                ORDER BY GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id
+                LIMIT 32 FOR UPDATE OF s SKIP LOCKED
+            ), ordinary AS MATERIALIZED (
+                SELECT s.id,
+                    GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz))
+                        - CASE WHEN $3 AND NOT s.initial_complete
+                            THEN make_interval(secs => $5) ELSE interval '0' END AS claim_order
+                FROM email_sync_streams s
+                WHERE s.provider = $1::text::email_user_provider_enum
+                    AND s.kind = $2 AND s.parked_at IS NULL
+                    AND GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
+                ORDER BY GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id
+                LIMIT $4 FOR UPDATE OF s SKIP LOCKED
+            ), due AS MATERIALIZED (
+                SELECT id, claim_order FROM imports
+                UNION SELECT id, claim_order FROM ordinary
+            ), inactive AS MATERIALIZED (
+                SELECT DISTINCT ON (l.id) l.*
+                FROM due d JOIN email_sync_streams s ON s.id = d.id
+                CROSS JOIN LATERAL (
+                    SELECT l.id, l.sync_generation, l.is_sync_active,
+                        l.needs_reauth, l.mailbox_unavailable_at
+                    FROM email_links l WHERE l.id = s.link_id AND (
+                        NOT l.is_sync_active OR l.needs_reauth
+                        OR ($2 <> 'folder_catalog' AND l.mailbox_unavailable_at IS NOT NULL)
+                        OR l.sync_generation <> s.generation)
+                    FOR SHARE OF l SKIP LOCKED
+                ) l
+                ORDER BY l.id
+            ), maintained AS (
+                UPDATE email_sync_streams s
+                SET parked_at = now()
+                FROM due d, email_links l LEFT JOIN inactive i ON i.id = l.id
+                WHERE s.id = d.id AND l.id = s.link_id
+                    AND (s.provider IS DISTINCT FROM l.provider OR (
+                        i.id IS NOT NULL AND (
+                        NOT i.is_sync_active OR i.needs_reauth
+                        OR ($2 <> 'folder_catalog' AND i.mailbox_unavailable_at IS NOT NULL)
+                        OR i.sync_generation <> s.generation)))
+                RETURNING s.id
+            )
+            SELECT ARRAY(SELECT id FROM due ORDER BY claim_order,id) AS "ids!",
+                (SELECT count(*) FROM maintained) AS "maintained!"
+            "#,
+            self.provider.as_str(),
+            kind,
+            imports,
+            if imports { 32i64 } else { 64i64 },
+            f64::from(IMPORT_ROUND_HEAD_START_SECONDS),
+        )
+        .fetch_one(connection)
+        .await
+        .map_err(db_error)
     }
 
     pub(super) async fn claim_message_lease(
         &self,
         lease_id: Uuid,
-    ) -> Result<Option<MessageLease>, MailboxError> {
-        // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
-        // Without it, Postgres before 18 reads every backed-off row on each poll.
-        // Paused imports name `false` twice, so only live rows are claimed.
-        // The equivalent boolean upper bound also narrows PG14 generic plans.
-        // A conservative eligible floor bypasses inactive/stale queue prefixes;
-        // provider_id remains in the final lock order to retain exact ties.
+    ) -> Result<SyncClaim<MessageLease>, MailboxError> {
         let mut tx = self.begin_claim().await?;
-        let row = sqlx::query!(
-            r#"
-            WITH eligible AS MATERIALIZED (
-                SELECT
-                    1
-                FROM
-                    email_links
-                WHERE
-                    provider = $3::text::email_user_provider_enum
-                    AND is_sync_active
-                    AND NOT needs_reauth
-                    AND mailbox_unavailable_at IS NULL
-                LIMIT 1
-            ),
-            candidate AS (
-                SELECT
-                    q.link_id,
-                    q.generation,
-                    q.provider_id,
-                    q.notified_traceparent
-                FROM
-                    email_message_reconciliation q
+        let window = self.lock_message_window(&mut tx).await?;
+        if window.link_ids.is_empty() {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(SyncClaim::Idle);
+        }
+        // The first statement holds these rows. Re-read their parent fences
+        // after maintenance commits its own changes within this transaction.
+        // Empty polls have no span; a nonempty maintained window is work
+        // even when it does not produce a provider lease.
+        let claim_span = tracing::info_span!(
+            "email.mailbox.claim",
+            mailbox.provider = self.provider.as_str(),
+            mailbox.work = "reconciliation",
+            mailbox.window_rows =
+                i64::try_from(window.link_ids.len()).map_err(|_| MailboxError::Persistence)?,
+            mailbox.window_maintained = window.maintained,
+            mailbox.link_id = tracing::field::Empty,
+            mailbox.outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let result: Result<SyncClaim<MessageLease>, MailboxError> = async {
+            let row = sqlx::query!(
+                r#"
+            WITH keys AS MATERIALIZED (
+                SELECT * FROM unnest($1::uuid[], $2::bigint[], $3::text[])
+                    AS k(link_id, generation, provider_id)
+            ), candidate AS MATERIALIZED (
+                SELECT q.link_id, q.generation, q.provider_id, q.notified_traceparent
+                FROM keys k
+                -- Keep one unique-key probe per locked row. Flattening this
+                -- into a hash join can scan every due message under stale stats.
+                CROSS JOIN LATERAL (
+                    SELECT q.link_id, q.generation, q.provider_id, q.is_import,
+                        q.available_at, q.lease_until, q.notified_traceparent
+                    FROM email_message_reconciliation q
                     JOIN email_links l ON l.id = q.link_id
-                WHERE
-                    EXISTS (
-                        SELECT
-                            1
-                        FROM
-                            eligible)
-                    AND q.generation = l.sync_generation
-                    AND l.is_sync_active
-                    AND NOT l.needs_reauth
-                    AND l.mailbox_unavailable_at IS NULL
-                    AND l.provider = $3::text::email_user_provider_enum
-                    AND q.provider = $3::text::email_user_provider_enum
-                    AND q.is_import IN (false, $2)
-                    AND q.is_import <= $2
-                    AND (q.is_import,
-                        q.available_at,
-                        q.link_id) >= (
-                        SELECT
-                            COALESCE(h.is_import, raw.is_import),
-                            COALESCE(h.available_at, raw.available_at),
-                            COALESCE(h.link_id, raw.link_id)
-                        FROM (
-                            SELECT
-                                r.is_import,
-                                r.available_at,
-                                r.link_id,
-                                r.generation,
-                                r.lease_until
-                            FROM
-                                email_message_reconciliation r
-                            WHERE
-                                r.provider = $3::text::email_user_provider_enum
-                                AND r.is_import IN (false, $2)
-                                AND r.is_import <= $2
-                                AND r.available_at <= now()
-                            ORDER BY
-                                r.is_import,
-                                r.available_at,
-                                r.link_id,
-                                r.provider_id
-                            LIMIT 1) raw
-                    LEFT JOIN email_links ok ON ok.id = raw.link_id
-                        AND ok.sync_generation = raw.generation
-                        AND ok.provider = $3::text::email_user_provider_enum
-                        AND ok.is_sync_active
-                        AND NOT ok.needs_reauth
-                        AND ok.mailbox_unavailable_at IS NULL
-                        AND (raw.lease_until IS NULL
-                            OR raw.lease_until < now())
-                    LEFT JOIN LATERAL (
-                        SELECT
-                            head.is_import,
-                            head.available_at,
-                            l.id AS link_id
-                        FROM
-                            email_links l
-                            CROSS JOIN LATERAL ((
-                                    SELECT
-                                        false AS is_import,
-                                        r.available_at
-                                    FROM
-                                        email_message_reconciliation r
-                                    WHERE
-                                        r.link_id = l.id
-                                        AND r.generation = l.sync_generation
-                                        AND NOT r.is_import
-                                        AND r.available_at <> 'infinity'
-                                        AND r.available_at <= now()
-                                        AND (r.lease_until IS NULL
-                                            OR r.lease_until < now())
-                                    ORDER BY
-                                        r.available_at
-                                    LIMIT 1)
-                            UNION ALL (
-                                SELECT
-                                    true AS is_import,
-                                    r.available_at
-                                FROM
-                                    email_message_reconciliation r
-                                WHERE
-                                    r.link_id = l.id
-                                    AND r.generation = l.sync_generation
-                                    AND $2
-                                    AND r.is_import
-                                    AND r.available_at <> 'infinity'
-                                    AND r.available_at <= now()
-                                    AND (r.lease_until IS NULL
-                                        OR r.lease_until < now())
-                                ORDER BY
-                                    r.available_at
-                                LIMIT 1)
-                        ORDER BY
-                            is_import,
-                            available_at
-                        LIMIT 1) head
-                WHERE
-                    ok.id IS NULL
-                    AND l.provider = $3::text::email_user_provider_enum
-                    AND l.is_sync_active
-                    AND NOT l.needs_reauth
-                    AND l.mailbox_unavailable_at IS NULL
-                ORDER BY
-                    head.is_import,
-                    head.available_at,
-                    l.id
-                LIMIT 1) h ON true
-            WHERE
-                ok.id IS NOT NULL
-                OR h.link_id IS NOT NULL)
-            AND q.available_at <= now()
-            AND (q.lease_until IS NULL
-                OR q.lease_until < now())
-            ORDER BY
-                q.is_import,
-                q.available_at,
-                q.link_id,
-                q.provider_id
-            LIMIT 1
-            FOR UPDATE
-                OF q SKIP LOCKED)
-            -- Only the first attempt joins the notification's trace. Every
-            -- recorded outcome deletes the row or clears its lease, so a lease
-            -- still set here expired under a worker that stopped; a revision
-            -- newer than the last claim read starts the count over.
-            UPDATE
-                email_message_reconciliation q
-            SET
-                lease_id = $1,
-                lease_until = now() + interval '3 minutes',
-            attempts = attempts + 1,
-            unfinished_claims = CASE WHEN q.lease_id IS NULL
-                OR q.revision <> q.claimed_revision THEN
-                0
-            ELSE
-                q.unfinished_claims + 1
-            END,
-            claimed_revision = q.revision,
-            notified_traceparent = NULL
-            FROM
-                candidate c,
-                email_links l
-            WHERE
-                q.link_id = c.link_id
-                AND q.generation = c.generation
-                AND q.provider_id = c.provider_id
-                AND l.id = q.link_id
-            RETURNING
-                q.link_id,
-                q.generation,
-                l.grant_generation,
-                q.provider_id,
-                q.revision,
-                q.is_import,
-                q.attempts,
-                q.unfinished_claims,
-                q.notified_at,
-                c.notified_traceparent,
+                    WHERE (q.link_id, q.generation, q.provider_id) =
+                          (k.link_id, k.generation, k.provider_id)
+                        AND q.parked_at IS NULL
+                        AND q.provider = $5::text::email_user_provider_enum
+                        AND l.provider = q.provider
+                        AND q.generation = l.sync_generation
+                        AND l.is_sync_active AND NOT l.needs_reauth
+                        AND l.mailbox_unavailable_at IS NULL
+                        AND GREATEST(q.available_at,
+                            COALESCE(q.lease_until, '-infinity'::timestamptz)) <= now()
+                    LIMIT 1
+                ) q
+                ORDER BY q.is_import,
+                    GREATEST(q.available_at,
+                        COALESCE(q.lease_until, '-infinity'::timestamptz)),
+                    q.link_id, q.generation, q.provider_id
+                LIMIT 1
+            )
+            UPDATE email_message_reconciliation q
+            SET lease_id = $4, lease_until = now() + interval '3 minutes',
+                attempts = q.attempts + 1,
+                unfinished_claims = CASE
+                    WHEN q.lease_id IS NULL OR q.revision <> q.claimed_revision THEN 0
+                    ELSE q.unfinished_claims + 1 END,
+                claimed_revision = q.revision, notified_traceparent = NULL
+            FROM candidate c, email_links l
+            WHERE (q.link_id, q.generation, q.provider_id) =
+                  (c.link_id, c.generation, c.provider_id) AND l.id = q.link_id
+            RETURNING q.link_id, q.generation, l.grant_generation,
+                q.provider_id, q.revision, q.is_import, q.attempts,
+                q.unfinished_claims, q.notified_at, c.notified_traceparent,
                 q.from_notification
             "#,
-            lease_id,
-            !self.imports_paused,
-            self.provider.as_str(),
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_error)?;
-        tx.commit().await.map_err(db_error)?;
-        row.map(|row| {
-            Ok(MessageLease {
+                &window.link_ids,
+                &window.generations,
+                &window.provider_ids,
+                lease_id,
+                self.provider.as_str(),
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            tx.commit().await.map_err(db_error)?;
+            let Some(row) = row else {
+                return Ok(if window.maintained > 0 {
+                    SyncClaim::Progress
+                } else {
+                    SyncClaim::Idle
+                });
+            };
+            Ok(SyncClaim::Acquired(MessageLease {
                 mailbox: MailboxKey {
                     link_id: row.link_id,
                     sync_generation: row.generation,
@@ -695,8 +357,133 @@ impl PgMailboxSync {
                 unfinished_claims: row.unfinished_claims,
                 notification: notification(row.notified_at, row.notified_traceparent),
                 from_notification: row.from_notification,
-            })
-        })
-        .transpose()
+            }))
+        }
+        .instrument(claim_span.clone())
+        .await;
+        let outcome = match &result {
+            Ok(SyncClaim::Acquired(lease)) => {
+                claim_span.record(
+                    "mailbox.link_id",
+                    tracing::field::display(lease.mailbox.link_id),
+                );
+                "acquired"
+            }
+            Ok(SyncClaim::Progress) => "progress",
+            Ok(SyncClaim::Idle) => "idle",
+            Err(_) => {
+                claim_span.record("otel.status_code", "ERROR");
+                "failed"
+            }
+        };
+        claim_span.record("mailbox.outcome", outcome);
+        result
     }
+
+    /// A bounded index walk, followed only by parent probes for its candidates.
+    /// Relabel a legacy row in place so its real provider can claim it next.
+    async fn lock_message_window(
+        &self,
+        connection: &mut sqlx::PgConnection,
+    ) -> Result<MessageWindow, MailboxError> {
+        sqlx::query_as!(
+            MessageWindow,
+            r#"
+            WITH due AS MATERIALIZED (
+                -- A serial Append fills the live branch first. The outer
+                -- LIMIT stops before locking more than 64 rows across both.
+                SELECT * FROM (
+                    SELECT * FROM (
+                     SELECT q.link_id, q.generation, q.provider_id
+                     FROM email_message_reconciliation q
+                     WHERE q.provider = $1::text::email_user_provider_enum
+                         AND NOT q.is_import AND q.parked_at IS NULL
+                         AND GREATEST(q.available_at,
+                             COALESCE(q.lease_until, '-infinity'::timestamptz)) <= now()
+                     ORDER BY GREATEST(q.available_at,
+                             COALESCE(q.lease_until, '-infinity'::timestamptz)),
+                         q.link_id, q.generation, q.provider_id
+                     LIMIT 64 FOR UPDATE OF q SKIP LOCKED
+                    ) live_rows
+                    UNION ALL
+                    SELECT * FROM (
+                     SELECT q.link_id, q.generation, q.provider_id
+                     FROM email_message_reconciliation q
+                     WHERE $2 AND q.provider = $1::text::email_user_provider_enum
+                         AND q.is_import AND q.parked_at IS NULL
+                         AND GREATEST(q.available_at,
+                             COALESCE(q.lease_until, '-infinity'::timestamptz)) <= now()
+                     ORDER BY GREATEST(q.available_at,
+                             COALESCE(q.lease_until, '-infinity'::timestamptz)),
+                         q.link_id, q.generation, q.provider_id
+                     LIMIT 64 FOR UPDATE OF q SKIP LOCKED
+                    ) import_rows
+                ) ordered_work
+                LIMIT 64
+            ), inactive AS MATERIALIZED (
+                SELECT DISTINCT ON (l.id) l.*
+                FROM due d
+                CROSS JOIN LATERAL (
+                    SELECT l.id, l.sync_generation, l.is_sync_active,
+                        l.needs_reauth, l.mailbox_unavailable_at
+                    FROM email_links l
+                    WHERE l.id = d.link_id AND (
+                        NOT l.is_sync_active OR l.needs_reauth
+                        OR l.mailbox_unavailable_at IS NOT NULL
+                        OR l.sync_generation <> d.generation)
+                    FOR SHARE OF l SKIP LOCKED
+                ) l
+                ORDER BY l.id
+            ), maintained AS (
+                UPDATE email_message_reconciliation q
+                SET provider = l.provider,
+                    parked_at = CASE WHEN i.id IS NOT NULL AND (
+                        NOT i.is_sync_active OR i.needs_reauth
+                        OR i.mailbox_unavailable_at IS NOT NULL
+                        OR i.sync_generation <> q.generation)
+                        THEN now() ELSE q.parked_at END
+                FROM due d JOIN email_links l ON l.id = d.link_id
+                LEFT JOIN inactive i ON i.id = l.id
+                WHERE (q.link_id, q.generation, q.provider_id) =
+                      (d.link_id, d.generation, d.provider_id)
+                    AND (q.provider IS DISTINCT FROM l.provider OR (
+                        i.id IS NOT NULL AND (NOT i.is_sync_active OR i.needs_reauth
+                        OR i.mailbox_unavailable_at IS NOT NULL
+                        OR i.sync_generation <> q.generation)))
+                RETURNING q.link_id
+            )
+            SELECT
+                ARRAY(SELECT link_id FROM due ORDER BY link_id,generation,provider_id)
+                    AS "link_ids!",
+                ARRAY(SELECT generation FROM due ORDER BY link_id,generation,provider_id)
+                    AS "generations!",
+                ARRAY(SELECT provider_id FROM due ORDER BY link_id,generation,provider_id)
+                    AS "provider_ids!",
+                (SELECT count(*) FROM maintained) AS "maintained!"
+            "#,
+            self.provider.as_str(),
+            !self.imports_paused,
+        )
+        .fetch_one(connection)
+        .await
+        .map_err(db_error)
+    }
+}
+
+struct MessageWindow {
+    link_ids: Vec<Uuid>,
+    generations: Vec<i64>,
+    provider_ids: Vec<String>,
+    maintained: i64,
+}
+
+pub(super) enum StreamWork {
+    Catalog,
+    Folder,
+    Live,
+}
+
+pub(super) struct StreamWindow {
+    pub(super) ids: Vec<Uuid>,
+    pub(super) maintained: i64,
 }

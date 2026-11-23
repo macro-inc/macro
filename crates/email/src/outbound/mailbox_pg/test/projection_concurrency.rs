@@ -1,10 +1,10 @@
 //! Concurrency contracts for projection claim snapshots, finishes and recovery.
 use super::*;
 use crate::domain::mailbox::MessageRetry;
+use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
 use crate::domain::mailbox::projection::{
     MailboxProjectionRepository, ProjectionClaim, ProjectionLease,
 };
-use crate::domain::mailbox::projection_recovery::ProjectionRecoveryRepository;
 use std::time::Duration;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -202,11 +202,11 @@ async fn a_cancelled_projection_probe_retains_its_attempt_fields(db: PgPool) {
     // An absolute timeout or shutdown drops the same future. Observe the
     // cancelled probe without waiting for its SQL statement to complete.
     drop(page);
-    let spans = telemetry.spans("email.projection.unpark_probe");
+    let spans = telemetry.spans("email.mailbox.unpark_probe");
     let span = spans.last().expect("the cancelled probe span must close");
-    assert_eq!(span["projection.unpark_attempts"], "1");
-    assert_eq!(span["projection.unpark_limit"], "64");
-    assert_eq!(span["projection.discovery_skipped"], "false");
+    assert_eq!(span["mailbox.unpark_attempts"], "1");
+    assert_eq!(span["mailbox.unpark_limit"], "64");
+    assert_eq!(span["mailbox.discovery_skipped"], "false");
 }
 
 async fn leased_head_and_new_successor(db: &PgPool) -> (PgMailboxSync, Box<ProjectionLease>, Uuid) {
@@ -412,7 +412,7 @@ async fn projection_finishes_serialize_before_taking_any_child_row_lock(db: PgPo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn projection_recovery_can_skip_a_discovery_timeout(db: PgPool) {
+async fn parked_work_recovery_can_skip_a_discovery_timeout(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
         "INSERT INTO email_projection_outbox (id,link_id,generation,payload,parked_at) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}',now())",

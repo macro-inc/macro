@@ -35,6 +35,7 @@ async fn an_inbox_health_wake_preserves_imap_provider_pacing(db: sqlx::PgPool) {
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.release_stream(&lease, SyncRetry::Provider(3600))
         .await
@@ -44,6 +45,7 @@ async fn an_inbox_health_wake_preserves_imap_provider_pacing(db: sqlx::PgPool) {
         repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
     let paced = sqlx::query_scalar!(

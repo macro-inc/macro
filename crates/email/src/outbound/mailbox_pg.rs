@@ -18,10 +18,11 @@ mod drafts;
 mod gmail_history;
 mod imap_notifications;
 mod ingest;
+mod leases;
 mod lifecycle;
+pub mod parked_work_recovery;
 mod progress;
 mod projection;
-pub mod projection_recovery;
 mod purge;
 mod reimport;
 mod settings;
@@ -100,7 +101,13 @@ impl PgMailboxSync {
         .execute(&mut *tx)
         .await
         .map_err(db_error)?;
-        sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        // The rollback binary knows only this key. Take it first, for Outlook
+        // alone, until that baseline is retired (mac-imap-smtp.89).
+        if self.provider == crate::domain::models::UserProvider::Outlook {
+            sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+                .fetch_one(&mut *tx).await.map_err(db_error)?;
+        }
+        sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.mailbox.mutation-claims:' || $1::text,0))", self.provider.as_str())
             .fetch_one(&mut *tx).await.map_err(db_error)?;
         Ok(tx)
     }
@@ -144,25 +151,24 @@ impl From<&sqlx::Error> for DatabaseFailure {
 
 impl MailboxSyncRepository for PgMailboxSync {
     async fn renew(&self, lease: SyncLease<'_>) -> Result<(), MailboxError> {
-        let updated = match lease {
-            SyncLease::Catalog(lease) => self.renew_stream(lease.id,lease.lease_id,lease.fence,lease.mailbox).await?,
-            SyncLease::Stream(lease) => self.renew_stream(lease.id,lease.lease_id,lease.fence,lease.mailbox).await?,
-            SyncLease::Message(lease) => {
-                sqlx::query!(r#"
-                    UPDATE email_message_reconciliation q SET lease_until = now() + interval '3 minutes'
-                    FROM email_links l WHERE q.link_id = $1 AND q.generation = $2 AND q.provider_id = $3
-                        AND q.lease_id = $4 AND q.lease_until > now() AND l.id = q.link_id
-                        AND l.sync_generation = q.generation AND l.grant_generation = $5 AND l.is_sync_active
-                "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id,lease.mailbox.grant_generation)
-                    .execute(&self.db).await.map_err(db_error)?.rows_affected()
+        let valid = match lease {
+            SyncLease::Catalog(lease) => {
+                self.renew_stream(lease.id, lease.lease_id, lease.fence, lease.mailbox)
+                    .await?
             }
+            SyncLease::Stream(lease) => {
+                self.renew_stream(lease.id, lease.lease_id, lease.fence, lease.mailbox)
+                    .await?
+            }
+            SyncLease::Message(lease) => self.renew_message(lease).await?,
         };
-        if updated != 1 {
+        if valid != 1 {
             return Err(MailboxError::Stale);
         }
         Ok(())
     }
-    async fn claim_catalog(&self, lease_id: Uuid) -> Result<Option<CatalogLease>, MailboxError> {
+
+    async fn claim_catalog(&self, lease_id: Uuid) -> Result<SyncClaim<CatalogLease>, MailboxError> {
         self.claim_catalog_lease(lease_id).await
     }
     async fn commit_catalog(
@@ -188,7 +194,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease_id: Uuid,
         kind: StreamKind,
-    ) -> Result<Option<StreamLease>, MailboxError> {
+    ) -> Result<SyncClaim<StreamLease>, MailboxError> {
         self.claim_stream_lease(lease_id, kind).await
     }
 
@@ -482,7 +488,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(paced.rows_affected() == 1)
     }
 
-    async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
+    async fn claim_message(&self, lease_id: Uuid) -> Result<SyncClaim<MessageLease>, MailboxError> {
         self.claim_message_lease(lease_id).await
     }
 
@@ -588,33 +594,6 @@ impl MailboxSyncRepository for PgMailboxSync {
             }
         }
         Ok(())
-    }
-}
-
-impl PgMailboxSync {
-    async fn renew_stream(
-        &self,
-        id: Uuid,
-        lease_id: Uuid,
-        fence: i64,
-        mailbox: MailboxKey,
-    ) -> Result<u64, MailboxError> {
-        Ok(sqlx::query!(
-            r#"
-            UPDATE email_sync_streams s SET lease_until = now() + interval '3 minutes'
-            FROM email_links l WHERE s.id = $1 AND s.lease_id = $2 AND s.fence = $3
-                AND s.lease_until > now() AND l.id = s.link_id AND l.sync_generation = s.generation
-                AND l.grant_generation = $4 AND l.is_sync_active
-        "#,
-            id,
-            lease_id,
-            fence,
-            mailbox.grant_generation
-        )
-        .execute(&self.db)
-        .await
-        .map_err(db_error)?
-        .rows_affected())
     }
 }
 

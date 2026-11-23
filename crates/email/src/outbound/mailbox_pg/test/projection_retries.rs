@@ -370,9 +370,15 @@ async fn failed_refresh_preserves_independent_message_effects_and_durable_retry(
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(&stream, &page()).await.unwrap();
-    let work = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     repo.ingest(
         &work,
         snapshot(link, work.provider_id.as_str(), Default::default(), "v1"),

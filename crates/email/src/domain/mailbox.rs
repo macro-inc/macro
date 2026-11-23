@@ -18,6 +18,8 @@ use tracing::{Instrument, Span};
 use uuid::Uuid;
 
 pub mod calendar_disconnect;
+pub mod claim;
+pub use claim::SyncClaim;
 pub mod catalog;
 pub mod commands;
 pub mod connection;
@@ -38,10 +40,9 @@ pub mod lifecycle;
 /// Link-maintenance queue decisions and reconnect notification selection.
 pub mod link_manager;
 pub mod live_pass;
+pub mod parked_work_recovery;
 pub mod progress;
 pub mod projection;
-pub mod projection_recovery;
-pub mod provider_repair;
 pub mod reimport;
 mod retry;
 pub mod settings;
@@ -306,7 +307,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn claim_catalog(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<CatalogLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<CatalogLease>, MailboxError>> + Send;
     /// Replaces a complete catalog only under its lease fence. Missing folders
     /// trigger message reconciliation, never deletion based on a partial scan.
     fn commit_catalog(
@@ -335,7 +336,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease_id: Uuid,
         kind: StreamKind,
-    ) -> impl Future<Output = Result<Option<StreamLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<StreamLease>, MailboxError>> + Send;
     /// Atomically records every changed/removed ID and advances the opaque
     /// cursor only while this generation and lease fence are still current.
     fn commit_page(
@@ -379,7 +380,7 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
     fn claim_message(
         &self,
         lease_id: Uuid,
-    ) -> impl Future<Output = Result<Option<MessageLease>, MailboxError>> + Send;
+    ) -> impl Future<Output = Result<SyncClaim<MessageLease>, MailboxError>> + Send;
     fn folders(
         &self,
         mailbox: MailboxKey,
@@ -521,13 +522,15 @@ impl<R, P, I> MailboxSyncService<R, P, I> {
 
 impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncService<R, P, I> {
     pub async fn discover_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_catalog(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("discover", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let span = tracing::info_span!(
             "outlook.sync.discover",
@@ -635,12 +638,14 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     /// other mailbox's new mail needs.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
         for _ in 0..PACED_CLAIMS_PER_TURN {
-            let Some(lease) = self
+            let lease = match self
                 .claim_folder_stream()
                 .await
                 .map_err(|error| claim_failed("enumerate", error))?
-            else {
-                return Ok(false);
+            {
+                SyncClaim::Acquired(lease) => lease,
+                SyncClaim::Progress => return Ok(true),
+                SyncClaim::Idle => return Ok(false),
             };
             let span = enumerate_span(&lease);
             adopt_notification_trace(&span, lease.notification.as_ref());
@@ -653,14 +658,17 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     }
 
     /// New mail goes first: a due live pass is claimed before any folder.
-    async fn claim_folder_stream(&self) -> Result<Option<StreamLease>, MailboxError> {
-        if self.live_pass.enabled()
-            && let Some(lease) = self
+    async fn claim_folder_stream(&self) -> Result<SyncClaim<StreamLease>, MailboxError> {
+        if self.live_pass.enabled() {
+            match self
                 .repo
                 .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::LivePass)
                 .await?
-        {
-            return Ok(Some(lease));
+            {
+                SyncClaim::Acquired(lease) => return Ok(SyncClaim::Acquired(lease)),
+                SyncClaim::Progress => return Ok(SyncClaim::Progress),
+                SyncClaim::Idle => {}
+            }
         }
         self.repo
             .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
@@ -793,13 +801,15 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
     }
 
     pub async fn reconcile_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
+        let lease = match self
             .repo
             .claim_message(macro_uuid::generate_uuid_v7())
             .await
             .map_err(|error| claim_failed("reconcile", error))?
-        else {
-            return Ok(false);
+        {
+            SyncClaim::Acquired(lease) => lease,
+            SyncClaim::Progress => return Ok(true),
+            SyncClaim::Idle => return Ok(false),
         };
         let span = tracing::info_span!(
             "outlook.sync.reconcile",

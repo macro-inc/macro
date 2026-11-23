@@ -16,12 +16,12 @@ struct RecoveryBudget {
     cancellation: CancellationToken,
 }
 
-impl email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository for RecoveryBudget {
+impl email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository for RecoveryBudget {
     async fn recover_page(
         &self,
         limit: u32,
     ) -> Result<
-        Option<email::domain::mailbox::projection_recovery::ProjectionRecoveryPage>,
+        Option<email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryPage>,
         MailboxError,
     > {
         let count = {
@@ -36,7 +36,7 @@ impl email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository f
             self.cancellation.cancel();
         }
         Ok(Some(
-            email::domain::mailbox::projection_recovery::ProjectionRecoveryPage {
+            email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryPage {
                 links_scanned: limit,
                 rows_unparked: 0,
                 failed_probes: 0,
@@ -47,16 +47,16 @@ impl email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository f
 }
 
 #[tokio::test(start_paused = true)]
-async fn projection_recovery_restores_its_budget_and_stops_during_progress() {
+async fn parked_work_recovery_restores_its_budget_and_stops_during_progress() {
     let cancellation = CancellationToken::new();
     let limits = Arc::new(Mutex::new(Vec::new()));
     let service =
-        email::domain::mailbox::projection_recovery::ProjectionRecoveryService(RecoveryBudget {
+        email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryService(RecoveryBudget {
             limits: limits.clone(),
             cancellation: cancellation.clone(),
         });
     let before = tokio::time::Instant::now();
-    run_projection_recovery(service, cancellation).await;
+    run_parked_work_recovery(service, cancellation).await;
     assert_eq!(
         *limits.lock().unwrap(),
         vec![64, 32, 16, 8, 4, 2, 1, 2, 4, 8, 16, 32, 64]

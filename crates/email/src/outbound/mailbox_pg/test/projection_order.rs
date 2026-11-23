@@ -1,8 +1,8 @@
 //! Projection ordering must survive both row-lock and retry windows.
 use super::*;
+use crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository;
 use crate::domain::mailbox::projection::MailboxProjectionRepository;
 use crate::domain::mailbox::projection::ProjectionClaim;
-use crate::domain::mailbox::projection_recovery::ProjectionRecoveryRepository;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPool) {
@@ -23,16 +23,18 @@ async fn a_slow_projection_unpark_halves_within_the_wrap_until_it_fits(db: PgPoo
         .execute(&db)
         .await
         .unwrap();
-    // Sequences survive savepoint rollback, exposing the attempted page sizes.
+    // Sequences survive savepoint rollback. With projection-only work, the
+    // shared quota's first UPDATE is 22, 11 or 6 rows for budgets 64, 32 or 16.
+    // Budget 16 can then borrow its remaining 10 rows without another timeout.
     sqlx::query!(
         r#"
         CREATE FUNCTION projection_unpark_budget() RETURNS trigger LANGUAGE plpgsql AS $$
         DECLARE amount bigint;
         BEGIN
             SELECT count(*) INTO amount FROM updated_rows;
-            IF amount>32 THEN
+            IF amount>16 THEN
                 PERFORM nextval('unpark_large_attempt'); PERFORM pg_sleep(0.4);
-            ELSIF amount>16 THEN
+            ELSIF amount>10 THEN
                 PERFORM nextval('unpark_medium_attempt'); PERFORM pg_sleep(0.4);
             ELSE PERFORM nextval('unpark_small_attempt');
             END IF;
@@ -350,7 +352,7 @@ async fn an_inactive_hot_projection_link_costs_one_recovery_probe(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_projection_recovery_page_is_fenced_and_rolls_back_its_cursor(db: PgPool) {
+async fn a_parked_work_recovery_page_is_fenced_and_rolls_back_its_cursor(db: PgPool) {
     let (repo, _) = fixture(&db).await;
     let mut owner = db.begin().await.unwrap();
     sqlx::query!("SELECT id FROM email_projection_unpark_sweep FOR UPDATE")

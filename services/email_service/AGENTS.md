@@ -103,7 +103,10 @@ the gateway `/email` prefix.
   `pubsub_workers`. It requires no enrichment-provider key or selection flag.
 - `src/mailbox_sync_worker.rs`: the Outlook mailbox loops (sync, projections,
   contacts, drafts, commands, settings, watches) and `run_health`, the
-  per-minute Outlook health snapshot.
+  per-minute Outlook health snapshot. `run_parked_work_recovery` shares one
+  bounded recovery cursor across parked projection, streams and reconciliation;
+  progress re-polls without an idle sleep, yielding and checking shutdown after
+  each bounded cycle.
 - `src/bin/`: standalone binaries — `pubsub_workers` (the queue consumer
   process), plus one-off backfill/cleanup scripts.
 
@@ -142,13 +145,6 @@ the gateway `/email` prefix.
 
 - `cargo test -p email_service` (`SQLX_OFFLINE` unset; the `label_write_sim`
   tests also need Redis, at `REDIS_URI` or `redis://127.0.0.1:6379`).
-- The ignored provider-repair scale test `ten_million_legacy_rows_are_repaired_in_bounded_committed_pages`
-  runs with `cargo test -p email_service ten_million_legacy_rows --lib -- --ignored --nocapture`.
-  It requires an owned scratch PostgreSQL server and creates its own SQLx test
-  database; allow its storage and runtime. It records all revised migration
-  timings, heap identities, exact query plans and bounded repair completion.
-  Never point the test at shared or hosted databases; set the URL inside the
-  devshell command. No validation-resume or ledger-editing path is needed.
 - `just check` from this directory runs `cargo check` with `SQLX_OFFLINE=true`.
   Run root `just check` as well for the shared code-rule and privacy checks.
   Changes to the boundary rules also run their
@@ -454,12 +450,12 @@ The inbox catalog exposes mailbox_issue independently of needs_reauth. Oversized
 
 Successful verified IMAP reconnect clears the old projected mailbox issue and retry deadline while advancing the same link generations. Preserve CredentialsUnreadable as saved-credential unavailability, never AuthRequired or definite SendUnavailable.
 
-`outbound/mailbox_provider_repair.rs` implements the domain's bounded legacy
-reconciliation repair. Pubsub uses one dedicated connection per replica until
-completion, 1,000-key pages, 250 ms pacing and durable fenced progress. Completing
-the scan marks the job complete without runtime DDL. See the
-[runbook](../../docs/runbooks/email-provider-repair.md); local databases that
-applied removed unmerged migrations require a fresh database for full migration.
+Legacy reconciliation routing is repaired by bounded claim-time relabeling,
+including work that becomes due later. There is no background provider repair
+job, dedicated repair connection or completion-marker gate. The derivation
+trigger covers new writes from old binaries. See the
+[routing runbook](../../docs/runbooks/email-provider-routing.md) for local
+migration compatibility.
 
 IMAP category deletion lists Organization metadata (flags and keywords), never
 full MIME bodies. An oversized message must not prevent removing its keyword.
@@ -475,7 +471,7 @@ pool, with its own singleton cursor lock and an absolute two-second page budget.
 Each link probe commits its cursor independently. Timed-out unpark attempts halve
 their row budget in fresh savepoints down to one row; a link still failing is
 skipped until wrap, with consecutive skips visible on the recovery span.
-It never borrows the IMAP catch-up or provider repair maintenance connection.
+It never borrows the IMAP catch-up maintenance connection.
 Connect/reconnect adapters clear one FIFO parking page after their parent update
 and finish bounded pages after commit; the periodic sweep recovers interrupted
 tails and old-binary activations without changing retry or provider due times.

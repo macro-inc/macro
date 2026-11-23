@@ -136,6 +136,16 @@ impl MailboxCredentialHealthRepository for PgMailboxSync {
                     .execute(&mut *tx).await.map_err(failed)?;
             }
         }
-        tx.commit().await.map_err(failed)
+        let recovered = current.needs_reauth && !reauth;
+        if recovered {
+            super::parked_work_recovery::unpark_link_page(&mut tx, mailbox.link_id, 64)
+                .await
+                .map_err(failed)?;
+        }
+        tx.commit().await.map_err(failed)?;
+        if recovered {
+            super::parked_work_recovery::resume_link(&self.db, mailbox.link_id).await;
+        }
+        Ok(())
     }
 }

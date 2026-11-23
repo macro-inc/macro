@@ -1,6 +1,25 @@
 use super::*;
 use std::time::Duration;
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_old_binary_draft_lease_is_not_claimed_again_after_its_commit(db: PgPool) {
+    let (sync, _, input, _) = setup(&db, false).await;
+    let mut old = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *old).await.unwrap();
+    sqlx::query!("UPDATE email_mailbox_drafts SET claimed_content=desired_content,state='running',lease_id=$2,lease_until=now()+interval '3 minutes' WHERE message_id=$1",input.db_id,Uuid::now_v7())
+        .execute(&mut *old).await.unwrap();
+    // The held-key probe tests establish exclusion. Once the old lease
+    // commits, a new claimer must respect it rather than lease it again.
+    old.commit().await.unwrap();
+    assert!(
+        sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
 async fn second_draft(
     db: &PgPool,
     repo: &EmailPgRepo,

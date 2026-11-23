@@ -47,7 +47,12 @@ async fn a_confirmed_outlook_send_is_in_sent_before_the_provider_copy_syncs(db: 
     sync.confirm_sent(&lease, &cp).await.unwrap();
     assert_eq!(sent_threads(&repo, link).await, vec![input.thread_db_id]);
 
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v2");
     remote.content.message.is_sent = true;
     sync.ingest(&work, remote).await.unwrap();

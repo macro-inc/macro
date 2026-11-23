@@ -438,7 +438,7 @@ impl ImapConnectionRepository for PgImapConnections {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
-        email::outbound::mailbox_pg::projection_recovery::unpark_link_page(
+        email::outbound::mailbox_pg::parked_work_recovery::unpark_link_page(
             &mut tx,
             attempt.binding.link_id,
             64,
@@ -520,7 +520,7 @@ impl ImapConnectionRepository for PgImapConnections {
         .await
         .map_err(failure)?;
         tx.commit().await.map_err(failure)?;
-        email::outbound::mailbox_pg::projection_recovery::resume_link(
+        email::outbound::mailbox_pg::parked_work_recovery::resume_link(
             &self.0,
             attempt.binding.link_id,
         )

@@ -271,10 +271,9 @@ projections, separate from `needs_reauth`; old binaries ignore them.
 
 Work provider columns use a constant Outlook default without a heap rewrite.
 Streams were Outlook-only; legacy reconciliation may include Gmail cleanup.
-The singleton `email_reconciliation_provider_backfill` retains a bounded leased
-cursor and completion marker. Cursor IDs have no foreign keys, so deleted links
-do not erase progress. Keep the derivation trigger active for old inserts during
-repair and rollback. Completing the bounded scan completes the job; it performs
-no runtime DDL or validation scan. See the [repair runbook](../../docs/runbooks/email-provider-repair.md)
-for the fresh-database requirement after removal of earlier unmerged migrations;
-never edit a preserved database's migration ledger to bypass that incompatibility.
+Claims relabel legacy reconciliation routing in bounded due windows; no
+background repair table, completion marker or runtime DDL is needed. Keep
+provider derivation active for old inserts and rollback. See the
+[routing runbook](../../docs/runbooks/email-provider-routing.md) for removed
+undeployed migrations and the preserved local preview's scoped adaptation;
+never edit its migration ledger to hide incompatibility.

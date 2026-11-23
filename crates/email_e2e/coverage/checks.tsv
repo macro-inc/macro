@@ -362,4 +362,5 @@ F-198	imap imap_connect_receive_isolate_and_send
 F-199	imap imap_connect_receive_isolate_and_send
 
 # Simulated old-binary activation; real worker sweep and exactly-once Kafka outcome.
-F-017	sync_projection_recovery outlook_legacy_activation_recovers_a_parked_message_once
+# Parks a real projection, folder stream and reconciliation retry; raw SQL activation simulates an old binary.
+F-017	sync_parked_work_recovery outlook_legacy_activation_recovers_a_parked_message_once

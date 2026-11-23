@@ -68,6 +68,7 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
         repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_some()
     );
     ingress
@@ -95,6 +96,7 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     MailboxWatchNotifications::new(repo.clone())
         .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
@@ -107,6 +109,7 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_some(),
         "the authenticated wakeup must survive the page commit"
     );
@@ -350,6 +353,7 @@ async fn a_change_notification_makes_a_folders_live_pass_due(db: PgPool) {
         .claim_stream(Uuid::new_v4(), StreamKind::LivePass)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(pass.folder.as_str(), "folder");
     assert!(pass.notification.is_some());
@@ -419,6 +423,7 @@ async fn subscription_writes_behind_a_share_locked_link_fail_fast(db: PgPool) {
         repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_none(),
         "a notification that failed must not wake the mailbox"
     );
@@ -456,6 +461,7 @@ async fn a_notification_keeps_a_due_folder_ahead_of_folders_due_after_it(db: PgP
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(
         claimed.mailbox.link_id, link,
@@ -554,6 +560,7 @@ async fn a_mailbox_still_importing_queues_no_notified_message(db: PgPool) {
         repo.claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
             .is_some(),
         "the folders are still woken"
     );
@@ -640,6 +647,7 @@ async fn a_folder_page_listing_a_notified_message_reads_it_as_its_own(db: PgPool
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
 
     repo.commit_page(

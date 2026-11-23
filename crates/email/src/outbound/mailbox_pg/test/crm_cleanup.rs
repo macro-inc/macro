@@ -37,6 +37,7 @@ async fn mail_deleted_at_outlook_leaves_its_correspondents_to_the_crm_cleanup(db
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -54,7 +55,12 @@ async fn mail_deleted_at_outlook_leaves_its_correspondents_to_the_crm_cleanup(db
     .await
     .unwrap();
     let mut work = Vec::new();
-    while let Some(lease) = repo.claim_message(Uuid::now_v7()).await.unwrap() {
+    while let Some(lease) = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+    {
         let mut message = snapshot(
             link,
             lease.provider_id.as_str(),

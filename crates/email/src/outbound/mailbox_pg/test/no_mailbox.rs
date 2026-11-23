@@ -136,11 +136,18 @@ async fn claimable(repo: &PgMailboxSync) -> Vec<&'static str> {
         .claim_stream(lease(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .is_some()
     {
         kinds.push("folder");
     }
-    if repo.claim_message(lease()).await.unwrap().is_some() {
+    if repo
+        .claim_message(lease())
+        .await
+        .unwrap()
+        .into_lease()
+        .is_some()
+    {
         kinds.push("message");
     }
     if AddressBookRepository::claim(repo, lease())
@@ -266,13 +273,20 @@ async fn an_account_graph_serves_no_mailbox_is_marked_and_only_discovery_looks_a
         .unwrap();
     assert!(inboxes.iter().all(|inbox| inbox.mailbox_unavailable));
 
-    // Only the mark held the work: without it every kind is claimed again.
+    // An old binary clears only the mark; its next bounded sweep must make
+    // every original kind claimable again without changing provider floors.
     sqlx::query!(
         "UPDATE email_links SET mailbox_unavailable_at = NULL WHERE id = $1",
         link
     )
     .execute(&db)
     .await
+    .unwrap();
+    crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository::recover_page(
+        &repo, 64,
+    )
+    .await
+    .unwrap()
     .unwrap();
     assert_eq!(claimable(&repo).await, EVERY_KIND);
     emulator.shutdown().await;
@@ -377,6 +391,7 @@ async fn a_discovery_that_lost_its_lease_does_not_mark_the_link(db: PgPool) {
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     // Its lease lapsed and another discovery took the catalog over.
     sqlx::query!(
@@ -402,6 +417,7 @@ async fn a_mark_behind_a_share_locked_link_fails_fast_then_marks(db: PgPool) {
         .claim_catalog(macro_uuid::generate_uuid_v7())
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
 
     // A CRM contact population holds the link this way for its whole transaction.

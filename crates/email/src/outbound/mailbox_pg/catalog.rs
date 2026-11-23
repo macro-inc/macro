@@ -1,149 +1,109 @@
 use super::*;
 use email_api_client::domain::models::FolderRole;
+use tracing::Instrument;
 
 impl PgMailboxSync {
     pub(super) async fn claim_catalog_lease(
         &self,
         lease_id: Uuid,
-    ) -> Result<Option<CatalogLease>, MailboxError> {
+    ) -> Result<SyncClaim<CatalogLease>, MailboxError> {
         let mut tx = self.begin_claim().await?;
-        let row = sqlx::query!(
-            r#"
-            WITH candidate AS (
-                SELECT
-                    s.id
-                FROM
-                    email_sync_streams s
-                    JOIN email_links l ON l.id = s.link_id
-                WHERE
-                    l.is_sync_active
-                    AND NOT l.needs_reauth
-                    AND l.provider = $2::text::email_user_provider_enum
-                    AND s.provider = $2::text::email_user_provider_enum
-                    AND s.generation = l.sync_generation
-                    AND s.kind = 'folder_catalog'
-                    AND s.next_run_at <= now()
-                    AND (s.provider_retry_at IS NULL OR s.provider_retry_at <= now())
-                    AND (s.next_run_at,
-                        s.id) >= (
-                        SELECT
-                            COALESCE(h.due, raw.due),
-                            COALESCE(h.id, raw.id)
-                        FROM (
-                            SELECT
-                                r.next_run_at AS due,
-                                r.id,
-                                r.link_id,
-                                r.generation,
-                                r.lease_until
-                            FROM
-                                email_sync_streams r
-                            WHERE
-                                r.provider = $2::text::email_user_provider_enum
-                                AND r.kind = 'folder_catalog'
-                                AND r.next_run_at <= now()
-                                AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                            ORDER BY
-                                r.next_run_at,
-                                r.id
-                            LIMIT 1) raw
-                    LEFT JOIN email_links ok ON ok.id = raw.link_id
-                        AND ok.sync_generation = raw.generation
-                        AND ok.provider = $2::text::email_user_provider_enum
-                        AND ok.is_sync_active
-                        AND NOT ok.needs_reauth
-                        AND (raw.lease_until IS NULL
-                            OR raw.lease_until < now())
-                    LEFT JOIN LATERAL (
-                        SELECT
-                            first.due,
-                            first.id
-                        FROM
-                            email_links l
-                            CROSS JOIN LATERAL (
-                                SELECT
-                                    scoped.due,
-                                    scoped.id
-                                FROM (
-                                    SELECT
-                                        r.next_run_at AS due,
-                                        r.id
-                                    FROM
-                                        email_sync_streams r
-                                    WHERE
-                                        r.link_id = l.id
-                                        AND r.generation = l.sync_generation
-                                        AND r.kind = 'folder_catalog'
-                                        AND r.next_run_at <= now()
-                                        AND (r.provider_retry_at IS NULL OR r.provider_retry_at <= now())
-                                        AND (r.lease_until IS NULL
-                                            OR r.lease_until < now())
-                                        OFFSET 0) scoped
-                                ORDER BY
-                                    scoped.due,
-                                    scoped.id
-                                LIMIT 1)
-                            first
-                        WHERE
-                            ok.id IS NULL
-                            AND l.provider = $2::text::email_user_provider_enum
-                            AND l.is_sync_active
-                            AND NOT l.needs_reauth
-                        ORDER BY
-                            first.due,
-                            first.id
-                        LIMIT 1) h ON true
-                WHERE
-                    ok.id IS NOT NULL
-                    OR h.id IS NOT NULL)
-                AND (s.lease_until IS NULL
-                    OR s.lease_until < now())
-            ORDER BY
-                s.next_run_at,
-                s.id
-            LIMIT 1
-            FOR UPDATE
-                OF s SKIP LOCKED
+        let window = self
+            .lock_stream_window(&mut tx, super::claims::StreamWork::Catalog)
+            .await?;
+        if window.ids.is_empty() {
+            tx.commit().await.map_err(db_error)?;
+            return Ok(SyncClaim::Idle);
+        }
+        // Empty polls have no span; a nonempty maintained window is work
+        // even when it does not produce a provider lease.
+        let claim_span = tracing::info_span!(
+            "email.mailbox.claim",
+            mailbox.provider = self.provider.as_str(),
+            mailbox.work = "folder_catalog",
+            mailbox.window_rows =
+                i64::try_from(window.ids.len()).map_err(|_| MailboxError::Persistence)?,
+            mailbox.window_maintained = window.maintained,
+            mailbox.link_id = tracing::field::Empty,
+            mailbox.outcome = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
+        let result: Result<SyncClaim<CatalogLease>, MailboxError> = async {
+            let row = sqlx::query!(
+                r#"
+            WITH keys AS MATERIALIZED (
+                SELECT unnest($1::uuid[]) AS id
+            ), candidate AS MATERIALIZED (
+                SELECT s.id FROM keys k
+                -- Keep one PK probe per held key, never a whole due-index scan.
+                CROSS JOIN LATERAL (
+                    SELECT s.id, s.next_run_at, s.provider_retry_at, s.lease_until
+                    FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
+                    WHERE s.id = k.id AND s.kind = 'folder_catalog'
+                    AND s.parked_at IS NULL
+                    AND s.provider = $3::text::email_user_provider_enum
+                    AND l.provider = s.provider AND l.sync_generation = s.generation
+                    AND l.is_sync_active AND NOT l.needs_reauth
+                    AND GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()
+                    LIMIT 1
+                ) s
+                ORDER BY GREATEST(s.next_run_at,
+                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),
+                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id
+                LIMIT 1
             )
-            UPDATE
-                email_sync_streams s
-            SET
-                lease_id = $1,
-                lease_until = now() + interval '3 minutes',
+            UPDATE email_sync_streams s
+            SET lease_id = $2, lease_until = now() + interval '3 minutes',
                 lease_started_at = clock_timestamp(),
                 leased_notification_revision = s.notification_revision,
-                provider_retry_at = NULL,
-                fence = fence + 1
-            FROM
-                candidate c,
-                email_links l
-            WHERE
-                s.id = c.id
-                AND l.id = s.link_id
-            RETURNING
-                s.id,
-                s.link_id,
-                s.generation,
-                l.grant_generation,
-                s.fence
+                provider_retry_at = NULL, fence = s.fence + 1
+            FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
+            RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.fence
             "#,
-            lease_id,
-            self.provider.as_str(),
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(db_error)?;
-        tx.commit().await.map_err(db_error)?;
-        Ok(row.map(|row| CatalogLease {
-            id: row.id,
-            mailbox: MailboxKey {
-                link_id: row.link_id,
-                sync_generation: row.generation,
-                grant_generation: row.grant_generation,
-            },
-            lease_id,
-            fence: row.fence,
-        }))
+                &window.ids,
+                lease_id,
+                self.provider.as_str(),
+            )
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            tx.commit().await.map_err(db_error)?;
+            Ok(match row {
+                Some(row) => SyncClaim::Acquired(CatalogLease {
+                    id: row.id,
+                    mailbox: MailboxKey {
+                        link_id: row.link_id,
+                        sync_generation: row.generation,
+                        grant_generation: row.grant_generation,
+                    },
+                    lease_id,
+                    fence: row.fence,
+                }),
+                None if window.maintained > 0 => SyncClaim::Progress,
+                None => SyncClaim::Idle,
+            })
+        }
+        .instrument(claim_span.clone())
+        .await;
+        let outcome = match &result {
+            Ok(SyncClaim::Acquired(lease)) => {
+                claim_span.record(
+                    "mailbox.link_id",
+                    tracing::field::display(lease.mailbox.link_id),
+                );
+                "acquired"
+            }
+            Ok(SyncClaim::Progress) => "progress",
+            Ok(SyncClaim::Idle) => "idle",
+            Err(_) => {
+                claim_span.record("otel.status_code", "ERROR");
+                "failed"
+            }
+        };
+        claim_span.record("mailbox.outcome", outcome);
+        result
     }
 
     pub(super) async fn commit_catalog_lease(
@@ -330,6 +290,9 @@ impl PgMailboxSync {
         .rows_affected()
             == 1;
         if found_mailbox {
+            super::parked_work_recovery::unpark_link_page(&mut tx, lease.mailbox.link_id, 64)
+                .await
+                .map_err(db_error)?;
             sqlx::query!(
                 r#"
                 UPDATE
@@ -362,6 +325,9 @@ impl PgMailboxSync {
         }
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
         tx.commit().await.map_err(db_error)?;
+        if found_mailbox {
+            super::parked_work_recovery::resume_link(&self.db, lease.mailbox.link_id).await;
+        }
         Ok(import_completed)
     }
 

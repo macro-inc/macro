@@ -229,3 +229,41 @@ async fn a_gmail_reconnect_behind_a_population_is_busy_then_reconnects(db: PgPoo
         .unwrap();
     assert_eq!(histories().await, 1);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn completed_google_consent_resumes_parked_work_after_clearing_reauth(db: PgPool) {
+    let owner = account(&db, "owner@example.com").await;
+    let inbox = held_inbox(&db, &owner).await;
+    sqlx::query!(
+        "UPDATE email_links SET needs_reauth=true WHERE id=$1",
+        inbox.id
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let event = macro_uuid::generate_uuid_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox(id,link_id,generation,payload,parked_at) SELECT $1,id,sync_generation,'{\"kind\":\"link_changed\"}'::jsonb,now() FROM email_links WHERE id=$2",
+        event,inbox.id,
+    ).execute(&db).await.unwrap();
+    let grants = GoogleConnectionGrants {
+        db: db.clone(),
+        calendar: std::sync::Arc::new(calendar_events::domain::service::CalendarService::new(
+            calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+        )),
+    };
+    grants.clear_reauth(inbox.id).await;
+    let state = sqlx::query!(
+        r#"SELECT l.needs_reauth,o.parked_at IS NULL AS "resumed!"
+        FROM email_links l JOIN email_projection_outbox o ON o.link_id=l.id WHERE o.id=$1"#,
+        event,
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(!state.needs_reauth);
+    assert!(
+        state.resumed,
+        "completed consent must resume parked work immediately"
+    );
+}

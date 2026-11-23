@@ -42,9 +42,15 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
     remote.content.message.is_sent = true;
     sync.ingest(&work, remote.clone()).await.unwrap();
@@ -77,7 +83,12 @@ async fn sending_in_outlook_is_not_attributed_to_the_last_macro_editor(db: PgPoo
         .unwrap();
     let cp = checkpoint(&lease, DraftStage::Ready);
     sync.settle_draft(&lease, &cp).await.unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
     remote.content.message.is_sent = true;
     sync.ingest(&work, remote).await.unwrap();
@@ -252,7 +263,12 @@ async fn conflict_resolution_rechecks_version_at_commit_and_requires_a_fresh_sen
         MessageOperationStatus::from(facts).state,
         MessageOperationState::Pending
     );
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(
         link,
         "a",
@@ -321,7 +337,12 @@ async fn confirmed_sent_copy_uses_provider_content_and_retains_local_recovery_da
     let mut cp = checkpoint(&lease, DraftStage::Confirming);
     cp.draft.as_mut().unwrap().is_draft = false;
     sync.confirm_sent(&lease, &cp).await.unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v2");
     remote.content.message.is_sent = true;
     remote.content.message.body_text = Some("Actually sent from Outlook".into());
@@ -417,7 +438,12 @@ async fn sync_draft(sync: &PgMailboxSync, link: Uuid) {
     sync.settle_draft(&lease, &checkpoint(&lease, DraftStage::Ready))
         .await
         .unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let state = MailboxState {
         is_draft: true,
         ..MailboxState::default()
@@ -492,9 +518,15 @@ async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_co
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(work.provider_id.as_str(), "a");
     let mut remote = snapshot(
         link,
@@ -729,9 +761,15 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
-    let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let work = sync
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let mut remote = snapshot(
         link,
         "a",

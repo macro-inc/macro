@@ -158,7 +158,11 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
     );
     assert_eq!(abandoned.attempts, 0);
     assert!(
-        repo.claim_message(Uuid::now_v7()).await.unwrap().is_none(),
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none(),
         "an abandoned message is not claimed again"
     );
     assert_eq!(
@@ -196,6 +200,7 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -208,7 +213,12 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
     )
     .await
     .unwrap();
-    let revived = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let revived = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(revived.provider_id.as_str(), "malformed");
     assert_eq!(revived.attempts, 1);
 }
@@ -359,7 +369,12 @@ async fn mailbox_wide_refusals_do_not_bring_a_message_closer_to_abandonment(db: 
 async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     queue(&db, link, "both", 0).await;
-    let import = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let import = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert!(import.is_import);
     // While the import reads it, a synced folder's page lists the message.
     sqlx::query!(
@@ -373,6 +388,7 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -399,7 +415,12 @@ async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(d
     .unwrap();
 
     assert!(row(&db, link, "both").await.delay_seconds <= 0);
-    let live = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let live = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert!(!live.is_import);
 }
 
@@ -508,24 +529,57 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
     };
 
     set_reauth(true).await.unwrap();
-    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
     assert!(
-        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        repo.claim_catalog(Uuid::now_v7())
             .await
             .unwrap()
+            .into_lease()
             .is_none()
     );
-    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
-
-    set_reauth(false).await.unwrap();
-    assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_some());
     assert!(
         repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
             .await
             .unwrap()
+            .into_lease()
+            .is_none()
+    );
+    assert!(
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
+
+    set_reauth(false).await.unwrap();
+    // The legacy flag-only write has no inline recovery; run its bounded sweep.
+    crate::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository::recover_page(
+        &repo, 64,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert!(
+        repo.claim_catalog(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
             .is_some()
     );
-    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_some());
+    assert!(
+        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .into_lease()
+            .is_some()
+    );
+    assert!(
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_some()
+    );
 }
 
 /// Ends the current claim as a worker that stopped would: its lease runs out.
@@ -549,7 +603,12 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
     let (repo, link) = fixture(&db).await;
     queue(&db, link, "fatal", 0).await;
     for claimed_after in 0..5 {
-        let lease = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        let lease = repo
+            .claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         assert_eq!(lease.unfinished_claims, claimed_after);
         expire_lease(&db, link, "fatal").await;
     }
@@ -561,7 +620,13 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
     let abandoned = row(&db, link, "fatal").await;
     assert!(abandoned.abandoned);
     assert_eq!(abandoned.attempts, 0);
-    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
     assert_eq!(
         outcomes(&telemetry),
         [("abandoned".into(), "unfinished".into(), None)]
@@ -580,6 +645,7 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -592,7 +658,12 @@ async fn a_message_whose_claims_keep_ending_unfinished_is_abandoned_unread_until
     )
     .await
     .unwrap();
-    let revived = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let revived = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(revived.provider_id.as_str(), "fatal");
     assert_eq!((revived.attempts, revived.unfinished_claims), (1, 0));
 }
@@ -602,16 +673,25 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
     let (repo, link) = fixture(&db).await;
     queue(&db, link, "changed", 0).await;
     for _ in 0..4 {
-        repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         expire_lease(&db, link, "changed").await;
     }
     // The fifth claim's worker stops too, but a new change to the message
     // arrives while it still holds the lease.
-    repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    repo.claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     let stream = repo
         .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     repo.commit_page(
         &stream,
@@ -637,7 +717,13 @@ async fn a_change_during_an_unfinished_claim_is_read_with_a_fresh_count(db: PgPo
 
     assert!(service.reconcile_once().await.unwrap());
 
-    assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -645,7 +731,11 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     let (repo, link) = fixture(&db).await;
     queue(&db, link, "flaky", 0).await;
     for _ in 0..4 {
-        repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+        repo.claim_message(Uuid::now_v7())
+            .await
+            .unwrap()
+            .into_lease()
+            .unwrap();
         expire_lease(&db, link, "flaky").await;
     }
     let service = sync(
@@ -665,6 +755,11 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     .await
     .unwrap();
 
-    let next = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    let next = repo
+        .claim_message(Uuid::now_v7())
+        .await
+        .unwrap()
+        .into_lease()
+        .unwrap();
     assert_eq!(next.unfinished_claims, 0);
 }

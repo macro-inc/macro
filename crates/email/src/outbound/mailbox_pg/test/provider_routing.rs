@@ -37,11 +37,13 @@ async fn legacy_writers_derive_the_provider_and_deletion_keeps_existing_ownershi
         .claim_stream(Uuid::from_u128(901), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     let message = imap
         .claim_message(Uuid::from_u128(902))
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
     assert_eq!(stream.mailbox.link_id, link);
     assert_eq!(stream.mailbox.sync_generation, 1);

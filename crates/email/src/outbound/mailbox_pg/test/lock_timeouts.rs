@@ -9,6 +9,7 @@ async fn a_page_commit_behind_a_share_locked_link_fails_fast_then_commits(db: Pg
         .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
+        .into_lease()
         .unwrap();
 
     // A CRM contact population holds the link this way for its whole transaction.

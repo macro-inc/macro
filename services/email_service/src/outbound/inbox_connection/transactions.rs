@@ -59,7 +59,7 @@ impl ConnectionTransactions for PgConnectionTransactions {
         tx.commit()
             .await
             .map_err(database("Failed to commit self-link bootstrap transaction"))?;
-        email::outbound::mailbox_pg::projection_recovery::resume_link(&self.0, link.id).await;
+        email::outbound::mailbox_pg::parked_work_recovery::resume_link(&self.0, link.id).await;
         Ok(link)
     }
 
@@ -83,7 +83,7 @@ impl ConnectionTransactions for PgConnectionTransactions {
         tx.commit()
             .await
             .map_err(database("Failed to commit link transaction"))?;
-        email::outbound::mailbox_pg::projection_recovery::resume_link(&self.0, link.id).await;
+        email::outbound::mailbox_pg::parked_work_recovery::resume_link(&self.0, link.id).await;
         Ok(link)
     }
 
@@ -157,7 +157,7 @@ async fn enable_gmail_sync_for(
     let link = email_db_client::links::insert::upsert_link(&mut *conn, link)
         .await
         .map_err(database("Failed to upsert link"))?;
-    email::outbound::mailbox_pg::projection_recovery::unpark_link_page(&mut *conn, link.id, 64)
+    email::outbound::mailbox_pg::parked_work_recovery::unpark_link_page(&mut *conn, link.id, 64)
         .await
         .map_err(database("Failed to unpark inbox projection"))?;
 

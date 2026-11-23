@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH imports AS MATERIALIZED (\n                SELECT s.id,\n                    GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz))\n                        - make_interval(secs => $5) AS claim_order\n                FROM email_sync_streams s\n                WHERE $3 AND s.provider = $1::text::email_user_provider_enum\n                    AND s.kind = 'mail_folder' AND NOT s.initial_complete\n                    AND s.parked_at IS NULL\n                    AND GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()\n                ORDER BY GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id\n                LIMIT 32 FOR UPDATE OF s SKIP LOCKED\n            ), ordinary AS MATERIALIZED (\n                SELECT s.id,\n                    GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz))\n                        - CASE WHEN $3 AND NOT s.initial_complete\n                            THEN make_interval(secs => $5) ELSE interval '0' END AS claim_order\n                FROM email_sync_streams s\n                WHERE s.provider = $1::text::email_user_provider_enum\n                    AND s.kind = $2 AND s.parked_at IS NULL\n                    AND GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)) <= now()\n                ORDER BY GREATEST(s.next_run_at,\n                        COALESCE(s.provider_retry_at, '-infinity'::timestamptz),\n                        COALESCE(s.lease_until, '-infinity'::timestamptz)), s.id\n                LIMIT $4 FOR UPDATE OF s SKIP LOCKED\n            ), due AS MATERIALIZED (\n                SELECT id, claim_order FROM imports\n                UNION SELECT id, claim_order FROM ordinary\n            ), inactive AS MATERIALIZED (\n                SELECT DISTINCT ON (l.id) l.*\n                FROM due d JOIN email_sync_streams s ON s.id = d.id\n                CROSS JOIN LATERAL (\n                    SELECT l.id, l.sync_generation, l.is_sync_active,\n                        l.needs_reauth, l.mailbox_unavailable_at\n                    FROM email_links l WHERE l.id = s.link_id AND (\n                        NOT l.is_sync_active OR l.needs_reauth\n                        OR ($2 <> 'folder_catalog' AND l.mailbox_unavailable_at IS NOT NULL)\n                        OR l.sync_generation <> s.generation)\n                    FOR SHARE OF l SKIP LOCKED\n                ) l\n                ORDER BY l.id\n            ), maintained AS (\n                UPDATE email_sync_streams s\n                SET parked_at = now()\n                FROM due d, email_links l LEFT JOIN inactive i ON i.id = l.id\n                WHERE s.id = d.id AND l.id = s.link_id\n                    AND (s.provider IS DISTINCT FROM l.provider OR (\n                        i.id IS NOT NULL AND (\n                        NOT i.is_sync_active OR i.needs_reauth\n                        OR ($2 <> 'folder_catalog' AND i.mailbox_unavailable_at IS NOT NULL)\n                        OR i.sync_generation <> s.generation)))\n                RETURNING s.id\n            )\n            SELECT ARRAY(SELECT id FROM due ORDER BY claim_order,id) AS \"ids!\",\n                (SELECT count(*) FROM maintained) AS \"maintained!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "maintained!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Bool",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "c00a7f0247a1eea1392265337791a938b310de74364e0996eef79194a4f4b07e"
+}

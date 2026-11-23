@@ -359,8 +359,9 @@ shared with the web app's suite) and backend entry points second.
 ## Start here
 
 - `tests/gmail.rs`, `tests/outlook.rs`: one worked scenario per provider.
-- `tests/sync_projection_recovery.rs`: simulated old-binary activation in the
-  scenario database, real sweep recovery and one MessageReceived publication;
+- `tests/sync_parked_work_recovery.rs`: simulated old-binary activation in the
+  scenario database, real sweep recovery of projection, folder stream and
+  reconciliation retry work, and one MessageReceived publication;
   no reconnect or inline unpark. PG unit cases cover bounds and lock edge cases.
 - `tests/journey_*.rs`: whole user journeys (compose, organise, read,
   account, sender rules, agent, provider parity, connect, follow-up),

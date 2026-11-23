@@ -125,27 +125,6 @@ async fn main() -> anyhow::Result<()> {
     let worker_tracker = TaskTracker::new();
     let event_broker_tracker = TaskTracker::new();
 
-    // One extra connection per replica only while rollout repair is pending.
-    // It never borrows normal sync/request capacity and closes on completion.
-    let provider_repair_pool = PgPoolOptions::new()
-        .min_connections(0)
-        .max_connections(1)
-        .acquire_timeout(std::time::Duration::from_secs(3))
-        .connect_lazy(&config.macro_db_url)
-        .context("invalid provider repair database configuration")?;
-    let provider_repair = email_service::outbound::mailbox_provider_repair::PgProviderRepair(
-        provider_repair_pool.clone(),
-    );
-    let provider_repair_stopped = worker_cancellation_token.clone();
-    worker_tracker.spawn(async move {
-        email_service::mailbox_provider_repair_worker::run(
-            provider_repair,
-            provider_repair_stopped,
-        )
-        .await;
-        provider_repair_pool.close().await;
-    });
-
     worker_tracker.spawn(email_service::backfill_outbox::run(
         db.clone(),
         sqs_client.clone(),
@@ -664,12 +643,14 @@ async fn main() -> anyhow::Result<()> {
     ));
     // Separate singleton cursor and shared projection pool: recovery never owns
     // the startup-critical IMAP catch-up or rollout repair connection.
-    worker_tracker.spawn(email_service::mailbox_sync_worker::run_projection_recovery(
-        email::domain::mailbox::projection_recovery::ProjectionRecoveryService(
-            mailbox_repository.clone(),
+    worker_tracker.spawn(
+        email_service::mailbox_sync_worker::run_parked_work_recovery(
+            email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryService(
+                mailbox_repository.clone(),
+            ),
+            worker_cancellation_token.clone(),
         ),
-        worker_cancellation_token.clone(),
-    ));
+    );
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_projections(
         email::domain::mailbox::projection::MailboxProjectionService::new(
             mailbox_repository,

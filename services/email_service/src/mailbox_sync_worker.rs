@@ -31,6 +31,9 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
         let cycle = async {
             let mut worked = reported(service.discover_once().await);
             for _ in 0..32 {
+                if cancellation.is_cancelled() {
+                    break;
+                }
                 let enumerated = reported(service.enumerate_once().await);
                 let reconciled = reported(service.reconcile_once().await);
                 worked |= enumerated || reconciled;
@@ -39,6 +42,11 @@ pub async fn run<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest>(
                 if !reconciled {
                     break;
                 }
+            }
+            // A hot queue can maintain one bounded window after another.
+            // Yield after the cycle instead of making idle time part of progress.
+            if worked {
+                tokio::task::yield_now().await;
             }
             worked
         };
@@ -194,11 +202,11 @@ pub async fn run_drafts<R, G, M>(
 }
 
 /// Recover parked links independently of provider sync and startup catch-up.
-pub async fn run_projection_recovery<R>(
-    service: email::domain::mailbox::projection_recovery::ProjectionRecoveryService<R>,
+pub async fn run_parked_work_recovery<R>(
+    service: email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryService<R>,
     cancellation: CancellationToken,
 ) where
-    R: email::domain::mailbox::projection_recovery::ProjectionRecoveryRepository,
+    R: email::domain::mailbox::parked_work_recovery::ParkedWorkRecoveryRepository,
 {
     let mut pages = 0u8;
     let mut limit = 64u32;
@@ -228,7 +236,7 @@ pub async fn run_projection_recovery<R>(
             Ok(None) => false,
             Err(error) => {
                 limit = (limit / 2).max(1);
-                tracing::warn!(?error, "projection recovery page deferred");
+                tracing::warn!(?error, "parked mailbox work recovery page deferred");
                 false
             }
         };
