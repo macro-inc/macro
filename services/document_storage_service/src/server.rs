@@ -1023,6 +1023,10 @@ async fn run_server() -> anyhow::Result<()> {
                 time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher::new(
                     macro_event_broker.clone(),
                 ),
+                time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates::new(
+                    conn_gateway_client.clone(),
+                    event_broker_tracker.clone(),
+                ),
             ),
         ),
         entity_access_service.clone(),

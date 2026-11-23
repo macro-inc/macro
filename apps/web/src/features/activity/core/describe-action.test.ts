@@ -27,6 +27,15 @@ const DESCRIBE_CASES: Array<[ActivityAction, string]> = [
   ],
   [{ kind: 'call-started' }, 'started a call'],
   [{ kind: 'responded' }, 'responded'],
+  [
+    {
+      kind: 'time-logged',
+      minutes: 90,
+      entryDate: '2026-11-20',
+      source: 'manual',
+    },
+    'logged 1h 30m',
+  ],
 ];
 
 const ENTITY_CASES: Array<
@@ -43,6 +52,15 @@ const ENTITY_CASES: Array<
   ],
   [{ kind: 'messaged' }, { verb: 'sent a message', connector: 'in' }],
   [{ kind: 'responded' }, { verb: 'responded', connector: 'to' }],
+  [
+    {
+      kind: 'time-logged',
+      minutes: 90,
+      entryDate: '2026-11-20',
+      source: 'manual',
+    },
+    { verb: 'logged 1h 30m', connector: 'on' },
+  ],
   [
     { kind: 'participant-added', participant: 'macro|sarah@example.com' },
     { verb: 'added a participant', connector: 'to' },
@@ -95,6 +113,15 @@ describe('describeAction', () => {
     ],
     [{ kind: 'call-started' }, 'started 5 calls'],
     [{ kind: 'unknown', tag: 'transmogrified' }, 'transmogrified 5 times'],
+    [
+      {
+        kind: 'time-logged',
+        minutes: 90,
+        entryDate: '2026-11-20',
+        source: 'manual',
+      },
+      'logged 1h 30m in 5 entries',
+    ],
   ];
 
   it.each(COUNTED_CASES)('folds a run count into %j', (action, expected) => {
@@ -164,6 +191,37 @@ describe('describeRun', () => {
         to: 'C',
       },
       countLabel: '2 changes',
+    });
+  });
+
+  it('counts a run of logged time in entries and reads its total', () => {
+    const newest = event('b', {
+      kind: 'time-logged',
+      minutes: 30,
+      entryDate: '2026-11-21',
+      source: 'timer',
+    });
+    const oldest = event('a', {
+      kind: 'time-logged',
+      minutes: 45,
+      entryDate: '2026-11-20',
+      source: 'manual',
+    });
+    expect(
+      describeRun({
+        kind: 'run',
+        events: [newest, oldest],
+        first: newest,
+        last: oldest,
+      })
+    ).toEqual({
+      action: {
+        kind: 'time-logged',
+        minutes: 75,
+        entryDate: '2026-11-21',
+        source: 'timer',
+      },
+      countLabel: '2 entries',
     });
   });
 });
