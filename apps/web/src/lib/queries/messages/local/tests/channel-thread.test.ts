@@ -224,6 +224,69 @@ describe('createLocalChannelThread', () => {
     );
   });
 
+  it('loads a thread again from the server when the device lost it', async () => {
+    let covered = true;
+    const host = fakeHost(
+      () =>
+        devicePage(
+          covered
+            ? [channelMessageKey(second.id), channelMessageKey(first.id)]
+            : [],
+          { covered }
+        ),
+      { records: [root, first, second] }
+    );
+    const sync = runtime();
+    const fetchPage = serverThread();
+
+    const thread = createRoot(() =>
+      createLocalChannelThread(
+        { host, runtime: sync, fetchPage },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      )
+    );
+    await vi.waitFor(() => expect(thread.replies()).toHaveLength(2));
+    expect(fetchPage).not.toHaveBeenCalled();
+
+    // Evicted: the next change finds no coverage.
+    covered = false;
+    sync.change();
+
+    await vi.waitFor(() => expect(fetchPage).toHaveBeenCalled());
+    await vi.waitFor(() => expect(host.commits).toHaveLength(1));
+    expect(thread.replies()).toHaveLength(2);
+  });
+
+  it('reads a thread longer than one key read from the device', async () => {
+    const replies = Array.from({ length: 620 }, (_, index) =>
+      graphqlMessage(index + 10, { threadId: ROOT_ID })
+    );
+    const newestFirst = replies.map((reply) => channelMessageKey(reply.id));
+    newestFirst.reverse();
+    const pages = [];
+    for (let at = 0; at < newestFirst.length; at += 100) {
+      const keys = newestFirst.slice(at, at + 100);
+      pages.push(
+        devicePage(keys, {
+          olderCursor: at + 100 < newestFirst.length ? `cursor-${at}` : null,
+        })
+      );
+    }
+    const host = fakeHost(pages, { records: [root, ...replies] });
+    const read = vi.spyOn(host, 'readRecordsByKeys');
+
+    const loaded = await loadChannelThread(host, CHANNEL_ID, ROOT_ID);
+
+    if (loaded === 'unsupported') throw new Error('unexpected');
+    expect(loaded.thread.replies).toHaveLength(620);
+    for (const [args] of read.mock.calls) {
+      expect(args.keys.length).toBeLessThanOrEqual(500);
+    }
+  });
+
   it('loads nothing until enabled', async () => {
     const host = fakeHost(() => devicePage([]), { records: [root] });
 

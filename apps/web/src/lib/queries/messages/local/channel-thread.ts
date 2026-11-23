@@ -4,6 +4,7 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
   MAX_CHANNEL_TIMELINE_PAGE,
+  MAX_RECORD_SELECTION_PAGE_SIZE,
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/index';
@@ -82,14 +83,21 @@ async function readMessages(
   keys: readonly string[]
 ): Promise<ChannelMessageFieldsFragment[] | undefined> {
   if (keys.length === 0) return [];
-  const { records } = await readRecordsByKeys(host, messageRecords(), [
-    ...keys,
-  ]);
+  // The engine reads at most a selection page of keys per request.
+  const chunks: string[][] = [];
+  for (let at = 0; at < keys.length; at += MAX_RECORD_SELECTION_PAGE_SIZE) {
+    chunks.push(keys.slice(at, at + MAX_RECORD_SELECTION_PAGE_SIZE));
+  }
+  const reads = await Promise.all(
+    chunks.map((chunk) => readRecordsByKeys(host, messageRecords(), chunk))
+  );
   const byKey = new Map(
-    records.map(({ recordKey, record }) => [
-      recordKey,
-      record as ChannelMessageFieldsFragment,
-    ])
+    reads.flatMap(({ records }) =>
+      records.map(({ recordKey, record }) => [
+        recordKey,
+        record as ChannelMessageFieldsFragment,
+      ])
+    )
   );
   const messages: ChannelMessageFieldsFragment[] = [];
   for (const key of keys) {
@@ -404,7 +412,17 @@ export function createLocalChannelThread(
         const current = token;
         const device = await readDeviceThread(deps.host, channelId, root);
         if (current !== token) return;
-        if (device.kind === 'thread') show(device.thread);
+        if (device.kind === 'unsupported') {
+          onUnsupported();
+          return;
+        }
+        if (device.kind === 'miss') {
+          // Reset or evicted meanwhile: load it again, from the server. The
+          // replies shown stay until the new ones replace them.
+          await load(root);
+          return;
+        }
+        show(device.thread);
       } while (rereadAgain);
     } finally {
       rereading = false;
