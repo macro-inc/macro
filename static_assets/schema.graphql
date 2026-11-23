@@ -633,7 +633,8 @@ type CompleteMutationRoot {
 
 """
 Root subscription object combining realtime Soup, notification,
-activity, work feed and notification inbox adapters.
+activity, work feed, notification inbox, registered work and channel
+timeline adapters.
 """
 type CompleteSubscriptionRoot {
 	"""
@@ -699,6 +700,13 @@ type CompleteSubscriptionRoot {
 	and refetches.
 	"""
 	registeredWorkUpdates(accountIds: [ID!]!): [GraphqlRegisteredWorkPatch!]!
+	"""
+	Subscribe to committed changes in every channel the authenticated user
+	participates in. Updates come from memory: subscribing reads nothing
+	from the database. A subscription that falls behind ends with an error;
+	subscribe again and catch up each held channel with `channelChanges`.
+	"""
+	channelTimelineUpdates: GraphqlChannelTimelineUpdate!
 }
 
 """
@@ -4232,6 +4240,36 @@ type GraphqlChannelTimelinePage {
 	Channel change sequence read before this page.
 	"""
 	seq: String!
+}
+
+"""
+One committed change to a channel the viewer participates in: exactly what
+`channelChanges` returns for this one sequence.
+"""
+type GraphqlChannelTimelineUpdate {
+	"""
+	Channel whose sequence this change advanced.
+	"""
+	channelId: ID!
+	"""
+	The channel's sequence once this change is applied, encoded as in
+	`channelChanges`. Updates can arrive out of order, and a sequence can
+	have no update; a gap is closed with `channelChanges`.
+	"""
+	seq: String!
+	"""
+	The changed message and, for a reply, its root with the thread
+	summary, tombstones included.
+	"""
+	messages: [GraphqlChannelMessage!]!
+	"""
+	The recorded timeline activity.
+	"""
+	activities: [GraphqlChannelTimelineActivity!]!
+	"""
+	A changed entry that no longer exists.
+	"""
+	removedIds: [ID!]!
 }
 
 """

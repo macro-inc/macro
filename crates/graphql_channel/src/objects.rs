@@ -1,7 +1,7 @@
 //! Cacheable channel messages and embedded timeline/thread values.
 use async_graphql::{Enum, ID, Json, SimpleObject, Union};
 use chrono::{DateTime, SecondsFormat, Utc};
-use messages::domain::{models::*, ports::*};
+use messages::domain::{changes::ChannelMessageChange, models::*, ports::*};
 use uuid::Uuid;
 
 use crate::inputs::{encode_cursor, encode_reply_cursor};
@@ -247,6 +247,16 @@ impl GraphqlChannelMessage {
         });
         message.call = call.map(Into::into);
         message
+    }
+
+    /// Map a changed message as a changes page and a live update carry it.
+    pub(crate) fn from_change(change: ChannelMessageChange, channel_id: Uuid) -> Self {
+        match change {
+            ChannelMessageChange::Root { message, call } => {
+                Self::from_item(*message, channel_id, call)
+            }
+            ChannelMessageChange::Reply { message } => Self::from_message(*message, channel_id),
+        }
     }
 }
 

@@ -12,6 +12,8 @@ separately from Soup's thread-root projection.
 - `src/reads.rs`: request context using the REST messages service and access boundary.
 - `src/inputs.rs`: lossless microsecond/UUID timeline and import-aware reply cursors.
 - `src/objects.rs`: message, thread, call, and activity response mapping.
+- `src/subscription.rs`: `channelTimelineUpdates`, the viewer's live channel
+  changes in the `channelChanges` shape, streamed from request data.
 - `src/lib.rs`: channel activity mutation and typed read errors.
 
 ## Boundaries
@@ -20,6 +22,8 @@ separately from Soup's thread-root projection.
 - `complete_graph` flattens the read fields onto `GraphqlUser`.
 - DSS inserts `ChannelGraphqlContext` for both HTTP and websocket requests, using
   the same primary-backed messages service as REST.
+- DSS inserts `ChannelTimelineSubscriptions` over its process-local
+  `ChannelTimelineFanout`; the subscription resolver reads no database.
 
 ## Checks
 
@@ -34,6 +38,8 @@ separately from Soup's thread-root projection.
   watermark, coalescing, removed identities, and changed-reply roots.
 - Reply keys include `import_order NULLS LAST`; timestamps alone do not describe their order.
 - Preserve microseconds in timestamps and cursors; message UUIDs break equal-time ties.
+- Map messages with `GraphqlChannelMessage::from_change` in both the changes
+  page and the live update, so the two never diverge.
 - Keep `id` for global identities; thread metadata and attachment references are embedded.
 
 ## Related

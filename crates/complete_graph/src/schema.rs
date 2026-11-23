@@ -27,7 +27,7 @@ use graphql_activity::{
 use graphql_calendar::{CalendarMutationRoot, GraphqlCalendarQuery};
 use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
-    NoOpChannelActivityMutationService,
+    ChannelTimelineSubscriptionRoot, NoOpChannelActivityMutationService,
 };
 use graphql_common::{GraphqlSoupEntityType, parse_id, require_authorized_user};
 use graphql_email::{
@@ -151,7 +151,8 @@ impl<
 }
 
 /// Root subscription object combining realtime Soup, notification,
-/// activity, work feed and notification inbox adapters.
+/// activity, work feed, notification inbox, registered work and channel
+/// timeline adapters.
 #[derive(MergedSubscription)]
 pub struct CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>(
     SoupSubscriptionRoot<R, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
@@ -160,6 +161,7 @@ pub struct CompleteSubscriptionRoot<R, NS, AS, EAS, Auth, St, NR, PR, ER, FR, AR
     WorkFeedSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     NotificationInboxSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
     RegisteredWorkSubscriptionRoot<SoupEdges<NR, PR, ER, FR, AR, AcR>>,
+    ChannelTimelineSubscriptionRoot,
 )
 where
     R: SoupRealtimeSubscriptionService,
@@ -493,6 +495,7 @@ where
             WorkFeedSubscriptionRoot::default(),
             NotificationInboxSubscriptionRoot::default(),
             RegisteredWorkSubscriptionRoot::default(),
+            ChannelTimelineSubscriptionRoot,
         ),
     )
     .finish()
