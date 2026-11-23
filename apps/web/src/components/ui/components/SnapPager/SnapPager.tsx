@@ -116,6 +116,7 @@ export function createSnapPager(
   let noScrollFrame: number | undefined;
   let recoveredWithoutScroll = false;
   let attached: HTMLDivElement | undefined;
+  let measuredWidth = 0;
   let touchHeld = false;
   let pointerHeld = false;
   let nativeScroll = false;
@@ -418,8 +419,25 @@ export function createSnapPager(
     else reportSettle();
   };
 
+  const recoverResize = () => {
+    if (!attached) return false;
+    const width = attached.clientWidth;
+    if (!measuredWidth) {
+      measuredWidth = width;
+      return false;
+    }
+    if (width === measuredWidth) return false;
+    measuredWidth = width;
+    // A resize can emit scroll before ResizeObserver measures the new width.
+    // Re-center a committed page before treating that scroll as a gesture.
+    if (phase() !== 'idle' || gestureHeld() || nativeScroll || pending !== 0)
+      return false;
+    jump(attached, middle * width);
+    return true;
+  };
   const onScroll = () => {
     clearNoScrollTimer();
+    if (recoverResize()) return;
     if (locked()) return;
     if (
       recoveredWithoutScroll &&
@@ -460,6 +478,7 @@ export function createSnapPager(
   };
   const onScrollEnd = () => {
     clearNoScrollTimer();
+    if (recoverResize()) return;
     if (gestureHeld()) {
       nativeEndedWhileHeld = true;
       return;
@@ -532,6 +551,7 @@ export function createSnapPager(
     attachViewport(element) {
       if (attached) detach(attached);
       attached = element;
+      measuredWidth = element.clientWidth;
       setViewport(element);
       element.addEventListener('wheel', onWheel, { passive: true });
       element.addEventListener('scroll', onScroll);
@@ -595,9 +615,10 @@ export function createSnapPager(
       if (value) setPhase('idle');
     },
     resize() {
-      if (!attached || gestureHeld() || (phase() !== 'idle' && !locked()))
-        return;
-      jump(attached, middle * attached.clientWidth);
+      if (!attached) return;
+      measuredWidth = attached.clientWidth;
+      if (gestureHeld() || (phase() !== 'idle' && !locked())) return;
+      jump(attached, middle * measuredWidth);
     },
   };
 }

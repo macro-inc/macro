@@ -26,7 +26,10 @@ function mountCalendar(
     { calendar: Calendar; element: HTMLDivElement }
   >();
   const viewport = document.createElement('div');
-  Object.defineProperty(viewport, 'clientWidth', { value: 100 });
+  Object.defineProperty(viewport, 'clientWidth', {
+    value: 100,
+    configurable: true,
+  });
   viewport.scrollTo = vi.fn(
     (options?: ScrollToOptions | number, _y?: number) => {
       if (typeof options === 'object')
@@ -362,6 +365,70 @@ describe('calendar native paging', () => {
     ).toBe(420);
   });
 
+  it.each([
+    ['timeGridDay', 2],
+    ['timeGridWeek', 8],
+    ['dayGridMonth', 1],
+  ] as const)(
+    'keeps the active %s period and hour after split and window resize',
+    async (view, day) => {
+      const { pager, pages, viewport, calendar } = mountCalendar(view);
+      viewport.scrollLeft = 300;
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(200);
+      const date = calendar().getDate().toDateString();
+      const active = pages
+        .get(pager().activePageId())
+        ?.element.querySelector<HTMLElement>(
+          '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+        );
+      if (view !== 'dayGridMonth') {
+        if (!active) throw new Error('Active time grid missing');
+        active.scrollTop = 480;
+        active.dispatchEvent(new Event('scroll'));
+        // FullCalendar can reset its internal hour scroller during updateSize.
+        for (const { calendar: api, element } of pages.values()) {
+          const scroller = element.querySelector<HTMLElement>(
+            '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+          );
+          vi.spyOn(api, 'updateSize').mockImplementation(() => {
+            if (scroller) scroller.scrollTop = 0;
+          });
+        }
+      }
+      for (const width of [160, 240]) {
+        Object.defineProperty(viewport, 'clientWidth', {
+          value: width,
+          configurable: true,
+        });
+        viewport.dispatchEvent(new Event('scroll'));
+        pager().pager.resize();
+        pager().updateSize();
+        expect(viewport.scrollLeft).toBe(width * 2);
+        expect(pager().pager.position()).toBe(1);
+        expect(pager().activeDate().getDate()).toBe(day);
+        expect(calendar().getDate().toDateString()).toBe(date);
+        if (active) expect(active.scrollTop).toBe(480);
+      }
+    }
+  );
+
+  it('keeps the last hour when FullCalendar resets the scroller before the resize callback', async () => {
+    const { pager, pages } = mountCalendar('timeGridDay');
+    await vi.advanceTimersByTimeAsync(200);
+    const scroller = pages
+      .get(pager().activePageId())
+      ?.element.querySelector<HTMLElement>(
+        '.fc-timegrid .fc-scroller-harness-liquid > .fc-scroller'
+      );
+    if (!scroller) throw new Error('Active time grid missing');
+    scroller.scrollTop = 480;
+    scroller.dispatchEvent(new Event('scroll'));
+    scroller.scrollTop = 0;
+    pager().updateSize();
+    expect(scroller.scrollTop).toBe(480);
+  });
+
   it('keeps the visible three-day page until adjacent date selection settles', async () => {
     const { pager, calendar, viewport, pages } =
       mountCalendar('timeGridThreeDay');
@@ -412,6 +479,7 @@ describe('calendar native paging', () => {
     pager().navigateToDate(new Date(2026, 10, 20));
     pager().nextPeriod();
     viewport.scrollLeft = 300;
+
     viewport.dispatchEvent(new Event('scrollend'));
     await vi.advanceTimersByTimeAsync(200);
     expect(pager().navigationDate().getDate()).toBe(21);

@@ -368,7 +368,17 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     registerPage,
     isActive: (id: CalendarPageId) => activePageId() === id,
     updateSize: () => {
+      // Read the last user scroll event, not FullCalendar's already-reset scroller.
+      const scrollTop = sharedScrollTop;
       for (const handle of handles.values()) handle.api()?.updateSize();
+      // FullCalendar can reset the hour scroller while recomputing its layout.
+      // Restore the captured active position to every page after all updates.
+      if (scrollTop === undefined) return;
+      sharedScrollTop = scrollTop;
+      for (const handle of handles.values()) {
+        const scroller = timeGridScroller(handle.element());
+        if (scroller) scroller.scrollTop = scrollTop;
+      }
     },
     setPagingLocked: pager.setLocked,
     gotoDate,

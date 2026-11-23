@@ -360,6 +360,107 @@ describe('SnapPager', () => {
     expect(element.scrollLeft).toBe(400);
   });
 
+  it('re-snaps the committed page after width changes without a navigation', () => {
+    const moved = vi.fn();
+    const pager = createSnapPager({ onSettle: moved });
+    const element = viewport();
+    pager.attachViewport(element);
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+    for (const width of [160, 240]) {
+      Object.defineProperty(element, 'clientWidth', {
+        value: width,
+        configurable: true,
+      });
+      pager.resize();
+      expect(element.scrollLeft).toBe(width * 2);
+      element.dispatchEvent(new Event('scrollend'));
+      expect(pager.position()).toBe(1);
+    }
+    expect(moved).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-snaps the current page when the viewport ResizeObserver measures a new width', () => {
+    let notifyResize!: () => void;
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          notifyResize = () => callback([], this);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const pager = createSnapPager();
+    HTMLDivElement.prototype.scrollTo = vi.fn(function (
+      this: HTMLDivElement,
+      options?: ScrollToOptions | number,
+      _y?: number
+    ) {
+      if (typeof options === 'object')
+        this.scrollLeft = options.left ?? this.scrollLeft;
+    });
+    const { container } = render(() => (
+      <SnapPager.Root controller={pager}>
+        <SnapPager.Viewport>Pages</SnapPager.Viewport>
+      </SnapPager.Root>
+    ));
+    const element = container.querySelector<HTMLDivElement>('.snap-pager')!;
+    let width = 100;
+    Object.defineProperty(element, 'clientWidth', { get: () => width });
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+    for (const nextWidth of [160, 240]) {
+      width = nextWidth;
+      notifyResize();
+      expect(element.scrollLeft).toBe(nextWidth * 2);
+      element.dispatchEvent(new Event('scrollend'));
+      expect(pager.position()).toBe(1);
+    }
+    Reflect.deleteProperty(HTMLDivElement.prototype, 'scrollTo');
+  });
+
+  it('does not interpret a resize scroll event as a page turn before measurement', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    element.scrollLeft = 300;
+    element.dispatchEvent(new Event('scrollend'));
+    Object.defineProperty(element, 'clientWidth', {
+      value: 160,
+      configurable: true,
+    });
+    element.dispatchEvent(new Event('scroll'));
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+    expect(element.scrollLeft).toBe(320);
+  });
+
+  it('retains native gesture completion through a resize', () => {
+    const pager = createSnapPager();
+    const element = viewport();
+    pager.attachViewport(element);
+    element.dispatchEvent(new Event('touchstart'));
+    element.scrollLeft = 270;
+    element.dispatchEvent(new Event('scroll'));
+    Object.defineProperty(element, 'clientWidth', {
+      value: 160,
+      configurable: true,
+    });
+    pager.resize();
+    expect(pager.position()).toBe(0);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    element.scrollLeft = 480;
+    element.dispatchEvent(new Event('scroll'));
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+    expect(element.scrollLeft).toBe(320);
+  });
+
   it('keeps a later held swipe from being reversed by an earlier date request', () => {
     const moved = vi.fn();
     const canceled = vi.fn();
