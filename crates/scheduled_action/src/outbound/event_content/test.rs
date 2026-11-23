@@ -151,7 +151,28 @@ fn channel_messages_are_plain_text_from_their_sender() {
 }
 
 #[test]
-fn replies_go_to_the_root_of_the_message_thread() {
+fn a_message_says_whether_it_is_a_reply_and_which_post_started_its_thread() {
+    let mut root = message("Launch plan");
+    root.id = Uuid::now_v7();
+    let value = message_json(&root);
+    assert_eq!(value["is_reply"], false);
+    assert_eq!(value["root_id"], json!(root.id));
+
+    let mut reply = message("Looks good");
+    reply.id = Uuid::now_v7();
+    reply.thread_id = Some(root.id);
+    let value = message_json(&reply);
+    assert_eq!(value["is_reply"], true);
+    assert_eq!(value["root_id"], json!(root.id));
+
+    // A root stored with itself as its thread is still a top-level post.
+    root.thread_id = Some(root.id);
+    assert_eq!(message_json(&root)["is_reply"], false);
+}
+
+/// Routines written before `root_id` read `thread_id`, set on every message.
+#[test]
+fn thread_id_keeps_its_old_value_for_routines_that_read_it() {
     let mut root = message("Launch plan");
     root.id = Uuid::now_v7();
     assert_eq!(message_json(&root)["thread_id"], json!(root.id));
@@ -160,6 +181,18 @@ fn replies_go_to_the_root_of_the_message_thread() {
     reply.id = Uuid::now_v7();
     reply.thread_id = Some(root.id);
     assert_eq!(message_json(&reply)["thread_id"], json!(root.id));
+}
+
+#[test]
+fn every_message_names_its_sender() {
+    let mut guest = message("Joining from the lobby");
+    guest.sender_id = "guest|01928f3e-6a2b-7c3d-8e4f-00000000e7a1"
+        .to_owned()
+        .try_into()
+        .unwrap();
+    assert!(message_json(&guest)["sender"].is_string());
+    guest.guest_name = Some("Visitor".into());
+    assert_eq!(message_json(&guest)["sender"], "Visitor");
 }
 
 fn task() -> DocumentBasic {
