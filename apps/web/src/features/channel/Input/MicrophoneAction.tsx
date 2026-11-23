@@ -102,7 +102,7 @@ function MicrophoneMenu(props: {
         <MicrophoneIcon class="size-5 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content
-        class="min-w-56 max-w-80"
+        class="min-w-40 max-w-80"
         onCloseAutoFocus={(event: Event) => {
           const run = pending;
           pending = undefined;
@@ -121,14 +121,9 @@ function MicrophoneMenu(props: {
             <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
               <TextAaIcon class="size-4" />
             </span>
-            <span class="min-w-0 flex-1">
-              <Dropdown.ItemLabel class="block truncate">
-                {t('channelComposer.dictate')}
-              </Dropdown.ItemLabel>
-              <Dropdown.ItemDescription class="block truncate text-sm text-ink-muted">
-                {t('channelComposer.dictateDescription')}
-              </Dropdown.ItemDescription>
-            </span>
+            <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+              {t('channelComposer.dictate')}
+            </Dropdown.ItemLabel>
           </Dropdown.Item>
           <Dropdown.Item
             onSelect={() => {
@@ -138,14 +133,9 @@ function MicrophoneMenu(props: {
             <span class="flex size-5 shrink-0 items-center justify-center text-ink-muted">
               <WaveformIcon class="size-4" />
             </span>
-            <span class="min-w-0 flex-1">
-              <Dropdown.ItemLabel class="block truncate">
-                {t('channelComposer.voiceMemo')}
-              </Dropdown.ItemLabel>
-              <Dropdown.ItemDescription class="block truncate text-sm text-ink-muted">
-                {t('channelComposer.voiceMemoDescription')}
-              </Dropdown.ItemDescription>
-            </span>
+            <Dropdown.ItemLabel class="min-w-0 flex-1 truncate">
+              {t('channelComposer.voiceMemo')}
+            </Dropdown.ItemLabel>
           </Dropdown.Item>
         </Dropdown.Group>
       </Dropdown.Content>
