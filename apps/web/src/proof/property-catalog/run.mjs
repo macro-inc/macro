@@ -90,6 +90,7 @@ const CONFIG = {
   optimism: E.OPTIMISM === '1', // optimistic states only (optimism.mjs), no sequences
 };
 let DUMP_LEFT = Number(E.DUMP || 0);
+const DUMP_KIND = E.DUMP_KIND ? new RegExp(E.DUMP_KIND) : null;
 // DUMP_OPEN=1: dump only the differences a clean run fails on (diff, state)
 const DUMP_OPEN = E.DUMP_OPEN === '1';
 // DUMP_LANE=n: every comparison of that lane but the equal ones, open or not
@@ -655,8 +656,9 @@ let FRESH_PAIR = null;
 function freshOf(snap, kind) {
   const caller = /^caller\.(.+)$/.exec(kind);
   if (caller) return snap?.callers?.[caller[1]];
-  const reader = /^reader(.+)\.data$/.exec(kind);
-  return reader ? snap?.[reader[1]]?.data : undefined;
+  const reader = /^reader(\{.*\})(\.data)?$/.exec(kind);
+  if (!reader) return undefined;
+  return reader[2] ? snap?.[reader[1]]?.data : snap?.[reader[1]];
 }
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
   if ((cls === 'diff' || cls === 'state') && OLD_STALE?.has(kind)) {
@@ -664,12 +666,18 @@ function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
     bump(R.oldStale.byOp, here().op ?? level, kind.replace(UUID_RE, '<id>'));
   }
   bump(R.classes, level, cls);
+  // DUMP_KIND=<regex>: also every equal comparison of a matching kind (within DUMP_LANE, if set)
+  if (cls === 'equal' && DUMP_KIND && DUMP_LEFT > 0 && DUMP_KIND.test(kind) && (DUMP_LANE === null || String(here().lane) === DUMP_LANE)) {
+    DUMP_LEFT--;
+    const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
+    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh, write: LAST_WRITE })}\n`);
+  }
   if (cls === 'equal') return;
   // DUMP=n: the first n differences in full, both sides, to out/<run>/dump.jsonl
   if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format' && (DUMP_LANE !== null ? String(here().lane) === DUMP_LANE : !DUMP_OPEN || cls === 'diff' || cls === 'state')) {
     DUMP_LEFT--;
     const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
-    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh })}\n`);
+    fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh, write: LAST_WRITE })}\n`);
   }
   const ex = (R.examples[`${level}:${cls}`] ??= []);
   // The first difference that survives normalization (timestamps, tie order).
@@ -1816,6 +1824,8 @@ function transport(name, s, res) {
 // A request in the window that never got an answer, or a server failure:
 // a write refused for that reason is not refused on its merits.
 const transportFailed = (s, res) => s.tap.window.some((e) => e.failed || (e.status !== null && e.status >= 500)) || res.error?.network === true;
+// The step's write as each side ran it, for the dump only.
+let LAST_WRITE = null;
 async function write(pair, actor, name, vars) {
   const acct = pair[actor];
   const nvars = tr(pair, vars);
@@ -1829,6 +1839,10 @@ async function write(pair, actor, name, vars) {
   }
   const [o, n] = await Promise.all([ev(acct.old, 'mutate', name, vars), ev(acct.neu, 'mutate', name, nvars)]);
   for (const s of [acct.old, acct.neu]) s.tap.mode = 'pass';
+  if (DUMP_LEFT > 0) {
+    const brief = (x) => (x.ok ? { ok: true } : { ok: false, message: x.message ?? null });
+    LAST_WRITE = { name, actor, vars, old: brief(o), neu: brief(n) };
+  }
   const to = transport(name, acct.old, o);
   const tn = transport(name, acct.neu, n);
   const problems = [...to.problems.map((p) => `old: ${p}`), ...tn.problems.map((p) => `new: ${p}`)];
