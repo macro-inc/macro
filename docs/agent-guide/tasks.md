@@ -607,7 +607,8 @@ Layout, primary sort, sort direction, and grouping are reflected in `tasks.layou
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
 Explicit URL values override saved preferences; back/forward navigation
 restores the corresponding controls, including the layout.
-Columns are 336px wide. Each column loads its next page when the end of its cards
+Columns are 21rem wide, so they follow the text size (336px at the default 16px).
+Each column loads its next page when the end of its cards
 scrolls into view; a failed page shows **Retry** at the bottom of that column.
 Ungrouped results, such as a search, load their next page from the end of any
 column.

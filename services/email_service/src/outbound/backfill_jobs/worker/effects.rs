@@ -82,7 +82,7 @@ impl BackfillEffects for BackfillWorkerEffects {
     }
     async fn acquire_crm(&self, team: Uuid) -> anyhow::Result<Option<Self::Permit>> {
         self.redis_client
-            .acquire_crm_population_slot(team)
+            .try_acquire_crm_population_slot(team)
             .await
             .map_err(anyhow::Error::new)
     }
