@@ -1,5 +1,6 @@
 import { deferredGate } from '@core/util/debounce';
 import { useMutationState } from '@tanstack/solid-query';
+import { createMemo } from 'solid-js';
 import { channelCacheHost } from './local/channel-flag';
 
 /** Identifies send-message mutations in the mutation cache. */
@@ -12,10 +13,21 @@ export const UNSENT_AFTER_MS = 5000;
  * Whether this session has been trying to send the message for longer than
  * `UNSENT_AFTER_MS`: it is waiting for a connection or for its channel to
  * let it in. A send that is refused for good rolls back instead. Nothing is
- * marked while channels send over REST (`enable-channel-local-sync` off).
+ * marked, or watched, while channels send over REST
+ * (`enable-channel-local-sync` off): every message row would otherwise follow
+ * every mutation.
  */
 export function useMessageUnsent(messageId: () => string): () => boolean {
-  const sending = useMutationState(() => {
+  const local = createMemo(() => channelCacheHost() !== undefined);
+  const sending = createMemo(() =>
+    local() ? watchSend(messageId) : undefined
+  );
+  return deferredGate(() => (sending()?.().length ?? 0) > 0, UNSENT_AFTER_MS);
+}
+
+/** The pending sends of one message; call under the owner that keeps it. */
+function watchSend(messageId: () => string) {
+  return useMutationState(() => {
     const id = messageId();
     return {
       filters: {
@@ -27,10 +39,6 @@ export function useMessageUnsent(messageId: () => string): () => boolean {
       select: (mutation) => mutation.mutationId,
     };
   });
-  return deferredGate(
-    () => sending().length > 0 && channelCacheHost() !== undefined,
-    UNSENT_AFTER_MS
-  );
 }
 
 export function optimisticIdOf(variables: unknown): string | undefined {

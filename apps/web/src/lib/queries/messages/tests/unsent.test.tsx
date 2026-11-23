@@ -77,6 +77,20 @@ describe('useMessageUnsent', () => {
 
     expect(view.container.textContent).toBe('ok');
   });
+
+  it('follows no mutation while channels send over REST', () => {
+    channelCacheHost.mockReturnValue(undefined);
+    const client = new QueryClient();
+    const subscribe = vi.spyOn(client.getMutationCache(), 'subscribe');
+    render(() => (
+      <QueryClientProvider client={client}>
+        <Probe id="m1" />
+        <Probe id="m2" />
+      </QueryClientProvider>
+    ));
+
+    expect(subscribe).not.toHaveBeenCalled();
+  });
 });
 
 function fireAndForgetMutate(
