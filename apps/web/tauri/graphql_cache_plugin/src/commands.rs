@@ -52,6 +52,13 @@ fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
     })
 }
 
+/// The trace id of a well-formed `traceparent`, for a receive span's
+/// `upstream.trace_id`; `None` for anything else, since the iOS subscriber
+/// panics on a NUL in a span field.
+fn upstream_trace_id(traceparent: Option<&str>) -> Option<&str> {
+    people_trace_correlation(traceparent)?.split('-').nth(1)
+}
+
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
         .0
@@ -113,11 +120,12 @@ pub async fn graphql_cache_init<R: Runtime>(
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
+/// The span logs no error: one can quote the bundle's SDL. The webview records
+/// the returned error, and the storage open logs its own.
 #[tracing::instrument(
     name = "graphql_cache.ipc.receive",
     skip_all,
-    fields(graphql_cache.ipc.command = "init", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
-    err
+    fields(graphql_cache.ipc.command = "init", upstream.trace_id = upstream_trace_id(traceparent.as_deref()))
 )]
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
