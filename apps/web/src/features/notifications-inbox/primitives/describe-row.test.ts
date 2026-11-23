@@ -309,10 +309,206 @@ describe('describeInboxCard', () => {
       what: 'Can we ship Friday?',
       body: 'Ana: On it',
     });
-    expect(itemsOf(row).map((item) => item.by)).toEqual([
-      'Ana replied',
-      'Leo reacted',
+    expect(itemsOf(row)).toMatchObject([
+      { by: 'Ana replied', text: 'On it' },
+      { by: 'Leo', text: 'Reacted +1 to: Can we ship Friday?' },
     ]);
+  });
+
+  it('lays out a reaction as who reacted, the reaction and message, then where', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'root',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🧑🏽‍💻',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted 🧑🏽‍💻 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names no place for a reaction in a direct message', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('1', 'channel_message_reaction', 'Leo', {
+          channelType: 'directMessage',
+          channelName: 'Leo',
+          messageId: 'root',
+          messageContent: 'Lunch?',
+          emoji: '❤️',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Leo',
+      what: 'Reacted ❤️ to: Lunch?',
+      body: undefined,
+    });
+  });
+
+  it('gathers reactions to one message into one line of every emoji', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const card = describeInboxCard(
+      stack(
+        'channel_thread',
+        [
+          reaction('3', 'Ana', '🎉'),
+          reaction('2', 'Leo', '👍'),
+          reaction('1', 'Sam', '🎉'),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana, Leo and Sam',
+      what: 'Reacted 🎉 👍 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('shows the newest of reactions to several messages, in the same layout', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Design review moved to 3pm',
+          emoji: '👀',
+        }),
+        sent('1', 'channel_message_reaction', 'Leo', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Can we ship Friday?',
+          emoji: '🎉',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
+  });
+
+  it('speaks only for the newest reaction when older notifications are not loaded', () => {
+    const reaction = (id: string, by: string, emoji: string) =>
+      sent(id, 'channel_message_reaction', by, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji,
+      });
+    const row = stack(
+      'channel_thread',
+      [reaction('3', 'Ana', '🎉'), reaction('2', 'Leo', '👍')],
+      'root'
+    );
+    // An older reply sits beyond the loaded notifications.
+    const card = describeInboxCard({ ...row, count: 3 }, people);
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Can we ship Friday?',
+      body: '#launch',
+    });
+  });
+
+  it('names someone for a reaction without a sender', () => {
+    const row = stack('channel_messages', [
+      sent('1', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'root',
+        messageContent: 'Can we ship Friday?',
+        emoji: '👍',
+      }),
+    ]);
+    expect(itemsOf(row).map((item) => item.by)).toEqual(['Someone']);
+    expect(describeInboxCard(row, people).who).toBe('Someone');
+  });
+
+  it('shows the newest reaction of a row that mixes it with messages', () => {
+    const card = describeInboxCard(
+      stack('channel_messages', [
+        sent('2', 'channel_message_reaction', 'Ana', {
+          ...channel,
+          messageId: 'first',
+          messageContent: 'Release branch is cut',
+          emoji: '🎉',
+        }),
+        sent('1', 'channel_message_send', 'Leo', {
+          ...channel,
+          messageId: 'second',
+          messageContent: 'Anyone around?',
+        }),
+      ]),
+      people
+    );
+    expect(card).toEqual({
+      who: 'Ana',
+      what: 'Reacted 🎉 to: Release branch is cut',
+      body: '#launch',
+    });
+  });
+
+  it('keeps a mention row about the mention when a reaction is newest', () => {
+    const card = describeInboxCard(
+      stack(
+        'channel_mention',
+        [
+          sent('2', 'channel_message_reaction', 'Ana', {
+            ...channel,
+            messageId: 'reply',
+            messageContent: 'My reply',
+            emoji: '👀',
+          }),
+          sent('1', 'channel_mention', 'Leo', {
+            ...channel,
+            messageId: 'root',
+            messageContent: 'Can you check this?',
+          }),
+        ],
+        'root'
+      ),
+      people
+    );
+    expect(card.what).toBe('Can you check this?');
+  });
+
+  it('never credits an older reactor with the newest reaction', () => {
+    const row = stack('channel_messages', [
+      sent('2', 'channel_message_reaction', null as never, {
+        ...channel,
+        messageId: 'second',
+        messageContent: 'Design review moved to 3pm',
+        emoji: '👀',
+      }),
+      sent('1', 'channel_message_reaction', 'Leo', {
+        ...channel,
+        messageId: 'first',
+        messageContent: 'Can we ship Friday?',
+        emoji: '🎉',
+      }),
+    ]);
+    expect(describeInboxCard(row, people)).toEqual({
+      who: 'Someone',
+      what: 'Reacted 👀 to: Design review moved to 3pm',
+      body: '#launch',
+    });
   });
 
   it('skips the middle line when no notification carries the root', () => {

@@ -30,6 +30,11 @@ class NotifPreview:
         self.body = body
         self._created_at = created_at
 
+    # Mirrors NotifPreview::body_lines in src/lib.rs.
+    def body_lines(self) -> list[str]:
+        lines = (line.removesuffix("\r") for line in self.body.split("\n"))
+        return [line for line in lines if line.strip()]
+
     # Askama calls notif.created_at.format(…); in the converted template we
     # expose a pre-formatted string instead (see the regex below).
     @property
