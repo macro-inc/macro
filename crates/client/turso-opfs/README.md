@@ -19,6 +19,17 @@ directly; `ConnectedOpfsSession::try_close()` exclusively owns and proves that
 transition. Turso open/connect failures poison and require worker replacement
 followed by a fresh lock acquisition and `recovery_wipe()`.
 
+`connect()` also caps Turso's page cache at `PAGE_CACHE_PAGES` (8,000 pages,
+about 31 MiB at the default 4 KiB page size; native Turso keeps 2,000) and
+turns on cache spilling. Turso's wasm default is 100,000 pages, and the
+worker's linear memory never shrinks, so the cache otherwise grew with the
+database. A
+transaction that dirties more pages than the cap appends some of them to the
+WAL as uncommitted frames before COMMIT, as native Turso does; ROLLBACK
+discards them. Without spilling, such a transaction leaves nothing to evict and
+each further page scans the whole cache. Clean pages beyond the cap are read
+again from OPFS.
+
 `OpfsOwner::adopt(&previous)` moves an older build's complete main/WAL pair to
 this owner's paths, so a new storage version opens the old database and upgrades
 it instead of starting empty. `previous` is a `PreviousLock` from

@@ -752,7 +752,6 @@ export default {
       'Setelan tidak ditemukan. Coba “tanda tangan”, “tema”, atau “kalender”.',
     backToSettings: 'Kembali ke setelan',
     closeSettings: 'Tutup setelan',
-    goToTab: 'Buka tab setelan {{number}}',
     editProfile: 'Edit profil',
     logOut: 'Logout',
     yourAccount: 'Akun Anda',

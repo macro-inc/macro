@@ -23,8 +23,8 @@ vi.mock('@components/app/split-layout/layout', () => ({
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'owner' }));
-vi.mock('@queries/channel/channels', () => ({
-  invalidateListChannels: vi.fn(),
+vi.mock('@queries/channel/directory', () => ({
+  refreshChannelDirectory: vi.fn(async () => undefined),
 }));
 vi.mock('@queries/channel/get-or-create-dm', () => ({
   useGetOrCreateDirectMessageMutation: () => ({ mutateAsync: mocks.direct }),

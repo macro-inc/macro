@@ -32,6 +32,27 @@ mod test;
 
 const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
 
+/// Pages the connection keeps in Turso's page cache (about 31 MiB at the
+/// default 4 KiB page size).
+///
+/// Turso's wasm default is 100,000 pages (about 400 MB), and wasm linear memory
+/// never shrinks, so the cache grew with the database until the worker held
+/// hundreds of megabytes. Native Turso defaults to 2,000 pages; the browser keeps
+/// four times that, because a page the cache dropped is read again from the
+/// OPFS sync handle on the one worker that answers every tab.
+///
+/// The cap needs spilling, which `connect` turns on with it. Without spilling,
+/// a transaction that dirties more pages than the cap leaves nothing to evict,
+/// and Turso scans the whole cache before admitting each further page: clearing
+/// a 200 MB cache took 12 minutes instead of 2.4 seconds. A spill
+/// appends dirty pages to the WAL before COMMIT, as native Turso does by
+/// default; they stay uncommitted frames until the commit frame, and ROLLBACK
+/// discards them.
+/// Wasm Turso ships with spilling off because its asynchronous OPFS binding
+/// cannot wait for a spill's write mid-statement; the sync access handles here
+/// finish every write before it returns.
+const PAGE_CACHE_PAGES: i64 = 8_000;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = performance, js_name = now)]
@@ -1649,6 +1670,25 @@ impl OpfsSession {
                 return Err(ConnectFailure::poisoned(turso_error("connect", error)));
             }
         };
+        if let Err((operation, error)) = connection
+            .execute(format!("PRAGMA cache_size = {PAGE_CACHE_PAGES}"))
+            .map_err(|error| ("cache_size", error))
+            .and_then(|()| {
+                connection
+                    .execute("PRAGMA cache_spill = ON")
+                    .map_err(|error| ("cache_spill", error))
+            })
+        {
+            let _ = connection.close();
+            drop(connection);
+            drop(database);
+            self.armed = false;
+            poison(
+                self.owner,
+                "Turso page cache setup failure made session health uncertain",
+            );
+            return Err(ConnectFailure::poisoned(turso_error(operation, error)));
+        }
         if let Err(error) = REGISTRY.with(|registry| {
             registry
                 .borrow_mut()

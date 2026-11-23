@@ -3575,6 +3575,32 @@ export type ChannelAccessRequestedMetadata = {
 };
 
 /**
+ * A bot's membership in a channel, stored under the principal `bot|<id>`.
+ */
+export type ChannelBotParticipant = {
+    /**
+     * Participant bot id.
+     */
+    bot_id: string;
+    /**
+     * Channel id for the participant membership.
+     */
+    channel_id: string;
+    /**
+     * Timestamp when the bot joined the channel.
+     */
+    joined_at: string;
+    /**
+     * Timestamp when the bot left the channel, if any.
+     */
+    left_at?: string | null;
+    /**
+     * Participant role in the channel.
+     */
+    role: ParticipantRole;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Created`].
  */
 export type ChannelCreatedMetadata = {
@@ -3640,7 +3666,10 @@ export type ChannelFilters = {
     /**
      * Filter by whether the requesting user is an active participant of the channel.
      * Presence of this filter also widens the candidate set to team channels of the
-     * user's teams that they have not joined, so `false` matches those channels.
+     * user's teams that they have not joined, so `false` matches those channels,
+     * and, when the filter admits only channels it names by id, to public
+     * channels too. Soup listings apply the filter and its widening; channel
+     * search (`/search`) reads only the channels the user joined and ignores it.
      * None to ignore (participant channels only, today's default).
      */
     is_participant?: boolean | null;
@@ -3986,7 +4015,9 @@ export type ChannelTopicEvent = {
 } | {
     event_type: 'channel.updated';
     /**
-     * A channel's metadata was updated (rename).
+     * A channel's settings were patched (a rename, a team conversion, or an
+     * auto-join change), or the bots in it changed; the names are equal when
+     * it was not a rename.
      */
     metadata: ChannelUpdatedMetadata;
 } | {
@@ -4033,7 +4064,8 @@ export type ChannelUpdatedMetadata = {
      */
     channel_id: string;
     /**
-     * New channel name.
+     * Stored channel name after the update; equal to `previous_name` when
+     * the update was not a rename.
      */
     channel_name?: string | null;
     /**
@@ -4071,6 +4103,10 @@ export type ChannelWebhookResponse = {
  */
 export type ChannelWithParticipants = {
     /**
+     * Bots that are participants in the channel.
+     */
+    bot_participants?: Array<ChannelBotParticipant>;
+    /**
      * Channel metadata.
      */
     channel: Channel;
@@ -4080,7 +4116,7 @@ export type ChannelWithParticipants = {
      */
     is_participant?: boolean;
     /**
-     * Participants in the channel.
+     * Participants in the channel. Bots are in `bot_participants`.
      */
     participants: Array<ChannelParticipant>;
 };
@@ -13982,6 +14018,10 @@ export type InitiativePropertySnapshot = {
      */
     priority?: string | null;
     /**
+     * Start timestamp, or unset.
+     */
+    startDate?: string | null;
+    /**
      * Status option id, or unset.
      */
     status?: string | null;
@@ -18217,10 +18257,14 @@ export type PropertyValue = {
      */
     value: string;
 } | {
+    /**
+     * True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone.
+     */
+    has_time?: boolean;
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -19452,6 +19496,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {

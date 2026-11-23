@@ -18,6 +18,7 @@ export function NewHomeTabs(props: {
   onChange: (tab: NewHomeTab) => void;
   /** Unread notifications: the Notifications tab's dot. */
   unread: boolean;
+  ref?: (element: HTMLElement) => void;
 }) {
   const [frame, setFrame] = createSignal<HTMLDivElement>();
   const size = createElementSize(frame);
@@ -56,6 +57,7 @@ export function NewHomeTabs(props: {
       class="shrink-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) pb-1"
     >
       <Tabs
+        ref={props.ref}
         aria-label={t('home.views')}
         fullWidth
         iconOnly={iconOnly()}

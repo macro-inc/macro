@@ -19,10 +19,10 @@ uuid = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 turso-opfs = { path = "../turso-opfs" }
-turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid", "conn_raw_api"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid"] }
+turso_core = { workspace = true, features = ["fs", "pure-rust-crypto", "uuid", "conn_raw_api"] }
 
 [dev-dependencies]
 chrono = { workspace = true }

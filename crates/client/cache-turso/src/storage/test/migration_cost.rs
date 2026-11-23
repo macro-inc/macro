@@ -35,7 +35,7 @@ fn written_bytes() -> u64 {
         .unwrap()
 }
 
-fn count(connection: &Arc<Connection>, sql: &str) -> i64 {
+fn count(connection: &Db, sql: &str) -> i64 {
     required_i64(&driver::query(connection, sql, vec![]).unwrap()[0], 0).unwrap()
 }
 
@@ -237,7 +237,7 @@ fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
         OpenOptions::new(Arc::new(SqliteDialect)),
     )
     .unwrap();
-    let connection = database.connect().unwrap();
+    let connection = Db::uncached(database.connect().unwrap());
     let mut phases = Vec::new();
     driver::execute(&connection, "BEGIN IMMEDIATE", vec![]).unwrap();
     for sql in crate::storage::migration::UPGRADE_11_TO_12 {

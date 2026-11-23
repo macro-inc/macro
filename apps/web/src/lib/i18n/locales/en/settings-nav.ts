@@ -46,7 +46,6 @@ export default {
     'No settings found. Try “signature”, “theme”, or “calendar”.',
   backToSettings: 'Back to settings',
   closeSettings: 'Close settings',
-  goToTab: 'Go to settings tab {{number}}',
   editProfile: 'Edit profile',
   logOut: 'Log out',
   yourAccount: 'Your account',

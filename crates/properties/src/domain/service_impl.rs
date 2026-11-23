@@ -2,6 +2,7 @@
 
 mod helpers;
 mod options;
+mod start_and_due;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
@@ -782,6 +783,16 @@ where
             self.handle_initiative_assignees_property(access, &property_value)
                 .await?;
         }
+
+        let property_value = self
+            .keep_start_on_or_before_due(
+                access,
+                entity_type,
+                property_definition_id,
+                property_value,
+                source.as_ref(),
+            )
+            .await?;
 
         let snapshot = self
             .repository

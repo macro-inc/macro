@@ -48,7 +48,7 @@ async fn populate(storage: &mut TursoStorage) {
 }
 
 /// Every schema object with its definition, minus root pages.
-fn schema_rows(connection: &Arc<Connection>) -> Vec<String> {
+fn schema_rows(connection: &Db) -> Vec<String> {
     driver::query(
         connection,
         "SELECT type, name, tbl_name, sql FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
@@ -62,7 +62,7 @@ fn schema_rows(connection: &Arc<Connection>) -> Vec<String> {
 
 /// What the frozen-schema checks read: columns, keys, foreign keys and index
 /// columns of every table, independent of how the DDL text was written.
-fn schema_fingerprint(connection: &Arc<Connection>) -> Vec<String> {
+fn schema_fingerprint(connection: &Db) -> Vec<String> {
     let mut lines = Vec::new();
     let tables = driver::query(
         connection,
@@ -96,7 +96,7 @@ fn schema_fingerprint(connection: &Arc<Connection>) -> Vec<String> {
 }
 
 /// Every row of every table, in a stable order.
-fn table_rows(connection: &Arc<Connection>) -> Vec<String> {
+fn table_rows(connection: &Db) -> Vec<String> {
     let mut lines = Vec::new();
     let tables = driver::query(
         connection,
@@ -129,7 +129,7 @@ fn table_rows(connection: &Arc<Connection>) -> Vec<String> {
     lines
 }
 
-fn stored_storage_version(connection: &Arc<Connection>) -> i64 {
+fn stored_storage_version(connection: &Db) -> i64 {
     let rows = driver::query(
         connection,
         "SELECT CAST(value AS INTEGER) FROM meta WHERE key = 'storage_schema_version'",
@@ -198,7 +198,7 @@ fn upgrade_reports_the_previous_version_once() {
             OpenOptions::new(Arc::new(SqliteDialect)),
         )
         .unwrap();
-        let connection = raw.connect().unwrap();
+        let connection = Db::uncached(raw.connect().unwrap());
         let initialized = initialize(&connection, "scope", false).unwrap();
         connection.close().unwrap();
         initialized
@@ -257,7 +257,7 @@ fn versions_without_a_chain_and_failing_steps_still_reset() {
                     OpenOptions::new(Arc::new(SqliteDialect)),
                 )
                 .unwrap();
-                let connection = raw.connect().unwrap();
+                let connection = Db::uncached(raw.connect().unwrap());
                 assert_eq!(table_rows(&connection), before, "case {name}");
                 assert_eq!(stored_storage_version(&connection), 11);
                 connection.close().unwrap();
@@ -299,7 +299,7 @@ fn a_file_this_scope_does_not_own_is_never_upgraded() {
                 OpenOptions::new(Arc::new(SqliteDialect)),
             )
             .unwrap();
-            let connection = raw.connect().unwrap();
+            let connection = Db::uncached(raw.connect().unwrap());
             assert_eq!(stored_storage_version(&connection), 11, "case {name}");
             assert_eq!(schema_rows(&connection), schema, "case {name}");
             assert_eq!(table_rows(&connection), rows, "case {name}");
@@ -331,7 +331,7 @@ fn a_rejected_upgrade_leaves_the_older_file_untouched() {
             OpenOptions::new(Arc::new(SqliteDialect)),
         )
         .unwrap();
-        let connection = raw.connect().unwrap();
+        let connection = Db::uncached(raw.connect().unwrap());
         assert_eq!(
             crate::storage::migration::stored_storage_version(&connection),
             Some(11)
@@ -528,7 +528,7 @@ fn copy_files(from: &Path, to: &Path) {
     }
 }
 
-fn raw_open(path: &Path) -> (Arc<Database>, Arc<Connection>) {
+fn raw_open(path: &Path) -> (Arc<Database>, Db) {
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());
     let database = Database::open(
         io,
@@ -536,7 +536,7 @@ fn raw_open(path: &Path) -> (Arc<Database>, Arc<Connection>) {
         OpenOptions::new(Arc::new(SqliteDialect)),
     )
     .unwrap();
-    let connection = database.connect().unwrap();
+    let connection = Db::uncached(database.connect().unwrap());
     enable_foreign_keys(&connection).unwrap();
     (database, connection)
 }
@@ -555,7 +555,7 @@ fn leak_steps(
             let statements = step.upgrade.clone();
             let crash_copy = crash_copy.to_owned();
             let live = live.to_owned();
-            let apply = move |connection: &Arc<Connection>| -> Result<(), TursoStorageError> {
+            let apply = move |connection: &Db| -> Result<(), TursoStorageError> {
                 for (position, sql) in statements.iter().enumerate() {
                     driver::execute(connection, sql, Vec::new())?;
                     if position == 0 {
@@ -594,7 +594,7 @@ fn leak_steps(
 
 /// Builds what a build with every change creates from scratch, holding the
 /// same logical rows as `source`.
-fn fresh_at_target(source: &Arc<Connection>, fresh: &FreshSchema, path: &Path, version: u32) {
+fn fresh_at_target(source: &Db, fresh: &FreshSchema, path: &Path, version: u32) {
     let (_database, connection) = raw_open(path);
     let mut creates = CREATE_SCHEMA
         .into_iter()
@@ -684,13 +684,13 @@ fn check_generated_chain(
         expected.close().unwrap();
         schema
     };
-    let accept_expected = |connection: &Arc<Connection>| {
+    let accept_expected = |connection: &Db| {
         if schema_fingerprint(connection) != expected_schema {
             return Err(compatibility());
         }
         Ok(())
     };
-    let validate = |connection: &Arc<Connection>| match interruption {
+    let validate = |connection: &Db| match interruption {
         Interruption::RejectedByValidation => Err(compatibility()),
         _ => accept_expected(connection),
     };

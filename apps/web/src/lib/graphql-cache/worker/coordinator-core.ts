@@ -285,6 +285,19 @@ export class CoordinatorCore {
     return this.activateNext(this.stateValue.nextDatabaseAction);
   }
 
+  /**
+   * Another visible tab's engine is starting or running, so `tabId` joining
+   * now would not take it over: only a hidden owner hands off to a new tab.
+   */
+  ownedByAnotherVisibleTab(tabId: string): boolean {
+    const state = this.stateValue;
+    return (
+      (state.kind === 'activating' || state.kind === 'active') &&
+      state.tabId !== tabId &&
+      this.visibleTabs.has(state.tabId)
+    );
+  }
+
   setTabVisibility(tabId: string, visible: boolean): CoordinatorAction[] {
     if (!this.tabs.includes(tabId)) return [];
     if (visible) this.visibleTabs.add(tabId);

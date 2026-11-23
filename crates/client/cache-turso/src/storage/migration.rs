@@ -20,12 +20,11 @@
 //! step must still produce exactly the version after its own.
 
 use super::{STORAGE_SCHEMA_VERSION, compatibility, required_text, text, validate_frozen_schema};
-use crate::{TursoStorageError, driver};
-use std::sync::Arc;
-use turso_core::Connection;
+use crate::TursoStorageError;
+use crate::driver::{self, Db};
 
 /// The body of one step. Tests build generated steps as closures.
-pub(super) type StepFn = dyn Fn(&Arc<Connection>) -> Result<(), TursoStorageError> + Sync;
+pub(super) type StepFn = dyn Fn(&Db) -> Result<(), TursoStorageError> + Sync;
 
 /// One upgrade from storage version `from` to `from + 1`.
 pub(super) struct StorageUpgradeStep {
@@ -79,7 +78,7 @@ pub fn storage_version_upgradable(version: u32) -> bool {
 
 /// Upgrades an existing database to the current storage version. Returns the
 /// version it was written at when it was older.
-pub(super) fn upgrade(connection: &Arc<Connection>) -> Result<Option<u32>, TursoStorageError> {
+pub(super) fn upgrade(connection: &Db) -> Result<Option<u32>, TursoStorageError> {
     run_steps(
         connection,
         STEPS,
@@ -93,10 +92,10 @@ pub(super) fn upgrade(connection: &Arc<Connection>) -> Result<Option<u32>, Turso
 /// from [`upgrade`] so tests can run generated chains against their own
 /// schema.
 pub(super) fn run_steps(
-    connection: &Arc<Connection>,
+    connection: &Db,
     steps: &[StorageUpgradeStep],
     current: u32,
-    validate: impl Fn(&Arc<Connection>) -> Result<(), TursoStorageError>,
+    validate: impl Fn(&Db) -> Result<(), TursoStorageError>,
 ) -> Result<Option<u32>, TursoStorageError> {
     let stored = stored_version(connection)?;
     if stored == current {
@@ -137,11 +136,11 @@ pub(super) fn run_steps(
 /// The storage version a database says it was written at, or `None` when it
 /// does not say so readably. Never writes.
 #[cfg(any(test, target_arch = "wasm32"))]
-pub(super) fn stored_storage_version(connection: &Arc<Connection>) -> Option<u32> {
+pub(super) fn stored_storage_version(connection: &Db) -> Option<u32> {
     stored_version(connection).ok()
 }
 
-fn stored_version(connection: &Arc<Connection>) -> Result<u32, TursoStorageError> {
+fn stored_version(connection: &Db) -> Result<u32, TursoStorageError> {
     let rows = driver::query(
         connection,
         "SELECT value FROM meta WHERE key = 'storage_schema_version'",
@@ -165,7 +164,7 @@ pub(super) const UPGRADE_11_TO_12: [&str; 3] = [
     "CREATE INDEX records_contacts_cover_idx ON records (__typename, id, value) WHERE __typename = 'GraphqlContact'",
 ];
 
-fn upgrade_11_to_12(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+fn upgrade_11_to_12(connection: &Db) -> Result<(), TursoStorageError> {
     for sql in UPGRADE_11_TO_12 {
         driver::execute(connection, sql, Vec::new())?;
     }
@@ -179,7 +178,7 @@ pub mod test_hooks {
     use super::super::{
         QUICK_ACCESS_PROJECTION_VERSION_KEY, TursoStorage, page_retention, people_sql, text,
     };
-    use super::{Arc, Connection};
+    use super::Db;
     use crate::{TursoStorageError, driver};
     use cache_core::people::sql::projection;
     use std::cell::Cell;
@@ -245,10 +244,7 @@ pub mod test_hooks {
         }))
     }
 
-    fn rewind(
-        connection: &Arc<Connection>,
-        part: Storage11DerivedState,
-    ) -> Result<(), TursoStorageError> {
+    fn rewind(connection: &Db, part: Storage11DerivedState) -> Result<(), TursoStorageError> {
         let set = |key: &str, value: &str| {
             driver::execute(
                 connection,
