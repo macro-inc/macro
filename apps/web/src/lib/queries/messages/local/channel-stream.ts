@@ -63,10 +63,13 @@ export function createChannelStream(
     if (frame) {
       retryMs = CHANNEL_STREAM_RETRY_MS;
       const metadata = normalizedCacheResultMetadata(result);
+      // The session its records were stored in; its sequence commits there.
+      const generation = result.operation?.context.cacheSessionGeneration;
       runtime.onFrame(
         frame,
         metadata?.source === 'live-network' &&
-          metadata.cacheEffectsApplied === true
+          metadata.cacheEffectsApplied === true,
+        typeof generation === 'string' ? generation : undefined
       );
     }
     if (result.error) {

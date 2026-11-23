@@ -69,7 +69,22 @@ describe('createChannelStream', () => {
       extensions: {},
     });
 
-    expect(runtime.onFrame).toHaveBeenCalledWith(update, false);
+    expect(runtime.onFrame).toHaveBeenCalledWith(update, false, undefined);
+  });
+
+  it('hands on the cache session the frame was stored in', () => {
+    const { client, emit } = fakeClient();
+    const runtime = fakeRuntime();
+    createChannelStream(client as never, runtime);
+
+    emit({
+      data: { channelTimelineUpdates: update },
+      hasNext: true,
+      extensions: {},
+      operation: { context: { cacheSessionGeneration: 'generation-1' } },
+    } as never);
+
+    expect(runtime.onFrame).toHaveBeenCalledWith(update, false, 'generation-1');
   });
 
   it('reports the socket connecting and closing', () => {

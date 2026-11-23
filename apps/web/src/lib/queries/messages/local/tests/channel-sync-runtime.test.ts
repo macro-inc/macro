@@ -21,6 +21,7 @@ function syncHost(initial: bigint | null) {
   const host = {
     seq: initial,
     commits: [] as ChannelTimelineCommitArgs[],
+    generations: [] as string[],
     heads: 0,
     async channelTimeline() {
       host.heads += 1;
@@ -29,8 +30,12 @@ function syncHost(initial: bigint | null) {
         seq: host.seq === null ? null : host.seq.toString(),
       });
     },
-    async channelTimelineCommit(args: ChannelTimelineCommitArgs) {
+    async channelTimelineCommit(
+      args: ChannelTimelineCommitArgs,
+      generation: string
+    ) {
       host.commits.push(args);
+      host.generations.push(generation);
       if (args.reset) host.seq = null;
       const seq = args.seq;
       if (seq?.kind === 'advance' && host.seq?.toString() === seq.from) {
@@ -127,6 +132,40 @@ describe('createChannelSyncRuntime', () => {
       },
     ]);
     await waitFor(() => changed.mock.calls.length > 0);
+  });
+
+  it('commits a frame in the cache session that stored its records', async () => {
+    const { host, runtime } = setup(5n);
+    runtime.onConnected();
+    runtime.onFrame(frame(6), true, 'generation-0');
+    await waitFor(() => host.commits.length > 0);
+    expect(host.generations).toEqual(['generation-0']);
+  });
+
+  it('replays from before a frame that arrived after a newer one', async () => {
+    // Frame 11 stored its records after frame 12 stored newer ones.
+    const { host, fetch, runtime } = setup(10n);
+    runtime.onConnected();
+    const release = runtime.open(CHANNEL_ID);
+    runtime.onFrame(frame(12), true);
+    runtime.onFrame(frame(11), true);
+    await waitFor(() => host.seq === 12n);
+    await waitFor(() => fetch.mock.calls.some(([, after]) => after === '10'));
+    expect(fetch).not.toHaveBeenCalledWith(CHANNEL_ID, '12');
+    release();
+  });
+
+  it('replays from before a frame the device had already moved past', async () => {
+    const { fetch, runtime } = setup(12n);
+    runtime.onConnected();
+    const release = runtime.open(CHANNEL_ID);
+    runtime.onFrame(frame(11), true);
+    await waitFor(() => fetch.mock.calls.length > 0);
+    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '10');
+    // Replayed: an open asks nothing more.
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+    expect(fetch).toHaveBeenCalledTimes(1);
+    release();
   });
 
   it('reads the stored sequence once, however many frames arrive', async () => {

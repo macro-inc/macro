@@ -48,6 +48,9 @@ export type ChannelCatchUpOutcome =
   | 'reset'
   | 'skipped';
 
+/** A frame waiting for the ones before it, with the session that stored it. */
+type HeldFrame = { frame: ChannelFrame; generation: string };
+
 type ChannelState = {
   /** Stored sequence: undefined until read, null when the device holds nothing. */
   seq: bigint | null | undefined;
@@ -56,7 +59,13 @@ type ChannelState = {
   /** One write to the channel's sync state at a time. */
   lock: Semaphore.Semaphore;
   /** Frames past a gap, by sequence, applied once the gap closes. */
-  held: Map<bigint, ChannelFrame>;
+  held: Map<bigint, HeldFrame>;
+  /**
+   * Replay changes from here on the next catch-up: a frame arrived after a
+   * newer one, or after the device had moved past it, so the records it wrote
+   * can be older than what the device already held.
+   */
+  repairFrom: bigint | undefined;
   /** Views showing the channel; only they are caught up after a gap. */
   views: number;
   /**
@@ -68,8 +77,11 @@ type ChannelState = {
 };
 
 export interface ChannelSyncRuntime {
-  /** A pushed frame; `stored` says whether its records reached the cache. */
-  onFrame(frame: ChannelFrame, stored: boolean): void;
+  /**
+   * A pushed frame; `stored` says whether its records reached the cache, in
+   * the cache session `generation` (the current one when not given).
+   */
+  onFrame(frame: ChannelFrame, stored: boolean, generation?: string): void;
   /** The socket or the stream dropped: nothing held is current any more. */
   onDisconnected(): void;
   /** The stream is live again: catch up the channels on screen. */
@@ -143,6 +155,7 @@ export function createChannelSyncRuntime(
         current: false,
         lock: Semaphore.makeUnsafe(1),
         held: new Map(),
+        repairFrom: undefined,
         views: 0,
         seenSeq: undefined,
       };
@@ -199,11 +212,13 @@ export function createChannelSyncRuntime(
       deps.host.channelTimelineCommit({ channelId, ...args }, generation)
     );
 
-  /** Applies the frames that now continue the stored sequence. */
+  /**
+   * Applies the frames that now continue the stored sequence, each in the
+   * session that stored its records: a later session refuses it.
+   */
   const applyHeld = Effect.fn('channel.sync.apply_frames')(function* (
     channelId: string,
-    state: ChannelState,
-    generation: string
+    state: ChannelState
   ) {
     let applied = 0;
     while (state.seq !== null && state.seq !== undefined) {
@@ -214,14 +229,14 @@ export function createChannelSyncRuntime(
       const committed = yield* commit(
         channelId,
         {
-          removedKeys: next.removedIds.flatMap(channelEntryKeys),
+          removedKeys: next.frame.removedIds.flatMap(channelEntryKeys),
           seq: {
             kind: 'advance',
             from: from.toString(),
             to: (from + 1n).toString(),
           },
         },
-        generation
+        next.generation
       );
       if (committed.kind !== 'committed') break;
       state.seq = parseSeq(committed.channelSeq);
@@ -250,7 +265,10 @@ export function createChannelSyncRuntime(
     const generation = deps.generation();
     const from = yield* learnSeq(channelId, state);
     if (from === null) return 'not-held' as const;
-    let after = from;
+    // A repair replays from before the frame that may have written old
+    // records; the stored sequence only moves forward.
+    const repair = state.repairFrom;
+    let after = repair !== undefined && repair < from ? repair : from;
     let changes = 0;
     for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
       const delta = yield* Effect.tryPromise(() =>
@@ -263,15 +281,16 @@ export function createChannelSyncRuntime(
         delta.removedIds.length;
       const to = parseSeq(delta.seq);
       if (to === null) break;
-      if (to !== after || delta.removedIds.length > 0) {
+      const stored = state.seq ?? from;
+      if (to > stored || delta.removedIds.length > 0) {
         const committed = yield* commit(
           channelId,
           {
             removedKeys: delta.removedIds.flatMap(channelEntryKeys),
-            ...(to !== after && {
+            ...(to > stored && {
               seq: {
                 kind: 'advance',
-                from: after.toString(),
+                from: stored.toString(),
                 to: to.toString(),
               },
             }),
@@ -282,18 +301,22 @@ export function createChannelSyncRuntime(
         state.seq = parseSeq(committed.channelSeq);
         // Gone meanwhile (evicted or reset): nothing to catch up.
         if (state.seq === null) return 'not-held' as const;
-        after = state.seq;
         // A read lowered the sequence meanwhile: replay from there.
-        if (after !== to) continue;
+        if (to > stored && state.seq !== to) {
+          after = state.seq;
+          continue;
+        }
       }
+      after = to;
       if (!delta.hasMore) {
-        yield* applyHeld(channelId, state, generation);
+        if (state.repairFrom === repair) state.repairFrom = undefined;
+        yield* applyHeld(channelId, state);
         if (epoch === socketEpoch && isConnected) state.current = true;
         yield* Effect.annotateCurrentSpan({
           'catch_up.pages': page + 1,
           'catch_up.changes': changes,
         });
-        return changes > 0 || after !== from
+        return changes > 0 || (state.seq ?? from) !== from
           ? ('applied' as const)
           : ('current' as const);
       }
@@ -303,6 +326,7 @@ export function createChannelSyncRuntime(
     yield* commit(channelId, { reset: true }, generation);
     state.seq = null;
     state.held.clear();
+    state.repairFrom = undefined;
     state.current = false;
     return 'reset' as const;
   });
@@ -351,7 +375,8 @@ export function createChannelSyncRuntime(
 
   const handleFrame = Effect.fn('channel.sync.frame')(function* (
     frame: ChannelFrame,
-    stored: boolean
+    stored: boolean,
+    generation: string
   ) {
     const channelId = frame.channelId;
     const state = stateOf(channelId);
@@ -361,6 +386,8 @@ export function createChannelSyncRuntime(
       'channel.frame_seq': frame.seq,
     });
     if (seq === null) return 'not-held';
+    // Behind a frame already seen: the records it wrote may be older.
+    const late = state.seenSeq !== undefined && seq < state.seenSeq;
     if (state.seenSeq === undefined || seq > state.seenSeq) {
       state.seenSeq = seq;
     }
@@ -369,17 +396,29 @@ export function createChannelSyncRuntime(
     if (known === null) return 'not-held';
     return yield* state.lock.withPermits(1)(
       Effect.gen(function* () {
-        const generation = deps.generation();
         const current = state.seq;
         if (current === null || current === undefined) return 'not-held';
+        if (stored && (late || seq <= current)) {
+          // Its records replaced newer ones the device held: replay the
+          // changes from before it, which carry each record as it is now.
+          const before = seq - 1n;
+          if (state.repairFrom === undefined || before < state.repairFrom) {
+            state.repairFrom = before;
+          }
+          state.current = false;
+          scheduleCatchUp(channelId, 'gap');
+        }
         if (seq <= current) return 'applied-before';
         if (!stored) {
           state.current = false;
           scheduleCatchUp(channelId, 'gap');
           return 'unstored';
         }
-        if (state.held.size < MAX_HELD_FRAMES) state.held.set(seq, frame);
-        yield* applyHeld(channelId, state, generation);
+        if (state.held.size < MAX_HELD_FRAMES) {
+          state.held.set(seq, { frame, generation });
+        }
+        yield* applyHeld(channelId, state);
+        if (state.repairFrom !== undefined) return 'repair';
         if (state.held.size > 0) {
           state.current = false;
           scheduleCatchUp(channelId, 'gap');
@@ -391,10 +430,10 @@ export function createChannelSyncRuntime(
   });
 
   return {
-    onFrame(frame, stored) {
+    onFrame(frame, stored, generation) {
       if (disposed) return;
       fork(
-        handleFrame(frame, stored).pipe(
+        handleFrame(frame, stored, generation ?? deps.generation()).pipe(
           Effect.tap((outcome) =>
             Effect.sync(() => {
               // The frame wrote records a held window shows, edits and
@@ -483,6 +522,7 @@ export function createChannelSyncRuntime(
         state.seq = undefined;
         state.current = false;
         state.held.clear();
+        state.repairFrom = undefined;
       }
     },
     dispose() {
