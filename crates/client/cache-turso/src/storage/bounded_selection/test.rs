@@ -88,6 +88,7 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
                     &[],
                     None,
                     candidate_budget(query.as_query()),
+                    true,
                 );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
@@ -112,6 +113,7 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
                     &[],
                     Some(middle),
                     candidate_budget(query.as_query()),
+                    true,
                 );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
@@ -276,6 +278,115 @@ fn complete_cutoff_ties_use_record_keys_not_internal_document_ids() {
         }
     });
 }
+
+/// The shadow probe and the optimistic window run exactly while a pending
+/// write holds optimistic documents, and the page follows the layer both ways.
+#[test]
+fn the_shadow_probe_runs_only_while_optimistic_documents_exist() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-pending").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..40)
+                    .map(|n| ProjectionMutation::Replace(document(n, i64::from(n))))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let query = query(owner("owner"), SortDirection::Desc, SortDirection::Asc);
+        // The connection keeps a statement text from its second use, so the
+        // selector runs twice on an emptied statement cache, and the kept
+        // texts show whether it ran the shadow probe and the optimistic window.
+        let page = |storage: &TursoStorage| {
+            let connection = storage.connection();
+            connection.release_statements();
+            for _ in 0..2 {
+                assert!(try_select(&connection, &query, &[]).unwrap().is_some());
+            }
+            let ran = Ran {
+                pending: has_optimistic_documents(&connection).unwrap(),
+                shadow_probe: connection.cached_texts_containing(SHADOW_PROBE) > 0,
+                optimistic_window: connection.cached_texts_containing(OPTIMISTIC_WINDOW) > 0,
+            };
+            let actual = hits(&connection, &query, &[]);
+            assert_eq!(actual, reference(&connection, &query, &[]));
+            (ran, actual)
+        };
+        let idle = Ran {
+            pending: false,
+            shadow_probe: false,
+            optimistic_window: false,
+        };
+        let (ran, before) = page(&storage);
+        assert_eq!(ran, idle);
+        assert_eq!(before[0], ("Thing:00039".to_owned(), 39));
+
+        let mut moved = document(39, 39);
+        moved.partition = Token::new("other").unwrap();
+        let id = storage
+            .enqueue_mutation_with_shadow(
+                queued("Pending"),
+                vec![
+                    PendingOptimisticProjection {
+                        state: OptimisticProjectionState::Complete(moved),
+                        uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                    },
+                    PendingOptimisticProjection {
+                        state: OptimisticProjectionState::Complete(document(100, 100)),
+                        uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                    },
+                ],
+            )
+            .await
+            .unwrap();
+        let (ran, shadowed) = page(&storage);
+        assert_eq!(
+            ran,
+            Ran {
+                pending: true,
+                shadow_probe: true,
+                optimistic_window: true,
+            }
+        );
+        assert_eq!(shadowed[0], ("Thing:00100".to_owned(), 100));
+        assert!(!shadowed.iter().any(|(key, _)| key == "Thing:00039"));
+
+        let claimed = storage
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 10,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(
+            storage
+                .discard_mutation(
+                    id,
+                    MutationClaimToken {
+                        owner: "runner".into(),
+                        generation: claimed.lease_generation,
+                    },
+                )
+                .await
+                .unwrap()
+        );
+        assert_eq!(page(&storage), (idle, before));
+    });
+}
+
+/// What one selection ran, read back from the connection's statement cache.
+#[derive(Debug, PartialEq)]
+struct Ran {
+    pending: bool,
+    shadow_probe: bool,
+    optimistic_window: bool,
+}
+
+const SHADOW_PROBE: &str = "FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key";
+const OPTIMISTIC_WINDOW: &str = "INDEXED BY optimistic_sort_facts_lookup_idx";
 
 #[test]
 fn optimistic_moves_deletes_and_uncertainty_suppress_authority() {
@@ -561,6 +672,8 @@ fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
                 &[],
                 None,
                 64,
+                // No local writes are pending, so the window has no shadow probe.
+                false,
             );
             driver::prepare_unless_refused(&connection, &sql)
                 .unwrap()
@@ -1051,6 +1164,7 @@ fn a_tie_wider_than_the_cap_falls_back_with_the_same_pages() {
                 &[],
                 Some(position),
                 MIN_CANDIDATES,
+                true,
             );
             let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
             let rows = driver::query_prepared(&mut statement, parameters).unwrap();

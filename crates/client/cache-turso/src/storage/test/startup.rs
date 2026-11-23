@@ -62,12 +62,15 @@ fn schema_11_cache_is_replaced_without_migrating_pending_writes() {
 }
 
 #[test]
-fn native_file_storage_keeps_temporary_tables_in_memory() {
+fn native_file_storage_keeps_temporary_tables_in_memory_and_a_larger_page_cache() {
     let directory = tempfile::tempdir().unwrap();
     let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
     for _ in 0..2 {
         let storage = database.open("scope").unwrap();
         assert_eq!(storage.connection.get_temp_store(), TempStore::Memory);
+        let rows = driver::query(&storage.connection(), "PRAGMA cache_size", Vec::new()).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(required_i64(&rows[0], 0).unwrap(), NATIVE_PAGE_CACHE_PAGES);
         storage.try_close().unwrap();
     }
 }

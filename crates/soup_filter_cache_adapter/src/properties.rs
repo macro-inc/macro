@@ -7,6 +7,7 @@ use crate::mail::ProjectionError;
 use cache_core::predicate::{
     ProjectionMutation, ProjectionState, apply_authoritative_projection_mutations,
 };
+use cache_core::store::DurableRead;
 use item_filter_index::{properties as facts, vocabulary};
 use predicate_index::{
     ExactFact, IndexDocument, OptimisticProjectionMutation, Profile, RecordKey, Token,
@@ -132,7 +133,7 @@ pub async fn augment_authoritative<S: cache_core::predicate::PredicateIndexStora
 }
 
 /// [`augment_authoritative`] over a response the other passes share.
-pub async fn augment_authoritative_response<S: cache_core::predicate::PredicateIndexStorage>(
+pub async fn augment_authoritative_response<S: DurableRead>(
     storage: &S,
     response: &WriteResponse<'_>,
     reuse_stored_identity: bool,
@@ -154,7 +155,7 @@ pub async fn augment_authoritative_response<S: cache_core::predicate::PredicateI
     let keys: Vec<_> = by_key.keys().cloned().collect();
     let bases = if reuse_stored_identity {
         storage
-            .load_projection_states(&keys)
+            .read_projection_states(&keys)
             .await
             .map_err(ProjectionError::Storage)?
     } else {

@@ -5,8 +5,9 @@
 //! the ones before again, by an amount sized from the hit rate it saw, up to
 //! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
 //! set-based SQL plan. Optimistic facts hold only pending local writes, so
-//! their window runs out long before the cap. Both plans run inside the
-//! caller's read transaction over the same snapshot. Inside a tie a
+//! their window runs out long before the cap; when the snapshot holds none,
+//! neither that window nor the per-candidate shadow probe runs. Both plans run
+//! inside the caller's read transaction over the same snapshot. Inside a tie a
 //! continuation seeks to the tie's value and steps over the index entries of
 //! the tied candidates already read, at a fraction of a returned candidate's
 //! cost each.
@@ -146,13 +147,16 @@ struct Position {
 }
 
 /// `budget` candidates in index order, starting after `after` when a previous
-/// window of the same source already read up to it.
+/// window of the same source already read up to it. `pending` says whether the
+/// snapshot holds any optimistic document; without one no authority candidate
+/// can be shadowed, so the per-candidate shadow probe is left out.
 fn candidate_sql(
     query: &IndexQuery,
     source: conjunction::FactSource,
     excluded_optimistic: &[i64],
     after: Option<Position>,
     budget: usize,
+    pending: bool,
 ) -> (String, Vec<Value>) {
     let (facts, index, documents) = match source {
         conjunction::FactSource::Authority => {
@@ -197,6 +201,7 @@ fn candidate_sql(
     ]);
     let shadow = match source {
         // Any shadow suppresses authority, even a deleted, uncertain, or moved one.
+        conjunction::FactSource::Authority if !pending => String::new(),
         conjunction::FactSource::Authority => " AND NOT EXISTS (SELECT 1 FROM optimistic_index_documents AS o WHERE o.record_key = d.record_key)".to_owned(),
         conjunction::FactSource::Optimistic if !excluded_optimistic.is_empty() => {
             parameters.extend(excluded_optimistic.iter().copied().map(Value::from_i64));
@@ -254,9 +259,16 @@ impl Window {
         query: &IndexQuery,
         excluded_optimistic: &[i64],
         count: usize,
+        pending: bool,
     ) -> Result<bool, TursoStorageError> {
-        let (sql, parameters) =
-            candidate_sql(query, self.source, excluded_optimistic, self.last, count);
+        let (sql, parameters) = candidate_sql(
+            query,
+            self.source,
+            excluded_optimistic,
+            self.last,
+            count,
+            pending,
+        );
         let Some(mut statement) = driver::prepare_unless_refused(connection, &sql)? else {
             return Ok(false);
         };
@@ -305,6 +317,19 @@ impl Window {
     }
 }
 
+/// Whether the snapshot holds any optimistic document, of any profile.
+fn has_optimistic_documents(connection: &Db) -> Result<bool, TursoStorageError> {
+    let rows = driver::query(
+        connection,
+        "SELECT EXISTS (SELECT 1 FROM optimistic_index_documents)",
+        Vec::new(),
+    )?;
+    match rows.as_slice() {
+        [row] => Ok(required_i64(row, 0)? != 0),
+        _ => Err(invariant()),
+    }
+}
+
 /// Reads both fact sources' windows, continuing any that cannot yet prove the
 /// page past the candidates it already read, until every window is exhausted
 /// or reaches past the page's cutoff.
@@ -319,14 +344,18 @@ fn try_select(
     }
     let limit = usize::from(query.limit);
     let mut budget = candidate_budget(query);
-    let mut windows = [
-        Window::new(conjunction::FactSource::Authority),
-        Window::new(conjunction::FactSource::Optimistic),
-    ];
+    // Optimistic documents exist only while local writes are pending. With
+    // none in this snapshot, nothing shadows authority and the optimistic
+    // window would read nothing, so only the authority window runs.
+    let pending = has_optimistic_documents(connection)?;
+    let mut windows = vec![Window::new(conjunction::FactSource::Authority)];
+    if pending {
+        windows.push(Window::new(conjunction::FactSource::Optimistic));
+    }
     // SQL Turso refuses takes the set-based plan, which compiles each
     // partition on its own.
     for window in &mut windows {
-        if !window.extend(connection, query, excluded_optimistic, budget)? {
+        if !window.extend(connection, query, excluded_optimistic, budget, pending)? {
             return Ok(None);
         }
     }
@@ -367,7 +396,7 @@ fn try_select(
         for window in &mut windows {
             if !window.proves(cutoff, &query.sort_direction) {
                 let count = budget.saturating_sub(window.read);
-                if !window.extend(connection, query, excluded_optimistic, count)? {
+                if !window.extend(connection, query, excluded_optimistic, count, pending)? {
                     return Ok(None);
                 }
             }

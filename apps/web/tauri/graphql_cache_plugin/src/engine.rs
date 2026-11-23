@@ -14,8 +14,8 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, QueryRegistration,
-    ReadResult, RollbackOptimisticWriteResult, WriteResult,
+    HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, NormalizedResponse,
+    QueryRegistration, ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -29,6 +29,7 @@ use cache_core::search::{SearchPage, SearchRequest};
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
+use soup_filter_cache_adapter::WritePassStep;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -754,6 +755,24 @@ impl EngineHandle {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
         });
+        let input = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
+        let registration =
+            registration
+                .as_ref()
+                .map(|(op_id, entity_resolvers)| QueryRegistration {
+                    op_id: *op_id,
+                    entity_resolvers,
+                });
+        // One normalization serves the projection passes and the write. A
+        // response that fails it takes the path that normalizes twice, which
+        // reports its error where it always has.
+        let normalized = engine.normalize_network(registration, input).ok();
         let projections = soup::write_projections(
             engine,
             &query,
@@ -761,28 +780,27 @@ impl EngineHandle {
             &variables,
             &data,
             identity.as_deref(),
+            normalized.as_ref().map(NormalizedResponse::updates),
         )
         .await?;
-        let result = engine
-            .write_query_with_registration_and_projections(
-                origin,
-                registration
-                    .as_ref()
-                    .map(|(op_id, entity_resolvers)| QueryRegistration {
-                        op_id: *op_id,
-                        entity_resolvers,
-                    }),
-                NetworkWrite {
-                    query: &query,
-                    operation_name: operation_name.as_deref(),
-                    variables: &variables,
-                    data: &data,
-                    identity: identity.as_deref(),
-                },
-                projections,
-            )
-            .await
-            .map_err(|e| e.to_string())?;
+        let result = match normalized {
+            Some(normalized) => {
+                engine
+                    .write_normalized_query(origin, input, normalized, projections)
+                    .await
+            }
+            None => {
+                engine
+                    .write_query_with_registration_and_projections(
+                        origin,
+                        registration,
+                        input,
+                        projections,
+                    )
+                    .await
+            }
+        }
+        .map_err(|e| e.to_string())?;
 
         self.publish_bound_generation(engine);
         Ok(wire_write_result(ops, result))
@@ -808,32 +826,67 @@ impl EngineHandle {
             identity: identity.as_deref(),
         };
         let mut state = self.snapshot_hydration().await?;
-        // Compute the write in two read-only steps, letting reads that queued
-        // meanwhile run after each. Only reads can: this hydrate keeps its
-        // turn. If storage moved anyway, the hydrate runs whole after
-        // rechecking the session.
+        // One normalization serves the projection passes and the write, as in
+        // `write`.
+        let mut normalized = state.engine.normalize_network(None, write).ok();
+        // Compute the write in read-only steps (the authoritative rows, each
+        // projection pass, the merge), letting reads that queued meanwhile
+        // run after each. Only reads can: this hydrate keeps its turn. If
+        // storage moved anyway, the hydrate runs whole after rechecking the
+        // session.
         let mut reuse = None;
         if staging()
             && let Ok(wal) = state.engine.storage().wal_position()
         {
+            let unmoved =
+                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
             // A failed read is the hydrate's error, as it is for a whole
             // one: retrying it whole could succeed where that failed.
-            let projections = soup::write_projections(
+            let mut passes = soup::write_passes(
                 &mut state.engine,
                 &query,
                 operation_name.as_deref(),
-                &variables,
                 &data,
                 identity.as_deref(),
             )
             .await?;
-            state = self.let_reads_run(state).await;
-            let unmoved =
-                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
-            if unmoved(&state.engine) {
+            let schema = state.engine.schema_snapshot();
+            let response = soup::write_response(
+                &schema,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                normalized.as_ref().map(NormalizedResponse::updates),
+            );
+            let mut projections = None;
+            loop {
+                state = self.let_reads_run(state).await;
+                if !unmoved(&state.engine) {
+                    break;
+                }
+                if let WritePassStep::Done(done) = passes
+                    .step(&mut state.engine, &response)
+                    .await
+                    .map_err(|error| error.to_string())?
+                {
+                    projections = Some(done);
+                    state = self.let_reads_run(state).await;
+                    break;
+                }
+            }
+            drop(response);
+            if let Some(projections) = projections
+                && unmoved(&state.engine)
+            {
                 let staged = state
                     .engine
-                    .stage_hydrate(write, hydration_scope.as_ref(), &projections)
+                    .stage_normalized_hydrate(
+                        write,
+                        &mut normalized,
+                        hydration_scope.as_ref(),
+                        &projections,
+                    )
                     .await
                     .map_err(|error| error.to_string());
                 #[cfg(test)]
@@ -875,17 +928,28 @@ impl EngineHandle {
                     &variables,
                     &data,
                     identity.as_deref(),
+                    normalized.as_ref().map(NormalizedResponse::updates),
                 )
                 .await?
             }
         };
-        let result = match hydration_scope {
-            Some(scope) => {
+        let result = match (hydration_scope, normalized) {
+            (Some(scope), Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query_in_scope(write, normalized, &scope, projections)
+                    .await
+            }
+            (Some(scope), None) => {
                 engine
                     .hydrate_query_in_scope(write, &scope, projections)
                     .await
             }
-            None => {
+            (None, Some(normalized)) => {
+                engine
+                    .hydrate_normalized_query(write, normalized, projections)
+                    .await
+            }
+            (None, None) => {
                 engine
                     .hydrate_query_with_projections(
                         &query,
@@ -1133,6 +1197,7 @@ impl EngineHandle {
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                None,
                 None,
             )
             .await?

@@ -37,6 +37,21 @@ impl<S: Storage> Engine<S> {
         scope: Option<&HydrationScope>,
         projections: &[ProjectionMutation],
     ) -> Result<Option<StagedHydrate>, EngineError<S::Error>> {
+        self.stage_normalized_hydrate(write, &mut None, scope, projections)
+            .await
+    }
+
+    /// [`Self::stage_hydrate`] reusing a response [`Self::normalize_network`]
+    /// normalized under the current schema. It takes `normalized` once it
+    /// stages, and leaves it for the whole hydrate
+    /// ([`Self::hydrate_normalized_query`] or its scoped form) otherwise.
+    pub async fn stage_normalized_hydrate(
+        &mut self,
+        write: NetworkWrite<'_>,
+        normalized: &mut Option<NormalizedResponse>,
+        scope: Option<&HydrationScope>,
+        projections: &[ProjectionMutation],
+    ) -> Result<Option<StagedHydrate>, EngineError<S::Error>> {
         if let Some(scope) = scope
             && (scope.identity.is_empty()
                 || write.identity != Some(scope.identity.as_str())
@@ -72,22 +87,42 @@ impl<S: Storage> Engine<S> {
         {
             return Ok(None);
         }
-        let entity_resolvers = EntityResolverLookup::compile(&self.schema, &[])?;
         let doc = Self::document(&mut self.docs, write.query)?;
         let op = doc.operation(write.operation_name)?;
-        let normalized = Self::network_records(
-            &self.schema,
-            self.response_records,
-            op,
-            NetworkData {
-                variables: write.variables,
-                data: write.data,
-                entity_resolvers: &entity_resolvers,
-            },
-            false,
-            fence.is_some(),
-        )?;
-        let plan = self.plan_persist(normalized.updates, projections).await?;
+        let updates = match normalized
+            .take_if(|normalized| std::sync::Arc::ptr_eq(&normalized.schema, &self.schema))
+        {
+            Some(normalized) => {
+                let mut updates = normalized.result.updates;
+                Self::complete_network_records(
+                    &self.schema,
+                    self.response_records,
+                    op,
+                    (write.variables, write.data),
+                    &mut updates,
+                    false,
+                    fence.is_some(),
+                )?;
+                updates
+            }
+            None => {
+                let entity_resolvers = EntityResolverLookup::compile(&self.schema, &[])?;
+                Self::network_records(
+                    &self.schema,
+                    self.response_records,
+                    op,
+                    NetworkData {
+                        variables: write.variables,
+                        data: write.data,
+                        entity_resolvers: &entity_resolvers,
+                    },
+                    false,
+                    fence.is_some(),
+                )?
+                .updates
+            }
+        };
+        let plan = self.plan_persist(updates, projections).await?;
         Ok(Some(StagedHydrate {
             data,
             plan,
