@@ -25,6 +25,9 @@ const senderContent = (
   (notification.notification_metadata as { content?: SenderMetadataContent })
     .content;
 
+/** Who a notification reads as being from when nothing names its sender. */
+export const UNKNOWN_SENDER_NAME = 'Someone';
+
 /**
  * The sender name carried in the notification metadata, for notifications
  * whose sender is not (only) a Macro user id: email senders, agents, bots and
