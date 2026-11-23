@@ -75,7 +75,9 @@ morning**, **Yesterday**, and so on), by each row's newest notification; `j`/`k`
 skip them.
 
 Click a row or press Enter to preview it beside the list, opened at the
-notification's message, thread, or comment. A conversation's composer takes
+notification's message, thread, or comment. Links and mentions in a row's
+text are part of the row: clicking or tapping one opens the row, never the
+link, and Tab skips them. A conversation's composer takes
 focus, and Esc returns to the row; see
 [composer focus and Esc](channels.md#composer-focus-and-esc). The shown row and stacked
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
