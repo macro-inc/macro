@@ -315,9 +315,10 @@ service, and no crash memory leaves the machine
   `<app data>/crash-reports/panic-<uuid>.json` before the default hook runs.
   The message is scrubbed first: the user's home directory and login name,
   quoted values, backtick spans other than std's own (`Result::unwrap()`),
-  paths, URL paths and IP hosts, email addresses, credentials (`Bearer …`,
-  `token=…`, long mixed tokens) and long numbers are replaced. Release builds carry no debug info,
-  so frames have function names but no files or lines. A panic on the main
+  paths, URL paths, IP addresses, email addresses, credentials (`Bearer …`,
+  `password: …`, `token=…`, long random tokens) and long numbers are
+  replaced. Release builds carry no debug info, so frames have function
+  names but no files or lines. A panic on the main
   thread is `fatal`; on another thread the app usually survives, so `error`.
 - **Chromium crashes** (macOS): `../desktop-cef/crash_reporter.cfg`, bundled
   as `Contents/Resources/crash_reporter.cfg`, turns on CEF's Crashpad for the
