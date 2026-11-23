@@ -143,6 +143,47 @@ impl<R: ChannelChangeLogPruner> ChannelChangeLogRetention<R> {
     }
 }
 
+/// Current states of the changed messages `ids` in `channel_id`, the root of
+/// each changed reply, and each call root's call state: what a changes page
+/// and a live timeline update both carry. A hard-deleted id is left out.
+pub async fn load_message_changes<R: super::ports::MessageRepository>(
+    repo: &R,
+    channel_id: Uuid,
+    ids: &[Uuid],
+) -> Result<Vec<ChannelMessageChange>, MessageError> {
+    let mut messages = repo.load_channel_message_changes(channel_id, ids).await?;
+
+    let call_ids: Vec<_> = messages
+        .iter()
+        .filter_map(|change| match change {
+            ChannelMessageChange::Root { message, .. }
+                if message.message.kind == MessageKind::CallRoot =>
+            {
+                Some(message.message.id)
+            }
+            _ => None,
+        })
+        .collect();
+    if call_ids.is_empty() {
+        return Ok(messages);
+    }
+
+    let calls = repo.call_entry_statuses(&call_ids).await?;
+    for change in &mut messages {
+        if let ChannelMessageChange::Root { message, call } = change
+            && message.message.kind == MessageKind::CallRoot
+        {
+            *call = Some(
+                calls
+                    .get(&message.message.id)
+                    .copied()
+                    .unwrap_or(CallEntryStatus::RecordDeleted),
+            );
+        }
+    }
+    Ok(messages)
+}
+
 /// Positions outside retained history cannot safely advance incrementally.
 pub(super) fn requires_reset(log: &ChannelChangeLog, after: i64) -> bool {
     after < log.floor

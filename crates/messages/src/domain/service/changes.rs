@@ -7,7 +7,7 @@ use activity::domain::timeline::ActivityTimelineIdsQuery;
 use super::*;
 use crate::domain::changes::{
     ChannelChangeKind, ChannelChanges, ChannelMessageChange, MAX_CHANNEL_CHANGE_ROWS,
-    requires_reset,
+    load_message_changes, requires_reset,
 };
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
@@ -60,10 +60,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
             seq = change.seq;
         }
-        let mut messages = self
-            .repo
-            .load_channel_message_changes(channel_id, &message_ids)
-            .await?;
+        let messages = load_message_changes(&self.repo, channel_id, &message_ids).await?;
         let activities = if activity_ids.is_empty() {
             Vec::new()
         } else {
@@ -88,32 +85,6 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     ))
                 })?
         };
-        let call_ids: Vec<_> = messages
-            .iter()
-            .filter_map(|change| match change {
-                ChannelMessageChange::Root { message, .. }
-                    if message.message.kind == MessageKind::CallRoot =>
-                {
-                    Some(message.message.id)
-                }
-                _ => None,
-            })
-            .collect();
-        if !call_ids.is_empty() {
-            let calls = self.repo.call_entry_statuses(&call_ids).await?;
-            for change in &mut messages {
-                if let ChannelMessageChange::Root { message, call } = change
-                    && message.message.kind == MessageKind::CallRoot
-                {
-                    *call = Some(
-                        calls
-                            .get(&message.message.id)
-                            .copied()
-                            .unwrap_or(CallEntryStatus::RecordDeleted),
-                    );
-                }
-            }
-        }
         let found_messages: HashSet<_> = messages.iter().map(ChannelMessageChange::id).collect();
         let found_activities: HashSet<_> = activities.iter().map(|activity| activity.id).collect();
         let removed_ids = message_ids
