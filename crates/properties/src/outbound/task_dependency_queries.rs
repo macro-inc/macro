@@ -277,9 +277,14 @@ async fn link_transaction(
         let before = endpoint_properties
             .get(&row.entity_id)
             .and_then(|row| row.values.clone());
-        let previous_value = super::entity_property_queries::decode_stored_property_value(before)?
-            .or_else(|| {
-                Some(models_properties::service::property_value::PropertyValue::EntityRef(vec![]))
+        // Preserve the empty baseline for new assignments, but discard malformed
+        // legacy metadata instead of rolling back a valid graph repair.
+        let previous_value = super::entity_property_queries::decode_stored_property_value(before)
+            .ok()
+            .map(|value| {
+                value.unwrap_or_else(|| {
+                    models_properties::service::property_value::PropertyValue::EntityRef(vec![])
+                })
             });
         let value = super::entity_property_queries::decode_stored_property_value(row.values)?;
         reciprocal.push(crate::domain::model::EntityPropertyMutationSnapshot {

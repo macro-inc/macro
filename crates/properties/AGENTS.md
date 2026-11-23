@@ -26,6 +26,7 @@ events to the `macro.properties` Kafka topic.
 - `src/domain/task_dependency_state.rs` + `src/outbound/task_dependency_state.rs`: receipt-gated, indexed dependency batches; project per-blocker completion facts with `visible_state` and preserve the full aggregate Blocked flag. The storage completion guard applies the team policy atomically to every Status writer.
 - Authorize only added and removed dependency endpoints through bulk document edit receipts; retain inaccessible unchanged references. Lock source, all current endpoints, and all desired endpoints before dependency writes; recheck the snapshot after locking. Use PostgreSQL `task_dependency_lock_key` and sort actual signed keys, not UUIDs.
 - Cleanup locks UUID TASK/DOCUMENT roots even without edges or subtype metadata; discover all neighbors, lock them, and validate discovery. Non-document cleanup skips graph locks.
+- Treat malformed pre-write neighbor values as absent metadata so cleanup and link repair can finish; keep canonical post-write decoding strict.
 - Preserve `PropertiesErr::DependencyContended` for PostgreSQL 40001 and stale snapshots; return HTTP 409 and GraphQL `DEPENDENCY_BUSY` with `retryable: true`.
 - Preserve `PropertiesErr::TaskCompletionBlocked` when atomic completion admission rejects a write; transport adapters map the typed variant, not its display text.
 

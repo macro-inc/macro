@@ -754,7 +754,10 @@ pub async fn delete_entity_properties(
                 updated_at: row.updated_at,
             },
             value: decode_stored_property_value(row.values)?,
-            previous_value: decode_stored_property_value(previous.remove(&row.id).flatten())?,
+            // Previous metadata must not prevent cleanup from repairing legacy data.
+            previous_value: decode_stored_property_value(previous.remove(&row.id).flatten())
+                .ok()
+                .flatten(),
         });
     }
     tx.commit().await?;

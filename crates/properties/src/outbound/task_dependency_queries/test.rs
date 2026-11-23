@@ -755,3 +755,111 @@ async fn transition_table_writer_tries_both_endpoints(pool: Pool<Postgres>) -> a
     graph.rollback().await?;
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn link_tolerates_malformed_previous_neighbor_value(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    task(&pool, a).await?;
+    task(&pool, b).await?;
+    link(
+        &pool,
+        a,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![],
+        vec![b],
+    )
+    .await?;
+
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL macro.task_dependency_backfill = 'on'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND property_definition_id = $3",
+        serde_json::json!({"type": "EntityReference", "value": [{}]}),
+        b.to_string(),
+        SystemPropertyKey::BLOCKING_UUID,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    let TaskDependencyLinkOutcome::Updated(_, effects) = link(
+        &pool,
+        a,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![b],
+        vec![],
+    )
+    .await?
+    else {
+        anyhow::bail!("expected successful relationship removal");
+    };
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].previous_value, None);
+    assert_eq!(effects[0].value, None);
+    let mut connection = pool.acquire().await?;
+    assert!(
+        targets(&mut connection, a, SystemPropertyKey::DEPENDS_ON_UUID)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cleanup_tolerates_malformed_previous_neighbor_value(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let a = Uuid::now_v7();
+    let b = Uuid::now_v7();
+    task(&pool, a).await?;
+    task(&pool, b).await?;
+    link(
+        &pool,
+        a,
+        SystemPropertyKey::DEPENDS_ON_UUID,
+        vec![],
+        vec![b],
+    )
+    .await?;
+
+    let mut tx = pool.begin().await?;
+    sqlx::query!("SET LOCAL macro.task_dependency_backfill = 'on'")
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query!(
+        "UPDATE entity_properties SET values = $1 WHERE entity_id = $2 AND property_definition_id = $3",
+        serde_json::json!({"type": "EntityReference", "value": [{}]}),
+        b.to_string(),
+        SystemPropertyKey::BLOCKING_UUID,
+    )
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+
+    let entity = models_properties::EntityReference::new(
+        a.to_string(),
+        models_properties::EntityType::Document,
+    );
+    let effects =
+        super::super::entity_property_queries::delete_entity_properties(&pool, &entity).await?;
+    assert_eq!(effects.len(), 1);
+    assert_eq!(effects[0].previous_value, None);
+    assert_eq!(effects[0].value, None);
+    assert!(
+        super::super::entity_property_queries::delete_entity_properties(&pool, &entity)
+            .await?
+            .is_empty()
+    );
+    let mut connection = pool.acquire().await?;
+    assert!(
+        targets(&mut connection, b, SystemPropertyKey::BLOCKING_UUID)
+            .await?
+            .is_empty()
+    );
+    Ok(())
+}
