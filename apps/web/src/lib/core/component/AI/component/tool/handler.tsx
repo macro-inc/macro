@@ -119,6 +119,7 @@ import { getThreadHandler } from './GetThread';
 import {
   createImportEntityHandler,
   deleteImportEntityHandler,
+  importFromHubspotHandler,
   importFromJiraHandler,
   importFromLinearHandler,
   importFromNotionHandler,
@@ -268,6 +269,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ImportFromNotion: importFromNotionHandler,
   ImportFromLinear: importFromLinearHandler,
   ImportFromJira: importFromJiraHandler,
+  ImportFromHubspot: importFromHubspotHandler,
   ImportNotionPage: importNotionPageHandler,
   ConnectMcpServer: connectMcpServerHandler,
   GetCompany: getCompanyHandler,

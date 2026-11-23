@@ -4,6 +4,7 @@ import {
   alreadyInMacroSummary,
   buildPlanTree,
   EMPTY_IMPORT_DRAFT,
+  hubspotTotals,
   type ImportDraft,
   type ImportPlanEntry,
   type ImportProgress,
@@ -162,7 +163,10 @@ export function createImportReview(sources: ImportReviewSources) {
         draft(),
         sources.report()?.onTeam ?? true
       ),
-    totals: () => planTotals(sources.entries(), draft().excluded),
+    totals: () => [
+      ...planTotals(sources.entries(), draft().excluded),
+      ...hubspotTotals(sources.report()?.hubspot),
+    ],
     planningStatus: () =>
       planningStatus(progress(), sources.entries(), draft().source),
     alreadyInMacroSummary: () => alreadyInMacroSummary(sources.entries()),

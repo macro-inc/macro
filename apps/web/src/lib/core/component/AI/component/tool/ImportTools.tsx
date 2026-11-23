@@ -94,16 +94,24 @@ export const importNotionPageHandler = createToolRenderer({
 
 /** Progress while the short plan call waits; the persisted review takes over. */
 function WorkspaceScanProgress(props: {
-  source: 'notion' | 'linear' | 'jira';
+  source: 'notion' | 'linear' | 'jira' | 'hubspot';
 }) {
   const report = useWorkspaceImportReportQuery(() => props.source);
   return (
     <Show when={queryReadyGate(report) ? report.data.scanned : undefined}>
       {(scanned) => (
         <span class="shrink-0 text-ink-muted">
-          {scanned().pages} {props.source === 'notion' ? 'pages' : 'issues'},{' '}
-          {scanned().dataSources}{' '}
-          {props.source === 'notion' ? 'databases' : 'projects'} found
+          {scanned().pages}{' '}
+          {match(props.source)
+            .with('notion', () => 'pages')
+            .with('linear', 'jira', () => 'issues')
+            .with('hubspot', () => 'records')
+            .exhaustive()}
+          <Show when={props.source !== 'hubspot'}>
+            , {scanned().dataSources}{' '}
+            {props.source === 'notion' ? 'databases' : 'projects'}
+          </Show>{' '}
+          found
         </span>
       )}
     </Show>
@@ -112,9 +120,12 @@ function WorkspaceScanProgress(props: {
 
 function WorkspaceImportTool(
   ctx: ToolRenderContext<
-    'ImportFromNotion' | 'ImportFromLinear' | 'ImportFromJira'
+    | 'ImportFromNotion'
+    | 'ImportFromLinear'
+    | 'ImportFromJira'
+    | 'ImportFromHubspot'
   > &
-    RenderContext & { source: 'notion' | 'linear' | 'jira' }
+    RenderContext & { source: 'notion' | 'linear' | 'jira' | 'hubspot' }
 ) {
   const [isExpanded, setIsExpanded] = createSignal(false);
   const hasResponse = () => ctx.response !== undefined;
@@ -124,6 +135,7 @@ function WorkspaceImportTool(
       .with('notion', () => 'Notion')
       .with('linear', () => 'Linear')
       .with('jira', () => 'Jira')
+      .with('hubspot', () => 'HubSpot')
       .exhaustive();
   const label = () =>
     match(ctx.tool.data.action)
@@ -172,6 +184,10 @@ export const importFromLinearHandler = createToolRenderer({
 export const importFromJiraHandler = createToolRenderer({
   name: 'ImportFromJira',
   render: (ctx) => <WorkspaceImportTool {...ctx} source="jira" />,
+});
+export const importFromHubspotHandler = createToolRenderer({
+  name: 'ImportFromHubspot',
+  render: (ctx) => <WorkspaceImportTool {...ctx} source="hubspot" />,
 });
 
 export const deleteImportEntityHandler = createToolRenderer({

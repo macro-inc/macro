@@ -1043,7 +1043,7 @@ export type Code =
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack' | 'hubspot';
 /**
  * Status values accepted by [`CreateImportEntity`].
  */
@@ -3720,10 +3720,6 @@ export type Granularity = 'day' | 'week' | 'month' | 'summary';
  */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
 /**
- * Who a Notion workspace import shares what it writes with.
- */
-export type NotionSharing = 'team' | 'personal' | 'ai';
-/**
  * Lifecycle of a discovery run (one per user × source).
  */
 export type RunStatus =
@@ -3749,7 +3745,28 @@ export type ImportKind =
   | 'jira_issue'
   | 'jira_project'
   | 'jira_epic'
-  | 'channel';
+  | 'channel'
+  | 'hubspot_pipeline'
+  | 'hubspot_company'
+  | 'hubspot_contact'
+  | 'hubspot_deal';
+/**
+ * Something a HubSpot import cannot carry into Macro CRM, counted on the
+ * review card and in the final report.
+ */
+export type HubspotLoss =
+  | 'owner_not_member'
+  | 'deal_without_company'
+  | 'deal_without_pipeline'
+  | 'extra_company_links'
+  | 'domain_rejected'
+  | 'unsupported_currency'
+  | 'additional_domains'
+  | 'company_owner';
+/**
+ * Who a Notion workspace import shares what it writes with.
+ */
+export type NotionSharing = 'team' | 'personal' | 'ai';
 /**
  * A kind of action or inactivity the user should see: `permission` to run a tool, an
  * `elicitation` question or form, a `tool_approval` held for the owner, or `stalled` with no
@@ -11139,19 +11156,15 @@ export interface ToolAddedOptions {
   labels: string[];
 }
 /**
- * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+ * Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps records already written.
  */
-export interface ImportFromJira {
+export interface ImportFromHubspot {
   action: NotionImportAction;
-  /**
-   * The user's visibility choice: team, personal or AI. Ask if required.
-   */
-  sharing?: NotionSharing | null;
 }
 /**
- * Where a reviewed tracker import stands and what the agent should do next.
+ * Where a HubSpot import stands and what the agent should do next.
  */
-export interface TrackerImportResponse {
+export interface HubspotImportResponse {
   report: NotionImportReport;
   /**
    * Guidance on presenting or approving the current plan.
@@ -11280,6 +11293,10 @@ export interface NotionImportReport {
    * Objects that failed to import, with the failure.
    */
   failures?: NotionReportItem[];
+  /**
+   * A HubSpot plan's counts, owners and losses.
+   */
+  hubspot?: HubspotReport | null;
 }
 /**
  * What a planning run has found in the source so far.
@@ -11328,6 +11345,77 @@ export interface NotionReportItem {
    * Why it is called out: the decision model's reason, or the failure.
    */
   reason?: string | null;
+}
+/**
+ * What a HubSpot plan holds, for the review card.
+ */
+export interface HubspotReport {
+  /**
+   * Deal pipelines, each becoming a Macro pipeline.
+   */
+  pipelines: number;
+  /**
+   * Companies.
+   */
+  companies: number;
+  /**
+   * Contacts.
+   */
+  contacts: number;
+  /**
+   * Deals, each becoming an entry in its pipeline.
+   */
+  deals: number;
+  /**
+   * HubSpot owners named by the planned records.
+   */
+  owners: number;
+  /**
+   * Of those, owners matched to a team member by email.
+   */
+  ownersMatched: number;
+  /**
+   * Records already in Macro from an earlier import, left as they are.
+   */
+  alreadyImported: number;
+  /**
+   * What cannot be carried over, by kind.
+   */
+  losses: HubspotLossCount[];
+  /**
+   * Portal-defined property names whose values stay in HubSpot.
+   */
+  customProperties: string[];
+}
+/**
+ * How many records lost one thing.
+ */
+export interface HubspotLossCount {
+  loss: HubspotLoss;
+  /**
+   * Records affected.
+   */
+  count: number;
+}
+/**
+ * Import Jira Cloud into Macro: issues become tasks, and projects and epics become Macro projects. Plan reads all sites visible through the user's connected Jira account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: jira}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.
+ */
+export interface ImportFromJira {
+  action: NotionImportAction;
+  /**
+   * The user's visibility choice: team, personal or AI. Ask if required.
+   */
+  sharing?: NotionSharing | null;
+}
+/**
+ * Where a reviewed tracker import stands and what the agent should do next.
+ */
+export interface TrackerImportResponse {
+  report: NotionImportReport;
+  /**
+   * Guidance on presenting or approving the current plan.
+   */
+  message: string;
 }
 /**
  * Import a Linear workspace into Macro: issues become tasks, and teams, projects and initiatives become Macro projects. Plan reads only through the user's connected Linear account; no source writes are possible. First plan without sharing unless the user already chose. If sharing is required, ask team, personal, or AI; users without a team get a personal import. Present the plan immediately with PresentReview kind import, drafts [{source: linear}], even while it is running. Do not poll status or recreate plan items with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps completed copies.

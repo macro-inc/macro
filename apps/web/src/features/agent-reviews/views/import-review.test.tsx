@@ -348,6 +348,7 @@ describe('import review', () => {
       reviewId: 'review',
       handItems: [],
       failures: [],
+      hubspot: null,
     };
     setup({ item: { status: 'completed' } });
     expect(
