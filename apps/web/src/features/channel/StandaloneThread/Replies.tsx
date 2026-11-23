@@ -124,6 +124,7 @@ export function Replies(props: RepliesProps) {
                               format="dateAndTime"
                             />
                             <Message.EditedIndicator class="shrink-0" />
+                            <Message.UnsentIndicator class="shrink-0" />
                           </div>
                           <Message.FromPill />
                         </Message.Slot>

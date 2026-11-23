@@ -58,6 +58,7 @@ import {
 } from './reconcile';
 import { applyMessage, applyRootDeletion, applyThreadState } from './sync';
 import { getMessageTimelineQueryKeyPrefix } from './timeline';
+import { SEND_MESSAGE_MUTATION_KEY } from './unsent';
 
 /** Deduplicate the one committed-message event echoed by the server. */
 function registerMessageNonces(optimisticId: string): void {
@@ -435,6 +436,7 @@ export function useSendMessageMutation(
   const analytics = useAnalytics();
 
   return useMutation(() => ({
+    mutationKey: SEND_MESSAGE_MUTATION_KEY,
     gcTime: 0,
     networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: SendMessageParams) => {

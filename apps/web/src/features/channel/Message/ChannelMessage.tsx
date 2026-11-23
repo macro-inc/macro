@@ -153,6 +153,7 @@ function RegularMessageLayout(props: {
               }
             />
             <Message.EditedIndicator class="shrink-0" />
+            <Message.UnsentIndicator class="shrink-0" />
           </div>
           <Message.AgentSessionLink class="ml-auto" />
         </div>
@@ -199,6 +200,8 @@ function GroupedMessageLayout(props: {
             messageEditor={props.messageEditor}
             class="min-w-0 flex-1"
           />
+          {/* No sender line to sit on either: the label takes the row's end. */}
+          <Message.UnsentIndicator class="shrink-0 mt-0.5" />
           {/* No sender line to sit on: the link takes the top right of the
               content row instead. */}
           <Message.AgentSessionLink class="mt-0.5" />

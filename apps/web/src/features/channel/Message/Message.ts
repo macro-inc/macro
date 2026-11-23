@@ -17,6 +17,7 @@ import { SenderIcon } from './SenderIcon';
 import { MessageSenderName } from './SenderName';
 import { Slot } from './Slot';
 import { Timestamp } from './Timestamp';
+import { UnsentIndicator } from './UnsentIndicator';
 
 export const Message = {
   Root,
@@ -34,6 +35,7 @@ export const Message = {
   NewDivider,
   Reactions,
   EditedIndicator,
+  UnsentIndicator,
   HoverActions,
   MessageFlag,
   ActionMenu,
