@@ -33,6 +33,17 @@ function pane() {
   const split = document.createElement('div');
   split.dataset.hotkeyScope = 'split-test';
   split.innerHTML = `
+    <div data-view-shell-aside>
+      <aside data-view-sidebar>
+        <nav aria-label="Email tabs">
+          <button type="button">Inbox</button>
+          <button type="button">Favorites</button>
+          <button type="button" aria-haspopup="menu">Options</button>
+          <input aria-label="View name" />
+        </nav>
+        <button type="button">New</button>
+      </aside>
+    </div>
     <div data-view-shell-main>
       <div role="radiogroup" aria-label="Inbox view"></div>
       <button type="button">Filter</button>
@@ -43,9 +54,12 @@ function pane() {
       <button type="button">Reply</button>
       <p>Here is the plan.</p>
     </div>`;
-  document.body.append(split);
+  const rail = document.createElement('nav');
+  rail.dataset.hotkeyScopeNeutral = '';
+  rail.innerHTML = '<button type="button">Mail</button>';
+  document.body.append(rail, split);
   for (const region of split.querySelectorAll(
-    '[data-view-shell-main], [data-view-shell-detail]'
+    '[data-view-shell-aside], [data-view-shell-main], [data-view-shell-detail]'
   )) {
     Object.defineProperty(region, 'getClientRects', {
       configurable: true,
@@ -66,10 +80,36 @@ function pane() {
     detail: find('[data-hotkey-scope="thread"]'),
     detailButton: find('[data-view-shell-detail] button'),
     detailText: find('[data-view-shell-detail] p'),
+    inbox: find('nav button'),
+    favorites: find('nav button + button'),
+    options: find('nav [aria-haspopup]'),
+    viewName: find('nav input'),
+    sidebarNew: find('aside > button'),
+    rail: rail.querySelector('button')!,
     hide: () => {
       onScreen = false;
     },
   };
+}
+
+const press = (element: Element) =>
+  element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+const focus = (element: Element) =>
+  element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+const typeKey = () =>
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }));
+
+function mailTabs(view: ReturnType<typeof pane>) {
+  const move = vi.fn();
+  useViewTabHotkeys({
+    scopeId: 'split-test',
+    tabs: () => view.tabs,
+    ids: () => ['focus', 'important', 'noise'],
+    activeId: () => 'important',
+    setActiveId: move,
+    label: (id) => id,
+  });
+  return move;
 }
 
 afterEach(() => {
@@ -212,10 +252,6 @@ it('leaves the split itself to the pane the user last put the keyboard in', () =
       setActiveId: move,
       label: (id) => id,
     });
-    const press = (element: Element) =>
-      element.dispatchEvent(new Event('pointerdown', { bubbles: true }));
-    const focus = (element: Element) =>
-      element.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
 
     expect(handler('tab')(keydown(view.split))).toBe(true);
     press(view.detailText);
@@ -232,6 +268,92 @@ it('leaves the split itself to the pane the user last put the keyboard in', () =
     focus(view.grid);
     expect(handler('tab')(keydown(view.split))).toBe(true);
     expect(move).toHaveBeenCalledTimes(3);
+    dispose();
+  });
+});
+
+it('leaves the keys to the pane on a sidebar destination a pointer press chose, until the keyboard moves focus', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const move = mailTabs(view);
+
+    press(view.inbox);
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(true);
+    expect(handler('2')(keydown(view.inbox))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(2);
+
+    typeKey();
+    focus(view.favorites);
+    expect(handler('tab')(keydown(view.favorites))).toBe(false);
+    // Back on the destination by the keyboard, it is focus order too.
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(false);
+    expect(move).toHaveBeenCalledTimes(2);
+    dispose();
+  });
+});
+
+it('chooses nothing with a keyboard focus, a control that opens something, a field, or a control outside the navigation', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const move = mailTabs(view);
+
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(false);
+    press(view.options);
+    focus(view.options);
+    expect(handler('tab')(keydown(view.options))).toBe(false);
+    press(view.viewName);
+    focus(view.viewName);
+    expect(handler('tab')(keydown(view.viewName))).toBe(false);
+    press(view.sidebarNew);
+    focus(view.sidebarNew);
+    expect(handler('tab')(keydown(view.sidebarNew))).toBe(false);
+    expect(move).not.toHaveBeenCalled();
+    dispose();
+  });
+});
+
+it('ends the choice when the press opens something that takes focus', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const move = mailTabs(view);
+    const dialog = document.createElement('div');
+    dialog.setAttribute('role', 'dialog');
+    document.body.append(dialog);
+
+    press(view.inbox);
+    focus(view.inbox);
+    focus(dialog);
+    // Focus handed back to the destination as the dialog closes.
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(false);
+    expect(move).not.toHaveBeenCalled();
+    dispose();
+  });
+});
+
+it('hands the pane the keyboard from a press on the navigation, wherever it was before', () => {
+  createRoot((dispose) => {
+    const view = pane();
+    const move = mailTabs(view);
+
+    press(view.detailText);
+    focus(view.split);
+    expect(handler('tab')(keydown(view.split))).toBe(false);
+    // A browser that focuses no button on a click leaves the split focused.
+    press(view.inbox);
+    expect(handler('tab')(keydown(view.split))).toBe(true);
+
+    press(view.detailText);
+    focus(view.split);
+    expect(handler('tab')(keydown(view.split))).toBe(false);
+    // The rail hands the split back the destination that had focus.
+    press(view.rail);
+    focus(view.inbox);
+    expect(handler('tab')(keydown(view.inbox))).toBe(true);
+    expect(move).toHaveBeenCalledTimes(2);
     dispose();
   });
 });

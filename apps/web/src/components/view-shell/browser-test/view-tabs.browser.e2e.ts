@@ -202,8 +202,44 @@ test('a view chosen on the app rail leaves Tab to the header tabs', async ({
   // From a project, the rail returns to Mail and its tabs.
   await project.click();
   await rail.click();
-  await expect(page.getByRole('radiogroup', { name: 'Inbox view' })).toBeVisible();
+  await expect(
+    page.getByRole('radiogroup', { name: 'Inbox view' })
+  ).toBeVisible();
   await page.keyboard.press('Tab');
   await expect(tab).toHaveText('focus');
   await expect(section).toHaveText('overview');
+});
+
+test('a sidebar control that opens a menu or a dialog chooses nothing, so Tab stays focus order after it closes', async ({
+  page,
+}) => {
+  const { tab, folder, project } = await openWithSidebar(page);
+  await folder('Inbox').click();
+  const options = page.getByRole('button', { name: 'Saved view options' });
+  const create = page.getByRole('button', { name: 'Create view' });
+
+  await options.click();
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(options).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(create).toBeFocused();
+
+  await options.click();
+  await page.getByRole('menuitem', { name: 'Rename' }).click();
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(options).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(create).toBeFocused();
+
+  await create.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(create).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(project).toBeFocused();
+  await expect(tab).toHaveText('important');
 });

@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { hotkeyScopeNeutralSelector } from '@core/dom-selectors';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { getScopeElement } from '@core/hotkey/utils';
 import { isEditableInput } from '@core/util/isEditableInput';
@@ -44,6 +45,45 @@ const OWNS_ITS_KEYS_SELECTOR = '[data-owns-arrow-keys]';
 const PANE_REGION_SELECTOR =
   '[data-view-shell-list], [data-view-shell-main], [data-view-shell-aside], [data-view-shell-detail]';
 
+/** A view sidebar's navigation: its folders, views and scopes. */
+const SIDEBAR_NAVIGATION_SELECTOR = '[data-view-sidebar] nav';
+
+/**
+ * Where a pointer press chooses what a pane shows rather than putting the
+ * keyboard there: a view sidebar's navigation, or the app's own chrome
+ * outside the splits (the rail), which hands focus back to the split.
+ */
+const NAVIGATION_SELECTOR = `${SIDEBAR_NAVIGATION_SELECTOR}, ${hotkeyScopeNeutralSelector}`;
+
+/**
+ * Controls beside the destinations that open or disclose something (a menu,
+ * a dialog, a picker, a folder's children) instead of choosing one.
+ */
+const DISCLOSURE_SELECTOR =
+  '[aria-haspopup]:not([aria-haspopup="false"]), [aria-expanded], [data-view-sidebar-control]';
+
+/** Whether a pointer press at `target` chooses what a pane shows. */
+function choosesDestination(target: Element): boolean {
+  return (
+    !!target.closest(NAVIGATION_SELECTOR) &&
+    !target.closest(DISCLOSURE_SELECTOR) &&
+    !isEditableInput(target)
+  );
+}
+
+/**
+ * Whether focus landing on `target` during a press at `pressed` that chose a
+ * destination is that destination: the sidebar destination pressed, or the
+ * one the rail's press handed the split back to.
+ */
+function isChosenDestination(target: Element, pressed: Element): boolean {
+  return (
+    choosesDestination(target) &&
+    !!target.closest(SIDEBAR_NAVIGATION_SELECTOR) &&
+    (target.contains(pressed) || !!pressed.closest(hotkeyScopeNeutralSelector))
+  );
+}
+
 /** Whether an element is laid out on screen, outside an inert layer. */
 function isOnScreen(element: Element | undefined): boolean {
   if (!element?.isConnected) return false;
@@ -59,19 +99,23 @@ function isOnScreen(element: Element | undefined): boolean {
  * after a load or an item opening, unless the user last put the keyboard in
  * another of the split's panes still on screen (`lastPlace`, that pane: a
  * press on plain text in a detail beside the list focuses the split itself).
+ * So does a sidebar destination a pointer press focused (`chosen`): the
+ * press chose what the pane shows, and the browser left focus on it.
  */
 function keyboardIsOnPane(
   target: EventTarget | null | undefined,
   tabs: Element,
   split: Element | null,
-  lastPlace: Element | undefined
+  lastPlace: Element | undefined,
+  chosen: Element | undefined
 ): boolean {
   const pane = tabs.closest(PANE_REGION_SELECTOR) ?? split;
   if (
     !(target instanceof Element) ||
     target === document.body ||
     target === document.documentElement ||
-    target === split
+    target === split ||
+    target === chosen
   )
     return (
       !lastPlace ||
@@ -91,7 +135,9 @@ function keyboardIsOnPane(
  * Tab, Shift+Tab and 1–9 for the tabs in a pane's top bar. They act only
  * while those tabs are on screen and the keyboard is on the pane; anywhere
  * else (a field, an editor, a button, an open item without tabs) Tab is
- * normal focus order. A split can hold several panes with tabs (a list
+ * normal focus order. A destination chosen with the pointer in a view's
+ * sidebar or on the rail leaves the keyboard on the pane, though the
+ * browser may leave focus on it. A split can hold several panes with tabs (a list
  * beside a conversation), so each set registers alongside the others and
  * the first whose pane has the keyboard takes the key.
  */
@@ -103,18 +149,42 @@ export function useViewTabHotkeys<TTab extends string>(
   // pressed, or of the last one focused other than the split itself. The
   // pane rather than the element, so content replaced inside it keeps it.
   let lastPlace: WeakRef<Element> | undefined;
+  // A press that chose a destination leaves no place. It lasts until the
+  // next key, press or focus elsewhere (a menu or dialog it opened), and the
+  // destination it left focus on is `chosen` until focus moves on.
+  let press: WeakRef<Element> | undefined;
+  let chosen: WeakRef<Element> | undefined;
   const remember = (event: Event) => {
+    if (event.type === 'keydown') {
+      press = undefined;
+      return;
+    }
     const target = event.target;
     if (!(target instanceof Element)) return;
-    if (event.type === 'focusin' && target === getScopeElement(options.scopeId))
-      return;
+    if (event.type === 'pointerdown') {
+      press = choosesDestination(target) ? new WeakRef(target) : undefined;
+      if (press) {
+        lastPlace = undefined;
+        return;
+      }
+    } else {
+      if (target === getScopeElement(options.scopeId)) return;
+      const pressed = press?.deref();
+      if (pressed && isChosenDestination(target, pressed)) {
+        chosen = new WeakRef(target);
+        return;
+      }
+      press = undefined;
+      chosen = undefined;
+    }
     lastPlace = new WeakRef(target.closest(PANE_REGION_SELECTOR) ?? target);
   };
-  document.addEventListener('pointerdown', remember, { capture: true });
-  document.addEventListener('focusin', remember, { capture: true });
+  const listened = ['pointerdown', 'focusin', 'keydown'] as const;
+  for (const type of listened)
+    document.addEventListener(type, remember, { capture: true });
   onCleanup(() => {
-    document.removeEventListener('pointerdown', remember, { capture: true });
-    document.removeEventListener('focusin', remember, { capture: true });
+    for (const type of listened)
+      document.removeEventListener(type, remember, { capture: true });
   });
   const isEnabled = () =>
     (options.enabled?.() ?? true) && isOnScreen(options.tabs());
@@ -127,7 +197,8 @@ export function useViewTabHotkeys<TTab extends string>(
         event.target,
         tabs,
         getScopeElement(options.scopeId),
-        lastPlace?.deref()
+        lastPlace?.deref(),
+        chosen?.deref()
       )
     );
   };

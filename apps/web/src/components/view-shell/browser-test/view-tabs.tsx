@@ -11,7 +11,7 @@ import {
   useHotKeyRoot,
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
-import { Button, pressHandlers, Tabs } from '@ui';
+import { Button, Dialog, Dropdown, pressHandlers, Tabs } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ListHeader } from '../ListHeader';
@@ -45,8 +45,9 @@ const THREADS = ['Quarterly plan', 'Lunch on Friday', 'Release notes'];
  * beside it in a detail pane. `?width=<px>` narrows the split. `?sidebar`
  * adds a real `ViewSidebar` whose folders change what the list shows, as
  * Email's do (only Inbox has tabs), and a project with section tabs of its
- * own, beside a stand-in for the app rail, which hands focus back to the
- * split after a press as the real one does.
+ * own, saved-view controls that open a menu and a dialog, beside a stand-in
+ * for the app rail, which hands focus back to the split after a press as the
+ * real one does.
  */
 function Fixture() {
   const params = new URLSearchParams(location.search);
@@ -62,6 +63,8 @@ function Fixture() {
   const [place, setPlace] = createSignal<Place>('Inbox');
   const [section, setSection] = createSignal<Section>('overview');
   const [sectionTabs, setSectionTabs] = createSignal<HTMLElement>();
+  const [creating, setCreating] = createSignal(false);
+  let createView: HTMLButtonElement | undefined;
 
   const list = createListController({
     items: () => THREADS.map((subject) => ({ id: subject })),
@@ -109,8 +112,7 @@ function Fixture() {
     ids: () => SECTIONS.map((option) => option.value),
     activeId: section,
     setActiveId: setSection,
-    label: (id) =>
-      SECTIONS.find((option) => option.value === id)?.label ?? id,
+    label: (id) => SECTIONS.find((option) => option.value === id)?.label ?? id,
   });
 
   // The rail's press keeps focus off its button and gives the split back
@@ -249,6 +251,23 @@ function Fixture() {
                     )}
                   </For>
                 </ViewSidebar.Nav>
+                <ViewSidebar.Nav aria-label="Saved views">
+                  <Dropdown placement="bottom-start">
+                    <Dropdown.Trigger aria-label="Saved view options">
+                      Options
+                    </Dropdown.Trigger>
+                    <Dropdown.Content>
+                      <Dropdown.Item>Rename</Dropdown.Item>
+                      <Dropdown.Item>Duplicate</Dropdown.Item>
+                    </Dropdown.Content>
+                  </Dropdown>
+                  <ViewSidebar.Item
+                    ref={createView}
+                    onClick={() => setCreating(true)}
+                  >
+                    Create view
+                  </ViewSidebar.Item>
+                </ViewSidebar.Nav>
                 <ViewSidebar.Nav aria-label="Projects">
                   <ViewSidebar.Item
                     active={place() === PROJECT}
@@ -276,6 +295,22 @@ function Fixture() {
             </div>
           </Show>
         </div>
+        <Dialog
+          open={creating()}
+          onOpenChange={setCreating}
+          onCloseAutoFocus={(event) => {
+            // Back to its opener, as a dialog's own trigger does.
+            event.preventDefault();
+            createView?.focus();
+          }}
+        >
+          <div class="flex flex-col gap-2 p-4">
+            <h2 class="text-sm font-medium">New view</h2>
+            <Button variant="secondary" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+          </div>
+        </Dialog>
         <output data-testid="tab">{tab()}</output>
         <output data-testid="section">{section()}</output>
       </div>
