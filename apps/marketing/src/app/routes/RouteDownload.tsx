@@ -104,9 +104,9 @@ export function RouteDownload() {
         <article class="documentation-body">
           <h2 id="desktop">Desktop</h2>
           <p>
-            The desktop app runs on macOS 15 or later with Apple silicon, and on
-            x86_64 Linux as an AppImage. It updates itself when a new release is
-            published.
+            The macOS app requires macOS 13 (Ventura) or later on a Mac with
+            Apple silicon. The Linux app is an x86_64 AppImage. The desktop app
+            updates itself when a new release is published.
           </p>
           <p>
             For self-hosting, see the{' '}

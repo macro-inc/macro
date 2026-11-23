@@ -19,7 +19,11 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
   DesktopPlatform,
   { label: string; requirement: string }
 > = {
-  macos: { label: 'macOS', requirement: 'macOS 15 or later, Apple silicon' },
+  macos: {
+    label: 'macOS',
+    requirement:
+      'Requires macOS 13 (Ventura) or later on a Mac with Apple silicon.',
+  },
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };
 
