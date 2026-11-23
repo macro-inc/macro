@@ -37,7 +37,43 @@ const permission = (): MessagePart => ({
   outcome: { kind: 'pending' },
 });
 
+const hold = (
+  serverSlug = 'macro-sdk',
+  status: 'pending' | 'approved' | 'denied' = 'approved'
+): MessagePart => ({
+  kind: 'tool_approval',
+  approvalId: 'hold',
+  serverSlug,
+  serverName: 'Macro',
+  toolName: 'ExecuteCode',
+  arguments: null,
+  requestedBy: null,
+  status,
+  resolvedBy: null,
+  remembered: false,
+  approver: null,
+});
+
 describe('segmentParts', () => {
+  it('keeps a permission hold inside its program’s run, answered or not', () => {
+    for (const status of ['pending', 'approved', 'denied'] as const) {
+      expect(
+        segmentParts([tool(), hold('macro-sdk', status), tool(), text()])
+      ).toEqual([
+        { kind: 'tools', start: 0, end: 3 },
+        { kind: 'part', start: 3, end: 4 },
+      ]);
+    }
+  });
+
+  it('still breaks a run at another server’s held call', () => {
+    expect(segmentParts([tool(), hold('linear'), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'tools', start: 2, end: 3 },
+    ]);
+  });
+
   it('leaves a message without tool calls as one segment per part', () => {
     expect(segmentParts([text(), text()])).toEqual([
       { kind: 'part', start: 0, end: 1 },

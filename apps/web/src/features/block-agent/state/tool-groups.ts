@@ -9,7 +9,9 @@
  * Tools with their own answer or session view always break the run, including
  * while their arguments are still arriving. So do a program its permissions
  * blocked (its card says what was refused and must stay in view) and a
- * ShowPermissions call (its card holds live controls).
+ * ShowPermissions call (its card holds live controls). A hold on the
+ * agent's permissions renders nothing in the transcript, so it never splits
+ * a run.
  *
  * Thoughts after a run's last call belong to the run, at the tail of the
  * message too: the run's live line says `Thinking` while the tail thought
@@ -28,6 +30,7 @@
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { codeExecutionReceipt } from './code-execution';
 import {
+  isPermissionHold,
   isShowPermissions,
   parseExecutionPermission,
 } from './permission-approval';
@@ -83,6 +86,8 @@ function isGroupable(part: MessagePart | undefined): boolean {
   return (
     part?.kind === 'thought' ||
     isBlankText(part) ||
+    // A permission hold renders nothing, so it joins its program's run.
+    isPermissionHold(part) ||
     (part?.kind === 'tool_use' &&
       part.detail.kind !== 'subagent' &&
       part.detail.kind !== 'user_tool' &&

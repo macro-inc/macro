@@ -1,6 +1,6 @@
 import {
   BlockedPermissionsNotice,
-  describeGatedThings,
+  gatedThingsTitle,
 } from '@app/features/agent-permissions';
 import { t } from '@app/lib/i18n';
 import { createEffect, Match, on, Suspense, Switch } from 'solid-js';
@@ -113,16 +113,16 @@ export function CodeExecutionPart(props: {
           />
         )}
       </Match>
+      {/* A held program nobody allowed is a failed step: what it would have
+          done, and why it didn't. */}
       <Match when={declined()}>
         {(current) => (
           <ToolCard
-            title={t('agentPermissionsChat.didntRun', {
-              things: describeGatedThings(current().operations),
-            })}
-            status="completed"
+            title={gatedThingsTitle(current().operations)}
+            status="failed"
             muted
             trailing={match(current().status)
-              .with('denied', () => t('agentPermissionsChat.declined'))
+              .with('denied', () => t('agentPermissionsChat.denied'))
               .with('cancelled', () => t('agentPermissionsChat.cancelled'))
               .with('expired', () =>
                 t('agentPermissionsChat.notApprovedInTime')

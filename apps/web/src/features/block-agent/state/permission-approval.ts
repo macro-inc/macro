@@ -17,6 +17,17 @@ import { z } from 'zod';
 /** The approval server slug of a hold on the agent's permissions. */
 export const PERMISSION_HOLD_SLUG = 'macro-sdk';
 
+/**
+ * A hold on the agent's permissions in the transcript. It shows nothing
+ * there: the pending one docks above the composer, and once answered the
+ * program's own row says whether it ran.
+ */
+export function isPermissionHold(part: MessagePart | undefined): boolean {
+  return (
+    part?.kind === 'tool_approval' && part.serverSlug === PERMISSION_HOLD_SLUG
+  );
+}
+
 const PERMISSION_ACTION = z.enum([
   'create',
   'read',
@@ -87,7 +98,7 @@ const showPermissionsResultSchema = z.object({
 });
 
 export type PermissionHold = {
-  /** The program, for "View program". */
+  /** The program. */
   source?: string;
   /** The TypeScript module beside it, shown with it; it reaches no network. */
   module?: string;
