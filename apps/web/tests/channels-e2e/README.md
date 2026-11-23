@@ -64,7 +64,7 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | `CHANNELS_E2E_KEEP_NOTIFICATIONS` | Set, global setup leaves the people's notifications as earlier runs left them; by default it removes them, so a run does not carry the load of the runs before it. |
 | `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
-| `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built to keep channels on the device (the client that does is not on `main` yet, and CI runs the app without it): a known defect can be marked for one build alone, and the tests of a device that keeps channels are skipped without it. |
+| `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built to keep channels on the device (the client that does is not on `main` yet, and CI runs the app without it): a known defect can be marked for one build alone. The tests of a device that keeps channels are not here: they follow that client. |
 
 The people sign in through the passwordless code flow of a local stack, so
 the suite needs a stack that offers it; it does not run against a deployed
@@ -169,8 +169,9 @@ bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
   page finish fetching the app's code before it cuts it off: no test asserts
   on it.
 - A test of what only a build with `VITE_ENABLE_CHANNEL_LOCAL_SYNC` does (channels
-  kept on the device, writes that wait there) skips itself on other builds
-  with `test.skip(!LOCAL_SYNC_BUILD, ...)`.
+  kept on the device, writes that wait there) does not belong here until
+  `main` has that client: the check of a run against the ledger counts a
+  skipped test as a failure, so a test cannot skip itself on other builds.
 - A test that runs on both builds and reads messages can fail on one alone:
   with the flag, messages come through the device's own path, and a break
   of the other path leaves the test passing, so watch it fail on each.
