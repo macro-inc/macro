@@ -99,7 +99,7 @@ export function MobileComposerReminders(props: ComposerReminderOptions) {
         </Show>
       </Show>
       <Show when={props.preservedCount > 0}>
-        <p class="px-3 pb-2 text-[13px] text-ink-muted">
+        <p class="px-3 pb-2 text-xs text-ink-muted">
           {t('calendar.otherNotificationsPreserved', {
             count: props.preservedCount,
           })}

@@ -163,7 +163,7 @@ function EveryoneElseDeclinedNotice(props: {
       <div class="border-edge-muted mx-3 mb-3 grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-4 rounded-lg border bg-active p-3 text-sm text-ink-muted sm:mt-2 sm:grid-cols-[1rem_minmax(0,1fr)] sm:gap-x-3 sm:text-xs">
         <span
           aria-hidden="true"
-          class="flex size-5 shrink-0 items-center justify-center rounded bg-ink/10 text-ink-muted sm:size-4"
+          class="flex size-5 shrink-0 items-center justify-center rounded bg-control text-ink-muted sm:size-4"
         >
           <ExclamationIcon class="size-3" />
         </span>
@@ -241,7 +241,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
               aria-label="Close event details"
               variant="ghost"
               size="icon-md"
-              class="size-11 rounded-full bg-ink/6 text-ink-muted"
+              class="size-11 rounded-full bg-control text-ink-muted"
             >
               <CloseIcon class="size-5 shrink-0" />
             </MobileDrawer.Close>
@@ -252,7 +252,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Copy event"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={() => copyCalendarEventMention(props.event)}
                 >
                   <LinkIcon class="size-5 shrink-0" />
@@ -262,7 +262,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Download .ics"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={() => downloadCalendarEventIcs(props.event)}
                 >
                   <DownloadSimpleIcon class="size-5 shrink-0" />
@@ -272,7 +272,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Forward by email"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={forwardByEmail}
                 >
                   <ArrowBendUpRightIcon class="size-5 shrink-0" />
@@ -284,7 +284,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip="Edit event"
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={openEditor}
                 >
                   <PencilSimpleIcon class="size-5 shrink-0" />
@@ -296,7 +296,7 @@ function EventDetailsDrawer(props: EventDetailsOverlayProps) {
                   tooltip={deleteEventLabel(props.event)}
                   variant="ghost"
                   size="icon-md"
-                  class="size-11 bg-ink/6 text-ink-muted"
+                  class="size-11 bg-control text-ink-muted"
                   onClick={deleteDialog.open}
                 >
                   <TrashIcon class="size-5 shrink-0" />

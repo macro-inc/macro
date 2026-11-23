@@ -58,8 +58,8 @@ export function WhenTimeOptions(props: {
               }
               class={cn(
                 'flex items-center justify-between gap-3',
-                props.inline && 'h-11 rounded-[20px] px-3 text-[15px]',
-                option.id === props.selectedId && 'bg-accent/18! text-accent'
+                props.inline && 'h-11 rounded-[20px] px-3 text-base',
+                option.id === props.selectedId && 'bg-selected! text-accent'
               )}
               onPointerDown={(event) => event.preventDefault()}
               onMouseDown={(event) => event.preventDefault()}

@@ -23,9 +23,7 @@ export function MobileComposerGuestPermissions() {
   return (
     <SheetGroup aria-label={t('calendar.guestPermissions')}>
       <SheetRow icon={<ShieldIcon class="size-4" />} class="min-h-8">
-        <span class="text-[13px] text-ink-muted">
-          {t('calendar.guestsCan')}
-        </span>
+        <span class="text-xs text-ink-muted">{t('calendar.guestsCan')}</span>
       </SheetRow>
       <For each={PERMISSIONS}>
         {(permission) => (
@@ -46,9 +44,7 @@ export function MobileComposerGuestPermissions() {
         )}
       </For>
       <Show when={model.guestPolicy.disabledReason}>
-        {(reason) => (
-          <p class="px-3 pb-2 text-[13px] text-ink-muted">{reason()}</p>
-        )}
+        {(reason) => <p class="px-3 pb-2 text-xs text-ink-muted">{reason()}</p>}
       </Show>
     </SheetGroup>
   );

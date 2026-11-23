@@ -48,14 +48,12 @@ export function MobileComposerGuests() {
         />
       </Show>
       <Show when={model.guests.guestListHidden}>
-        <p class="px-3 pb-2 text-[13px] text-ink-muted">
+        <p class="px-3 pb-2 text-xs text-ink-muted">
           {t('calendar.guestListHidden')}
         </p>
       </Show>
       <Show when={model.guests.readOnlyReason}>
-        {(reason) => (
-          <p class="px-3 pb-2 text-[13px] text-ink-muted">{reason()}</p>
-        )}
+        {(reason) => <p class="px-3 pb-2 text-xs text-ink-muted">{reason()}</p>}
       </Show>
     </SheetGroup>
   );

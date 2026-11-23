@@ -264,7 +264,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
     <>
       <Show when={props.sink.lockedNotice()}>
         {(notice) => (
-          <p class="px-4 pt-3 text-xs text-ink-extra-muted/60">{notice()}</p>
+          <p class="px-4 pt-3 text-xs text-ink-disabled">{notice()}</p>
         )}
       </Show>
       <Show when={!controller.selectedCalendarOption()}>

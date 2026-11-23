@@ -11,8 +11,8 @@ export function ComposerDropTarget(props: {
       aria-hidden="true"
       data-composer-drop-target=""
       data-active={props.active || undefined}
-      class="pointer-events-none fixed z-modal flex items-center justify-center rounded-xl border-2 border-dashed border-accent/40 bg-surface text-sm text-ink-muted"
-      classList={{ 'border-accent! bg-accent/15!': props.active }}
+      class="pointer-events-none fixed z-modal flex items-center justify-center rounded-xl border-2 border-dashed border-border-secondary bg-surface text-sm text-ink-muted"
+      classList={{ 'border-accent! bg-selected!': props.active }}
       style={{
         left: `${props.bounds.left}px`,
         top: `${props.bounds.top}px`,

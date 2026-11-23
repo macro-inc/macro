@@ -628,7 +628,7 @@ function CalendarSearchControl(props: {
                                 : 'p-1.5 px-2',
                               !props.page &&
                                 index() === activeIndex() &&
-                                'bg-ink/5'
+                                'bg-active'
                             )}
                             onMouseMove={() => setActiveRow(index())}
                           >
@@ -678,7 +678,7 @@ function CalendarSearchControl(props: {
                                   class={cn(
                                     'px-2',
                                     link().kind === 'google'
-                                      ? 'bg-blue text-[white] light-mode:not-touch:not-disabled:hover:text-[white] dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
+                                      ? 'bg-blue text-button-primary-ink light-mode:not-touch:not-disabled:hover:text-button-primary-ink dark-mode:bg-blue-bg dark-mode:text-blue-ink dark-mode:not-touch:not-disabled:hover:bg-blue-hover dark-mode:not-touch:not-disabled:hover:text-blue-ink'
                                       : 'bg-hover text-ink not-touch:not-disabled:hover:bg-active not-touch:not-disabled:hover:text-ink'
                                   )}
                                   onClick={() =>

@@ -27,7 +27,7 @@ export function DateTile(props: DateTileProps) {
       }}
     >
       <span
-        class="text-[10px] font-semibold leading-3 tracking-[0.06em]"
+        class="text-xxs font-semibold leading-3 tracking-[0.06em]"
         style={{ color: props.color }}
       >
         {props.month}

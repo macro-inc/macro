@@ -243,7 +243,7 @@ export function SetupBanner(
         <div
           role="status"
           class={cn(
-            'mb-2 flex items-center gap-3 border border-accent/30 bg-accent-bg px-3 py-2 text-xs',
+            'mb-2 flex items-center gap-3 border border-accent bg-accent-bg px-3 py-2 text-xs',
             props.fullWidth ? 'rounded-none' : 'mx-2 rounded-lg'
           )}
         >

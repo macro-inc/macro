@@ -8,7 +8,7 @@ export function CalendarSettingsGroup(props: {
 }) {
   return (
     <section class="flex flex-col gap-3" aria-label={props.title}>
-      <h2 class="px-4 text-[13px] leading-4 font-medium text-ink-extra-muted">
+      <h2 class="px-4 text-xs font-medium text-ink-extra-muted">
         {props.title}
       </h2>
       <div class="bg-surface rounded-4xl p-1">{props.children}</div>
@@ -22,9 +22,7 @@ export function CalendarSettingsRow(props: {
 }) {
   return (
     <div class="flex min-h-14 min-w-0 items-center justify-between gap-3 px-4 py-2">
-      {props.label && (
-        <span class="min-w-0 text-base leading-[22px]">{props.label}</span>
-      )}
+      {props.label && <span class="min-w-0 text-base">{props.label}</span>}
       {props.children}
     </div>
   );

@@ -65,7 +65,7 @@ export function EventJoinRequests(props: {
       >
         <span
           aria-hidden="true"
-          class="flex size-5 shrink-0 items-center justify-center rounded bg-ink/10 text-ink-muted sm:size-4"
+          class="flex size-5 shrink-0 items-center justify-center rounded bg-control text-ink-muted sm:size-4"
         >
           <UserPlusIcon class="size-3" />
         </span>

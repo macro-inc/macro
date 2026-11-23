@@ -27,7 +27,7 @@ export function ComposerNotices() {
           <div
             role="note"
             aria-label={t('calendar.eventKindOutOfOffice')}
-            class="flex flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
+            class="flex flex-col gap-1 rounded-lg border border-border-secondary bg-warning-bg p-3 text-xs text-warning-ink"
           >
             <span class="font-medium">
               {t('calendar.eventKindOutOfOffice')}

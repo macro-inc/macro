@@ -51,7 +51,7 @@ function MonthWheels(props: { month: Date; weekStart?: Date }) {
   );
   return (
     <div class="flex flex-col gap-3 px-5 pb-[max(26px,var(--mobile-sheet-safe-padding))]">
-      <div class="rounded-3xl bg-ink/4 p-1">
+      <div class="rounded-3xl bg-panel p-1">
         <WheelPicker label={t('calendar.chooseMonth')}>
           <WheelColumn
             label={t('calendar.wheelMonth')}

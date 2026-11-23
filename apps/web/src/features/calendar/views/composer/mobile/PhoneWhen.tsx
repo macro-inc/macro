@@ -203,7 +203,7 @@ export function PhoneWhen(props: {
         {(reason) => (
           <p
             id={model.ids.recurrenceReason}
-            class="px-3 text-[13px] text-ink-muted"
+            class="px-3 text-xs text-ink-muted"
           >
             {reason()}
           </p>

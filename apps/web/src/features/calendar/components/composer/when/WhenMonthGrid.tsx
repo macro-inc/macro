@@ -85,10 +85,8 @@ export function WhenMonthGrid(props: {
                         day={day()}
                         month={calendar.month()}
                         class={cn(
-                          'mx-auto flex items-center justify-center rounded-full outline-none text-ink data-today:text-accent data-today:font-semibold data-selected:bg-accent! data-selected:text-button-accent-ink! data-range-start:bg-accent! data-range-start:text-button-accent-ink! data-range-end:bg-accent! data-range-end:text-button-accent-ink! data-in-range:bg-accent/18 hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent disabled:text-ink-disabled disabled:pointer-events-none',
-                          compact()
-                            ? 'size-7 text-xs'
-                            : 'size-9 text-[15px] leading-5',
+                          'mx-auto flex items-center justify-center rounded-full outline-none text-ink data-today:text-accent data-today:font-semibold data-selected:bg-accent! data-selected:text-button-accent-ink! data-range-start:bg-accent! data-range-start:text-button-accent-ink! data-range-end:bg-accent! data-range-end:text-button-accent-ink! data-in-range:bg-selected hover:bg-hover focus-visible:ring-2 focus-visible:ring-accent disabled:text-ink-disabled disabled:pointer-events-none',
+                          compact() ? 'size-7 text-xs' : 'size-9 text-base',
                           day().getMonth() !== calendar.month().getMonth() &&
                             'text-ink-disabled',
                           (day().getDay() === 0 || day().getDay() === 6) &&

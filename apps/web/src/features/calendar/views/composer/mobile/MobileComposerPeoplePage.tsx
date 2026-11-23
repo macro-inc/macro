@@ -126,7 +126,7 @@ export function MobileComposerPeoplePage(props: {
       <div class="flex flex-wrap gap-2">
         <For each={[...props.current(), ...draft()]}>
           {(guest) => (
-            <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-ink/6 pl-2 text-sm">
+            <span class="inline-flex max-w-full items-center gap-1 rounded-full bg-control pl-2 text-sm">
               <span class="truncate">{composerGuestName(guest)}</span>
               <Show
                 when={changes.canRemove(guest)}

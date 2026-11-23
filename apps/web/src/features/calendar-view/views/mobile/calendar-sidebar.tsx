@@ -63,7 +63,7 @@ function MobileBookingLinks() {
   };
   return (
     <section aria-label="Booking links" class="flex flex-col gap-2">
-      <div class="flex items-center justify-between px-3 text-[13px] font-medium text-ink-extra-muted">
+      <div class="flex items-center justify-between px-3 text-xs font-medium text-ink-extra-muted">
         <span>Booking links</span>
         <Button
           variant="ghost"
@@ -185,7 +185,7 @@ export function MobileCalendarSidebar() {
                   </For>
                 </ViewSidebar.Nav>
                 <section aria-label="Calendars" class="flex flex-col gap-2">
-                  <div class="flex items-center justify-between px-3 text-[13px] font-medium text-ink-extra-muted">
+                  <div class="flex items-center justify-between px-3 text-xs font-medium text-ink-extra-muted">
                     <span>Calendars</span>
                     <Button
                       variant="ghost"
@@ -204,7 +204,7 @@ export function MobileCalendarSidebar() {
                   <For each={groups()}>
                     {(group) => (
                       <div class="flex flex-col gap-1">
-                        <div class="truncate px-3 py-2 text-[13px] text-ink-extra-muted">
+                        <div class="truncate px-3 py-2 text-xs text-ink-extra-muted">
                           {group.emailAddress}
                         </div>
                         <For each={group.calendars}>
@@ -244,9 +244,7 @@ export function MobileCalendarSidebar() {
                 <ShowFeatureFlag flag={enableCalendarTeamOoo}>
                   <Show when={hasTeammates()}>
                     <section aria-label="Team">
-                      <div class="px-3 text-[13px] text-ink-extra-muted">
-                        Team
-                      </div>
+                      <div class="px-3 text-xs text-ink-extra-muted">Team</div>
                       <Checkbox
                         checked={view.isSourceVisible(TEAM_OOO_SOURCE_ID)}
                         onChange={(checked) =>
