@@ -63,7 +63,10 @@ impl ChannelTimelineUpdate {
 /// change committed, the same audience as `message_update`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddressedChannelTimelineUpdate {
-    /// The participants to deliver to.
+    /// The participants to deliver to. Decoding drops an id that cannot
+    /// subscribe rather than the whole update, so a writer that still sends
+    /// one costs the rest of the channel nothing.
+    #[serde(deserialize_with = "subscribable")]
     pub recipients: Vec<MacroUserIdStr<'static>>,
     /// The hydrated change.
     pub update: ChannelTimelineUpdate,
@@ -137,6 +140,13 @@ fn recipients(users: impl IntoIterator<Item = String>) -> Vec<MacroUserIdStr<'st
                 .map(|user| user.into_owned())
         })
         .collect()
+}
+
+/// Decodes recipients as [`recipients`] filters them.
+fn subscribable<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Vec<MacroUserIdStr<'static>>, D::Error> {
+    Vec::<String>::deserialize(deserializer).map(recipients)
 }
 
 /// Publishes recorded channel activity as live timeline updates.
