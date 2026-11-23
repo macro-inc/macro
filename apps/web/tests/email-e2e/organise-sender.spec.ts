@@ -4,7 +4,7 @@
 // sender filters.
 
 import { createHash } from 'node:crypto';
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { rowIds } from './harness/list';
@@ -160,47 +160,90 @@ for (const provider of PROVIDERS) {
               original
             ),
           });
-          // Match a request started after this listener, never an in-flight
-          // response from the tab change. The first hint may wait up to 5 s.
-          const refreshed = page
-            .waitForRequest(
-              (request) =>
+          if (wakeIndex === 2) {
+            // Showing a clean tab keeps its existing row and menu without IO.
+            // Advance beyond the list's coalescing interval so a delayed read
+            // would also be observed, without a wall-clock sleep.
+            const now = new Date();
+            await page.clock.install({ time: now });
+            await page.clock.pauseAt(new Date(now.getTime() + 1_000));
+            let soupRequests = 0;
+            const recordSoup = (request: Request) => {
+              if (
                 request.method() === 'POST' &&
                 new URL(request.url()).pathname.endsWith(
                   '/dss/items/soup/graphql'
                 ) &&
-                request.postData() === noise.postData(),
-              { timeout: 15_000 }
-            )
-            .catch((cause: unknown) => {
-              throw new Error(
-                `Wake ${wakeIndex} did not request the Noise list`,
-                { cause }
-              );
+                /\bquery\s+Soup\s*[( {]/.test(
+                  request.postDataJSON()?.query ?? ''
+                )
+              )
+                soupRequests += 1;
+            };
+            page.on('request', recordSoup);
+            try {
+              await wake();
+              await page.clock.runFor(5_001);
+              wakeFacts.push({
+                wakeIndex,
+                phase: 'clean-visibility',
+                soupRequests,
+                connected: await original.evaluate(
+                  (element) => element.isConnected
+                ),
+                sameNode: await row(page, photos.id).evaluate(
+                  (element, reference) => element === reference,
+                  original
+                ),
+              });
+              expect(soupRequests).toBe(0);
+            } finally {
+              page.off('request', recordSoup);
+              await page.clock.resume();
+            }
+          } else {
+            // Match a request started after this listener, never an in-flight
+            // response from the tab change. The first hint may wait up to 5 s.
+            const refreshed = page
+              .waitForRequest(
+                (request) =>
+                  request.method() === 'POST' &&
+                  new URL(request.url()).pathname.endsWith(
+                    '/dss/items/soup/graphql'
+                  ) &&
+                  request.postData() === noise.postData(),
+                { timeout: 15_000 }
+              )
+              .catch((cause: unknown) => {
+                throw new Error(
+                  `Wake ${wakeIndex} did not request the Noise list`,
+                  { cause }
+                );
+              });
+            await wake();
+            const request = await refreshed;
+            const response = await request.response();
+            expect(response?.status()).toBe(200);
+            if (!response) throw new Error(`Wake ${wakeIndex} had no response`);
+            await response.finished();
+            wakeFacts.push({
+              wakeIndex,
+              phase: 'after-wake',
+              connected: await original.evaluate(
+                (element) => element.isConnected
+              ),
+              sameNode: await row(page, photos.id).evaluate(
+                (element, reference) => element === reference,
+                original
+              ),
+              requestHash: createHash('sha256')
+                .update(request.postData() ?? '')
+                .digest('hex'),
+              responseHash: createHash('sha256')
+                .update(await response.body())
+                .digest('hex'),
             });
-          await wake();
-          const request = await refreshed;
-          const response = await request.response();
-          expect(response?.status()).toBe(200);
-          if (!response) throw new Error(`Wake ${wakeIndex} had no response`);
-          await response.finished();
-          wakeFacts.push({
-            wakeIndex,
-            phase: 'after-wake',
-            connected: await original.evaluate(
-              (element) => element.isConnected
-            ),
-            sameNode: await row(page, photos.id).evaluate(
-              (element, reference) => element === reference,
-              original
-            ),
-            requestHash: createHash('sha256')
-              .update(request.postData() ?? '')
-              .digest('hex'),
-            responseHash: createHash('sha256')
-              .update(await response.body())
-              .digest('hex'),
-          });
+          }
           expect(
             await original.evaluate((element) => element.isConnected)
           ).toBe(true);

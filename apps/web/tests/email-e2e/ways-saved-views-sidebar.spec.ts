@@ -104,14 +104,18 @@ for (const provider of PROVIDERS) {
       await storeView(mailbox, 'Alpha mail', { subject: ['Alpha'] });
       // The service does not answer for the list of views until asked again
       // by hand, as `list-views.spec.ts` fails the list of mail.
-      let failing = true;
       let asked = 0;
-      await page.route(/\/graphql(\?|$)/, (route) => {
+      await page.route(/\/graphql(\?|$)/, async (route) => {
         const sent = route.request().postData() ?? '';
         if (!sent.includes('"operationName":"SavedViews"'))
           return route.fallback();
         asked += 1;
-        if (failing) return route.fulfill({ status: 500, body: '{}' });
+        const clicked = await page.evaluate(() =>
+          document.documentElement.hasAttribute(
+            'data-test-saved-views-retry-clicked'
+          )
+        );
+        if (!clicked) return route.fulfill({ status: 500, body: '{}' });
         return route.fallback();
       });
       const retry = page.getByRole('button', { name: 'Retry loading views' });
@@ -121,18 +125,24 @@ for (const provider of PROVIDERS) {
       await expect(retry).toBeVisible();
       await expect(viewList(page).getByRole('button')).toHaveCount(0);
 
-      // The app asks again by itself every few seconds after a failed load.
-      // The click comes right after one of those, so the request that
-      // follows it at once is Retry's own and not the next of them.
-      const quiet = asked;
-      await expect.poll(() => asked).toBeGreaterThan(quiet);
+      // Recover only after a real click, so an unrelated automatic re-read
+      // cannot satisfy Retry's request-and-recovery assertions.
+      await retry.evaluate((button) => {
+        button.addEventListener(
+          'click',
+          () => {
+            document.documentElement.setAttribute(
+              'data-test-saved-views-retry-clicked',
+              ''
+            );
+          },
+          { capture: true, once: true }
+        );
+      });
       const before = asked;
-      failing = false;
       await retry.click();
       did('AL-120');
-      await expect
-        .poll(() => asked, { timeout: 3_000 })
-        .toBeGreaterThan(before);
+      await expect.poll(() => asked, { timeout: 3_000 }).toBe(before + 1);
       await expect(viewRow(page, 'Alpha mail')).toBeVisible();
       await expect(retry).toHaveCount(0);
       await viewRow(page, 'Alpha mail').click();

@@ -113,10 +113,8 @@ export async function providerFault(
 /**
  * Answers the app's connection-gateway socket in place of the fixture's
  * relay, for a test that waits on what the email services tell the app.
- * The fixture's socket leaves the app's pings unanswered, so the app drops
- * it every few seconds and reconnects a second later; what is sent in that
- * second never arrives. This one answers each ping, and passes on what is
- * sent to the user once the page first connects (not what was sent before,
+ * Like the default relay, it answers each heartbeat. It passes on only what
+ * is sent to the user once the page first connects (not what was sent before,
  * such as the end of the first backfill, which would raise its notice
  * again). Call it before the page opens. Answers what stops it; it also
  * stops when the page closes.
