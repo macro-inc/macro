@@ -33,13 +33,24 @@ export function createTaskDependencyQuery(taskId: Accessor<string>) {
 export function createTaskDependencyStatesSource(
   taskIds: Accessor<readonly string[]>
 ) {
-  const chunks = createMemo(() => {
-    const ids = [...new Set(taskIds().filter(validateUuid))].sort();
+  const chunks = createMemo<string[][]>((previous) => {
+    const ids = [...new Set(taskIds().filter(validateUuid))];
     const chunks: string[][] = [];
-    for (let index = 0; index < ids.length; index += 500)
-      chunks.push(ids.slice(index, index + 500));
+    for (let index = 0; index < ids.length; index += 500) {
+      const chunk = ids.slice(index, index + 500);
+      const prior = previous[chunks.length];
+      // Stable sealed batches must not resend their query when a page appends.
+      if (
+        prior?.length === chunk.length &&
+        prior.every((id, index) => id === chunk[index])
+      ) {
+        chunks.push(prior);
+      } else {
+        chunks.push(chunk);
+      }
+    }
     return chunks;
-  });
+  }, []);
   const queries = indexArray(chunks, (ids) =>
     createLiveQuery(
       TaskDependencyStatesDocument,

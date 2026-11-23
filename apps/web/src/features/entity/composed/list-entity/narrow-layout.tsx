@@ -15,6 +15,7 @@ import {
   isTaskEntity,
 } from '../../types/entity';
 import { isSearchEntity } from '../../types/search';
+import { isTaskCompleted } from '../../utils/task-properties';
 import {
   ChannelActiveCallBadge,
   ChannelJoinButton,
@@ -106,7 +107,12 @@ export function NarrowLayout(props: ParentProps<LayoutProps>) {
         </Show>
         {props.titleTrailing}
         <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
-          {(task) => <TaskBlockedBadge blocked={task().isBlocked} />}
+          {(task) => (
+            <TaskBlockedBadge
+              blocked={task().isBlocked}
+              completed={isTaskCompleted(task())}
+            />
+          )}
         </Show>
         <Show when={isTaskEntity(props.entity) ? props.entity : undefined}>
           {(task) => (

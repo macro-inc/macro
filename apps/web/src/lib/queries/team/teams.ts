@@ -188,6 +188,28 @@ export function usePatchTeamMutation(callbacks?: PatchTeamCallbacks) {
               applyAccess
             );
           }
+          const preventBlockedCompletion =
+            request.prevent_completing_blocked_tasks;
+          if (typeof preventBlockedCompletion === 'boolean') {
+            const applyPolicy = (old: TeamWithMembers | null | undefined) => {
+              if (old?.team.id !== teamId) return old;
+              return {
+                ...old,
+                team: {
+                  ...old.team,
+                  prevent_completing_blocked_tasks: preventBlockedCompletion,
+                },
+              };
+            };
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.detail(teamId).queryKey,
+              applyPolicy
+            );
+            queryClient.setQueryData<TeamWithMembers | null>(
+              teamKeys.currentTeam.queryKey,
+              applyPolicy
+            );
+          }
           fireAndForget(invalidateTeam(teamId), 'team-settings');
           invalidateUserTeams();
           toast.success('Team updated');

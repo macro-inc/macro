@@ -5,7 +5,7 @@ import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import { createTaskDependencyQuery } from '@queries/properties/graphql/task-dependency-source';
 import { For, Show, Suspense } from 'solid-js';
-import { SYSTEM_PROPERTY_IDS } from '../identifiers';
+import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '../identifiers';
 
 function TaskDependencyLink(props: { taskId: string }) {
   const [preview, { documentProperties }] = useItemPreview(() => ({
@@ -54,6 +54,15 @@ function TaskDependencyLink(props: { taskId: string }) {
 export function TaskDependencyDetail(props: { taskId: string }) {
   const query = createTaskDependencyQuery(() => props.taskId);
   const state = () => query.data?.taskDependencies;
+  const completed = () => {
+    const status = state()?.properties.find(
+      (property) => property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS
+    )?.value;
+    return (
+      status?.__typename === 'GraphqlSelectOptionPropertyValue' &&
+      status.optionIds.includes(PROPERTY_OPTION_IDS.STATUS.COMPLETED)
+    );
+  };
   const blockers = () => {
     const value = state()?.properties.find(
       (property) =>
@@ -67,7 +76,10 @@ export function TaskDependencyDetail(props: { taskId: string }) {
     <Suspense>
       <Show when={blockers().length > 0}>
         <div class="flex basis-full min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs font-normal">
-          <TaskBlockedBadge blocked={state()?.isBlocked} />
+          <TaskBlockedBadge
+            blocked={state()?.isBlocked}
+            completed={completed()}
+          />
           <span class="text-ink-muted">{t('entityActions.taskDependsOn')}</span>
           <For each={blockers()}>
             {(blocker) => (

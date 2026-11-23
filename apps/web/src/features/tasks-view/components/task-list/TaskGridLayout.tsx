@@ -19,7 +19,11 @@ import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
 import { TaskPropertyControl } from '@entity/extractors-property/task-property-control';
-import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
+import {
+  getTaskDueDate,
+  isTaskClosed,
+  isTaskCompleted,
+} from '@entity/utils/task-properties';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -239,7 +243,10 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
                   <span class="min-w-0 truncate">
                     <Entity.Title entity={props.entity} />
                   </span>
-                  <TaskBlockedBadge blocked={props.entity.isBlocked} />
+                  <TaskBlockedBadge
+                    blocked={props.entity.isBlocked}
+                    completed={isTaskCompleted(props.entity)}
+                  />
                   <Show when={props.isShared}>
                     <span class="task-shared-badge hidden shrink-0">
                       <SharedBadgeSmall ownerId={props.entity.ownerId} />

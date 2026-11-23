@@ -1,9 +1,10 @@
 import { analytics } from '@app/lib/analytics';
 import { t } from '@app/lib/i18n';
+import { contentReference } from '@components/app/split-layout/content-reference';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { buildSimpleEntityUrl } from '@core/util/url';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { Telemetry } from '@macro-inc/observability';
 import { entityPropertyFromApi } from '@property/api/converters';
@@ -684,9 +685,9 @@ function handleCommittedPropertySave(
 
 async function reportBulkPropertySaveFailure(
   error: Error,
-  variables: BulkSaveEntityPropertiesParams
+  variables: BulkSaveEntityPropertiesParams,
+  openTask: (taskId: string) => void
 ): Promise<void> {
-  Telemetry.error(error, { surface: 'task-properties' });
   const blockedError =
     error instanceof CombinedError
       ? error.graphQLErrors.find(
@@ -694,6 +695,7 @@ async function reportBulkPropertySaveFailure(
         )
       : undefined;
   if (!blockedError) {
+    Telemetry.error(error, { surface: 'task-properties' });
     toast.failure('Failed to save properties');
     return;
   }
@@ -714,10 +716,7 @@ async function reportBulkPropertySaveFailure(
             label: blockerId
               ? t('entityActions.taskOpenBlocker')
               : t('entityActions.taskViewBlockers'),
-            onClick: () =>
-              window.location.assign(
-                buildSimpleEntityUrl({ type: 'task', id: destination })
-              ),
+            onClick: () => openTask(destination),
           },
         ]
       : undefined,
@@ -741,6 +740,10 @@ export function useBulkSaveEntityPropertiesMutation(
     BulkSaveEntityPropertiesContext
   >
 ): BulkSaveEntityPropertiesMutation {
+  const { openWithSplit } = useSplitLayout();
+  const openTask = (taskId: string) => {
+    openWithSplit(contentReference('md', taskId), { activate: true });
+  };
   const graphqlMutation =
     createGraphqlBulkSaveEntityPropertiesMutation<BulkSaveEntityPropertiesContext>(
       {
@@ -758,7 +761,7 @@ export function useBulkSaveEntityPropertiesMutation(
           );
         },
         onError: async (error, variables, context) => {
-          await reportBulkPropertySaveFailure(error, variables);
+          await reportBulkPropertySaveFailure(error, variables, openTask);
           await callbacks?.onError?.(
             error,
             variables,

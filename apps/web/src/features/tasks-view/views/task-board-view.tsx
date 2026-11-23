@@ -4,7 +4,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { TaskBlockedBadge } from '@entity/components/TaskBlockedBadge';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
-import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import {
+  PROPERTY_OPTION_IDS,
+  SYSTEM_PROPERTY_IDS,
+} from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
 import {
@@ -205,7 +208,14 @@ export function TaskBoardView(props: {
           {renderProperty(task, readOnly, SYSTEM_PROPERTY_IDS.ASSIGNEES, true)}
         </div>
       </TaskBoard.CardHeader>
-      <TaskBlockedBadge blocked={task().isBlocked} />
+      <TaskBlockedBadge
+        blocked={task().isBlocked}
+        completed={
+          task().statusId
+            ? task().statusId === PROPERTY_OPTION_IDS.STATUS.COMPLETED
+            : task().subtypeCompleted === true
+        }
+      />
       <TaskBoard.CardFields>
         <div data-kanban-no-drag class="contents">
           <For each={cardPropertyIds()}>

@@ -6,6 +6,7 @@ import {
   getTaskReferencedEntityIds,
   getTaskStatusOptionId,
   isTaskClosed,
+  isTaskCompleted,
   TASK_PRIORITY_OPTIONS,
   TASK_STATUS_OPTIONS,
 } from '@entity/utils/task-properties';
@@ -55,8 +56,7 @@ export function toBoardTask(
     isBlocked: task.isBlocked,
     dueDate: getTaskDueDate(task),
     closed: isTaskClosed(task),
-    subtypeCompleted:
-      task.subType?.type === 'task' && task.subType.is_completed,
+    subtypeCompleted: isTaskCompleted(task),
     deadline: calendar
       ? taskDueDateBucket(getTaskDueDate(task), calendar)
       : undefined,

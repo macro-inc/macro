@@ -229,6 +229,20 @@ export const getTaskPriorityOptionId = (
   return value.value[0];
 };
 
+/** Prefer a present Status assignment over the stored subtype completion hint. */
+export const isTaskCompleted = (entity: TaskEntityWithProperties): boolean => {
+  const status = getTaskPropertyByDefinitionId(
+    entity,
+    SYSTEM_PROPERTY_IDS.STATUS
+  );
+  if (status) {
+    return (
+      getTaskStatusOptionId(entity) === PROPERTY_OPTION_IDS.STATUS.COMPLETED
+    );
+  }
+  return entity.subType?.is_completed === true;
+};
+
 /**
  * Checks if a task is in a closed state.
  */

@@ -150,7 +150,10 @@ it('does not publish a late confirmed toggle into a replacement account', async 
   const invalidated = vi.spyOn(client, 'invalidateQueries');
   const pending = mutation.mutateAsync({
     teamId: 'team-one',
-    request: { member_crm_access: { user_id: 'member', enabled: false } },
+    request: {
+      member_crm_access: { user_id: 'member', enabled: false },
+      prevent_completing_blocked_tasks: true,
+    },
   });
   await started.promise;
   client.setQueryData(authKeys.userInfo.queryKey, {
@@ -213,4 +216,58 @@ it('updates only the matching team after a committed toggle', async () => {
       ?.crm_member_access.member
   ).toBe(false);
   expect(client.getQueryData(teamKeys.currentTeam.queryKey)).toEqual(other);
+});
+
+it('keeps a confirmed completion policy through refetch errors and reverses the next toggle', async () => {
+  let mutation!: ReturnType<typeof usePatchTeamMutation>;
+  function Probe() {
+    useTeamQuery(() => 'team-one');
+    useCurrentTeamQuery();
+    mutation = usePatchTeamMutation();
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Probe />
+    </QueryClientProvider>
+  ));
+  const refreshed = Promise.withResolvers<void>();
+  let failures = 0;
+  const unsubscribe = client.getQueryCache().subscribe((event) => {
+    if (event.type === 'updated' && event.action.type === 'error') {
+      failures += 1;
+      if (failures === 2) refreshed.resolve();
+    }
+  });
+  await mutation.mutateAsync({
+    teamId: 'team-one',
+    request: { prevent_completing_blocked_tasks: true },
+  });
+  await refreshed.promise;
+  unsubscribe();
+  for (const key of [
+    teamKeys.detail('team-one').queryKey,
+    teamKeys.currentTeam.queryKey,
+  ]) {
+    const cached = client.getQueryData<TeamWithMembers>(key);
+    expect(cached?.team.prevent_completing_blocked_tasks).toBe(true);
+    expect(cached?.crm_member_access).toEqual(TEAM.crm_member_access);
+  }
+  const current = client.getQueryData<TeamWithMembers>(
+    teamKeys.detail('team-one').queryKey
+  );
+  await mutation.mutateAsync({
+    teamId: 'team-one',
+    request: {
+      prevent_completing_blocked_tasks:
+        !current?.team.prevent_completing_blocked_tasks,
+    },
+  });
+  expect(api.patch).toHaveBeenLastCalledWith({
+    prevent_completing_blocked_tasks: false,
+  });
+  expect(
+    client.getQueryData<TeamWithMembers>(teamKeys.currentTeam.queryKey)?.team
+      .prevent_completing_blocked_tasks
+  ).toBe(false);
 });
