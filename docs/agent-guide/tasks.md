@@ -372,8 +372,8 @@ Behind `enable-task-start-date` (on in dev), tasks and projects have a Start Dat
 optional: nothing is backfilled, and a task without one looks as it always has.
 With a start, the Due date pill under the title, the list's Due date cell, the
 board card, a project's header pill and its list row read as one range,
-`Nov 23 → Nov 27` (`Nov 23 →` with no due date); overdue colours follow the due
-date only. The Properties panel (desktop and the phone sheet) keeps Start Date
+`Nov 23 → Nov 27` (`Nov 23 →` with no due date, and one date when both fall on
+the same day); overdue colours follow the due date only. The Properties panel (desktop and the phone sheet) keeps Start Date
 and Due Date as separate rows, Start Date directly above Due Date.
 Every one of them opens the same picker: Start and Due fields over the date
 suggestions, which set the active field and close the picker as a due date's
@@ -395,9 +395,12 @@ the active field (**Set start time…** / **Set end time…**; typed times such 
 **Change day** moves the active end to another day, keeping its time. Times
 follow the calendar's 12/24-hour setting. The footer then reads `2h` with
 **Remove time**, which makes both ends whole days again, and **Clear both**.
-With times, the range reads `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
-Nov 28, 4:00 PM` across days), the Properties rows show the time, and a due
-date with a time is overdue from that moment. A date without a time is read and
+With times, the pills read `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
+Nov 28, 4:00 PM` across days); list cells, board cards and project rows write
+times compactly, as calendar events do (`Nov 26, 2–4pm`), and the Properties
+rows show `Nov 26, 2pm`. A due date with a time is overdue from that moment.
+When a pick moves the start past the saved due date, the picker saves the due
+date first, so the server's start rule never clamps the new start. A date without a time is read and
 written exactly as before. Agents set a time with `date_has_time` on
 SetEntityProperty; the SDK with `tasks.create({ dueDate, startDate, withTimes:
 true })` or `setProperty` with `has_time: true`.
