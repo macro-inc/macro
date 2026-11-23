@@ -22,7 +22,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 10px 28px;
-  margin: 24px 0 0;
+  width: var(--product-feature-intro-width);
+  margin: 24px auto 0;
   padding: 0;
   list-style: none;
   color: var(--color-ink-muted);
