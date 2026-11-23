@@ -10,6 +10,7 @@ import {
   logTime,
   updateTimeEntry,
 } from '../queries/time-entries';
+import { refreshOnTimeTrackingChanges } from '../queries/time-tracking-changes';
 import type { TimeWriteResult } from '../queries/write-result';
 
 const NO_VIEWER: TimeWriteResult = err({
@@ -40,6 +41,15 @@ export function createTaskTime(taskId: Accessor<string | undefined>) {
   const { client, cacheHost, viewerId } = useTimeTracking();
   const entries = createTaskTimeEntriesQuery(taskId, client);
   const dependencies = () => ({ client: client(), host: cacheHost() });
+  refreshOnTimeTrackingChanges(
+    async (change) => {
+      const id = taskId();
+      if (id && change.taskId === id) await entries.refetch();
+    },
+    async () => {
+      if (taskId()) await entries.refetch();
+    }
+  );
 
   return {
     entries: entries.entries,
