@@ -76,6 +76,33 @@ test('a booking that stays unanswered says it is taking longer, then finishes', 
   ).toBeVisible();
 });
 
+test('a booking left unanswered stops resending until the visitor tries again', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 820 });
+  await details(page);
+  const lose = page.getByRole('button', {
+    name: /Simulate lost booking response|Losing \d+ booking answers/,
+  });
+  for (let i = 0; i < 7; i++) await lose.click();
+  await confirm(page);
+
+  await page.clock.runFor(1000 + 2000 + 4000 + 8000 + 15000 + 15000);
+  await expect(
+    page.getByText('We couldn’t finish your booking yet')
+  ).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: '← Choose another time' })
+  ).toBeDisabled();
+  await capture(page, 'paused-desktop');
+
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(
+    page.getByRole('heading', { name: 'You’re booked' })
+  ).toBeVisible();
+});
+
 test('the finishing state fits a phone', async ({ page }) => {
   // The fixture's frame does not scroll, so the phone gets a tall window.
   await page.setViewportSize({ width: 390, height: 1600 });

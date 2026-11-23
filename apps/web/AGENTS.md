@@ -575,7 +575,8 @@ A booking link's details step has a backend-free browser regression over the
 scheduling fixture (`/src/features/scheduling/browser-test/index.html`): a
 booking whose answer is lost shows Finishing your booking and resends the same
 request by itself (Playwright's clock runs the backoff), says it is taking
-longer after four unanswered retries, fits a phone, and a receipt still
+longer after four unanswered retries, stops after six until Try again, fits a
+phone, and a receipt still
 processing says the page updates by itself. `SCHEDULING_SCREENSHOT_DIR` saves
 its screenshots. On gab-dev run it under `tests/view-parity/isolated-network.sh ""`:
 `bunx playwright test --config src/features/scheduling/browser-test/playwright.config.ts`.

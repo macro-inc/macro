@@ -8,6 +8,7 @@ import {
   on,
   Show,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   type BookingReceipt,
   meetingPlaceLabel,
@@ -17,8 +18,33 @@ import {
 import {
   type BookingSource,
   createBookingFlow,
+  type FinishState,
 } from '../primitives/booking-flow';
 import { Field, TextArea, TextInput, TimeZoneInput } from './fields';
+
+function finishTitle(state: FinishState) {
+  return match(state)
+    .with('resending', () => 'Finishing your booking')
+    .with('slow', () => 'Still finishing your booking')
+    .with('paused', () => 'We couldn’t finish your booking yet')
+    .exhaustive();
+}
+
+function finishHint(state: FinishState) {
+  return match(state)
+    .with('resending', () => 'This takes a moment. Keep this page open.')
+    .with(
+      'slow',
+      () =>
+        'This is taking longer than usual. Keep this page open and check your connection.'
+    )
+    .with(
+      'paused',
+      () =>
+        'Your time may already be held. Check your connection, then try again. Trying again never books twice.'
+    )
+    .exhaustive();
+}
 
 function dateKey(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -197,25 +223,21 @@ export function BookingPicker(props: {
                 {flow.error()}
               </p>
             </Show>
-            <Show when={flow.finishing()}>
-              <div
-                role="status"
-                class="mb-5 flex items-start gap-3 rounded-lg bg-surface-0 p-3 text-sm"
-              >
-                <Spinner decorative size="sm" class="mt-0.5" />
-                <div>
-                  <p class="font-medium">
-                    {flow.stalled()
-                      ? 'Still finishing your booking'
-                      : 'Finishing your booking'}
-                  </p>
-                  <p class="mt-1 text-ink-muted">
-                    {flow.stalled()
-                      ? 'This is taking longer than usual. Keep this page open and check your connection; it finishes on its own.'
-                      : 'This takes a moment. Keep this page open.'}
-                  </p>
+            <Show when={flow.finishState()}>
+              {(state) => (
+                <div
+                  role="status"
+                  class="mb-5 flex items-start gap-3 rounded-lg bg-surface-0 p-3 text-sm"
+                >
+                  <Show when={state() !== 'paused'}>
+                    <Spinner decorative size="sm" class="mt-0.5" />
+                  </Show>
+                  <div>
+                    <p class="font-medium">{finishTitle(state())}</p>
+                    <p class="mt-1 text-ink-muted">{finishHint(state())}</p>
+                  </div>
                 </div>
-              </div>
+              )}
             </Show>
             <Show
               when={!flow.selected()}
@@ -278,17 +300,22 @@ export function BookingPicker(props: {
                   <Button
                     type="submit"
                     variant="primary"
-                    disabled={locked() || props.preview}
+                    disabled={
+                      (locked() && flow.finishState() !== 'paused') ||
+                      props.preview
+                    }
                   >
                     {props.preview
                       ? 'Booking is off in preview'
-                      : flow.submitting()
-                        ? 'Booking…'
+                      : flow.finishState() === 'paused'
+                        ? 'Try again'
                         : flow.finishing()
                           ? 'Finishing booking…'
-                          : event().requiresConfirmation
-                            ? 'Request booking'
-                            : 'Confirm booking'}
+                          : flow.submitting()
+                            ? 'Booking…'
+                            : event().requiresConfirmation
+                              ? 'Request booking'
+                              : 'Confirm booking'}
                   </Button>
                   <p class="text-xs leading-relaxed text-ink-muted">
                     Your details are shared with the meeting hosts.

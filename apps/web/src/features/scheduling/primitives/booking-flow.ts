@@ -20,12 +20,20 @@ export type BookingSource = {
 type PendingBooking = { eventId: string; request: BookingRequest };
 
 /**
- * Waits between automatic retries of a booking whose outcome is unknown: the
- * last delay repeats until the booking settles or the page closes.
+ * How a booking sent without a definite answer is being finished: resent
+ * automatically, resent for long enough to say so, or out of automatic
+ * resends and waiting for the visitor to try again.
  */
-const FINISH_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
-/** Unanswered retries before the visitor is told it is taking longer. */
-const STALLED_AFTER_RETRIES = 4;
+export type FinishState = 'resending' | 'slow' | 'paused';
+
+/**
+ * Waits before each automatic resend. Every resend that reaches the server
+ * before a booking exists spends the link's shared public booking budget, so
+ * the resends stop after these and wait for the visitor.
+ */
+const RESEND_DELAYS_MS = [1000, 2000, 4000, 8000, 15000, 15000];
+/** Unanswered resends before the visitor is told it is taking longer. */
+const SLOW_AFTER_RESENDS = 4;
 
 export function createBookingFlow(source: BookingSource, profileId: string) {
   const [slots, setSlots] = createSignal<
@@ -34,10 +42,11 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
   const [loading, setLoading] = createSignal(false);
   const [submitting, setSubmitting] = createSignal(false);
   // A booking sent without a definite answer (the connection dropped, or the
-  // server failed): it may already be reserved, so the same request is sent
+  // server failed) may already be reserved, so only that same request is sent
   // again until the server answers it.
-  const [finishing, setFinishing] = createSignal(false);
-  const [stalled, setStalled] = createSignal(false);
+  const [finishState, setFinishState] = createSignal<FinishState>();
+  const finishing = () => finishState() !== undefined;
+  let pending: PendingBooking | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -71,44 +80,42 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
       if (current === generation) setLoading(false);
     }
   };
-  /** Send the request once; true when the server settled it. */
-  const send = async (pending: PendingBooking) => {
+  /** Send the held request once; true when the server settled it. */
+  const send = async (held: PendingBooking) => {
     try {
-      setReceipt(
-        await source.book(profileId, pending.eventId, pending.request)
-      );
+      setReceipt(await source.book(profileId, held.eventId, held.request));
     } catch (error) {
       if (!(error instanceof BookingRejectedError)) return false;
       setError(error.message);
     }
-    setFinishing(false);
-    setStalled(false);
+    pending = undefined;
+    setFinishState(undefined);
     return true;
   };
-  const finish = async (pending: PendingBooking) => {
-    setFinishing(true);
-    for (let retry = 0; ; retry++) {
-      await sleep(
-        FINISH_RETRY_DELAYS_MS[
-          Math.min(retry, FINISH_RETRY_DELAYS_MS.length - 1)
-        ]
-      );
-      if (disposed || (await send(pending))) return;
-      if (retry + 1 >= STALLED_AFTER_RETRIES) setStalled(true);
+  const finish = async (held: PendingBooking) => {
+    setFinishState('resending');
+    for (const [resend, delay] of RESEND_DELAYS_MS.entries()) {
+      await sleep(delay);
+      if (disposed || (await send(held))) return;
+      if (resend + 1 >= SLOW_AFTER_RESENDS) setFinishState('slow');
     }
+    setFinishState('paused');
   };
   const submit = async (
     eventId: string,
     details: Omit<BookingRequest, 'startsAt' | 'requestId'>
   ) => {
     const startsAt = selected();
-    if (!startsAt || submitting() || finishing()) return;
+    if (!startsAt || submitting()) return;
+    if (finishing() && finishState() !== 'paused') return;
+    pending ??= { eventId, request: { ...details, startsAt, requestId } };
+    const held = pending;
+    if (finishing()) setFinishState('resending');
     setSubmitting(true);
     setError('');
-    const pending = { eventId, request: { ...details, startsAt, requestId } };
-    const settled = await send(pending);
+    const settled = await send(held);
     setSubmitting(false);
-    if (!settled) await finish(pending);
+    if (!settled) await finish(held);
   };
   return {
     reset: () => {
@@ -125,7 +132,7 @@ export function createBookingFlow(source: BookingSource, profileId: string) {
     loading,
     submitting,
     finishing,
-    stalled,
+    finishState,
     error,
     selected,
     receipt,

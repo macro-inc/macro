@@ -84,8 +84,7 @@ describe('a booking without an answer', () => {
     flow.select(start);
     const submitted = flow.submit('event', DETAILS);
     await vi.advanceTimersByTimeAsync(0);
-    expect(flow.finishing()).toBe(true);
-    expect(flow.stalled()).toBe(false);
+    expect(flow.finishState()).toBe('resending');
     expect(flow.error()).toBe('');
     flow.back();
     flow.reset();
@@ -116,16 +115,41 @@ describe('a booking without an answer', () => {
     const submitted = flow.submit('event', DETAILS);
     await vi.advanceTimersByTimeAsync(1000 + 2000 + 4000);
     expect(book).toHaveBeenCalledTimes(4);
-    expect(flow.stalled()).toBe(false);
+    expect(flow.finishState()).toBe('resending');
     await vi.advanceTimersByTimeAsync(8000);
     expect(book).toHaveBeenCalledTimes(5);
-    expect(flow.stalled()).toBe(true);
-    expect(flow.finishing()).toBe(true);
+    expect(flow.finishState()).toBe('slow');
     await vi.advanceTimersByTimeAsync(15000);
     await submitted;
     expect(book).toHaveBeenCalledTimes(6);
-    expect(flow.finishing()).toBe(false);
-    expect(flow.stalled()).toBe(false);
+    expect(flow.finishState()).toBeUndefined();
+    expect(flow.receipt()?.token).toBe('t');
+  });
+
+  it('stops resending after six unanswered resends until the visitor tries again', async () => {
+    const book = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'));
+    const flow = createRoot(() =>
+      createBookingFlow({ slots: vi.fn(), book }, 'profile')
+    );
+    const start = '2026-10-02T09:00:00Z';
+    flow.select(start);
+    const submitted = flow.submit('event', DETAILS);
+    await vi.advanceTimersByTimeAsync(
+      1000 + 2000 + 4000 + 8000 + 15000 + 15000
+    );
+    await submitted;
+    expect(book).toHaveBeenCalledTimes(7);
+    expect(flow.finishState()).toBe('paused');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(book).toHaveBeenCalledTimes(7);
+    flow.back();
+    expect(flow.selected()).toBe(start);
+
+    book.mockResolvedValueOnce({ token: 't' } as BookingReceipt);
+    await flow.submit('event', { ...DETAILS, email: 'different@example.com' });
+    expect(book).toHaveBeenCalledTimes(8);
+    expect(book.mock.calls[7]).toEqual(book.mock.calls[0]);
+    expect(flow.finishState()).toBeUndefined();
     expect(flow.receipt()?.token).toBe('t');
   });
 
