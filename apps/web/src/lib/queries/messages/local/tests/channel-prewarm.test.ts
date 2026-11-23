@@ -1,5 +1,6 @@
 import type { ChannelTimelineEvictCacheResult } from '@graphql-cache/protocol';
 import * as Effect from 'effect/Effect';
+import * as Fiber from 'effect/Fiber';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LoadedChannelPage } from '../channel-pages';
 import { loadChannelPage } from '../channel-pages';
@@ -224,6 +225,38 @@ describe('evictIdleChannels', () => {
     expect(runtime.forget.mock.calls).toEqual([[['a', 'b']], [['c']]]);
     // A fill already in flight will not cover what this removed.
     expect(unchangedSince(host, 'a', mark)).toBe(false);
+  });
+
+  // This tab stops leading while the device removes channels.
+  it('forgets what the device removed when the pass is interrupted meanwhile', async () => {
+    let finish: (result: ChannelTimelineEvictCacheResult) => void = () =>
+      undefined;
+    const evict = vi.fn(
+      () =>
+        new Promise<ChannelTimelineEvictCacheResult>((resolve) => {
+          finish = resolve;
+        })
+    );
+    const runtime = { forget: vi.fn() };
+    const fiber = Effect.runFork(
+      evictIdleChannels({
+        host: { channelTimelineEvict: evict as never },
+        runtime,
+        now: () => 0,
+      })
+    );
+    await vi.waitFor(() => expect(evict).toHaveBeenCalled());
+    await Effect.runPromise(Fiber.interrupt(fiber));
+
+    finish({
+      kind: 'evicted',
+      changed: [],
+      channelIds: ['a'],
+      hasMore: true,
+    } as ChannelTimelineEvictCacheResult);
+    await vi.waitFor(() => expect(runtime.forget).toHaveBeenCalledWith(['a']));
+    // Interrupted: no further pass.
+    expect(evict).toHaveBeenCalledTimes(1);
   });
 });
 

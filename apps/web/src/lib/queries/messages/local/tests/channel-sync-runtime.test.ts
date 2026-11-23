@@ -212,6 +212,33 @@ describe('createChannelSyncRuntime', () => {
     expect(host.seq).toBeNull();
   });
 
+  it('gives an unheld channel its row again when eviction lands while the row is written', async () => {
+    const { host, runtime } = setup(null);
+    const write = host.channelTimelineCommit;
+    const waiting: (() => void)[] = [];
+    host.channelTimelineCommit = (args, generation) =>
+      new Promise((resolve) => {
+        waiting.push(() => resolve(write(args, generation)));
+      });
+    runtime.onConnected();
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => waiting.length === 1);
+
+    // Eviction removed the channel's row before the write was acknowledged.
+    runtime.forget([CHANNEL_ID]);
+    waiting[0]();
+    await settle();
+    runtime.onFrame(frame(7), true);
+
+    await waitFor(() => waiting.length === 2);
+    waiting[1]();
+    await waitFor(() => host.commits.length === 2);
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID },
+      { channelId: CHANNEL_ID },
+    ]);
+  });
+
   it('holds a frame past a gap and catches up a channel on screen', async () => {
     const { host, fetch, runtime } = setup(5n, () => changes(7));
     runtime.onConnected();

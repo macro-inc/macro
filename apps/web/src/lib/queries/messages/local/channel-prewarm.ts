@@ -240,8 +240,8 @@ export const evictIdleChannels = (deps: {
     let evicted = 0;
     for (let pass = 0; pass < MAX_EVICTION_PASSES; pass += 1) {
       const result = yield* Effect.tryPromise({
-        try: () =>
-          whileNoFills(
+        try: async () => {
+          const removed = await whileNoFills(
             () => {
               // Counted before it is sent: a fill in flight must not cover
               // what it removes.
@@ -252,7 +252,16 @@ export const evictIdleChannels = (deps: {
               });
             },
             { waitMs: deps.fenceWaitMs }
-          ),
+          );
+          // Their sync rows are gone: a later frame must give them one
+          // again, here and in every other tab. Told here, not after the
+          // effect resumes, so a pass interrupted meanwhile still tells.
+          if (removed !== 'busy' && removed.kind !== 'unsupported') {
+            deps.runtime.forget(removed.channelIds);
+            announceEvicted(removed.channelIds);
+          }
+          return removed;
+        },
         catch: (error) => error,
       });
       if (result === 'busy') {
@@ -260,10 +269,6 @@ export const evictIdleChannels = (deps: {
         break;
       }
       if (result.kind === 'unsupported') break;
-      // Their sync rows are gone: a later frame must give them one again,
-      // here and in every other tab.
-      deps.runtime.forget(result.channelIds);
-      announceEvicted(result.channelIds);
       evicted += result.channelIds.length;
       if (!result.hasMore) break;
     }

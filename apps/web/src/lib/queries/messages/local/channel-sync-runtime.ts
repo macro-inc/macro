@@ -89,6 +89,8 @@ type ChannelState = {
    * channel's records through it.
    */
   sweepable: boolean;
+  /** Counts forgets, so a row write acknowledged across one marks nothing. */
+  forgets: number;
   debounce?: Fiber.Fiber<unknown, unknown>;
 };
 
@@ -145,6 +147,7 @@ function forgetState(state: ChannelState): void {
   state.held.clear();
   state.repairFrom = undefined;
   state.sweepable = false;
+  state.forgets += 1;
 }
 
 const parseSeq = (seq: string | null): bigint | null => {
@@ -189,6 +192,7 @@ export function createChannelSyncRuntime(
         views: 0,
         seenSeq: undefined,
         sweepable: false,
+        forgets: 0,
       };
       channels.set(channelId, state);
     }
@@ -266,12 +270,15 @@ export function createChannelSyncRuntime(
     generation: string
   ) {
     if (state.sweepable) return;
+    const forgets = state.forgets;
     yield* commit(channelId, {}, generation).pipe(
       Effect.tap((committed) =>
         Effect.sync(() => {
           // Only a row the device wrote: an unsupported or refused commit
-          // leaves the channel to the next frame.
-          if (committed.kind === 'committed') state.sweepable = true;
+          // leaves the channel to the next frame, and so does an eviction
+          // heard meanwhile, which may have removed the row after it.
+          if (committed.kind === 'committed' && state.forgets === forgets)
+            state.sweepable = true;
         })
       ),
       Effect.ignore
