@@ -89,11 +89,7 @@ pub(in crate::domain::mailbox::link_manager) fn assert_event(
         .collect();
     assert_eq!(matching.len(), 1, "{records:?}");
     assert_eq!(matching[0].level, level);
-    assert!(
-        matching[0].spans.iter().any(|name| *name == span),
-        "{:?}",
-        matching[0]
-    );
+    assert!(matching[0].spans.contains(&span), "{:?}", matching[0]);
     assert_eq!(
         matching[0].fields,
         fields
