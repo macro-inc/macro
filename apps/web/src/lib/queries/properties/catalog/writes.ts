@@ -228,7 +228,7 @@ function holdsOptionsOf(propertyDefinitionId: string) {
           .definitions()
           .some((set) => set.definitionId === propertyDefinitionId)
       )
-      .exhaustive();
+      .exhaustive(() => false);
 }
 
 /** Puts a definition's options back in the server's order (see the header). */
