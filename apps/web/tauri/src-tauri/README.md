@@ -683,9 +683,11 @@ event and an OTel span, sent by the frontend because the host has no exporter.
 The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 `native-update-report`. The page drains them with `take_native_update_reports`
 when it mounts and after each emit, so each report goes out once. A check
-reports `up_to_date`, `update_found` then `downloaded`, `check_failed` or
-`download_failed` (span `native.update.check`, timed by the host, with a
-`native.update.download` child; `update_found` is a PostHog event only). Failures
+reports `up_to_date`, `needs_newer_os` (a newer release whose
+`minimumSystemVersion` this Mac is below, with that minimum; not downloaded),
+`update_found` then `downloaded`, `check_failed` or `download_failed` (span
+`native.update.check`, timed by the host, with a `native.update.download`
+child; `update_found` is a PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next

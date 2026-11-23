@@ -20,6 +20,10 @@ function outcomeAttributes(outcome: Outcome): Attributes {
     .with({ kind: 'update_found' }, (found) => ({
       native_update_target_version: found.target_version,
     }))
+    .with({ kind: 'needs_newer_os' }, (skipped) => ({
+      native_update_target_version: skipped.target_version,
+      native_update_minimum_system_version: skipped.minimum_system_version,
+    }))
     .with({ kind: 'downloaded' }, (downloaded) => ({
       native_update_target_version: downloaded.target_version,
       native_update_download_ms: downloaded.download_ms,
