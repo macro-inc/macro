@@ -56,6 +56,7 @@ import {
   PropertyCatalogDefinitionOptionsFragmentDoc,
   PropertyCatalogOptionsDocument,
   PropertyCatalogTagSetsDocument,
+  type PropertyCatalogTagSetsQuery,
   UpdatePropertyOptionDocument,
 } from '@service-storage/graphql/generated/graphql';
 import {
@@ -63,10 +64,12 @@ import {
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
 import { onlineManager } from '@tanstack/solid-query';
-import type {
-  AnyVariables,
-  OperationContext,
-  OperationResult,
+import {
+  type AnyVariables,
+  getOperationName,
+  type OperationContext,
+  type OperationResult,
+  stringifyDocument,
 } from '@urql/core';
 import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
@@ -602,25 +605,29 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
     const mapped = set && toTagSet(set);
     if (!mapped?.definition) noData('ensureTagSet');
     span.setAttr('property.definition_id', mapped.definition.id);
-    if (usingCache()) {
+    const host = getGraphqlSoupCacheHost();
+    if (host) {
       // Provisioning fills a set the cached list holds as empty. A set that is
       // already listed with its definition has nothing to reload.
       const definitionId = mapped.definition.id;
+      // Read from the store itself: a cache-only client query can share an
+      // in-flight network answer that the cache has not written.
       const listed = async () => {
-        const cached = await client
-          .query(
-            PropertyCatalogTagSetsDocument,
-            {},
-            { requestPolicy: 'cache-only' }
-          )
-          .toPromise();
-        return (
-          cached.data?.user.tagSets.some(
-            (candidate) => candidate.definition?.id === definitionId
-          ) ?? false
+        const cached = await host.readQuery({
+          query: stringifyDocument(PropertyCatalogTagSetsDocument),
+          operationName: getOperationName(PropertyCatalogTagSetsDocument),
+          variables: {},
+        });
+        if (cached.kind === 'miss') return false;
+        const data = cached.data as PropertyCatalogTagSetsQuery;
+        return data.user.tagSets.some(
+          (candidate) => candidate.definition?.id === definitionId
         );
       };
-      const wasListed = await listed();
+      const wasListed = await listed().catch((error: unknown) => {
+        console.error('Reading the cached tag sets failed', error);
+        return false;
+      });
       span.setAttr('property.reloaded', !wasListed);
       if (!wasListed) {
         const reloaded = await client
