@@ -2,9 +2,10 @@ import {
   CHANNEL_TIMELINE_HEAD,
   CHANNEL_TIMELINE_START,
 } from '@graphql-cache/index';
-import { createRoot } from 'solid-js';
+import type { Message } from '@service-storage/messages';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { channelMessageKey } from '../channel-map';
+import { channelMessageKey, mapChannelMessage } from '../channel-map';
 import {
   createLocalChannelThread,
   type FetchChannelThreadPage,
@@ -205,5 +206,54 @@ describe('createLocalChannelThread', () => {
     );
 
     await vi.waitFor(() => expect(onUnsupported).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe('createLocalChannelThread unstored replies', () => {
+  it('shows a reply this page sent until the device holds it', async () => {
+    const sent = graphqlMessage(5, { threadId: ROOT_ID });
+    let keys = [channelMessageKey(second.id), channelMessageKey(first.id)];
+    const host = fakeHost(() => devicePage(keys), {
+      records: [root, first, second, sent],
+    });
+    const sync = runtime();
+    const [unstored, setUnstored] = createSignal<Message[]>([
+      mapChannelMessage(sent),
+    ]);
+
+    const thread = createRoot(() =>
+      createLocalChannelThread(
+        {
+          host,
+          runtime: sync,
+          fetchPage: serverThread(),
+          unstored: () => unstored(),
+        },
+        CHANNEL_ID,
+        () => ROOT_ID,
+        () => true,
+        () => undefined
+      )
+    );
+    await vi.waitFor(() =>
+      expect(thread.replies()?.map((reply) => reply.id)).toEqual([
+        first.id,
+        second.id,
+        sent.id,
+      ])
+    );
+
+    // The device stores it: shown once, from the device.
+    keys = [channelMessageKey(sent.id), ...keys];
+    sync.change();
+    await vi.waitFor(() => expect(host.reads.length).toBeGreaterThan(1));
+    setUnstored([]);
+    await vi.waitFor(() =>
+      expect(thread.replies()?.map((reply) => reply.id)).toEqual([
+        first.id,
+        second.id,
+        sent.id,
+      ])
+    );
   });
 });

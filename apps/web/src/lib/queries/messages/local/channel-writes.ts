@@ -122,10 +122,15 @@ export interface ChannelWritesDeps {
   now?: () => Date;
 }
 
+/** A reply this page sent, under its thread root. */
+type UnstoredReply = { rootId: string; message: Message };
+
 type PendingWrite = {
   uuid: string;
   /** A root this device sent that the device does not show yet. */
   unstored?: ChannelPageEntry;
+  /** A reply this device sent, shown in its thread until the device has it. */
+  reply?: UnstoredReply;
 };
 
 export interface ChannelWrites {
@@ -141,6 +146,8 @@ export interface ChannelWrites {
    * on screen from the moment it is sent.
    */
   unstoredRoots: (channelId: string) => ChannelPageEntry[];
+  /** Replies this page sent to a thread, oldest first, the same way. */
+  unstoredReplies: (channelId: string, rootId: string) => Message[];
 }
 
 const mentionInput = (mention: Mention) => ({
@@ -316,6 +323,7 @@ interface Write<TData, TVariables extends AnyVariables> {
   /** The row to answer with when a delivered write cannot be read back. */
   predicted?: ChannelMessageFieldsFragment;
   unstored?: ChannelPageEntry;
+  reply?: UnstoredReply;
 }
 
 /**
@@ -373,6 +381,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     addPending(write.channelId, {
       uuid: write.uuid,
       unstored: write.unstored,
+      reply: write.reply,
     });
     deps.runtime.notifyChanged(write.channelId);
     // The optimistic record is on the device: windows read it from here.
@@ -432,6 +441,10 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
                 sortKey: predicted.sortKey,
                 entry,
               }
+            : undefined,
+        reply:
+          predicted && rootId
+            ? { rootId, message: mapChannelMessage(predicted) }
             : undefined,
         run: (client, options) =>
           executeOptimisticMutation(
@@ -587,5 +600,9 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       (pending[channelId] ?? [])
         .flatMap((write) => (write.unstored ? [write.unstored] : []))
         .reverse(),
+    unstoredReplies: (channelId, rootId) =>
+      (pending[channelId] ?? []).flatMap((write) =>
+        write.reply?.rootId === rootId ? [write.reply.message] : []
+      ),
   };
 }

@@ -233,6 +233,30 @@ describe('createChannelWrites', () => {
     });
   });
 
+  it('shows a waiting reply in its thread, not at the live end', async () => {
+    const root = graphqlMessage(1);
+    const reply = graphqlMessage(8, { threadId: root.id });
+    const { writes, settle } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [root, reply]
+    );
+
+    const sending = writes.send(
+      send(reply.id, { content: 'reply', thread_id: root.id })
+    );
+    // The root is read first, to predict its reply count.
+    await settleMicrotasks();
+    expect(writes.unstoredRoots(CHANNEL_ID)).toEqual([]);
+    expect(
+      writes.unstoredReplies(CHANNEL_ID, root.id).map((message) => message.id)
+    ).toEqual([reply.id]);
+    expect(writes.unstoredReplies(CHANNEL_ID, 'other-root')).toEqual([]);
+
+    settle({ transactionId: '4', status: 'committed' });
+    await sending;
+    expect(writes.unstoredReplies(CHANNEL_ID, root.id)).toEqual([]);
+  });
+
   it('predicts no root for a reply whose root the device does not hold', async () => {
     const reply = graphqlMessage(8, { threadId: graphqlMessage(1).id });
     const { writes, calls } = setup(() => ({

@@ -263,6 +263,11 @@ export interface ChannelThreadDeps {
     | 'epoch'
   >;
   fetchPage?: FetchChannelThreadPage;
+  /**
+   * Replies this page sent that the device does not hold yet, oldest first;
+   * the thread shows them until the device's copy replaces them.
+   */
+  unstored?: (channelId: string, rootId: string) => readonly Message[];
 }
 
 export interface LocalChannelThread {
@@ -270,6 +275,17 @@ export interface LocalChannelThread {
   replies(): Message[] | undefined;
   isPending(): boolean;
   error(): unknown;
+}
+
+/** Stored replies, then the ones this page sent that they do not hold yet. */
+function withUnstored(
+  stored: Message[] | undefined,
+  unstored: readonly Message[]
+): Message[] | undefined {
+  if (stored === undefined || unstored.length === 0) return stored;
+  const held = new Set(stored.map((reply) => reply.id));
+  const missing = unstored.filter((reply) => !held.has(reply.id));
+  return missing.length === 0 ? stored : [...stored, ...missing];
 }
 
 type ThreadState = {
@@ -372,7 +388,8 @@ export function createLocalChannelThread(
   );
 
   return {
-    replies: () => state.replies,
+    replies: () =>
+      withUnstored(state.replies, deps.unstored?.(channelId, rootId()) ?? []),
     isPending: () => state.replies === undefined && state.error === undefined,
     error: () => state.error,
   };

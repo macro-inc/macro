@@ -11,7 +11,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import { queryClient } from '../client';
 import { useChannelReadPath } from './channel-timeline-source';
 import { messageKeys } from './keys';
-import { channelSyncRuntime } from './local/channel-sync';
+import { channelSyncRuntime, channelWrites } from './local/channel-sync';
 import { createLocalChannelThread } from './local/channel-thread';
 import { normalizeMessageThreadSenders } from './message-sender';
 import { useMessageSubscription } from './subscription';
@@ -104,7 +104,11 @@ export function useThreadRepliesQuery(
     const current = host();
     if (mode() !== 'local' || !current) return undefined;
     return createLocalChannelThread(
-      { host: current, runtime: channelSyncRuntime(current) },
+      {
+        host: current,
+        runtime: channelSyncRuntime(current),
+        unstored: channelWrites(current).unstoredReplies,
+      },
       parent().id,
       messageId,
       enabled,
