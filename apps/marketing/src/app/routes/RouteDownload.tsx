@@ -15,6 +15,7 @@ import {
   IOS_APP_STORE_URL,
   type VisitorPlatform,
 } from '../../features/marketing/core/desktopDownloads';
+import { analytics } from '../utils/utilAnalytic';
 import { setPageSeo } from '../utils/utilSeo';
 import '../../features/documentation/components/documentation.css';
 import './RouteDownload.css';
@@ -64,6 +65,12 @@ export function RouteDownload() {
                   <a
                     class={index() === 0 ? 'site-nav-start' : 'site-nav-demo'}
                     href={downloads()[platform]}
+                    onClick={() =>
+                      analytics.trackPosthog('desktop_download_clicked', {
+                        platform,
+                        source: 'marketing',
+                      })
+                    }
                   >
                     Download for {DESKTOP_PLATFORM_DETAILS[platform].label}
                   </a>

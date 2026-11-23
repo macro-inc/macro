@@ -1,8 +1,19 @@
 import { MemoryRouter, Route } from '@solidjs/router';
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FALLBACK_DOWNLOAD_URLS } from '../../features/marketing/core/desktopDownloads';
+import { analytics } from '../utils/utilAnalytic';
 import { RouteDownload } from './RouteDownload';
+
+vi.mock('../utils/utilAnalytic', () => ({
+  analytics: { trackPosthog: vi.fn() },
+}));
 
 const latest = {
   macos: 'https://example.com/Macro-latest-aarch64-darwin.dmg',
@@ -55,6 +66,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -84,5 +96,17 @@ describe('RouteDownload', () => {
     visitWith('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     expect(downloadLinks()[0]?.[0]).toBe('Download for macOS');
     expect(screen.getByText(/Windows is not supported yet/)).toBeTruthy();
+  });
+
+  it('records which installer was clicked', () => {
+    visitWith('Mozilla/5.0 (X11; Linux x86_64)');
+    const link = screen.getByRole('link', { name: 'Download for macOS' });
+    // jsdom cannot follow the installer link.
+    link.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(link);
+    expect(analytics.trackPosthog).toHaveBeenCalledExactlyOnceWith(
+      'desktop_download_clicked',
+      { platform: 'macos', source: 'marketing' }
+    );
   });
 });
