@@ -24,8 +24,8 @@ export interface EmailThreadKeyboardHandlers {
   navigateToPreviousMessage: () => boolean;
   navigateToNextMessage: () => boolean;
   /** Space and Shift+Space: page the thread down or up, like a browser page. */
-  pageDown: () => boolean;
-  pageUp: () => boolean;
+  pageDown: (event?: KeyboardEvent) => boolean;
+  pageUp: (event?: KeyboardEvent) => boolean;
   /** Expands the focused message, or collapses it if already expanded. */
   expandFocusedMessage: () => boolean;
   expandAllMessages: () => boolean;

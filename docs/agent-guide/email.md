@@ -140,8 +140,8 @@ or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, `N`/`P` step
 messages like the arrows, and `Space`/`Shift+Space` page the thread down and
 up by about a screen from wherever the keyboard is in it (a focused button
-keeps its own Space, and fields and the reply composer type it). `B` in an open thread, or `Create event` in its
-title menu, opens the event composer with the subject as the title and every
+keeps its own Space, and fields and the reply composer type it). `B` in an
+open thread, or `Create event` in its title menu, opens the event composer with the subject as the title and every
 From, To and Cc address except the viewer's as guests (Bcc and drafts are left
 out); both are hidden while the calendar is off. With `enable-universal-input`
 on, the composer also sends the subject and latest message to

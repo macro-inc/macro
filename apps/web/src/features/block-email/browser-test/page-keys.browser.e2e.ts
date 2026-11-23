@@ -71,6 +71,21 @@ test('Space pages the thread down and Shift+Space back up, from the open thread'
   expect((await pressAndSettle(page, 'Shift+Space')).top).toBe(0);
 });
 
+// When this fails, a second tap of Space soon after the first is dropped:
+// with reduced motion every page lands at once, so the reader sees it ignored.
+test('every tap of Space pages, with reduced motion too', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
+  // Two pages, each more than half the list's height.
+  await expect
+    .poll(async () => {
+      const { top, height } = await position(page);
+      return top > height;
+    })
+    .toBe(true);
+});
+
 // When this fails, paging takes Space from what has the keyboard: a focused
 // button no longer presses, or a typed space never reaches a field or the
 // reply composer.

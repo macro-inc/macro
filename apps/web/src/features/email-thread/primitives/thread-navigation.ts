@@ -435,9 +435,11 @@ export function createThreadNavigation(
   // usually sits on the host's frame around the list, outside its scroller, so
   // the browser's own Space has nothing to scroll. Paging is the user's scroll,
   // not a jump to a message, so older messages still load at the top.
-  const pageList = (dir: 'prev' | 'next') => {
-    const active = document.activeElement;
-    if (active instanceof Element && active.matches(SPACE_CONTROL_SELECTOR))
+  const pageList = (dir: 'prev' | 'next', event?: KeyboardEvent) => {
+    // The key's own target, inside an email body's shadow root too. The
+    // command menu runs the command with no event, while its field has focus.
+    const target = event?.composedPath()[0];
+    if (target instanceof Element && target.matches(SPACE_CONTROL_SELECTOR))
       return false;
 
     const list = untrack(context.messagesListRef);
@@ -445,9 +447,10 @@ export function createThreadNavigation(
 
     const top = pageDelta(list, dir);
     if (top === 0) return false;
-    // A held key repeats faster than the smooth scroll settles.
-    if (tryKeyboardListScroll())
-      list.scrollBy({ top, behavior: listScrollBehavior() });
+    // A held key repeats faster than the smooth scroll settles; a tap always
+    // pages, as the browser's Space does.
+    if (!tryKeyboardListScroll() && event?.repeat) return true;
+    list.scrollBy({ top, behavior: listScrollBehavior() });
     return true;
   };
 
@@ -670,8 +673,8 @@ export function createThreadNavigation(
       markSenderNoise: context.markSenderNoise,
       navigateToPreviousMessage,
       navigateToNextMessage,
-      pageDown: () => pageList('next'),
-      pageUp: () => pageList('prev'),
+      pageDown: (event) => pageList('next', event),
+      pageUp: (event) => pageList('prev', event),
       activate,
       cancel,
       expandFocusedMessage,
