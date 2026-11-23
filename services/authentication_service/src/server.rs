@@ -506,8 +506,14 @@ async fn run_server() -> anyhow::Result<()> {
                         db.clone(),
                         entity_access_service_impl.clone(),
                     ),
-                    messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                        connection_gateway_client.clone(),
+                    messages::domain::timeline_updates::ChannelTimelineRealtime::new(
+                        messages::outbound::connection_gateway::ConnectionGatewayMessages(
+                            connection_gateway_client.clone(),
+                        ),
+                        messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+                        messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                            macro_event_broker.clone(),
+                        ),
                     ),
                     channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),

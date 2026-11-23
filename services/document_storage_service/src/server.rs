@@ -1279,6 +1279,12 @@ async fn run_server() -> anyhow::Result<()> {
         messages::outbound::entity_access_audience::EntityAccessMessageAudience(
             (*entity_access_service).clone(),
         ),
+        messages::domain::timeline_updates::ChannelActivityUpdates::new(
+            crate::service::activity::ChannelParticipantAudience(PgChannelsRepo::new(db.clone())),
+            messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                macro_event_broker.clone(),
+            ),
+        ),
     );
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
@@ -1546,9 +1552,10 @@ async fn run_server() -> anyhow::Result<()> {
 
     // One message implementation for channels and documents. Committed changes fan
     // out to the broker, the local agent queue, and the parent's own delivery: channel
-    // messages keep their notifications, activity, and sharing side effects and send
-    // the common `message_update` payload; document discussions get the common
-    // payload and document comment notifications.
+    // messages keep their notifications, activity, and sharing side effects, send
+    // the common `message_update` payload and publish a live timeline update for
+    // `channelTimelineUpdates`; document discussions get the common payload and
+    // document comment notifications.
     let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
         conn_gateway_client.clone(),
     );
@@ -1579,7 +1586,13 @@ async fn run_server() -> anyhow::Result<()> {
         PgChannelsRepo::new(db.clone()),
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
-        message_realtime,
+        messages::domain::timeline_updates::ChannelTimelineRealtime::new(
+            message_realtime,
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                macro_event_broker.clone(),
+            ),
+        ),
         channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
@@ -2235,6 +2248,47 @@ async fn run_server() -> anyhow::Result<()> {
         }
     });
 
+    // Every replica reads every live channel timeline update and hands it to its
+    // own subscribers from memory: no database read per subscriber.
+    let channel_timeline_fanout = Arc::new(
+        messages::domain::timeline_updates::ChannelTimelineFanout::new(
+            messages::outbound::channel_timeline::ChannelTimelineTopicConsumer::from_env(
+                config.kafka_brokers.as_ref(),
+            )
+            .map_err(|error| {
+                anyhow::anyhow!("failed to create channel timeline topic consumer: {error:?}")
+            })?,
+            graphql_channel::GraphqlChannelTimelineUpdate::shared,
+        ),
+    );
+    consumer_tracker.spawn({
+        let service = Arc::clone(&channel_timeline_fanout);
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = service.run() => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+
+                let _ = result.inspect_err(|error| {
+                    tracing::error!(error = ?error, "channel timeline update consumer stopped");
+                });
+
+                tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                }
+            }
+        }
+    });
+
     let soup_realtime_service = Arc::new(SoupRealtimeConsumerService::new(
         SoupTopicConsumer::from_env(config.kafka_brokers.as_ref()).map_err(|error| {
             anyhow::anyhow!("failed to create realtime Soup topic consumer: {error:?}")
@@ -2870,6 +2924,9 @@ async fn run_server() -> anyhow::Result<()> {
         agent_session_activity_subscriptions: complete_graph::agent_session_activity_subscriptions(
             activity_realtime_service,
             db.clone(),
+        ),
+        channel_timeline_subscriptions: graphql_channel::ChannelTimelineSubscriptions::new(
+            move |user_id| channel_timeline_fanout.subscribe(user_id),
         ),
         graphql_notification_reader,
         graphql_notification_writer,

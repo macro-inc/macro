@@ -85,7 +85,7 @@ call = { path = "../../crates/call" }
 feature_flags = { path = "../../crates/feature_flags" }
 channel_bots = { path = "../../crates/channel_bots" }
 channel_change_db_utils = { path = "../../crates/channel_change_db_utils" }
-messages = { path = "../../crates/messages", features = ["annotations", "broker", "delivery", "inbound"] }
+messages = { path = "../../crates/messages", features = ["annotations", "broker", "consumer", "delivery", "inbound"] }
 message_write_gate = { path = "../../crates/message_write_gate" }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",

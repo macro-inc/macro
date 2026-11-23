@@ -230,3 +230,9 @@ state requires acknowledged purge before ordinary cleanup; release the guard bef
 
 - `ChannelGraphqlContext` shares the primary-backed REST messages service and access
   service; insert it through `insert_graphql_context_data` for HTTP and websockets.
+- `channelTimelineUpdates` subscribers get updates from `ChannelTimelineFanout`, which
+  reads `macro.channel_timeline` with an ungrouped consumer on the consumer tracker;
+  `ChannelTimelineSubscriptions` reaches GraphQL through `insert_graphql_context_data`.
+  Channel message delivery is wrapped in `ChannelTimelineRealtime`, and
+  `TimelinePublisher` publishes sequenced channel activity with one participant read
+  per channel batch.
