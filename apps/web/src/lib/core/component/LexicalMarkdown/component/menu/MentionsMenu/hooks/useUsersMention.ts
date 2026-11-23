@@ -18,6 +18,7 @@ import {
   NAME_MATCH_RANKING,
 } from '@core/util/freshSort';
 import { preservePersonOrder } from '@core/util/ordered-window';
+import { useMentionListPriority } from '@queries/contacts/lists';
 import { createLazyMemo } from '@solid-primitives/memo';
 import {
   type Accessor,
@@ -107,6 +108,7 @@ export function useUsersMention(
     buckets: ['person'],
     searchTerm,
     peopleMode: 'mention',
+    peopleListPriority: useMentionListPriority(),
     peopleLocalBudgetMs: PEOPLE_CACHE_BUDGET_MS,
     enabled: usesDirectory,
   });

@@ -16,6 +16,7 @@ use sqlx::{Pool, Postgres};
 use tracing::Instrument;
 
 use crate::api::context::{ApiContext, AuthorizationService};
+use models_email::email::service::pubsub::LinkManagerSender;
 use sqs_client::email::LinkManagerMessage;
 
 /// Delete user webhook
@@ -133,7 +134,10 @@ async fn delete_user(
             let message = LinkManagerMessage::DeleteUser {
                 fusionauth_user_id: fusionauth_user_id.clone(),
             };
-            match sqs_client.enqueue_link_manager_notification(message).await {
+            match sqs_client
+                .enqueue_link_manager_notification(message, LinkManagerSender::Event)
+                .await
+            {
                 Ok(_) => tracing::info!("enqueued email link deletion"),
                 Err(e) => {
                     tracing::error!(error=?e, "unable to enqueue email link deletion");

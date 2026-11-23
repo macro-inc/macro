@@ -69,8 +69,7 @@ export type ToolConnectionState =
   | 'error'
   | 'available'
   | 'disabled'
-  | 'connected'
-  | 'account-linked';
+  | 'connected';
 export type ConnectedToolsSource = {
   connected: Accessor<ReadonlySet<string>>;
   state(slug: string): ToolConnectionState;

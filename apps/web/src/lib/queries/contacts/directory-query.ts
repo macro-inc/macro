@@ -91,6 +91,9 @@ export function createContactDirectoryWindow(
     /** Lets a first page read the server when the cache has not answered in
      * this long; see `ContactDirectoryRequest.localBudgetMs`. */
     localBudgetMs?: number;
+    /** Members of the viewer's team, for server pages to list the ones a
+     * typed search names among their first rows. */
+    teammates?: Accessor<ReadonlySet<string>>;
   } = {}
 ) {
   const owner = createUniqueId();
@@ -103,17 +106,28 @@ export function createContactDirectoryWindow(
       const value = options.policy?.();
       if (value && value.excluded.length > MAX_PEOPLE_BATCH)
         throw new Error('Invalid contact policy exclusions');
-      const policy = value
+      // Plain copies: the request outlives the accessor's reactive values.
+      const policy: ContactPeoplePolicy | undefined = value
         ? {
             mode: value.mode,
             excluded: [...value.excluded],
             senderDomain: value.senderDomain,
+            ...(value.listPriority?.length
+              ? { listPriority: value.listPriority.map((group) => [...group]) }
+              : {}),
+            ...(value.onlyListed ? { onlyListed: true } : {}),
           }
         : undefined;
+      // Only a typed search reads its teammates. Browsing leaves the roster
+      // out, so one that loads later never restarts its pages.
+      const teammates = search().trim()
+        ? [...(options.teammates?.() ?? [])].sort()
+        : [];
       return {
         query: search(),
         policy,
-        policyKey: hashKey([policy, options.resetKey?.()]),
+        teammates,
+        policyKey: hashKey([policy, options.resetKey?.(), teammates]),
         active: enabled(),
       };
     },
@@ -152,6 +166,7 @@ export function createContactDirectoryWindow(
       ...(options.localBudgetMs === undefined
         ? {}
         : { localBudgetMs: options.localBudgetMs }),
+      ...(selection.teammates.length ? { teammates: selection.teammates } : {}),
     };
   });
   /** Who the query reads for: nobody until the window is open and its text

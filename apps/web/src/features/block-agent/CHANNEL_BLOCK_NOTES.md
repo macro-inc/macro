@@ -69,7 +69,7 @@ export type ChannelHandle = {
 ### Consumed (global, cache-backed — Channel does NOT own these)
 | Hook | Source | Backing |
 |---|---|---|
-| `useChannelName` / `useChannelType` / `useChannelActivity` | `lib/core/context/channels.ts:68–81` | `ChannelsContextProvider` — app-level provider over `useListChannelsQuery` + `useChannelsActivityQuery` (whole channel list, memoized `byId` maps). Per-channel hooks are just memos over it. |
+| `useChannelName` / `useChannelType` / `useChannel` | `lib/core/context/channels.ts` | `ChannelDirectoryProvider` in `Root` — the channel directory (`lib/queries/channel/directory.ts`): the soup channel records the backfill lane caches, or the same query paged into memory without the cache. Per-channel hooks are memos over its `lookup`, `undefined` while a cold directory is still pending. |
 | `useUserId` | `@core/context/user` | app-level |
 | `useChannelParticipants` | `features/channel/use-channel-participants.ts` | thin memo over `useChannelParticipantsQuery` → `{ users, ids }` accessors |
 | `useSplitPanel` / `useSplitLayout` | `@components/app/split-layout` | split-layout contexts (insets, popoverSplit, openWithSplit) |

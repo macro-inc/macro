@@ -1,7 +1,7 @@
 apiVersion: v1
 data:
   policy.csv: ""
-  policy.default: ""
+  policy.default: role:readonly
   policy.matchMode: glob
   scopes: '[groups]'
 kind: ConfigMap

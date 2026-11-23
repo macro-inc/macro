@@ -33,7 +33,7 @@ use crate::domain::ports::{
     SharedEntity, SourceDates, TeamMember,
 };
 use crate::domain::service::NotionWorkspaceImporter;
-use crate::domain::service::test::admission::NoConnector;
+use crate::domain::service::test::admission::{NoConnector, no_connections};
 use crate::outbound::pg_import_repo::PgImportRepo;
 
 fn page_id(hex: char) -> NotionId {
@@ -192,7 +192,7 @@ fn service(
 ) -> Service {
     ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -386,7 +386,7 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -551,7 +551,7 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -646,7 +646,7 @@ async fn a_teammate_writing_the_same_page_waits_and_links_to_the_first_copy(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -717,7 +717,7 @@ async fn a_page_a_teammate_already_shared_is_linked_without_writing(pool: PgPool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )

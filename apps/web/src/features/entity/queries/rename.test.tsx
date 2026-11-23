@@ -122,8 +122,10 @@ it.each(['channel', 'call'] as const)(
     });
     const key =
       type === 'channel'
-        ? channelKeys.listChannels('viewer').queryKey
+        ? channelKeys.directory('viewer').queryKey
         : callKeys.record('entity').queryKey;
+    // A rejected channel rename rereads every viewer's in-memory directory.
+    const invalidated = type === 'channel' ? channelKeys.directory._def : key;
     const original =
       type === 'channel'
         ? [{ id: 'entity', name: 'Before' }]
@@ -162,7 +164,7 @@ it.each(['channel', 'call'] as const)(
         error: 'Denied',
       });
     expect(cache.getQueryData(key)).toEqual(original);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: key });
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: invalidated });
     expect(listeners.size).toBe(0);
   }
 );
