@@ -139,6 +139,17 @@ retried page load happened.
   what both cold mounts show there, this step or the last. The last step's
   counts only where main's copy is not this step's, and the head's rows must
   keep a cold mount's order (or main's).
+  One rule for the head alone one comparison behind
+  (`oldStale.otherWrite`): the other account (or a write straight to the
+  database) changes what the server answers, say by removing this account
+  from the team. Neither page is told, but the head's live copy already holds
+  the last comparison's cold read, through the shared cache, while main's
+  never read it and can match the server again by chance. Excused when the
+  write was not this account's, main's live copy has not moved since the
+  last comparison, the cold mounts agree now, and every place the head
+  differs from main shows what both cold mounts showed at the last
+  comparison (a whole reader, flags and error too, when more than data
+  differs). The staleness record accepts head-only keys excused this way.
 - A failed read is compared by its flags and error, not by the list it still
   holds, and a select editor row over a failed option read without its
   options (`failedReadData`): what a failed read holds is the client's

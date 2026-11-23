@@ -553,7 +553,7 @@ const R = {
   valueDropped: {},
   // live differences where main's reader was stale and the head's current
   // (see `oldStaleExcuses`), by operation and reader
-  oldStale: { byOp: {}, staleness: 0, inherited: 0, pointwise: 0, wholeReader: 0, headStaleInherited: 0 },
+  oldStale: { byOp: {}, staleness: 0, inherited: 0, pointwise: 0, wholeReader: 0, headStaleInherited: 0, otherWrite: 0 },
   failedReadData: { lists: 0, editorRows: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
   harnessErrors: [],
@@ -1618,22 +1618,77 @@ function inheritedExcuses(key, lo, ln, fo, fn) {
   return out;
 }
 
+// Another account's write, with the head one comparison behind. A write the
+// other account made (or one made straight in the database) reaches neither
+// page, so neither live copy moves for it. The head's copy can hold more than
+// main's: its cold mount shares the normalized cache, so what that mount read
+// at the last comparison is on the head's live screen now, where main's cold
+// mount had a client of its own. When the write then changes what the server
+// answers (the owner removes this account from the team), main's copy, which
+// never read the earlier answer, can match the server again by chance, while
+// the head's shows the last comparison's answer. Excused when the write was
+// not this account's, main's live copy has not moved since the last
+// comparison, the two cold mounts agree now, and every place the head's live
+// copy differs from main's shows what both cold mounts showed at the last
+// comparison (point by point, as `fresherPointwise` checks; a whole reader,
+// with its flags and error, when the readers differ in more than data). A
+// write this account made, a copy of main's that moved, or a head showing
+// anything no cold mount showed, still counts. `oldStale.otherWrite` counts
+// the keys no other rule excused.
+const OUT_OF_BAND_OPS = new Set(['sqlRename', 'sqlNullColor']);
+function otherWriteExcuses(key, who, lo, ln, fo, fn) {
+  const out = new Set();
+  const at = here();
+  if (at.actor === who && !OUT_OF_BAND_OPS.has(at.op)) return out;
+  const last = LAST_LIVE.get(key);
+  const prev = LAST_FRESH.get(key);
+  if (!last || !prev) return out;
+  const same = (x, y, canon) => JT(canon(x)) === JT(canon(y));
+  for (const k of new Set([...Object.keys(lo ?? {}), ...Object.keys(ln ?? {})])) {
+    if (k === 'callers') continue;
+    const canon = canonFor(readerKind(k));
+    const whole = (s) => readerWhole(s?.[k], canon);
+    if (whole(lo) !== whole(ln) && whole(lo) === whole(last.lo) && whole(fo) === whole(fn) && whole(ln) === whole(prev.fn) && whole(prev.fo) === whole(prev.fn)) {
+      for (const kind of [`reader${k}`, `reader${k}.data`, `reader${k}.error`]) out.add(kind);
+      continue;
+    }
+    const d = (s) => canon(s?.[k]?.data);
+    if (JT(d(lo)) !== JT(d(ln)) && JT(d(lo)) === JT(d(last.lo)) && JT(d(fo)) === JT(d(fn)) && fresherPointwise(d(lo), d(ln), [[d(prev.fo), d(prev.fn)]])) {
+      out.add(`reader${k}.data`);
+    }
+  }
+  const of = (s, name) => s?.callers?.[name];
+  const gPrev = callerGroups(prev.fo, prev.fn);
+  for (const name of new Set([...Object.keys(lo?.callers ?? {}), ...Object.keys(ln?.callers ?? {})])) {
+    if (name === '__sources') continue;
+    const by = (g) => (x) => canonCallers(x, g(name));
+    if (same(of(lo, name), of(ln, name), by(callerGroups(lo, ln)))) continue;
+    if (!same(of(lo, name), of(last.lo, name), by(callerGroups(lo, last.lo)))) continue;
+    if (!same(of(fo, name), of(fn, name), by(callerGroups(fo, fn)))) continue;
+    const p = (s) => by(gPrev)(of(s, name));
+    if (fresherPointwise(p(lo), p(ln), [[p(prev.fo), p(prev.fn)]])) {
+      out.add(`caller.${name}`);
+    }
+  }
+  return out;
+}
+
 // The staleness record, given each side's stale keys: main's staleness alone
 // when the head's stale keys are a subset of main's and every key only main
 // has stale is excused (for `callers`, every caller main has stale).
 // A key stale on the head alone is accepted only when it is carried: an
 // excused difference where neither live copy has moved since, which a write
 // neither side is told of left stale on the head while main's older copy
-// happens to match the server again.
-function staleOnlyOnOld(so, sn, excuses, lo, fo, inherited, ln, fn) {
+// happens to match the server again; or one `otherWriteExcuses` excused.
+function staleOnlyOnOld(so, sn, excuses, lo, fo, carried, ln, fn) {
   const headOnly = sn.filter((k) => !so.includes(k));
   const gNew = callerGroups(ln, fn);
-  const carried = headOnly.every((k) => {
-    if (k !== 'callers') return inherited.has(`reader${k}.data`);
+  const headOk = headOnly.every((k) => {
+    if (k !== 'callers') return carried.has(`reader${k}.data`);
     const stale = Object.keys(ln?.callers ?? {}).filter((c) => c !== '__sources' && JT(canonCallers(ln.callers[c], gNew(c))) !== JT(canonCallers(fn?.callers?.[c], gNew(c))));
-    return stale.length > 0 && stale.every((c) => inherited.has(`caller.${c}`));
+    return stale.length > 0 && stale.every((c) => carried.has(`caller.${c}`));
   });
-  if (!carried) return false;
+  if (!headOk) return false;
   if (headOnly.length) R.oldStale.headStaleInherited++;
   const gOld = callerGroups(lo, fo);
   return so
@@ -1731,8 +1786,10 @@ async function compareStep(pair, level, op) {
     const liveKey = `${account}:${c.seq}`;
     const fresh0 = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn, LAST_FRESH.get(liveKey) ?? null);
     const inherited = freshOutHere ? new Set() : inheritedExcuses(liveKey, lo, ln, fo, fn);
-    const excuses = new Set([...fresh0, ...inherited]);
+    const otherWrite = freshOutHere ? new Set() : otherWriteExcuses(liveKey, who, lo, ln, fo, fn);
+    const excuses = new Set([...fresh0, ...inherited, ...otherWrite]);
     for (const k of inherited) if (!fresh0.has(k)) R.oldStale.inherited++;
+    for (const k of otherWrite) if (!fresh0.has(k) && !inherited.has(k)) R.oldStale.otherWrite++;
     OLD_STALE = excuses;
     if (!liveOut) LAST_LIVE.set(liveKey, { lo, ln, excused: excuses });
     FRESH_PAIR = freshOutHere ? null : { fo, fn };
@@ -1760,7 +1817,7 @@ async function compareStep(pair, level, op) {
     const sn = stale(ln, fn);
     if (so.length) bump(R.staleness.byOp, `${op}:${who}`, 'old');
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
-    if (J(so) !== J(sn) && staleOnlyOnOld(so, sn, excuses, lo, fo, inherited, ln, fn)) {
+    if (J(so) !== J(sn) && staleOnlyOnOld(so, sn, excuses, lo, fo, new Set([...inherited, ...otherWrite]), ln, fn)) {
       R.oldStale.staleness++;
       record(`${level}:staleness`, `stale keys ${who}`, 'old-stale', so, sn);
     } else if (J(so) !== J(sn)) {
@@ -2413,7 +2470,7 @@ const real = Object.entries(R.diffSignatures);
 log(`done: ${R.counts.sequences} sequences, ${R.counts.steps} steps, ${R.counts.rawCases} raw cases, ${R.counts.readerComparisons} reader and ${R.counts.callerComparisons} caller comparisons; ${R.totals.differences} differences in ${real.length} signatures; ${R.totals.harnessErrors} harness errors; module checks ${JSON.stringify(R.moduleChecks)}`);
 {
   const n = Object.values(R.oldStale.byOp).reduce((a, x) => a + Object.values(x).reduce((b, y) => b + y, 0), 0);
-  if (n || R.oldStale.staleness) log(`main stale, head current: ${n} live differences (${R.oldStale.inherited} excused keys carried from an earlier step where neither side moved) and ${R.oldStale.staleness} staleness records (oldStale in results.json)`);
+  if (n || R.oldStale.staleness) log(`main stale, head current: ${n} live differences (${R.oldStale.inherited} excused keys carried from an earlier step where neither side moved, ${R.oldStale.otherWrite} where the head kept the last comparison's answer after another account's write) and ${R.oldStale.staleness} staleness records (oldStale in results.json)`);
   if (Object.keys(R.valueDropped).length) log(`value dropped by the head: ${JSON.stringify(R.valueDropped)}`);
 }
 for (const [s, n] of real.sort((a, b) => b[1] - a[1])) log(`  ${n}x ${s}`);
