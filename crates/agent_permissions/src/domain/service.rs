@@ -28,7 +28,7 @@ use super::model::{
 use super::ports::{
     AgentDirectory, PermissionStore, PermissionsRollout, SessionDirectory, Write, WriteTo,
 };
-use super::resolve::{self, Layer, ViewAccess};
+use super::resolve::{self, Resolver, ViewAccess};
 
 /// The most changes one request may make: more than one group's custom view
 /// holds.
@@ -325,14 +325,18 @@ where
         context: Option<&AgentContext>,
         overlay: Option<Vec<Rule>>,
     ) -> Result<PermissionsView, PermissionError> {
-        let saved = self.store.rules(policy).await.map_err(internal)?;
+        let chain = self
+            .store
+            .chain(policy)
+            .await
+            .map_err(internal)?
+            .ok_or(PermissionError::NotFound)?;
         Ok(resolve::view(
             &self.catalog,
             agent,
-            policy,
             kind,
             view_access(caller, agent, access, &owner, context),
-            saved,
+            &chain,
             overlay,
         ))
     }
@@ -545,21 +549,26 @@ where
             set_by,
         };
         self.store
-            .write(write, |saved, overlay| {
+            .write(write, |chain, overlay| {
                 // The saved policy applies to every session, so it must not
-                // loosen whatever this session's overlay holds.
-                let (before, after) = match to {
-                    WriteTo::Saved => (
-                        (saved, &[][..]),
-                        (resolve::apply(saved, &changes, set_by), Vec::new()),
-                    ),
+                // loosen whatever this session's overlay holds. A follower's
+                // rows sit on its chain, so both compare what the chain
+                // resolves to.
+                let saved = chain.rules();
+                let (before_overlay, after_saved, after_overlay) = match to {
+                    WriteTo::Saved => {
+                        (&[][..], resolve::apply(saved, &changes, set_by), Vec::new())
+                    }
                     WriteTo::Session(_) => (
-                        (saved, overlay),
-                        (saved.to_vec(), resolve::apply(overlay, &changes, set_by)),
+                        overlay,
+                        saved.to_vec(),
+                        resolve::apply(overlay, &changes, set_by),
                     ),
                 };
-                resolve::asks_looser(catalog, before, &requested)
-                    .and_then(|()| resolve::tighten_only(catalog, before, (&after.0, &after.1)))
+                let before = Resolver::new(chain, before_overlay);
+                let after = Resolver::with_rules(chain, &after_saved, &after_overlay);
+                resolve::asks_looser(catalog, &before, &requested)
+                    .and_then(|()| resolve::tighten_only(catalog, &before, &after))
                     .map_err(PermissionError::WouldLoosen)?;
                 Ok(changes)
             })
@@ -609,6 +618,9 @@ where
             agent_id = %policy.agent,
             agent_session_id = %policy.session.as_uuid(),
             operations = calls.len(),
+            policy_id = tracing::field::Empty,
+            chain_len = tracing::field::Empty,
+            source_policy_id = tracing::field::Empty,
         ),
         err
     )]
@@ -628,16 +640,29 @@ where
         // Its own statement, before the snapshot, so the snapshot stays read
         // only.
         let policy_id = self.policy_id(&owner).await?;
+        let span = tracing::Span::current();
+        span.record("policy_id", tracing::field::display(policy_id));
         // One snapshot: a gate must never combine layers no single
         // committed state held, such as the saved rules from before a
-        // person's Never with the overlay from after the agent dropped its own.
-        let (saved, overlay) = self
+        // person's Never with the overlay from after the agent dropped its
+        // own, or a source's rules from before its change with a follower's
+        // from after it. A chain that is too long or a cycle (only
+        // hand-edited data can make one) fails here, and the run is refused.
+        let (chain, overlay) = self
             .store
-            .rules_with_session(policy_id, policy.session)
+            .chain_with_session(policy_id, policy.session)
             .await
-            .map_err(internal)?;
-        let saved = Layer::new(&saved);
-        let overlay = Layer::new(&overlay);
+            .map_err(internal)?
+            .ok_or_else(|| {
+                PermissionError::Internal(
+                    rootcause::report!("a policy vanished after it was ensured").into_dynamic(),
+                )
+            })?;
+        span.record("chain_len", chain.depth());
+        if let Some(source) = chain.source() {
+            span.record("source_policy_id", tracing::field::display(source.id));
+        }
+        let resolver = Resolver::new(&chain, &overlay);
 
         Ok(calls
             .iter()
@@ -652,7 +677,7 @@ where
                 }
                 match self.catalog.entry(&key.service, &key.operation) {
                     Some(entry) => {
-                        let (state, origin) = resolve::effective(&saved, &overlay, entry);
+                        let (state, origin) = resolver.entry(entry);
                         ResolvedCall {
                             key: key.clone(),
                             entry: Some(entry.clone()),

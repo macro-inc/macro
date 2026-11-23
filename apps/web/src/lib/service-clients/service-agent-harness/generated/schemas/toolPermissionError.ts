@@ -12,7 +12,8 @@ import type { ToolPermissionErrorTargets } from './toolPermissionErrorTargets';
  */
 export interface ToolPermissionError {
   /** `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
-`would_loosen` or `internal`. */
+`would_loosen`, `source_cycle`, `source_too_deep`,
+`source_not_allowed` or `internal`. */
   code: string;
   /** What went wrong, for a person. */
   message: string;

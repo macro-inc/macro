@@ -7,7 +7,10 @@ use bot_id::MACRO_NEW_BOT_ID;
 use chrono::DateTime;
 
 use super::*;
-use crate::domain::model::{CatalogEntry, CatalogGroup, Target};
+use crate::domain::model::{
+    CatalogEntry, CatalogGroup, Follows, MAX_CHAIN, PolicyChain, PolicyLevel, Target,
+};
+use crate::domain::ports::SourceWrite;
 
 const OWNER: &str = "macro|owner@example.com";
 const TEAMMATE: &str = "macro|teammate@example.com";
@@ -73,6 +76,8 @@ enum Slot {
 struct FakeStore {
     /// Each owner's policy id, made on first use.
     policies: Mutex<HashMap<Key, PolicyId>>,
+    /// Each policy's owner, and what it follows when not its own settings.
+    owners: Mutex<HashMap<PolicyId, (PolicyOwner, Follows)>>,
     rules: Mutex<HashMap<Slot, Vec<Rule>>>,
 }
 
@@ -125,36 +130,80 @@ impl FakeStore {
     fn policy(&self, key: &Key) -> Option<PolicyId> {
         self.policies.lock().unwrap().get(key).copied()
     }
+
+    /// `policy`'s chain as it stands, or `None` for no such policy.
+    fn read_chain(&self, policy: PolicyId) -> Option<PolicyChain> {
+        let owners = self.owners.lock().unwrap();
+        let mut levels = Vec::new();
+        let mut next = Some(policy);
+        while let Some(id) = next {
+            let (owner, follows) = owners.get(&id)?.clone();
+            levels.push(PolicyLevel {
+                id,
+                owner,
+                follows,
+                rules: self.read_slot(Slot::Policy(id)),
+            });
+            next = match follows {
+                Follows::Source(source) if levels.len() <= MAX_CHAIN => Some(source),
+                Follows::Source(_) | Follows::Own | Follows::Lost => None,
+            };
+        }
+        Some(PolicyChain::new(levels).expect("the fake store holds only chains"))
+    }
+
+    /// The most policies on a path of followers ending at `policy`.
+    fn height(&self, policy: PolicyId) -> usize {
+        let followers: Vec<PolicyId> = self
+            .owners
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(_, (_, follows))| *follows == Follows::Source(policy))
+            .map(|(id, _)| *id)
+            .collect();
+        1 + followers
+            .into_iter()
+            .map(|follower| self.height(follower))
+            .max()
+            .unwrap_or(0)
+    }
 }
 
 impl PermissionStore for Arc<FakeStore> {
     type Err = Infallible;
 
     async fn ensure_policy(&self, owner: &PolicyOwner) -> Result<PolicyId, Infallible> {
-        Ok(*self
+        let id = *self
             .policies
             .lock()
             .unwrap()
             .entry(key(owner))
-            .or_insert_with(PolicyId::generate))
+            .or_insert_with(PolicyId::generate);
+        self.owners
+            .lock()
+            .unwrap()
+            .entry(id)
+            .or_insert_with(|| (owner.clone(), Follows::Own));
+        Ok(id)
     }
 
-    async fn rules(&self, policy: PolicyId) -> Result<Vec<Rule>, Infallible> {
-        Ok(self.read_slot(Slot::Policy(policy)))
+    async fn chain(&self, policy: PolicyId) -> Result<Option<PolicyChain>, Infallible> {
+        Ok(self.read_chain(policy))
     }
 
     async fn session_rules(&self, session: AgentSessionId) -> Result<Vec<Rule>, Infallible> {
         Ok(self.read_slot(Slot::Session(session)))
     }
 
-    async fn rules_with_session(
+    async fn chain_with_session(
         &self,
         policy: PolicyId,
         session: AgentSessionId,
-    ) -> Result<(Vec<Rule>, Vec<Rule>), Infallible> {
-        let rules = self.rules.lock().unwrap();
-        let read = |slot: Slot| rules.get(&slot).cloned().unwrap_or_default();
-        Ok((read(Slot::Policy(policy)), read(Slot::Session(session))))
+    ) -> Result<Option<(PolicyChain, Vec<Rule>)>, Infallible> {
+        Ok(self
+            .read_chain(policy)
+            .map(|chain| (chain, self.read_slot(Slot::Session(session)))))
     }
 
     async fn write<Plan>(
@@ -163,14 +212,16 @@ impl PermissionStore for Arc<FakeStore> {
         plan: Plan,
     ) -> Result<Result<(), PermissionError>, Infallible>
     where
-        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
+        Plan: FnOnce(&PolicyChain, &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
     {
-        let saved = self.read_slot(Slot::Policy(write.policy));
+        let Some(chain) = self.read_chain(write.policy) else {
+            return Ok(Err(PermissionError::NotFound));
+        };
         let overlay = write
             .session
             .map(|session| self.read_slot(Slot::Session(session)))
             .unwrap_or_default();
-        let changes = match plan(&saved, &overlay) {
+        let changes = match plan(&chain, &overlay) {
             Ok(changes) => changes,
             Err(refused) => return Ok(Err(refused)),
         };
@@ -186,6 +237,75 @@ impl PermissionStore for Arc<FakeStore> {
     async fn reset(&self, policy: PolicyId) -> Result<(), Infallible> {
         self.rules.lock().unwrap().remove(&Slot::Policy(policy));
         Ok(())
+    }
+
+    async fn set_source(
+        &self,
+        write: SourceWrite<'_>,
+        source: PolicyId,
+    ) -> Result<Result<(), PermissionError>, Infallible> {
+        let follower = self.owners.lock().unwrap().get(&write.policy).cloned();
+        let Some((PolicyOwner::Agent(_), follows)) = follower else {
+            return Ok(Err(match follower {
+                Some(_) => PermissionError::SourceNotAllowed,
+                None => PermissionError::NotFound,
+            }));
+        };
+        if source == write.policy {
+            return Ok(Err(PermissionError::SourceNotAllowed));
+        }
+        let Some(up) = self.read_chain(source) else {
+            return Ok(Err(PermissionError::NotFound));
+        };
+        if up.levels().any(|level| level.id == write.policy) {
+            return Ok(Err(PermissionError::SourceCycle));
+        }
+        if self.height(write.policy) + up.depth() > MAX_CHAIN {
+            return Ok(Err(PermissionError::SourceTooDeep));
+        }
+        if let Some((_, current)) = self.owners.lock().unwrap().get_mut(&write.policy) {
+            *current = Follows::Source(source);
+        }
+        if follows == Follows::Own
+            && let Some(rules) = self
+                .rules
+                .lock()
+                .unwrap()
+                .get_mut(&Slot::Policy(write.policy))
+        {
+            rules.retain(|rule| rule.restriction_only);
+        }
+        Ok(Ok(()))
+    }
+
+    async fn detach<Plan>(
+        &self,
+        write: SourceWrite<'_>,
+        plan: Plan,
+    ) -> Result<Result<usize, PermissionError>, Infallible>
+    where
+        Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send,
+    {
+        let Some(chain) = self.read_chain(write.policy) else {
+            return Ok(Err(PermissionError::NotFound));
+        };
+        let rules = match plan(&chain) {
+            Ok(rules) => rules,
+            Err(refused) => return Ok(Err(refused)),
+        };
+        let written = rules.len();
+        self.rules
+            .lock()
+            .unwrap()
+            .insert(Slot::Policy(write.policy), rules);
+        if let Some((_, current)) = self.owners.lock().unwrap().get_mut(&write.policy) {
+            *current = Follows::Own;
+        }
+        Ok(Ok(written))
+    }
+
+    async fn followers_height(&self, policy: PolicyId) -> Result<usize, Infallible> {
+        Ok(self.height(policy))
     }
 }
 
@@ -1174,5 +1294,144 @@ async fn an_agent_in_someone_elses_session_restricts_a_default_for_that_session(
     assert_eq!(
         (gate[0].state, gate[0].origin),
         (PermissionState::Ask, Origin::Session)
+    );
+}
+
+/// `BotId::TEST_A`'s policy made to follow the owner's own Macro policy, as
+/// a source change would leave it.
+async fn follow_owners_macro(fixture: &Fixture) -> PolicyId {
+    let follower = fixture
+        .store
+        .ensure_policy(&PolicyOwner::Agent(BotId::TEST_A))
+        .await
+        .unwrap();
+    let source = fixture
+        .store
+        .ensure_policy(&PolicyOwner::Persona {
+            persona: MACRO_NEW_BOT_ID,
+            user: user(OWNER),
+        })
+        .await
+        .unwrap();
+    let owner = user(OWNER);
+    fixture
+        .store
+        .set_source(
+            SourceWrite {
+                policy: follower,
+                by: &owner,
+            },
+            source,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    source
+}
+
+#[tokio::test]
+async fn a_follower_resolves_through_its_source_live() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    let before = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (before[0].state, before[0].origin),
+        (PermissionState::Always, Origin::Source)
+    );
+
+    // The owner changes their own Macro settings: the follower's next call
+    // takes them, and its view says the same.
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let after = fixture
+        .service
+        .resolve_calls(&owner_policy(), &[send_email()])
+        .await
+        .unwrap();
+    assert_eq!(
+        (after[0].state, after[0].origin),
+        (PermissionState::Never, Origin::Source)
+    );
+    let view = fixture
+        .service
+        .view_agent(&person(OWNER), BotId::TEST_A)
+        .await
+        .unwrap();
+    let email = view
+        .groups
+        .iter()
+        .find(|group| group.group == "email")
+        .unwrap();
+    assert_eq!(
+        (email.actions[0].state, email.actions[0].origin),
+        (PermissionState::Never, Origin::Source)
+    );
+    assert!(view.rules.is_empty());
+}
+
+#[tokio::test]
+async fn an_agent_tightens_a_follower_but_cannot_loosen_its_source() {
+    let fixture = fixture();
+    follow_owners_macro(&fixture).await;
+    fixture
+        .service
+        .set(&person(OWNER), MACRO_NEW_BOT_ID, never_send())
+        .await
+        .unwrap();
+    let agent = agent_caller(OWNER, BotId::TEST_A, None);
+    // Asking for always on what the source sets to never is refused.
+    let loosen = vec![Change {
+        target: Target::Tool {
+            service: "email".to_owned(),
+            operation: "send_email".to_owned(),
+        },
+        state: Some(PermissionState::Always),
+    }];
+    assert!(matches!(
+        fixture.service.tighten(&agent, BotId::TEST_A, loosen).await,
+        Err(PermissionError::WouldLoosen(_))
+    ));
+    // A stricter local default is saved on the follower, not the source.
+    let stricter = vec![Change {
+        target: Target::Action {
+            action: Action::Destroy,
+        },
+        state: Some(PermissionState::Ask),
+    }];
+    let tightened = fixture
+        .service
+        .tighten(&agent, BotId::TEST_A, stricter)
+        .await
+        .unwrap();
+    assert_eq!(tightened.applied_to, AppliedTo::Agent);
+    assert_eq!(tightened.permissions.rules.len(), 1);
+    let resolved = fixture
+        .service
+        .resolve_calls(
+            &owner_policy(),
+            &[OperationKey {
+                service: "storage".to_owned(),
+                operation: "delete_document".to_owned(),
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        (resolved[0].state, resolved[0].origin),
+        (PermissionState::Ask, Origin::Action)
+    );
+    assert_eq!(
+        fixture
+            .store
+            .read(&Key::Persona(MACRO_NEW_BOT_ID, OWNER.to_owned()))
+            .len(),
+        1
     );
 }

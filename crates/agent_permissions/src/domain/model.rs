@@ -212,6 +212,159 @@ pub enum PolicyOwner {
     },
 }
 
+/// The most policies one chain may hold, the policy itself and its root
+/// included: a follower, up to three policies it reaches through, and a root.
+pub const MAX_CHAIN: usize = 5;
+
+/// What a policy's settings start from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Follows {
+    /// It owns its settings: a root.
+    Own,
+    /// It follows this policy (its source): the source's settings apply, and
+    /// its own rows only restrict them.
+    Source(PolicyId),
+    /// It followed a source that was deleted for good: everything asks until
+    /// someone picks a source or detaches. A root.
+    Lost,
+}
+
+/// One policy of a chain, with its saved settings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyLevel {
+    /// Its id.
+    pub id: PolicyId,
+    /// Whose it is.
+    pub owner: PolicyOwner,
+    /// What its settings start from.
+    pub follows: Follows,
+    /// Its saved settings.
+    pub rules: Vec<Rule>,
+}
+
+/// A policy and every policy it follows, each the previous one's source,
+/// ending at a root (a policy that owns its settings, or one whose source
+/// was lost). Never longer than [`MAX_CHAIN`] and never a cycle: only
+/// [`PolicyChain::new`] and [`PolicyChain::own`] build one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PolicyChain {
+    policy: PolicyLevel,
+    sources: Vec<PolicyLevel>,
+}
+
+/// Why stored policies are not a chain. Setting a source refuses anything
+/// that would make one, so only hand-edited data can.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ChainError {
+    /// No policy.
+    #[error("a policy chain needs a policy")]
+    Empty,
+    /// More than [`MAX_CHAIN`] policies.
+    #[error("a policy chain is longer than {MAX_CHAIN} policies")]
+    TooDeep,
+    /// A policy follows one already in the chain.
+    #[error("a policy chain is a cycle")]
+    Cycle,
+    /// A policy's next level is not its source.
+    #[error("a policy chain is broken")]
+    Broken,
+}
+
+impl PolicyChain {
+    /// `levels` as a chain: the first the policy, each next one the previous
+    /// one's source, the last a root.
+    pub fn new(levels: Vec<PolicyLevel>) -> Result<Self, ChainError> {
+        if levels.len() > MAX_CHAIN {
+            return Err(ChainError::TooDeep);
+        }
+        let linked = levels
+            .windows(2)
+            .all(|pair| matches!(pair, [level, next] if level.follows == Follows::Source(next.id)));
+        if !linked {
+            return Err(ChainError::Broken);
+        }
+        let ids: Vec<PolicyId> = levels.iter().map(|level| level.id).collect();
+        let mut levels = levels.into_iter();
+        let policy = levels.next().ok_or(ChainError::Empty)?;
+        let chain = Self {
+            policy,
+            sources: levels.collect(),
+        };
+        match chain.root().follows {
+            Follows::Own | Follows::Lost => Ok(chain),
+            Follows::Source(source) if ids.contains(&source) => Err(ChainError::Cycle),
+            Follows::Source(_) => Err(ChainError::Broken),
+        }
+    }
+
+    /// A policy that owns its settings.
+    pub fn own(id: PolicyId, owner: PolicyOwner, rules: Vec<Rule>) -> Self {
+        Self {
+            policy: PolicyLevel {
+                id,
+                owner,
+                follows: Follows::Own,
+                rules,
+            },
+            sources: Vec::new(),
+        }
+    }
+
+    /// The policy itself.
+    pub fn policy(&self) -> &PolicyLevel {
+        &self.policy
+    }
+
+    /// The policy it follows, when that still exists.
+    pub fn source(&self) -> Option<&PolicyLevel> {
+        self.sources.first()
+    }
+
+    /// Its sources, from the one it follows toward the root.
+    pub fn sources(&self) -> &[PolicyLevel] {
+        &self.sources
+    }
+
+    /// The policy, then each source toward the root.
+    pub fn levels(&self) -> impl DoubleEndedIterator<Item = &PolicyLevel> {
+        std::iter::once(&self.policy).chain(&self.sources)
+    }
+
+    /// The last level: the policy itself when it follows nothing.
+    pub fn root(&self) -> &PolicyLevel {
+        self.sources.last().unwrap_or(&self.policy)
+    }
+
+    /// Whether the root's source was lost: everything starts from ask.
+    pub fn lost(&self) -> bool {
+        self.root().follows == Follows::Lost
+    }
+
+    /// Whether the policy follows another (or a lost one): its own rows
+    /// then only restrict.
+    pub fn follows(&self) -> bool {
+        self.policy.follows != Follows::Own
+    }
+
+    /// The policy's own settings.
+    pub fn rules(&self) -> &[Rule] {
+        &self.policy.rules
+    }
+
+    /// The chain with the policy's own settings replaced by `rules`.
+    #[must_use]
+    pub fn with_rules(&self, rules: Vec<Rule>) -> Self {
+        let mut chain = self.clone();
+        chain.policy.rules = rules;
+        chain
+    }
+
+    /// How many policies the chain holds, at least one.
+    pub fn depth(&self) -> usize {
+        1 + self.sources.len()
+    }
+}
+
 /// How the caller authenticated, as the transport saw it. The service
 /// decides what each may do.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -424,6 +577,8 @@ pub enum Origin {
     Action,
     /// The agent restricted itself for this session only.
     Session,
+    /// The policy it follows (its source, or one further along the chain).
+    Source,
 }
 
 /// An operation whose state differs from its group's action.
@@ -615,6 +770,16 @@ pub enum PermissionError {
     /// A tightening would make these operations more permissive.
     #[error("an agent can only make its permissions stricter")]
     WouldLoosen(Vec<LoosenedOperation>),
+    /// Following the source would make a policy follow itself.
+    #[error("that agent already follows this one's permissions, directly or through others")]
+    SourceCycle,
+    /// Following the source would chain more than [`MAX_CHAIN`] policies.
+    #[error("too many agents would follow each other's permissions in a row")]
+    SourceTooDeep,
+    /// The policy may not follow that source: only an owned agent's policy
+    /// follows, never itself.
+    #[error("this agent can't follow that agent's permissions")]
+    SourceNotAllowed,
     /// Storage or a directory failed; details stay in server diagnostics.
     #[error("internal error")]
     Internal(rootcause::Report),

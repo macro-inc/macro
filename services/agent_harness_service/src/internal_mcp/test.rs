@@ -684,13 +684,16 @@ impl agent_permissions::domain::service::AgentPermissions for Unrestricted {
         Ok(agent_permissions::domain::resolve::view(
             &agent_permissions::outbound::registry::registry_catalog(),
             agent,
-            agent_permissions::domain::model::PolicyId::from_uuid(macro_uuid::Uuid::nil()),
             agent_permissions::domain::model::PolicyKind::Agent,
             agent_permissions::domain::resolve::ViewAccess {
                 can_edit: false,
                 can_tighten: true,
             },
-            Vec::new(),
+            &agent_permissions::domain::model::PolicyChain::own(
+                agent_permissions::domain::model::PolicyId::from_uuid(macro_uuid::Uuid::nil()),
+                agent_permissions::domain::model::PolicyOwner::Agent(agent),
+                Vec::new(),
+            ),
             None,
         ))
     }

@@ -8,23 +8,30 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::model::{
-    AgentAccess, Change, PermissionError, PolicyId, PolicyOwner, Rule, SessionFacts, SetBy,
+    AgentAccess, Change, PermissionError, PolicyChain, PolicyId, PolicyOwner, Rule, SessionFacts,
+    SetBy,
 };
 
-/// Saved settings and session overlays.
+/// Saved settings, the policies they follow, and session overlays.
 pub trait PermissionStore: Send + Sync + 'static {
     /// The adapter's error.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// The id of `owner`'s policy, created (with no settings) when it has
+    /// The id of `owner`'s policy, created (owning no settings) when it has
     /// none yet. Concurrent calls for one owner return the same id.
     fn ensure_policy(
         &self,
         owner: &PolicyOwner,
     ) -> impl Future<Output = Result<PolicyId, Self::Err>> + Send;
 
-    /// A policy's saved settings.
-    fn rules(&self, policy: PolicyId) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
+    /// A policy, every policy it follows and each one's saved settings, as
+    /// one consistent read; `None` when there is no such policy. A stored
+    /// chain longer than [`MAX_CHAIN`](super::model::MAX_CHAIN) or a cycle
+    /// is an error.
+    fn chain(
+        &self,
+        policy: PolicyId,
+    ) -> impl Future<Output = Result<Option<PolicyChain>, Self::Err>> + Send;
 
     /// A session's overlay.
     fn session_rules(
@@ -32,18 +39,18 @@ pub trait PermissionStore: Send + Sync + 'static {
         session: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<Rule>, Self::Err>> + Send;
 
-    /// A policy's saved settings and a session's overlay, as one snapshot:
-    /// a write committing between the two reads can't pair the saved rules
-    /// before it with the overlay after it.
-    fn rules_with_session(
+    /// A policy's chain and a session's overlay, as one snapshot: a write,
+    /// a source change or a detach committing meanwhile is seen entirely or
+    /// not at all. `None` when there is no such policy.
+    fn chain_with_session(
         &self,
         policy: PolicyId,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<(Vec<Rule>, Vec<Rule>), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<(PolicyChain, Vec<Rule>)>, Self::Err>> + Send;
 
     /// Change a policy or a session's overlay in one transaction: lock the
     /// policy (and the session, when `write.session` names one) against every
-    /// other write, read its rules and the overlay, ask `plan` for the
+    /// other write, read its chain and the overlay, ask `plan` for the
     /// changes, and save them to `write.to`. A change with `state: None`
     /// deletes the row. When `plan` refuses, nothing is written and its error
     /// is returned inside `Ok`.
@@ -53,11 +60,63 @@ pub trait PermissionStore: Send + Sync + 'static {
         plan: Plan,
     ) -> impl Future<Output = Result<Result<(), PermissionError>, Self::Err>> + Send
     where
-        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send;
+        Plan: FnOnce(&PolicyChain, &[Rule]) -> Result<Vec<Change>, PermissionError> + Send;
 
     /// Delete every saved setting of a policy, under the same lock as
-    /// [`PermissionStore::write`]. Session overlays stay.
+    /// [`PermissionStore::write`]. What it follows, and session overlays,
+    /// stay.
     fn reset(&self, policy: PolicyId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Make `write.policy` follow `source`, in one transaction under the
+    /// lock every source change takes (so two changes can't each pass the
+    /// cycle check the other breaks), then the policy's own lock. Refused
+    /// inside `Ok`: [`SourceNotAllowed`](PermissionError::SourceNotAllowed)
+    /// when the policy is not an owned agent's or is `source` itself,
+    /// [`NotFound`](PermissionError::NotFound) when either policy is
+    /// missing, [`SourceCycle`](PermissionError::SourceCycle) when `source`'s
+    /// chain reaches the policy, and
+    /// [`SourceTooDeep`](PermissionError::SourceTooDeep) when the policy's
+    /// longest follower path and `source`'s chain together would exceed
+    /// [`MAX_CHAIN`](super::model::MAX_CHAIN). A policy that owned its
+    /// settings loses those a person made; its restrictions stay, as local
+    /// restrictions.
+    fn set_source(
+        &self,
+        write: SourceWrite<'_>,
+        source: PolicyId,
+    ) -> impl Future<Output = Result<Result<(), PermissionError>, Self::Err>> + Send;
+
+    /// Make `write.policy` own its settings again, in one transaction under
+    /// the sources lock and then the policy's: read its chain, ask `plan` for
+    /// the rows it keeps (the snapshot, `resolve::materialize`, plus any
+    /// changes), replace its rows with them and clear its source. When `plan`
+    /// refuses, nothing changes and its error is returned inside `Ok`; else
+    /// how many rows it wrote.
+    fn detach<Plan>(
+        &self,
+        write: SourceWrite<'_>,
+        plan: Plan,
+    ) -> impl Future<Output = Result<Result<usize, PermissionError>, Self::Err>> + Send
+    where
+        Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send;
+
+    /// The most policies on any path of followers ending at `policy`, itself
+    /// included (1 when nothing follows it), counted no further than one
+    /// past [`MAX_CHAIN`](super::model::MAX_CHAIN).
+    fn followers_height(
+        &self,
+        policy: PolicyId,
+    ) -> impl Future<Output = Result<usize, Self::Err>> + Send;
+}
+
+/// What a [`PermissionStore::set_source`] or [`PermissionStore::detach`]
+/// changes, and who.
+#[derive(Debug, Clone, Copy)]
+pub struct SourceWrite<'a> {
+    /// The follower.
+    pub policy: PolicyId,
+    /// The person making the change.
+    pub by: &'a MacroUserIdStr<'static>,
 }
 
 /// What a [`PermissionStore::write`] reads, locks and saves to.

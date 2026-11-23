@@ -9800,7 +9800,7 @@
         "properties": {
           "code": {
             "type": "string",
-            "description": "`invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,\n`would_loosen` or `internal`."
+            "description": "`invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,\n`would_loosen`, `source_cycle`, `source_too_deep`,\n`source_not_allowed` or `internal`."
           },
           "message": {
             "type": "string",
@@ -9843,7 +9843,14 @@
       "ToolPermissionOrigin": {
         "type": "string",
         "description": "Where an effective state comes from.",
-        "enum": ["tool", "group_action", "default", "action", "session"]
+        "enum": [
+          "tool",
+          "group_action",
+          "default",
+          "action",
+          "session",
+          "source"
+        ]
       },
       "ToolPermissionOverride": {
         "type": "object",

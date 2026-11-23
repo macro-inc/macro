@@ -13,9 +13,16 @@
 //! overlay's rows that cover it. Nothing is inferred: a new operation takes
 //! its group's action and a new group has no exceptions, so it follows each
 //! action's default.
+//!
+//! A policy that follows another resolves through its chain of sources
+//! instead, its own rows only restricting what the chain gives (`chain`'s
+//! [`Resolver`]); [`materialize`] is the snapshot a detach copies.
 
+mod chain;
 #[cfg(test)]
 mod test;
+
+pub use chain::{Resolver, materialize};
 
 use std::collections::HashMap;
 
@@ -25,7 +32,7 @@ use chrono::Utc;
 
 use super::model::{
     Catalog, CatalogEntry, Change, LoosenedOperation, Origin, PermissionState, PermissionsView,
-    PolicyId, PolicyKind, Rule, SetBy, Target, ToolPermissionAction, ToolPermissionCatalog,
+    PolicyChain, PolicyKind, Rule, SetBy, Target, ToolPermissionAction, ToolPermissionCatalog,
     ToolPermissionCatalogAction, ToolPermissionCatalogGroup, ToolPermissionDefault,
     ToolPermissionGroup, ToolPermissionOverride,
 };
@@ -33,17 +40,18 @@ use super::model::{
 /// One layer of settings (saved, or a session's overlay), indexed for lookup.
 #[derive(Debug, Default)]
 pub struct Layer<'a> {
-    actions: HashMap<Action, PermissionState>,
+    actions: HashMap<Action, Setting>,
     group_actions: HashMap<(&'a str, Action), Setting>,
     tools: HashMap<(&'a str, &'a str), Setting>,
 }
 
-/// A group's action or an operation's own setting, and whether it only
-/// restricts.
+/// A saved row's state, whether it only restricts, and whether the agent
+/// set it.
 #[derive(Debug, Clone, Copy)]
 struct Setting {
     state: PermissionState,
     restriction_only: bool,
+    via_agent: bool,
 }
 
 impl<'a> Layer<'a> {
@@ -54,10 +62,11 @@ impl<'a> Layer<'a> {
             let setting = Setting {
                 state: rule.state,
                 restriction_only: rule.restriction_only,
+                via_agent: rule.via_agent,
             };
             match &rule.target {
                 Target::Action { action } => {
-                    layer.actions.insert(*action, rule.state);
+                    layer.actions.insert(*action, setting);
                 }
                 Target::GroupAction { group, action } => {
                     layer
@@ -75,6 +84,10 @@ impl<'a> Layer<'a> {
     }
 
     fn action(&self, action: Action) -> Option<PermissionState> {
+        self.action_setting(action).map(|setting| setting.state)
+    }
+
+    fn action_setting(&self, action: Action) -> Option<Setting> {
         self.actions.get(&action).copied()
     }
 
@@ -117,35 +130,100 @@ fn with_overlay(
     }
 }
 
-/// `action`'s default under `saved` alone.
-fn saved_default(saved: &Layer, action: Action) -> (PermissionState, Origin) {
-    match saved.action(action) {
-        Some(state) => (state, Origin::Action),
-        None => (PermissionState::Always, Origin::Default),
+/// A state found under one layer, where it comes from, and the row that
+/// gave it (`None` when no row did: always, or a lost source's ask).
+#[derive(Debug, Clone, Copy)]
+struct Found {
+    state: PermissionState,
+    origin: Origin,
+    row: Option<Setting>,
+}
+
+impl Found {
+    fn row(setting: Setting, origin: Origin) -> Self {
+        Self {
+            state: setting.state,
+            origin,
+            row: Some(setting),
+        }
+    }
+
+    fn pair(self) -> (PermissionState, Origin) {
+        (self.state, self.origin)
+    }
+}
+
+/// `action`'s default under `saved` alone, as a policy that owns its
+/// settings has it.
+fn own_default(saved: &Layer, action: Action) -> Found {
+    match saved.action_setting(action) {
+        Some(setting) => Found::row(setting, Origin::Action),
+        None => Found {
+            state: PermissionState::Always,
+            origin: Origin::Default,
+            row: None,
+        },
     }
 }
 
 /// `group`'s `action` under `saved` alone: a person's exception replaces the
 /// default; anyone else's only adds to it.
-fn saved_pair(saved: &Layer, group: &str, action: Action) -> (PermissionState, Origin) {
-    let default = saved_default(saved, action);
+fn own_pair(saved: &Layer, group: &str, action: Action) -> Found {
+    let default = own_default(saved, action);
     match saved.group_action(group, action) {
-        Some(Setting {
-            state,
-            restriction_only: false,
-        }) => (state, Origin::GroupAction),
-        Some(Setting {
-            state,
-            restriction_only: true,
-        }) if state > default.0 => (state, Origin::GroupAction),
+        Some(
+            setting @ Setting {
+                restriction_only: false,
+                ..
+            },
+        ) => Found::row(setting, Origin::GroupAction),
+        Some(
+            setting @ Setting {
+                restriction_only: true,
+                ..
+            },
+        ) if setting.state > default.state => Found::row(setting, Origin::GroupAction),
         Some(_) | None => default,
     }
+}
+
+/// `entry` under `saved` alone: a person's setting on the operation
+/// replaces its group's action; anyone else's (the agent's, an API key's)
+/// only adds to it, so a stricter group setting still wins.
+fn own_entry(saved: &Layer, entry: &CatalogEntry) -> Found {
+    let pair = own_pair(saved, &entry.group, entry.action);
+    match saved.tool(entry) {
+        Some(
+            setting @ Setting {
+                restriction_only: false,
+                ..
+            },
+        ) => Found::row(setting, Origin::Tool),
+        Some(
+            setting @ Setting {
+                restriction_only: true,
+                ..
+            },
+        ) if setting.state > pair.state => Found::row(setting, Origin::Tool),
+        Some(_) | None => pair,
+    }
+}
+
+/// The overlay's rows covering `entry`: all the agent's, so the stricter of
+/// the operation's, its group's and the action's.
+fn overlay_entry(overlay: &Layer, entry: &CatalogEntry) -> Option<PermissionState> {
+    overlay
+        .tool(entry)
+        .map(|setting| setting.state)
+        .into_iter()
+        .chain(overlay.restriction(&entry.group, entry.action))
+        .max()
 }
 
 /// The state of `action`'s default under `saved` and `overlay`, and where it
 /// comes from.
 pub fn default_state(saved: &Layer, overlay: &Layer, action: Action) -> (PermissionState, Origin) {
-    with_overlay(saved_default(saved, action), overlay.action(action))
+    with_overlay(own_default(saved, action).pair(), overlay.action(action))
 }
 
 /// The state of `group`'s `action` under `saved` and `overlay`, ignoring
@@ -158,7 +236,7 @@ pub fn pair_state(
     action: Action,
 ) -> (PermissionState, Origin) {
     with_overlay(
-        saved_pair(saved, group, action),
+        own_pair(saved, group, action).pair(),
         overlay.restriction(group, action),
     )
 }
@@ -170,30 +248,10 @@ pub fn effective(
     overlay: &Layer,
     entry: &CatalogEntry,
 ) -> (PermissionState, Origin) {
-    let pair = saved_pair(saved, &entry.group, entry.action);
-    let base = match saved.tool(entry) {
-        // A person's setting on the operation replaces its group's.
-        Some(Setting {
-            state,
-            restriction_only: false,
-        }) => (state, Origin::Tool),
-        // Anyone else's (the agent's, an API key's) only adds to it: a
-        // stricter group setting still wins.
-        Some(Setting {
-            state,
-            restriction_only: true,
-        }) if state > pair.0 => (state, Origin::Tool),
-        Some(_) | None => pair,
-    };
-    // The overlay is all the agent's, so it too is the stricter of the
-    // operation's, its group's and the action's.
-    let extra = overlay
-        .tool(entry)
-        .map(|setting| setting.state)
-        .into_iter()
-        .chain(overlay.restriction(&entry.group, entry.action))
-        .max();
-    with_overlay(base, extra)
+    with_overlay(
+        own_entry(saved, entry).pair(),
+        overlay_entry(overlay, entry),
+    )
 }
 
 /// Who may do what with a view, decided by the service.
@@ -206,27 +264,25 @@ pub struct ViewAccess {
 }
 
 /// Each action's default, and every catalog group with the actions it has
-/// operations for, resolved under `saved` and `overlay` (`None` for no
-/// session), in display order. A pair no operation maps to, and a group with
+/// operations for, resolved through `chain` and under `overlay` (`None` for
+/// no session), in display order. A pair no operation maps to, and a group with
 /// none, is left out: no setting there can change what the agent does. Its
 /// saved rule stays in `rules` and applies as soon as an operation maps
 /// there, since resolution never looks at the view.
 pub fn view(
     catalog: &Catalog,
     agent_id: BotId,
-    policy_id: PolicyId,
     kind: PolicyKind,
     access: ViewAccess,
-    saved: Vec<Rule>,
+    chain: &PolicyChain,
     overlay: Option<Vec<Rule>>,
 ) -> PermissionsView {
-    let saved_layer = Layer::new(&saved);
-    let overlay_layer = overlay.as_deref().map(Layer::new).unwrap_or_default();
+    let resolver = Resolver::new(chain, overlay.as_deref().unwrap_or_default());
 
     let defaults = Action::DISPLAY
         .into_iter()
         .map(|action| {
-            let (state, origin) = default_state(&saved_layer, &overlay_layer, action);
+            let (state, origin) = resolver.default(action);
             ToolPermissionDefault {
                 action,
                 state,
@@ -248,13 +304,13 @@ pub fn view(
             if entries.is_empty() {
                 continue;
             }
-            let (state, origin) = pair_state(&saved_layer, &overlay_layer, &group.id, action);
+            let (state, origin) = resolver.pair(&group.id, action);
             let mut overrides = Vec::new();
 
             // An operation differs from its action only through its own
             // setting, saved or in the overlay.
             for entry in entries.iter().copied() {
-                let (tool_state, tool_origin) = effective(&saved_layer, &overlay_layer, entry);
+                let (tool_state, tool_origin) = resolver.entry(entry);
                 if tool_state != PermissionState::Always {
                     restricted += 1;
                 }
@@ -273,7 +329,7 @@ pub fn view(
                 action,
                 state,
                 origin,
-                exception: saved_layer.has_exception(&group.id, action),
+                exception: resolver.has_own_exception(&group.id, action),
                 tools: u32::try_from(entries.len()).unwrap_or(u32::MAX),
                 overrides,
             });
@@ -289,14 +345,14 @@ pub fn view(
 
     PermissionsView {
         agent_id,
-        policy_id,
+        policy_id: chain.policy().id,
         kind,
         can_edit: access.can_edit,
         can_tighten: access.can_tighten,
         version: catalog.version.clone(),
         restricted,
         defaults,
-        rules: saved,
+        rules: chain.rules().to_vec(),
         session_rules: overlay,
         groups,
     }
@@ -414,8 +470,8 @@ pub fn apply(rules: &[Rule], changes: &[Change], set_by: SetBy) -> Vec<Rule> {
     applied
 }
 
-/// Refuses a change that makes anything more permissive: compares, before
-/// and after, under the saved settings and the overlay as they will stand,
+/// Refuses a change that makes anything more permissive: compares, `before`
+/// and `after` (the chain and the overlay as they stand, and as they will),
 /// every operation's effective state, every catalog group's every action
 /// (including pairs no operation maps to yet) and every action's default.
 /// One pointwise rule, so no combination of settings can loosen anything,
@@ -424,28 +480,25 @@ pub fn apply(rules: &[Rule], changes: &[Change], set_by: SetBy) -> Vec<Rule> {
 /// none.
 pub fn tighten_only(
     catalog: &Catalog,
-    (saved_before, overlay_before): (&[Rule], &[Rule]),
-    (saved_after, overlay_after): (&[Rule], &[Rule]),
+    before: &Resolver,
+    after: &Resolver,
 ) -> Result<(), Vec<LoosenedOperation>> {
-    let before = (Layer::new(saved_before), Layer::new(overlay_before));
-    let after = (Layer::new(saved_after), Layer::new(overlay_after));
     let loosened: Vec<LoosenedOperation> = catalog
         .entries
         .iter()
         .filter_map(|entry| {
-            let (from, _) = effective(&before.0, &before.1, entry);
-            let (to, _) = effective(&after.0, &after.1, entry);
+            let (from, _) = before.entry(entry);
+            let (to, _) = after.entry(entry);
             (to < from).then(|| loosened(entry, from, to))
         })
         .collect();
-    let loosens_a_default = Action::ALL.into_iter().any(|action| {
-        default_state(&after.0, &after.1, action).0 < default_state(&before.0, &before.1, action).0
-    });
+    let loosens_a_default = Action::ALL
+        .into_iter()
+        .any(|action| after.default(action).0 < before.default(action).0);
     let loosens_a_pair = catalog.groups.iter().any(|group| {
-        Action::ALL.into_iter().any(|action| {
-            pair_state(&after.0, &after.1, &group.id, action).0
-                < pair_state(&before.0, &before.1, &group.id, action).0
-        })
+        Action::ALL
+            .into_iter()
+            .any(|action| after.pair(&group.id, action).0 < before.pair(&group.id, action).0)
     });
     if loosened.is_empty() && !loosens_a_default && !loosens_a_pair {
         Ok(())
@@ -476,10 +529,9 @@ fn loosened(entry: &CatalogEntry, from: PermissionState, to: PermissionState) ->
 /// operations that resolve through the target now.
 pub fn asks_looser(
     catalog: &Catalog,
-    (saved, overlay): (&[Rule], &[Rule]),
+    now: &Resolver,
     changes: &[Change],
 ) -> Result<(), Vec<LoosenedOperation>> {
-    let (saved, overlay) = (Layer::new(saved), Layer::new(overlay));
     let mut refused = false;
     let mut operations: Vec<LoosenedOperation> = Vec::new();
     for change in changes {
@@ -489,17 +541,15 @@ pub fn asks_looser(
                 else {
                     continue;
                 };
-                let (from, _) = effective(&saved, &overlay, entry);
+                let (from, _) = now.entry(entry);
                 if to < from {
                     refused = true;
                     operations.push(loosened(entry, from, to));
                 }
             }
             Target::GroupAction { group, action } => {
-                let to = change
-                    .state
-                    .unwrap_or_else(|| default_state(&saved, &overlay, *action).0);
-                let (from, _) = pair_state(&saved, &overlay, group, *action);
+                let to = change.state.unwrap_or_else(|| now.default(*action).0);
+                let (from, _) = now.pair(group, *action);
                 if to < from {
                     refused = true;
                     operations.extend(
@@ -513,7 +563,7 @@ pub fn asks_looser(
             }
             Target::Action { action } => {
                 let to = change.state.unwrap_or(PermissionState::Always);
-                let (from, _) = default_state(&saved, &overlay, *action);
+                let (from, _) = now.default(*action);
                 if to < from {
                     refused = true;
                     // The operations that follow the default: in a group
@@ -523,8 +573,7 @@ pub fn asks_looser(
                             .entries
                             .iter()
                             .filter(|entry| {
-                                entry.action == *action
-                                    && !saved.has_exception(&entry.group, *action)
+                                entry.action == *action && !now.has_exception(&entry.group, *action)
                             })
                             .map(|entry| loosened(entry, from, to)),
                     );

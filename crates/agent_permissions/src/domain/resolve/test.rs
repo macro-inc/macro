@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::{CatalogGroup, PermissionState::*};
+use crate::domain::model::{CatalogGroup, PermissionState::*, PolicyId, PolicyOwner};
 use chrono::DateTime;
 
 fn group(id: &str) -> CatalogGroup {
@@ -180,15 +180,21 @@ fn asking_for_a_tool_state_looser_than_it_has_is_refused() {
     let catalog = catalog();
     let saved = [group_rule("email", Action::Send, Never)];
     let ask = [change(tool("email", "send_email"), Some(Ask))];
-    let loosened = asks_looser(&catalog, (&saved, &[]), &ask).unwrap_err();
+    let loosened = asks_looser(&catalog, &Resolver::own(&saved, &[]), &ask).unwrap_err();
     assert_eq!(loosened[0].from, Never);
     assert_eq!(loosened[0].to, Ask);
 
     // Moving the group's never onto the tool asks for nothing looser.
     let never = [change(tool("email", "send_email"), Some(Never))];
-    assert_eq!(asks_looser(&catalog, (&saved, &[]), &never), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &never),
+        Ok(())
+    );
     // Nor does pinning ask under an always group.
-    assert_eq!(asks_looser(&catalog, (&[], &[]), &ask), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&[], &[]), &ask),
+        Ok(())
+    );
 }
 
 #[test]
@@ -203,17 +209,23 @@ fn removing_or_loosening_a_group_setting_is_refused_even_when_no_operation_moves
     ];
     for state in [None, Some(Always), Some(Ask)] {
         let drop = [change(group_action("documents", Action::Destroy), state)];
-        assert!(asks_looser(&catalog, (&saved, &[]), &drop).is_err());
+        assert!(asks_looser(&catalog, &Resolver::own(&saved, &[]), &drop).is_err());
     }
 
     // A group and action with no operations yet.
     let saved = [group_rule("calendar", Action::Send, Never)];
     let drop = [change(group_action("calendar", Action::Send), None)];
-    assert_eq!(asks_looser(&catalog, (&saved, &[]), &drop), Err(Vec::new()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &drop),
+        Err(Vec::new())
+    );
 
     // Tightening a group passes.
     let never = [change(group_action("calendar", Action::Send), Some(Never))];
-    assert_eq!(asks_looser(&catalog, (&saved, &[]), &never), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &never),
+        Ok(())
+    );
 }
 
 #[test]
@@ -237,7 +249,11 @@ fn a_new_operation_takes_its_groups_action_and_a_new_group_is_always() {
 fn tighten(saved: &[Rule], changes: Vec<Change>) -> Result<(), Vec<LoosenedOperation>> {
     let changes = normalize(changes, false);
     let after = apply(saved, &changes, SetBy::Person);
-    tighten_only(&catalog(), (saved, &[]), (&after, &[]))
+    tighten_only(
+        &catalog(),
+        &Resolver::own(saved, &[]),
+        &Resolver::own(&after, &[]),
+    )
 }
 
 fn change(target: Target, state: Option<PermissionState>) -> Change {
@@ -323,7 +339,14 @@ fn an_agents_tool_pin_is_tightening_and_survives_as_the_stricter_setting() {
     let saved = [group_rule("email", Action::Send, Always)];
     let pin = normalize(vec![change(tool("email", "send_email"), Some(Ask))], true);
     let after = apply(&saved, &pin, SetBy::Agent);
-    assert_eq!(tighten_only(&catalog, (&saved, &[]), (&after, &[])), Ok(()));
+    assert_eq!(
+        tighten_only(
+            &catalog,
+            &Resolver::own(&saved, &[]),
+            &Resolver::own(&after, &[])
+        ),
+        Ok(())
+    );
     assert!(after.iter().any(|rule| rule.via_agent));
 }
 
@@ -338,7 +361,7 @@ fn moving_a_groups_never_onto_each_of_its_tools_loosens_no_operation_but_is_refu
     // No operation loosens, but an operation added to documents·destroy
     // later would be always: both checks refuse, naming none.
     assert_eq!(tighten(&saved, changes.clone()), Err(Vec::new()));
-    assert!(asks_looser(&catalog(), (&saved, &[]), &changes).is_err());
+    assert!(asks_looser(&catalog(), &Resolver::own(&saved, &[]), &changes).is_err());
 }
 
 #[test]
@@ -348,7 +371,14 @@ fn a_session_overlay_can_tighten_but_never_loosen() {
 
     let removal = normalize(vec![change(tool("email", "send_email"), None)], true);
     let after = apply(&overlay, &removal, SetBy::Agent);
-    assert!(tighten_only(&catalog, (&[], &overlay), (&[], &after)).is_err());
+    assert!(
+        tighten_only(
+            &catalog,
+            &Resolver::own(&[], &overlay),
+            &Resolver::own(&[], &after)
+        )
+        .is_err()
+    );
 
     // An overlay holds no `always`: it becomes a removal.
     let to_always = normalize(
@@ -372,13 +402,12 @@ fn view_with_policy(
     view(
         catalog,
         BotId::TEST_A,
-        policy,
         PolicyKind::Agent,
         ViewAccess {
             can_edit: true,
             can_tighten: true,
         },
-        saved,
+        &PolicyChain::own(policy, PolicyOwner::Agent(BotId::TEST_A), saved),
         overlay,
     )
 }
@@ -966,7 +995,7 @@ fn tightening_cannot_loosen_a_hidden_pair_or_a_default() {
     ];
     let lower = vec![change(default_target(Action::Destroy), Some(Ask))];
     assert_eq!(tighten(&saved, lower.clone()), Err(Vec::new()));
-    assert!(asks_looser(&catalog(), (&saved, &[]), &lower).is_err());
+    assert!(asks_looser(&catalog(), &Resolver::own(&saved, &[]), &lower).is_err());
     let removal = vec![change(default_target(Action::Destroy), None)];
     assert_eq!(tighten(&saved, removal), Err(Vec::new()));
 
@@ -1007,7 +1036,7 @@ fn removing_an_exception_asks_for_the_default() {
         group_rule("email", Action::Send, Never),
     ];
     let removal = [change(group_action("email", Action::Send), None)];
-    let refused = asks_looser(&catalog, (&saved, &[]), &removal).unwrap_err();
+    let refused = asks_looser(&catalog, &Resolver::own(&saved, &[]), &removal).unwrap_err();
     assert_eq!((refused[0].from, refused[0].to), (Never, Ask));
 
     // Removing an Ask exception under a Never default asks for something
@@ -1016,14 +1045,17 @@ fn removing_an_exception_asks_for_the_default() {
         default_rule(Action::Send, Never),
         group_rule("email", Action::Send, Ask),
     ];
-    assert_eq!(asks_looser(&catalog, (&saved, &[]), &removal), Ok(()));
+    assert_eq!(
+        asks_looser(&catalog, &Resolver::own(&saved, &[]), &removal),
+        Ok(())
+    );
 
     // Removing a default asks for always; the operations that follow it are
     // named.
     let saved = [default_rule(Action::Destroy, Ask)];
     let refused = asks_looser(
         &catalog,
-        (&saved, &[]),
+        &Resolver::own(&saved, &[]),
         &[change(default_target(Action::Destroy), None)],
     )
     .unwrap_err();

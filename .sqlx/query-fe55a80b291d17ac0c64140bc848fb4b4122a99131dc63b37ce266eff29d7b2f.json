@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_permission_policy\n            SET follows = true,\n                source_policy_id = $2,\n                source_set_by = $3,\n                source_set_at = now()\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe55a80b291d17ac0c64140bc848fb4b4122a99131dc63b37ce266eff29d7b2f"
+}

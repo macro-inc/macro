@@ -51,7 +51,8 @@ pub struct ToolPermissionChanges {
 #[serde(rename_all = "camelCase")]
 pub struct ToolPermissionError {
     /// `invalid`, `unknown_target`, `forbidden`, `needs_person`, `not_found`,
-    /// `would_loosen` or `internal`.
+    /// `would_loosen`, `source_cycle`, `source_too_deep`,
+    /// `source_not_allowed` or `internal`.
     pub code: &'static str,
     /// What went wrong, for a person.
     pub message: String,
@@ -89,6 +90,11 @@ impl IntoResponse for ToolPermissionApiError {
                 Some(operations),
                 None,
             ),
+            PermissionError::SourceCycle => (StatusCode::CONFLICT, "source_cycle", None, None),
+            PermissionError::SourceTooDeep => (StatusCode::CONFLICT, "source_too_deep", None, None),
+            PermissionError::SourceNotAllowed => {
+                (StatusCode::FORBIDDEN, "source_not_allowed", None, None)
+            }
             PermissionError::Internal(report) => {
                 tracing::error!(error = ?report, "agent permissions request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal", None, None)

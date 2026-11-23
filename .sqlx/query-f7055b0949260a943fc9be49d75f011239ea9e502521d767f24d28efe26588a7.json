@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                DELETE FROM agent_permission_rule\n                WHERE policy_id = $1 AND NOT restriction_only\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f7055b0949260a943fc9be49d75f011239ea9e502521d767f24d28efe26588a7"
+}

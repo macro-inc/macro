@@ -1,11 +1,16 @@
 //! [`PermissionStore`] over MacroDB: `agent_permission_policy` (one row per
 //! policy, under a stable id: an owned agent's, or a person's for a built-in
-//! persona), `agent_permission_rule` (a policy's saved settings) and
+//! persona; an agent's may follow another policy, its source),
+//! `agent_permission_rule` (a policy's saved settings) and
 //! `agent_session_tool_permission` (an agent's restrictions on itself for one
 //! session). Every query is a lookup by a unique key or its table's
-//! primary-key prefix. Writes take a transaction-scoped advisory lock per
-//! policy and per session, so a check and the write it allows see the same
-//! rules; a gate reads the policy and the overlay in one read-only snapshot.
+//! primary-key prefix; a chain is a recursive walk of at most
+//! `MAX_CHAIN + 1` primary-key lookups, and a policy's followers a walk of
+//! `agent_permission_policy_source_idx` as deep. Writes take a
+//! transaction-scoped advisory lock per policy and per session, so a check
+//! and the write it allows see the same rules; every source change takes one
+//! global lock first, so no two can each pass the cycle check the other
+//! breaks. A gate reads the chain and the overlay in one read-only snapshot.
 //!
 //! `agent_tool_permission` and `persona_tool_permission`, which held the
 //! settings before policies had ids, are no longer read or written.
@@ -14,14 +19,16 @@
 mod test;
 
 use agent_fold::domain::log::AgentSessionId;
+use bot_id::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{PgConnection, PgPool};
 
 use crate::domain::model::{
-    Change, PermissionError, PolicyId, PolicyOwner, Rule, SetBy, Target, TargetKind,
+    ChainError, Change, Follows, MAX_CHAIN, PermissionError, PolicyChain, PolicyId, PolicyLevel,
+    PolicyOwner, Rule, SetBy, Target, TargetKind,
 };
-use crate::domain::ports::{PermissionStore, Write, WriteTo};
+use crate::domain::ports::{PermissionStore, SourceWrite, Write, WriteTo};
 
 /// Why the store failed.
 #[derive(Debug, thiserror::Error)]
@@ -33,6 +40,10 @@ pub enum PgPermissionStoreError {
     /// this impossible.
     #[error("invalid stored permission: {0}")]
     Corrupt(String),
+    /// Stored policies do not form a chain; setting a source refuses
+    /// anything that would, so only hand-edited data can.
+    #[error("invalid stored policy chain")]
+    Chain(#[from] ChainError),
 }
 
 /// [`PermissionStore`] over a MacroDB pool.
@@ -110,10 +121,29 @@ fn lock_key(policy: Option<PolicyId>, session: Option<AgentSessionId>) -> String
     }
 }
 
-/// The isolation a gate's read runs at: its two statements see one snapshot,
-/// so a write committing between them can't pair the policy before it with
-/// the overlay after it. Read only, so it never blocks a writer.
+/// The lock every change to any policy's source takes first, before a
+/// policy's: the cycle and depth checks then see a graph nobody else can
+/// change until they commit.
+const SOURCES_LOCK: &str = "agent_permission_policy:sources";
+
+/// How far a chain or follower walk goes: one level past the limit, which
+/// tells a chain that is too long from one that just fits.
+const WALK_DEPTH: i32 = MAX_CHAIN as i32;
+
+/// The isolation a gate's read runs at: its two statements (the chain with
+/// its rules, then the overlay) see one snapshot, so a write committing
+/// between them can't pair the policy before it with the overlay after it.
+/// Read only, so it never blocks a writer.
 const SNAPSHOT: &str = "BEGIN ISOLATION LEVEL REPEATABLE READ, READ ONLY";
+
+/// A source change walks the policy's followers, whose count grows with how
+/// many agents follow it (about 12 ms for ten thousand); bound it anyway.
+async fn bound_source_walk(connection: &mut PgConnection) -> Result<(), sqlx::Error> {
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(connection)
+        .await?;
+    Ok(())
+}
 
 async fn lock(connection: &mut PgConnection, key: &str) -> Result<(), sqlx::Error> {
     sqlx::query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", key,)
@@ -196,31 +226,239 @@ async fn insert_policy(
     Ok(inserted.map(PolicyId::from_uuid))
 }
 
-async fn policy_rules(
+/// Whose policy a stored row is.
+fn owner(
+    kind: &str,
+    bot_id: Option<macro_uuid::Uuid>,
+    user_id: Option<String>,
+    persona_id: Option<macro_uuid::Uuid>,
+) -> Result<PolicyOwner, PgPermissionStoreError> {
+    let corrupt = || PgPermissionStoreError::Corrupt(format!("policy owner {kind}"));
+    match (kind, bot_id, user_id, persona_id) {
+        ("agent", Some(bot), None, None) => Ok(PolicyOwner::Agent(BotId::new_from_uuid(bot))),
+        ("persona", None, Some(user), Some(persona)) => Ok(PolicyOwner::Persona {
+            persona: BotId::new_from_uuid(persona),
+            user: MacroUserIdStr::try_from(user).map_err(|_| corrupt())?,
+        }),
+        // Team policies have no owner in this code yet, and nothing makes
+        // one.
+        _ => Err(corrupt()),
+    }
+}
+
+/// `policy`, every policy it follows and each one's rules, in one statement
+/// (one snapshot, at any isolation). The walk stops one level past
+/// `MAX_CHAIN` or at a policy already on it, which [`PolicyChain::new`] then
+/// refuses.
+async fn read_chain(
     connection: &mut PgConnection,
     policy: PolicyId,
-) -> Result<Vec<Rule>, PgPermissionStoreError> {
-    sqlx::query!(
+) -> Result<Option<PolicyChain>, PgPermissionStoreError> {
+    let rows = sqlx::query!(
         r#"
-        SELECT kind, target, state, via_agent, restriction_only, updated_at
-        FROM agent_permission_rule
-        WHERE policy_id = $1
+        WITH RECURSIVE chain (id, kind, bot_id, user_id, persona_id, follows, source_policy_id, depth, path) AS (
+            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.follows, p.source_policy_id,
+                   1, ARRAY[p.id]
+            FROM agent_permission_policy p
+            WHERE p.id = $1
+          UNION ALL
+            SELECT p.id, p.kind, p.bot_id, p.user_id, p.persona_id, p.follows, p.source_policy_id,
+                   c.depth + 1, c.path || p.id
+            FROM chain c
+            JOIN agent_permission_policy p ON p.id = c.source_policy_id
+            WHERE c.depth <= $2 AND p.id <> ALL (c.path)
+        )
+        SELECT c.id AS "id!", c.kind AS "kind!", c.bot_id, c.user_id, c.persona_id,
+               c.follows AS "follows!", c.source_policy_id, c.depth AS "depth!",
+               r.kind AS "rule_kind?", r.target AS "target?", r.state AS "state?",
+               r.via_agent AS "via_agent?", r.restriction_only AS "restriction_only?",
+               r.updated_at AS "updated_at?"
+        FROM chain c
+        LEFT JOIN agent_permission_rule r ON r.policy_id = c.id
+        ORDER BY c.depth
         "#,
         policy.as_uuid(),
+        WALK_DEPTH,
     )
     .fetch_all(connection)
-    .await?
-    .into_iter()
-    .map(|row| {
-        rule(
-            &row.kind,
-            &row.target,
-            &row.state,
-            (row.via_agent, row.restriction_only),
+    .await?;
+
+    let mut levels: Vec<(i32, PolicyLevel)> = Vec::new();
+    for row in rows {
+        if levels.last().is_none_or(|(depth, _)| *depth != row.depth) {
+            let follows = match (row.follows, row.source_policy_id) {
+                (false, _) => Follows::Own,
+                (true, Some(source)) => Follows::Source(PolicyId::from_uuid(source)),
+                (true, None) => Follows::Lost,
+            };
+            levels.push((
+                row.depth,
+                PolicyLevel {
+                    id: PolicyId::from_uuid(row.id),
+                    owner: owner(&row.kind, row.bot_id, row.user_id, row.persona_id)?,
+                    follows,
+                    rules: Vec::new(),
+                },
+            ));
+        }
+        if let (
+            Some(kind),
+            Some(target),
+            Some(state),
+            Some(via_agent),
+            Some(restriction_only),
+            Some(updated_at),
+            Some((_, level)),
+        ) = (
+            row.rule_kind,
+            row.target,
+            row.state,
+            row.via_agent,
+            row.restriction_only,
             row.updated_at,
+            levels.last_mut(),
+        ) {
+            level.rules.push(rule(
+                &kind,
+                &target,
+                &state,
+                (via_agent, restriction_only),
+                updated_at,
+            )?);
+        }
+    }
+    if levels.is_empty() {
+        return Ok(None);
+    }
+    let levels = levels.into_iter().map(|(_, level)| level).collect();
+    Ok(Some(PolicyChain::new(levels)?))
+}
+
+/// The ids on `source`'s chain, itself first, walked no further than one
+/// level past `MAX_CHAIN`; empty when there is no such policy.
+async fn chain_ids(
+    connection: &mut PgConnection,
+    source: PolicyId,
+) -> Result<Vec<PolicyId>, sqlx::Error> {
+    let ids = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE chain (id, source_policy_id, depth, path) AS (
+            SELECT p.id, p.source_policy_id, 1, ARRAY[p.id]
+            FROM agent_permission_policy p
+            WHERE p.id = $1
+          UNION ALL
+            SELECT p.id, p.source_policy_id, c.depth + 1, c.path || p.id
+            FROM chain c
+            JOIN agent_permission_policy p ON p.id = c.source_policy_id
+            WHERE c.depth <= $2 AND p.id <> ALL (c.path)
         )
-    })
-    .collect()
+        SELECT id AS "id!" FROM chain ORDER BY depth
+        "#,
+        source.as_uuid(),
+        WALK_DEPTH,
+    )
+    .fetch_all(connection)
+    .await?;
+    Ok(ids.into_iter().map(PolicyId::from_uuid).collect())
+}
+
+/// The most policies on any path of followers ending at `policy`, itself
+/// included, counted no further than `levels`; 0 when there is no such
+/// policy. The walk visits every follower within `levels`, so a caller that
+/// needs only to know whether the height passes a bound walks no further.
+async fn read_followers_height(
+    connection: &mut PgConnection,
+    policy: PolicyId,
+    levels: i32,
+) -> Result<usize, sqlx::Error> {
+    let height = sqlx::query_scalar!(
+        r#"
+        WITH RECURSIVE tree (id, depth) AS (
+            SELECT p.id, 1
+            FROM agent_permission_policy p
+            WHERE p.id = $1
+          UNION ALL
+            SELECT p.id, t.depth + 1
+            FROM tree t
+            JOIN agent_permission_policy p ON p.source_policy_id = t.id
+            WHERE t.depth < $2
+        )
+        SELECT max(depth) FROM tree
+        "#,
+        policy.as_uuid(),
+        levels,
+    )
+    .fetch_one(connection)
+    .await?;
+    Ok(height
+        .and_then(|height| usize::try_from(height).ok())
+        .unwrap_or(0))
+}
+
+/// Why a source can't be set, checked under the sources lock.
+async fn check_source(
+    connection: &mut PgConnection,
+    policy: PolicyId,
+    source: PolicyId,
+) -> Result<Result<bool, PermissionError>, sqlx::Error> {
+    let follower = sqlx::query!(
+        "SELECT kind, follows FROM agent_permission_policy WHERE id = $1",
+        policy.as_uuid(),
+    )
+    .fetch_optional(&mut *connection)
+    .await?;
+    let Some(follower) = follower else {
+        return Ok(Err(PermissionError::NotFound));
+    };
+    // Only an owned agent's policy follows; persona and team policies are
+    // roots, so a default source never needs these checks.
+    if follower.kind != "agent" || policy == source {
+        return Ok(Err(PermissionError::SourceNotAllowed));
+    }
+    let up = chain_ids(connection, source).await?;
+    if up.is_empty() {
+        return Ok(Err(PermissionError::NotFound));
+    }
+    if up.contains(&policy) {
+        return Ok(Err(PermissionError::SourceCycle));
+    }
+    // Only whether the follower tree is taller than the room left matters:
+    // walk one level past it, no further.
+    let room = MAX_CHAIN.saturating_sub(up.len());
+    let down = match i32::try_from(room + 1) {
+        Ok(levels) if room > 0 => read_followers_height(connection, policy, levels).await?,
+        Ok(_) | Err(_) => MAX_CHAIN + 1,
+    };
+    if down + up.len() > MAX_CHAIN {
+        return Ok(Err(PermissionError::SourceTooDeep));
+    }
+    Ok(Ok(follower.follows))
+}
+
+/// Rows as parallel arrays for `UNNEST`.
+#[derive(Default)]
+struct Rows {
+    kinds: Vec<String>,
+    targets: Vec<String>,
+    states: Vec<String>,
+    via_agent: Vec<bool>,
+    restriction_only: Vec<bool>,
+}
+
+impl Rows {
+    fn new(rules: &[Rule]) -> Self {
+        let mut rows = Rows::default();
+        for rule in rules {
+            let kind: &'static str = rule.target.kind().into();
+            let state: &'static str = rule.state.into();
+            rows.kinds.push(kind.to_owned());
+            rows.targets.push(rule.target.key());
+            rows.states.push(state.to_owned());
+            rows.via_agent.push(rule.via_agent);
+            rows.restriction_only.push(rule.restriction_only);
+        }
+        rows
+    }
 }
 
 async fn overlay_rules(
@@ -355,9 +593,9 @@ impl PermissionStore for PgPermissionStore {
     }
 
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
-    async fn rules(&self, policy: PolicyId) -> Result<Vec<Rule>, Self::Err> {
+    async fn chain(&self, policy: PolicyId) -> Result<Option<PolicyChain>, Self::Err> {
         let mut connection = self.pool.acquire().await?;
-        policy_rules(&mut connection, policy).await
+        read_chain(&mut connection, policy).await
     }
 
     #[tracing::instrument(skip_all, err)]
@@ -367,16 +605,16 @@ impl PermissionStore for PgPermissionStore {
     }
 
     #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
-    async fn rules_with_session(
+    async fn chain_with_session(
         &self,
         policy: PolicyId,
         session: AgentSessionId,
-    ) -> Result<(Vec<Rule>, Vec<Rule>), Self::Err> {
+    ) -> Result<Option<(PolicyChain, Vec<Rule>)>, Self::Err> {
         let mut snapshot = self.pool.begin_with(SNAPSHOT).await?;
-        let saved = policy_rules(&mut snapshot, policy).await?;
+        let chain = read_chain(&mut snapshot, policy).await?;
         let overlay = overlay_rules(&mut snapshot, session).await?;
         snapshot.commit().await?;
-        Ok((saved, overlay))
+        Ok(chain.map(|chain| (chain, overlay)))
     }
 
     #[tracing::instrument(skip_all, fields(policy_id = %write.policy), err)]
@@ -386,7 +624,7 @@ impl PermissionStore for PgPermissionStore {
         plan: Plan,
     ) -> Result<Result<(), PermissionError>, Self::Err>
     where
-        Plan: FnOnce(&[Rule], &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
+        Plan: FnOnce(&PolicyChain, &[Rule]) -> Result<Vec<Change>, PermissionError> + Send,
     {
         let mut transaction = self.pool.begin().await?;
 
@@ -396,12 +634,14 @@ impl PermissionStore for PgPermissionStore {
             lock(&mut transaction, &lock_key(None, Some(session))).await?;
         }
 
-        let saved = policy_rules(&mut transaction, write.policy).await?;
+        let Some(chain) = read_chain(&mut transaction, write.policy).await? else {
+            return Ok(Err(PermissionError::NotFound));
+        };
         let overlay = match write.session {
             Some(session) => overlay_rules(&mut transaction, session).await?,
             None => Vec::new(),
         };
-        let changes = match plan(&saved, &overlay) {
+        let changes = match plan(&chain, &overlay) {
             Ok(changes) => changes,
             Err(refused) => return Ok(Err(refused)),
         };
@@ -438,5 +678,133 @@ impl PermissionStore for PgPermissionStore {
         .await?;
         transaction.commit().await?;
         Ok(())
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(policy_id = %write.policy, source_policy_id = %source),
+        err
+    )]
+    async fn set_source(
+        &self,
+        write: SourceWrite<'_>,
+        source: PolicyId,
+    ) -> Result<Result<(), PermissionError>, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
+        // Sources first, then the policy: nothing takes the sources lock
+        // after a policy's, so no two writers wait on each other.
+        lock(&mut transaction, SOURCES_LOCK).await?;
+        lock(&mut transaction, &lock_key(Some(write.policy), None)).await?;
+
+        let followed = match check_source(&mut transaction, write.policy, source).await? {
+            Ok(followed) => followed,
+            Err(refused) => return Ok(Err(refused)),
+        };
+        sqlx::query!(
+            r#"
+            UPDATE agent_permission_policy
+            SET follows = true,
+                source_policy_id = $2,
+                source_set_by = $3,
+                source_set_at = now()
+            WHERE id = $1
+            "#,
+            write.policy.as_uuid(),
+            source.as_uuid(),
+            write.by.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+        // A policy that owned its settings now takes the source's: the
+        // person-made ones go, its restrictions stay as local restrictions.
+        if !followed {
+            sqlx::query!(
+                r#"
+                DELETE FROM agent_permission_rule
+                WHERE policy_id = $1 AND NOT restriction_only
+                "#,
+                write.policy.as_uuid(),
+            )
+            .execute(&mut *transaction)
+            .await?;
+        }
+        transaction.commit().await?;
+        Ok(Ok(()))
+    }
+
+    #[tracing::instrument(skip_all, fields(policy_id = %write.policy, rules_written = tracing::field::Empty), err)]
+    async fn detach<Plan>(
+        &self,
+        write: SourceWrite<'_>,
+        plan: Plan,
+    ) -> Result<Result<usize, PermissionError>, Self::Err>
+    where
+        Plan: FnOnce(&PolicyChain) -> Result<Vec<Rule>, PermissionError> + Send,
+    {
+        let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
+        lock(&mut transaction, SOURCES_LOCK).await?;
+        lock(&mut transaction, &lock_key(Some(write.policy), None)).await?;
+
+        let Some(chain) = read_chain(&mut transaction, write.policy).await? else {
+            return Ok(Err(PermissionError::NotFound));
+        };
+        let rules = match plan(&chain) {
+            Ok(rules) => rules,
+            Err(refused) => return Ok(Err(refused)),
+        };
+
+        let rows = Rows::new(&rules);
+        sqlx::query!(
+            "DELETE FROM agent_permission_rule WHERE policy_id = $1",
+            write.policy.as_uuid(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_permission_rule
+                (policy_id, kind, target, state, updated_by, via_agent, restriction_only)
+            SELECT $1, kind, target, state, $7, via_agent, restriction_only
+            FROM UNNEST($2::text[], $3::text[], $4::text[], $5::bool[], $6::bool[])
+                AS row (kind, target, state, via_agent, restriction_only)
+            "#,
+            write.policy.as_uuid(),
+            &rows.kinds,
+            &rows.targets,
+            &rows.states,
+            &rows.via_agent,
+            &rows.restriction_only,
+            write.by.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+        sqlx::query!(
+            r#"
+            UPDATE agent_permission_policy
+            SET follows = false,
+                source_policy_id = NULL,
+                source_set_by = $2,
+                source_set_at = now()
+            WHERE id = $1
+            "#,
+            write.policy.as_uuid(),
+            write.by.as_ref(),
+        )
+        .execute(&mut *transaction)
+        .await?;
+        transaction.commit().await?;
+        tracing::Span::current().record("rules_written", rules.len());
+        Ok(Ok(rules.len()))
+    }
+
+    #[tracing::instrument(skip_all, fields(policy_id = %policy), err)]
+    async fn followers_height(&self, policy: PolicyId) -> Result<usize, Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+        bound_source_walk(&mut transaction).await?;
+        let height = read_followers_height(&mut transaction, policy, WALK_DEPTH + 1).await?;
+        transaction.commit().await?;
+        Ok(height)
     }
 }
