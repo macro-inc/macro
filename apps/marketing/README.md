@@ -277,19 +277,27 @@ website fallback from rendering an empty shell for app links. Keep `target="_sel
 is unchanged; run `apps/web` separately when testing local signup changes.
 
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and
-Linux”. It offers both published installers, Apple silicon DMG and x86_64
-AppImage, with the visitor's platform first as the primary button; other
-browsers list macOS first, and Windows visitors are pointed to the web app.
-The buttons link to `/download/mac` and `/download/linux`, which redirect to
-the current release's installers (`seo/download-redirects.json`), so the page
-never names a version or calls GitHub. The separate “All releases” link opens
-GitHub. Below the installers, the page describes
-the desktop, web, iOS, and Android apps.
+Linux”. A Mac or Linux visitor gets one primary button for their own installer
+(Apple silicon DMG or x86_64 AppImage) with its requirement caption, and the
+other platforms as quiet “Also available for …” links. Windows, ChromeOS,
+tablets (an iPad's Mac user agent is told apart by its touch screen) and
+undetected computers (and the prerendered HTML) get every installer as equal
+secondary buttons and a note pointing to the web app; Windows's note says a
+native Windows app is on the way. Platforms come from `DESKTOP_PLATFORMS` in
+`desktopDownloads.ts`, so a new installer (Intel Mac) is one entry there.
+The buttons and links send `desktop_download_clicked` and link to
+`/download/mac` and `/download/linux`, which redirect to the current release's
+installers (`seo/download-redirects.json`), so the page never names a version
+or calls GitHub. The separate “All releases” link opens GitHub. Below the
+installers, a Mobile app section shows the phone apps' QR codes behind an
+iPhone / Android toggle that starts on Android for Android visitors and on
+iPhone otherwise; the artwork in `src/assets/mobile-qr/` is copied from the
+app's Settings → Downloads page (`apps/web/src/lib/design/`), so update both.
 Phones are not offered the desktop download page: the main navigation hides
 its link below 768px, and the homepage rail that holds “Download for Desktop”
 only shows at 1440px and wider. A phone that opens `/download` (below 768px)
 sees “Download Macro” with App Store and Google Play buttons, its own platform
-first, and no desktop installers, release link, or Desktop section.
+first, and no desktop installers, release link, or QR codes.
 Check the installer link, keyboard navigation, and desktop/mobile layouts.
 
 Before the first prerender build, install Chromium with

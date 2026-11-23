@@ -5,7 +5,8 @@
 //! The reusable job definitions live in [`super::build_appimage_on_tag`],
 //! [`super::build_dmg_on_tag`] and [`super::desktop_windows`]. macOS and Linux
 //! must both build for a release; Windows joins it only when its build
-//! succeeds and may be published.
+//! succeeds and may be published. The macOS release QA job comes from
+//! [`super::desktop_qa_macos`]; promotion to `desktop-stable` waits for it.
 
 use gh_workflow::expr::typed::{
     Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, input,
@@ -15,7 +16,9 @@ use gh_workflow::{
     WorkflowInput,
 };
 
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, desktop_windows, steps, vars};
+use crate::workflows::{
+    build_appimage_on_tag, build_dmg_on_tag, desktop_qa_macos, desktop_windows, steps, vars,
+};
 
 #[cfg(test)]
 mod test;
@@ -50,7 +53,7 @@ const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
 /// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`, and
 /// `macro-windows-*` when Windows may be published). The publish jobs attach
 /// every artifact they download to the release, so they download only these,
-/// never the Windows frontend or an unpublished installer.
+/// never the Windows frontend, an unpublished installer or the QA results.
 const BUILD_ARTIFACT_PATTERN: &str = "macro-*";
 
 /// The job that attaches the installers to the release.
@@ -120,11 +123,20 @@ pub fn build_desktop_on_tag() -> Workflow {
                     .and(build_dmg_on_tag::BUILD_DMG.result().eq("success")),
             ),
         )
+        // The signed DMG must launch and pass QA before any installed app is
+        // offered it. Installers still reach the versioned release without it.
+        .add_job(
+            desktop_qa_macos::QA_RELEASE,
+            desktop_qa_macos::qa_release_job(resolved_ref())
+                .add_needs(RESOLVE_REF)
+                .add_needs(build_dmg_on_tag::BUILD_DMG),
+        )
         .add_job(
             "publish-release",
             publish_desktop_job()
                 .add_needs(RESOLVE_REF)
-                .add_needs(PUBLISH_INSTALLERS),
+                .add_needs(PUBLISH_INSTALLERS)
+                .add_needs(desktop_qa_macos::QA_RELEASE),
         )
 }
 
@@ -139,10 +151,12 @@ fn publish_desktop_job() -> Job {
         .timeout_minutes(20u32)
         // A status check spans every ancestor job, so without its own it would
         // skip whenever Windows failed, though the installers it follows did not.
+        // It still needs the macOS release QA.
         .cond(
             (!cancelled())
                 .and(RESOLVE_REF.result().eq("success"))
                 .and(PUBLISH_INSTALLERS.result().eq("success"))
+                .and(desktop_qa_macos::QA_RELEASE.result().eq("success"))
                 .and(resolved_ref().starts_with("refs/tags/v")),
         )
         .permissions(Permissions {

@@ -69,7 +69,11 @@ vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Root: (props: ParentProps) => <>{props.children}</>,
     Layout: (props: ParentProps) => <>{props.children}</>,
-    Section: (props: ParentProps) => <>{props.children}</>,
+    Section: (props: ParentProps<{ title: string; order?: number }>) => (
+      <section aria-label={props.title} data-order={props.order}>
+        {props.children}
+      </section>
+    ),
     Toggle: () => null,
   },
 }));
@@ -343,6 +347,27 @@ it('registers the actual company detail while mounted and clears it on unmount',
   expect(trackedItems()).toEqual([['company', undefined]]);
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('lists Properties before References in both information panels', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  const { Contact } =
+    await vi.importActual<typeof import('./contact-detail')>(
+      './contact-detail'
+    );
+  const order = (title: string) =>
+    Number(screen.getByRole('region', { name: title }).dataset.order);
+  const company = render(() => (
+    <Company companyId="company-1" section="files" />
+  ));
+  expect(order('Properties')).toBeLessThan(order('Email sharing'));
+  expect(order('Email sharing')).toBeLessThan(order('References'));
+  company.unmount();
+  render(() => <Contact contactId="contact-1" section="files" />);
+  expect(order('Properties')).toBeLessThan(order('References'));
 });
 
 it('records an open of a company once it has loaded', async () => {

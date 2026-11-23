@@ -30,6 +30,7 @@ check	build_desktop_on_tag.yml	build-dmg	Build macOS DMG
 check	build_desktop_on_tag.yml	build-windows-frontend	Build Windows frontend
 check	build_desktop_on_tag.yml	build-windows	Build Windows installer
 check	build_desktop_on_tag.yml	publish-installers	Publish desktop installers
+check	build_desktop_on_tag.yml	qa-macos	QA macOS release app
 check	build_desktop_on_tag.yml	publish-release	Sign and publish desktop updates
 check	build_dmg_on_tag.yml	build-dmg	Build macOS DMG
 check	build_web_app.yml	build	Build
