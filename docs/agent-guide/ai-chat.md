@@ -1534,7 +1534,8 @@ ACP call.
 Its card can appear before the program finishes and stays editable afterwards.
 Presentation means “Presented to the user,” not approved or sent. After
 presenting, the agent asks “Should I kick it off?”, unless the user said not
-to send it yet; when the person whose
+to send it yet or it is an import plan still being made (then it says to approve
+it on the card once it is ready); when the person whose
 account the review uses answers yes, it submits the review with
 **DecideReview**, and the card then reads “Started by the agent at your
 request”. The HTTP review decision endpoint requires direct user authentication;

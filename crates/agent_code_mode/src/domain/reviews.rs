@@ -109,8 +109,7 @@ pub struct CreateReview {
 pub use agent_runtime_protocol::domain::notification::ItemStatus as ReviewItemStatus;
 
 /// Why a submit was refused before anything started.
-const NOT_APPROVABLE: &str =
-    "This review is not ready to approve yet. Check it again before approving.";
+const NOT_APPROVABLE: &str = "This review is not ready to approve yet, so nothing was approved or queued. Do not promise to start it later: the user approves it on the card once it is ready, or asks you again then.";
 
 /// Full UI record, fetched outside the model context.
 #[derive(Clone, Serialize, Deserialize, ToSchema, specta::Type)]

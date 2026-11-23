@@ -1630,3 +1630,79 @@ async fn dismissing_a_review_lets_go_of_what_it_held() {
         .unwrap();
     assert_eq!(*f.actions.released.lock().unwrap(), vec![row.id]);
 }
+
+/// The session that reported this: the user said yes while the plan was
+/// still being made, the plan became ready in a system turn, and only the
+/// card started it.
+#[tokio::test]
+async fn an_early_yes_to_an_import_starts_nothing_and_a_yes_once_ready_starts_it_once() {
+    let f = Fixture::new();
+    let input = f.input("import", vec![json!({"source":"notion"})]);
+    let row = f
+        .service
+        .create(&f.edit(), &f.actions.owner, input)
+        .await
+        .unwrap();
+    let submit = ReviewDecision::Submit {
+        revision: row.revision,
+        items: vec![],
+    };
+    let prompted_by = |kind| {
+        *f.actions.prompter.lock().unwrap() = Some(TurnPrompter {
+            action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+            user: Some(f.actions.owner.clone()),
+            kind,
+            client: None,
+        });
+    };
+
+    // "yes" while the plan is still being made.
+    prompted_by(agent_session::domain::model::PrompterKind::User);
+    f.actions.approvable.store(false, Ordering::SeqCst);
+    let early = f
+        .service
+        .decide_for_session(f.session, &f.actions.owner, row.id, submit.clone())
+        .await;
+    let Err(CodeModeError::NotApprovable(why)) = early else {
+        panic!("{:?}", early.map(|record| record.revision));
+    };
+    assert_eq!(
+        why,
+        "This review is not ready to approve yet, so nothing was approved or queued. Do not promise to start it later: the user approves it on the card once it is ready, or asks you again then."
+    );
+
+    // The plan is ready, announced in a system turn: the early yes did not
+    // carry, and that turn cannot approve it either.
+    f.actions.approvable.store(true, Ordering::SeqCst);
+    prompted_by(agent_session::domain::model::PrompterKind::System);
+    assert!(matches!(
+        f.service
+            .decide_for_session(f.session, &f.actions.owner, row.id, submit.clone())
+            .await,
+        Err(CodeModeError::Forbidden)
+    ));
+    let waiting = f.store.get(f.session, row.id).await.unwrap();
+    assert_eq!(waiting.revision, row.revision);
+    assert_eq!(waiting.items.states()[0].status, ReviewItemStatus::Pending);
+    assert!(f.actions.calls.lock().unwrap().is_empty());
+
+    // A yes once it is ready starts exactly the ready revision, once.
+    prompted_by(agent_session::domain::model::PrompterKind::User);
+    f.service
+        .decide_for_session(f.session, &f.actions.owner, row.id, submit.clone())
+        .await
+        .unwrap();
+    let started = f.settled(row.id).await;
+    assert_eq!(
+        started.items.states()[0].status,
+        ReviewItemStatus::Completed
+    );
+    assert_eq!(started.decision.unwrap().revision, row.revision);
+    assert!(matches!(
+        f.service
+            .decide_for_session(f.session, &f.actions.owner, row.id, submit)
+            .await,
+        Err(CodeModeError::Conflict)
+    ));
+    assert_eq!(*f.actions.calls.lock().unwrap(), vec!["import".to_string()]);
+}

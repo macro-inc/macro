@@ -46,6 +46,8 @@ Notification-only invocations use `AgentAction::notification`; public control mu
 reject caller-supplied notification metadata. Payloads contain facts, not drafts.
 The fold reuses this tagged event enum for its generated TypeScript union;
 retain Specta derives on event payloads and preserve the producer wire shape.
+An `import.planned` notification appends `IMPORT_PLANNED_GUIDANCE`: tell the
+user the plan is ready, never approve it in that turn.
 Allow exact `<noop/>` only before any tool call in a notification turn; prompt
 instructions must match the fold's conservative treatment of all tool activity.
 

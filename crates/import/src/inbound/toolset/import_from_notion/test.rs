@@ -61,7 +61,7 @@ fn while_notion_is_read_the_agent_presents_the_plan_at_once_with_what_is_found_s
 
     assert_eq!(
         message(NotionImportAction::Plan, &report),
-        "Planning has started and goes on in the background (40 pages and 12 databases found in Notion so far). Present the plan now with PresentReview (kind \"import\", a short title such as \"Import from Notion\", drafts [{\"source\":\"notion\"}]) and tell the user in a sentence that the review fills in as Notion is read and each object is decided, and that they approve it there once it is ready. Do not wait for planning or check `status` in a loop. End your message by asking \"Should I kick it off once it's ready?\". If they say yes, approve it with DecideReview (a submit decision); while the plan is still being made it refuses, so tell them it is not ready yet and that they can say so again, or approve it on the card, once it is."
+        "Planning has started and goes on in the background (40 pages and 12 databases found in Notion so far). Present the plan now with PresentReview (kind \"import\", a short title such as \"Import from Notion\", drafts [{\"source\":\"notion\"}]) and tell the user in a sentence that the review fills in as Notion is read and each object is decided, and that they approve it on the card once it is ready. Do not wait for planning or check `status` in a loop. Do not offer to start it once it is ready, and do not call DecideReview while it is still being planned: a yes now cannot approve a plan that does not exist yet, and nothing acts on it later. If they ask you to start it before it is ready, tell them it is still being planned and that they approve it on the card, or ask you again, once it is ready."
     );
 }
 

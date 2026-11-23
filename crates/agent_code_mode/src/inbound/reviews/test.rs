@@ -58,4 +58,8 @@ fn present_review_skips_the_offer_when_the_user_held_the_send() {
     assert!(description.contains(
         "If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them."
     ));
+    // A yes before an import plan is ready cannot approve it later.
+    assert!(description.contains(
+        "For an import plan still being made, do not ask: say they approve it on the card once it is ready, and never offer to start it later."
+    ));
 }

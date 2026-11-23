@@ -1091,3 +1091,97 @@ fn a_failure_reads_from_its_kind_never_the_providers_text() {
     );
     assert_eq!(text, "Notion couldn't be reached.");
 }
+
+/// A yes the chat sends while the plan is being made approves nothing, and
+/// the review it was said about can never start the plan that replaces it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_approval_before_the_plan_is_ready_never_reaches_it_or_a_replan(pool: PgPool) {
+    let owner = user("approved-while-planning");
+    let (review, rows) = approved_plan(&pool, &owner).await;
+    let repo = PgImportRepo::new(pool.clone());
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+
+    // The early yes: refused, nothing queued.
+    let early = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    assert!(
+        matches!(
+            early,
+            Err(ImportError::RunNotReviewable(
+                UnreviewableRun::StillPlanning
+            ))
+        ),
+        "{early:?}"
+    );
+
+    // The plan becomes ready: it waits for an approval of its own.
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    assert_eq!(
+        repo.list_runs(&owner).await.unwrap()[0].status,
+        RunStatus::Ready
+    );
+    for row in &rows {
+        let row = repo.get(&owner, *row).await.unwrap().unwrap();
+        assert_eq!(row.status, ImportStatus::Staged, "nothing was claimed");
+    }
+
+    // The plan is made again, differently, and is ready: the first review
+    // cannot start it.
+    assert!(
+        repo.start_run(&owner, ImportSource::Notion, &[RunStatus::Ready])
+            .await
+            .unwrap()
+    );
+    let replanned = repo
+        .replace_plan(&owner, ImportSource::Notion, &[page('c', "Changed")])
+        .await
+        .unwrap();
+    assert!(
+        repo.transition_run(
+            &owner,
+            ImportSource::Notion,
+            &[RunStatus::Running],
+            RunStatus::Ready,
+            None
+        )
+        .await
+        .unwrap()
+    );
+    let stale = service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await;
+    tracker.close();
+    tracker.wait().await;
+
+    // None of the plan it was said about is left to write.
+    assert!(
+        matches!(
+            stale,
+            Err(ImportError::RunNotReviewable(UnreviewableRun::NothingLeft))
+        ),
+        "{stale:?}"
+    );
+    assert_eq!(
+        repo.list_runs(&owner).await.unwrap()[0].status,
+        RunStatus::Ready
+    );
+    let changed = repo.get(&owner, replanned[0].id).await.unwrap().unwrap();
+    assert_eq!(changed.status, ImportStatus::Staged);
+}

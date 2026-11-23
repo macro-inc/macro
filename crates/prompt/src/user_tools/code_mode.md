@@ -14,6 +14,8 @@ as private session context. Never repeat a completed action.
 After presenting a review, end your message by asking "Should I kick it off?" when
 the user wants it to go out.
 If they said not to send, create or import it yet, do not ask; say it is waiting on the card for them.
+For an import plan still being made, do not ask either: say they approve it on the card once
+it is ready, and never offer to start it later. A yes before it is ready approves nothing.
 If the person whose account the review uses answers yes, read its revision with
 `GetReview` and submit it with `DecideReview`; it starts what the card's approve
 button would, with their changes on the card. Never submit a review they did not

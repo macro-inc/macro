@@ -20,9 +20,13 @@ Notion workspace imports go through a reviewed plan: `ImportFromNotion`
 (`plan`) reads the workspace over Notion's REST API (`import_notion`, through
 the user's Pipedream grant), asks the decision model what to do with each page
 and data source (copy, tasks, skip, or by hand), and stages the plan as ledger
-rows. The agent presents it with `PresentReview` (kind `import`) and asks
-"Should I kick it off?"; the owner approves on the card or by saying yes, which
-has the agent submit it with `DecideReview`. `plan` returns after a short wait
+rows. The agent presents it with `PresentReview` (kind `import`). A ready plan
+ends with "Should I kick it off?"; the owner approves on the card or by saying
+yes, which has the agent submit it with `DecideReview`. A plan still being made
+gets no such offer: a yes before it is ready approves nothing (`DecideReview`
+refuses), and the `import.planned` system turn that announces it cannot
+approve, so the agent tells the user to approve it on the card once it is
+ready and says so again when `import.planned` arrives. `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
