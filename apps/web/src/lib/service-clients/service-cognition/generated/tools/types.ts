@@ -15678,7 +15678,7 @@ export interface SetEntityProperty {
    */
   date_value?: string | null;
   /**
-   * For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day. A time of day is the user's own: write date_value with the UTC offset of current_time, which is in the user's time zone ("3 PM" for a user in New York in winter is 15:00:00-05:00). When current_time says the user's time zone is unknown, it is in UTC: say in your reply which time zone you used.
+   * For date properties: true when date_value is a time of day the user asked for (an exact moment, such as 3 PM). Leave it out for a whole day. A time of day is in the user's time zone, the zone current_time names, unless the user names another: write date_value with that zone's UTC offset on that date, which daylight saving time can make different from today's ("3 PM" on a winter day in New York is 15:00:00-05:00). When current_time says the user's time zone is unknown, it is in UTC: say in your reply which time zone you used.
    */
   date_has_time?: boolean | null;
   /**
