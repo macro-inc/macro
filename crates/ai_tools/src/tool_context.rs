@@ -426,7 +426,13 @@ fn message_service_with_side_effects(
                     pool.clone(),
                     Arc::new(access.clone()),
                 ),
-                realtime.clone(),
+                messages::domain::timeline_updates::ChannelTimelineRealtime::new(
+                    realtime.clone(),
+                    messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+                    messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                        clients.macro_event_broker.clone(),
+                    ),
+                ),
                 channels::outbound::pg_agent_creations::PgAgentCreations::new(
                     pool.clone(),
                 ),

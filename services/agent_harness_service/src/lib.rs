@@ -1333,7 +1333,13 @@ pub async fn run() -> anyhow::Result<()> {
                 pool.clone(),
                 entity_access.clone(),
             ),
-            message_realtime.clone(),
+            messages::domain::timeline_updates::ChannelTimelineRealtime::new(
+                message_realtime.clone(),
+                messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+                messages::outbound::channel_timeline::BrokerChannelTimelinePublisher::new(
+                    broker.clone(),
+                ),
+            ),
             channels::outbound::pg_agent_creations::PgAgentCreations::new(
                 pool.clone(),
             ),

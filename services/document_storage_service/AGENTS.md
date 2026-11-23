@@ -233,3 +233,9 @@ state requires acknowledged purge before ordinary cleanup; release the guard bef
   Its `with_commands` serves the channel message mutations, which need the
   `ChannelWriteActor` only the HTTP handler inserts, for a person's own session:
   mutations over the websocket, and from tokens or agents, are refused.
+- `channelTimelineUpdates` subscribers get updates from `ChannelTimelineFanout`, which
+  reads `macro.channel_timeline` with an ungrouped consumer on the consumer tracker;
+  `ChannelTimelineSubscriptions` reaches GraphQL through `insert_graphql_context_data`.
+  Channel message delivery is wrapped in `ChannelTimelineRealtime`, and
+  `TimelinePublisher` publishes sequenced channel activity with one participant read
+  per channel batch.

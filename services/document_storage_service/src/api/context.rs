@@ -1023,6 +1023,7 @@ pub(crate) struct ApiContext {
     pub graphql_soup_schema: DssGraphqlSoupSchema,
     pub agent_session_log_subscriptions: complete_graph::AgentSessionLogSubscriptions,
     pub agent_session_activity_subscriptions: complete_graph::AgentSessionActivitySubscriptions,
+    pub channel_timeline_subscriptions: graphql_channel::ChannelTimelineSubscriptions,
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub graphql_notification_writer: Arc<GraphqlNotificationWriter>,
     pub activity_reader: DssActivityReader,
