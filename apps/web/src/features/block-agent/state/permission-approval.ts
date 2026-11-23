@@ -7,10 +7,13 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import type {
-  ExecutionPermission,
-  GatedOperation,
-  ShowPermissionsSelection,
+import {
+  type ExecutionPermission,
+  type GatedOperation,
+  PermissionAction,
+  type ShowPermissionsSelection,
+  ToolPermissionOrigin,
+  ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { z } from 'zod';
 
@@ -28,13 +31,9 @@ export function isPermissionHold(part: MessagePart | undefined): boolean {
   );
 }
 
-const PERMISSION_ACTION = z.enum([
-  'create',
-  'read',
-  'update',
-  'destroy',
-  'send',
-]);
+// The generated enums, so a value the server adds (an action default's
+// `action` origin) parses here too instead of hiding the whole hold.
+const PERMISSION_ACTION = z.enum(PermissionAction);
 
 const gatedOperationSchema = z.object({
   service: z.string(),
@@ -43,8 +42,8 @@ const gatedOperationSchema = z.object({
   group: z.string(),
   groupName: z.string(),
   action: PERMISSION_ACTION.nullish(),
-  state: z.enum(['always', 'ask', 'never']),
-  origin: z.enum(['tool', 'group_action', 'default', 'session']),
+  state: z.enum(ToolPermissionState),
+  origin: z.enum(ToolPermissionOrigin),
 }) satisfies z.ZodType<GatedOperation>;
 
 const permissionHoldSchema = z.object({
