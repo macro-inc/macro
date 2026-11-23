@@ -353,7 +353,7 @@ fn apply(
             let mut queue = conform_queue(
                 connection,
                 |request, source| overlay_fits(&change.stored, changed, request, source),
-                &dropped,
+                dropped,
                 &identity.aliases,
             )?;
             // A shadow of a dropped record goes even when no queued write
