@@ -20,6 +20,7 @@ import {
 import { NIL as NIL_UUID } from 'uuid';
 import { arrayEquals } from '../../../core/util/compareUtils';
 import { createBrowserOfflineSignal } from '../../../core/util/connectivity';
+import { debounce } from '../../../core/util/debounce';
 import { isResponseFreeNetworkError } from '../../../core/util/request-error';
 import { querySnapshot } from '../../../graphql-cache/exchange/live-query';
 import { normalizedCacheResultMetadata } from '../../../graphql-cache/exchange/normalized-cache-exchange';
@@ -541,7 +542,7 @@ export function createSoupLiveQuery(
         }
         if (firstInput?.initial.sortMethod === 'NOTIFIED_AT') {
           recordNetworkEmailTimes(firstInputKey, page.pageParam, result.data);
-          setNetworkAnswers((count) => count + 1);
+          if (!result.stale) setNetworkAnswers((count) => count + 1);
         }
         if (metadata.persistence) {
           if (
@@ -649,14 +650,13 @@ export function createSoupLiveQuery(
   // a row above it left or joined the list: the next page then repeats a row
   // the list already shows, or starts past one it now skips. Such a chain is
   // read again in order, as an explicit refresh does.
-  const brokenChain = createMemo((): boolean => {
+  const chainBroken = createMemo((): boolean => {
     const current = options();
     if (
       firstPageInput()?.initial.sortMethod !== 'NOTIFIED_AT' ||
       current.enabled === false ||
       current.localOnly ||
-      current.networkPaused ||
-      query.isFetching
+      current.networkPaused
     )
       return false;
     const data = query.data;
@@ -667,10 +667,12 @@ export function createSoupLiveQuery(
     });
   }, false);
   // Rebuilds in a row, until the chain agrees; a rebuild that finds it still
-  // broken (it shared a read that was ending, or the server moved meanwhile)
-  // goes again, up to the bound. A failed one waits for the next network
-  // answer, checked when a rebuild starts, so one a hidden tab deferred
-  // follows the same rule.
+  // broken (the server moved meanwhile) goes again, up to the bound. A failed
+  // one waits for a later network answer. Both are checked where a rebuild
+  // starts, so one a hidden tab deferred follows the same rules, and a
+  // rebuild starts only once no read runs, on a later task: the observer
+  // shows a read ended before it lets go of it, and a refetch started in
+  // between would share that read's answer instead of reading.
   let repairs = 0;
   let failedAt: number | undefined;
   const rebuildChain = async () => {
@@ -684,7 +686,7 @@ export function createSoupLiveQuery(
     } finally {
       repair = undefined;
     }
-    if (!brokenChain()) {
+    if (!chainBroken()) {
       repairs = 0;
       return;
     }
@@ -692,13 +694,14 @@ export function createSoupLiveQuery(
       failedAt = networkAnswers();
       return;
     }
-    chainRepair.request();
+    scheduleRepair();
   };
   const repairChain = () => {
     if (
       repair ||
       refreshesWaiting > 0 ||
-      !brokenChain() ||
+      query.isFetching ||
+      !chainBroken() ||
       repairs >= MAX_CHAIN_REPAIRS ||
       failedAt === untrack(networkAnswers)
     )
@@ -708,16 +711,19 @@ export function createSoupLiveQuery(
   };
   const chainRepair = createHiddenDeferral(repairChain);
   onCleanup(chainRepair.dispose);
+  const scheduleRepair = debounce(() => chainRepair.request(), 0);
   createEffect(
-    on([brokenChain, networkAnswers], ([broken]) => {
-      if (broken) {
-        chainRepair.request();
-        return;
+    on(
+      [chainBroken, () => query.isFetching, networkAnswers],
+      ([broken, fetching]) => {
+        if (!broken) {
+          repairs = 0;
+          failedAt = undefined;
+          return;
+        }
+        if (!fetching) scheduleRepair();
       }
-      if (query.isFetching) return;
-      repairs = 0;
-      failedAt = undefined;
-    })
+    )
   );
 
   /** The updatedAt NOTIFIED_AT pages' own network responses gave each email

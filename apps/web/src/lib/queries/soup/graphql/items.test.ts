@@ -92,7 +92,8 @@ type FakeExecution = {
       revision?: string;
       persistence?: Promise<string | undefined>;
     },
-    error?: CombinedError
+    error?: CombinedError,
+    stale?: boolean
   ): void;
 };
 
@@ -146,14 +147,15 @@ function makeFakeClient(): {
       next: (
         data,
         metadata = { source: 'live-network', revision: REVISION_1 },
-        error
+        error,
+        stale = false
       ) =>
         subject.next({
           operation,
           data,
           error,
           extensions: { __macroNormalizedCache: metadata },
-          stale: false,
+          stale,
           hasNext: false,
         } as OperationResult<unknown, Record<string, unknown>>),
     });
@@ -3310,9 +3312,11 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         await failRebuild(fake, 5);
         await expect(strict).rejects.toBeDefined();
         expect(settled).toBe(true);
-        await settle();
-        expect(fake.executions).toHaveLength(7);
         expect(ids()).toEqual(['a', 'b']);
+        // The refresh's first page was a later answer, so the list rebuilds
+        // again with a read of its own, not the refresh's ending one.
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(8));
+        expect(cursorOf(fake.executions[7])).toBeNull();
       } finally {
         dispose();
       }
@@ -3338,6 +3342,51 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         fake.executions[3].next(page('a', 'after-a'));
         await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
         expect(cursorOf(fake.executions[5])).toBeNull();
+      } finally {
+        dispose();
+      }
+    });
+
+    it('takes a stale replay after a failed rebuild for no later answer', async () => {
+      const { fake, dispose } = await breakChain();
+      try {
+        await failRebuild(fake, 3);
+        await settle();
+        // The first page is read again: its last answer comes back stale
+        // while the read runs, and the read then fails.
+        fake.executions[3].next(
+          page('a', 'after-a'),
+          undefined,
+          undefined,
+          true
+        );
+        fake.executions[3].fail(offline());
+        await settle();
+        expect(fake.executions).toHaveLength(5);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('keeps a failed rebuild that ended while another page read ran', async () => {
+      const { fake, dispose } = await breakChain();
+      try {
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+        fake.executions[3].next(page('a', 'after-a'));
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(5));
+        // The first page is read again while the rebuild reads the second,
+        // which fails; then the first page's read fails too.
+        fake.executions[3].next(
+          page('a', 'after-a'),
+          undefined,
+          undefined,
+          true
+        );
+        fake.executions[4].fail(offline());
+        await settle();
+        fake.executions[3].fail(offline());
+        await settle();
+        expect(fake.executions).toHaveLength(5);
       } finally {
         dispose();
       }
