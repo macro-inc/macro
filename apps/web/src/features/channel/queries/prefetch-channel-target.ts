@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { notificationTargetSpan } from '@notifications/notification-open-trace';
 import { queryClient } from '@queries/client';
+import { channelCacheHost } from '@queries/messages/local/channel-flag';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
 import { messageTimelineQueryOptions } from '@queries/messages/timeline';
 
@@ -14,6 +15,8 @@ export async function prefetchChannelTarget(
   // Push destinations already identify the root, including roots themselves.
   const threadId = target.threadId;
   if (!threadId) return;
+  // The device path reads its own pages; a REST page would go unused.
+  if (channelCacheHost()) return;
   const trace =
     notificationTargetSpan(channelId, target.messageId) ?? Telemetry;
   await trace.span('channel.target.prefetch', async (span) => {
@@ -45,6 +48,7 @@ export async function prefetchChannelTarget(
  * is reused as is.
  */
 export function prefetchLatestChannelMessages(channelId: string): void {
+  if (channelCacheHost()) return;
   fireAndForget(
     Telemetry.span('channel.timeline.prefetch', async (span) => {
       span.setAttr('channel.id', channelId);

@@ -10,6 +10,7 @@ import {
   type WithSearch,
 } from '@entity';
 import { queryClient } from '@queries/client';
+import { channelCacheHost } from '@queries/messages/local/channel-flag';
 import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
 import { messageTimelineQueryOptions } from '@queries/messages/timeline';
 import { useSearchChannelQuery } from '@queries/soup/search';
@@ -132,6 +133,8 @@ export function createChannelFindBar(
         const rs = results();
         const idx = activeIndex();
         if (idx === 0 || rs.length === 0) return;
+        // The device path reads its own windows; REST pages would go unused.
+        if (channelCacheHost()) return;
 
         const channelId = options.channelId();
         const end = Math.min(
@@ -162,6 +165,8 @@ export function createChannelFindBar(
         const rs = results();
         const idx = activeIndex();
         if (idx === 0 || rs.length === 0) return;
+        // The device path reads its own windows; REST pages would go unused.
+        if (channelCacheHost()) return;
 
         const channelId = options.channelId();
         const end = Math.min(

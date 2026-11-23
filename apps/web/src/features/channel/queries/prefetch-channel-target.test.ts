@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   timeline: vi.fn(),
   replies: vi.fn(),
+  host: vi.fn((): object | undefined => undefined),
+}));
+vi.mock('@queries/messages/local/channel-flag', () => ({
+  channelCacheHost: mocks.host,
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
@@ -23,12 +27,16 @@ vi.mock('@queries/messages/thread-replies', () => ({
   }),
 }));
 
-import { prefetchChannelTarget } from './prefetch-channel-target';
+import {
+  prefetchChannelTarget,
+  prefetchLatestChannelMessages,
+} from './prefetch-channel-target';
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.timeline.mockResolvedValue(undefined);
   mocks.replies.mockResolvedValue(undefined);
+  mocks.host.mockReturnValue(undefined);
 });
 
 describe('channel target prefetch', () => {
@@ -69,6 +77,19 @@ describe('channel target prefetch', () => {
 
   it('leaves ambiguous links to the mounted surface instead of fetching latest', async () => {
     await prefetchChannelTarget('channel-1', { messageId: 'reply-1' });
+    expect(mocks.timeline).not.toHaveBeenCalled();
+    expect(mocks.replies).not.toHaveBeenCalled();
+  });
+});
+
+describe('on the device path', () => {
+  it('prefetches no REST page, which the device reader would not use', async () => {
+    mocks.host.mockReturnValue({});
+    await prefetchChannelTarget('channel-1', {
+      messageId: 'reply-1',
+      threadId: 'root-1',
+    });
+    prefetchLatestChannelMessages('channel-1');
     expect(mocks.timeline).not.toHaveBeenCalled();
     expect(mocks.replies).not.toHaveBeenCalled();
   });
