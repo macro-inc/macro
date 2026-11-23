@@ -1,6 +1,10 @@
 import { formatDuration } from '@app/components/date-time-range/time-options';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import {
+  formatCompactCalendarTime,
+  formatCompactCalendarTimeRange,
+} from '@app/features/calendar/utils/time-format';
+import {
   addHours,
   addMinutes,
   differenceInCalendarDays,
@@ -110,6 +114,33 @@ function timedStartDueText(dates: StartDue, now: Date): string | undefined {
   const withYear = !thisYear(start) || !thisYear(due);
   const format = dayTimeFormat(withYear);
   return `${format.format(start)} → ${format.format(due)}`;
+}
+
+/**
+ * `formatStartDue` for a narrow list cell or card: times of day are compact,
+ * as on a calendar event (`Nov 26, 2–4pm`, `Nov 26, 2pm → Nov 28, 4pm`).
+ * Whole days read as `formatStartDue` gives them.
+ */
+export function formatStartDueCompact(
+  dates: StartDue,
+  now = new Date()
+): string | undefined {
+  if (!dates.timed) return formatStartDue(dates, now);
+  const { start, due } = dates;
+  const clock = clockIs12Hour() ? '12-hour' : '24-hour';
+  const withYear =
+    (start && start.getFullYear() !== now.getFullYear()) ||
+    (due && due.getFullYear() !== now.getFullYear());
+  const day = (date: Date) =>
+    (withYear ? DAY_YEAR_FORMAT : DAY_FORMAT).format(date);
+  const at = (date: Date) =>
+    `${day(date)}, ${formatCompactCalendarTime(date, clock)}`;
+  if (!start) return due ? at(due) : undefined;
+  if (!due) return `${at(start)} →`;
+  if (isSameDay(start, due)) {
+    return `${day(start)}, ${formatCompactCalendarTimeRange(start, due, clock)}`;
+  }
+  return `${at(start)} → ${at(due)}`;
 }
 
 /**

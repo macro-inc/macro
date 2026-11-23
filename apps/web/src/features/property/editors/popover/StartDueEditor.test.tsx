@@ -265,7 +265,10 @@ it('updates the length in the footer while the picker stays open', async () => {
 
 it('saves the due date first when a new start time passes the saved due date', async () => {
   const onSave = vi.fn(async () => {});
-  const { saveOther } = setup(onSave);
+  const saveOther = vi
+    .fn<StartDueEditorProps['saveOther']>()
+    .mockResolvedValue(undefined);
+  setup(onSave, saveOther);
   fireEvent.click(screen.getByRole('button', { name: /^Add time/ }));
   fireEvent.click(screen.getByRole('button', { name: /^Start/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Change day' }));

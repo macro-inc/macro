@@ -6,7 +6,7 @@ import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { formatStartDueCompact, startDueOf } from '@property/utils/start-due';
 import { hasValue, isDateProperty } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
 import {
@@ -153,7 +153,7 @@ export function TaskBoardView(props: {
       startDateEnabled() && isDateProperty(due) && due.hasTime === true;
     const datesText = (due: Property) => {
       if (!isDue || !startDateEnabled()) return undefined;
-      return formatStartDue(startDueOf(startDate(task().id), due));
+      return formatStartDueCompact(startDueOf(startDate(task().id), due));
     };
     const editor = isDue
       ? startDueEditorFor({

@@ -7,6 +7,7 @@ vi.mock('@app/features/calendar/utils/preferences', () => ({
 
 import {
   formatStartDue,
+  formatStartDueCompact,
   pickDay,
   pickTime,
   pickTimedDay,
@@ -257,5 +258,31 @@ describe('dates with times', () => {
       dates: { start: at(24, 14), due: at(27, 16), timed: true },
       changed: 'start',
     });
+  });
+});
+
+describe('formatStartDueCompact', () => {
+  it('writes times compactly, as on a calendar event', () => {
+    expect(
+      formatStartDueCompact(
+        { start: at(26, 14), due: at(26, 16), timed: true },
+        NOW
+      )
+    ).toBe('Nov 26, 2–4pm');
+    expect(
+      formatStartDueCompact(
+        { start: at(26, 14), due: at(28, 16, 30), timed: true },
+        NOW
+      )
+    ).toBe('Nov 26, 2pm → Nov 28, 4:30pm');
+    expect(
+      formatStartDueCompact({ start: null, due: at(26, 9), timed: true }, NOW)
+    ).toBe('Nov 26, 9am');
+  });
+
+  it('reads whole days as the full form does', () => {
+    expect(
+      formatStartDueCompact({ start: at(23, 0), due: at(27, 0) }, NOW)
+    ).toBe('Nov 23 → Nov 27');
   });
 });
