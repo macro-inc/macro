@@ -25,6 +25,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import { useAgentCapabilitiesQuery } from '@queries/agents/capabilities';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
 import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
@@ -125,6 +126,25 @@ export function AgentComposer(props: {
   };
 
   const effort = () => effortConfigOption(metadata()?.configOptions ?? []);
+  // Session currentValue changes after confirmation; discovery retains the model default.
+  const defaultCapabilities = useAgentCapabilitiesQuery(() => {
+    const source = session()?.harness;
+    const harness = isMacroHarness(source) ? 'in-memory' : source;
+    const model = metadata()?.model;
+    if (
+      !model ||
+      !effort() ||
+      (harness !== 'in-memory' && harness !== 'cursor')
+    )
+      return;
+    return { harness, model };
+  });
+  const defaultEffortValue = () =>
+    effortConfigOption(
+      defaultCapabilities.isSuccess
+        ? defaultCapabilities.data.configOptions
+        : []
+    )?.currentValue;
   /** Macro's tier option, when the current model offers more than standard.
    * Other harnesses' speed values are theirs to interpret, so they are left alone. */
   const speedOption = () => {
@@ -385,6 +405,7 @@ export function AgentComposer(props: {
               suggestedModels: catalog(),
               effort: effort(),
               effortValue: changingEffort(),
+              defaultEffortValue: defaultEffortValue(),
               effortDisabled:
                 changingModel(messages(), metadata()?.model ?? null) !==
                 undefined,

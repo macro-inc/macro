@@ -20,6 +20,17 @@ export function UnifiedModelTriggerContent() {
     if (state.showModelLabel) return `${state.agent?.name} · ${model()}`;
     return state.agent?.name;
   };
+  const thinking = () => {
+    const effort = state.effort;
+    if (!effort || effort.options.length < 2) return;
+    const value = state.effortValue ?? effort.currentValue;
+    if (
+      state.defaultEffortValue === undefined ||
+      value === state.defaultEffortValue
+    )
+      return;
+    return effort.options.find((choice) => choice.value === value)?.name;
+  };
   return (
     <>
       <Show
@@ -31,16 +42,8 @@ export function UnifiedModelTriggerContent() {
         </span>
       </Show>
       <span class="min-w-0 truncate text-ink-muted">{label()}</span>
-      <Show when={!custom() && state.effort && state.effort.options.length > 1}>
-        <span class="shrink-0 text-ink-extra-muted">
-          {
-            state.effort?.options.find(
-              (choice) =>
-                choice.value ===
-                (state.effortValue ?? state.effort?.currentValue)
-            )?.name
-          }
-        </span>
+      <Show when={!custom() && thinking()}>
+        <span class="shrink-0 text-ink-extra-muted">{thinking()}</span>
       </Show>
       <Show
         when={

@@ -40,7 +40,7 @@ export function MobileModelSelector() {
           ref={card}
           aria-hidden={sheetOpen()}
           inert={sheetOpen()}
-          class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] outline-none transition-[opacity,translate] duration-200 motion-reduce:transition-none"
+          class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none transition-[opacity,translate] duration-200 motion-reduce:transition-none"
           style={{
             'box-shadow':
               'inset 0 0 0 1px var(--color-edge), 0 8px 24px #00000066',

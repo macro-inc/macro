@@ -103,6 +103,10 @@ release and immediate keyboard commits. Models with at most one effort option
 retain the no-thinking slot. Agent and Auto cards contain only their name row.
 The name opens in-place desktop selection pages or a phone sheet. Existing
 EffortSelector and legacy pickers remain unwired for reference.
+The trigger omits the advertised default Thinking level and shows only a
+non-default choice. A running session's confirmed current value is not a model
+default: supported preflight discovery supplies that default separately. Until a
+default is known, the trigger omits the level rather than guessing.
 
 Speed uses a small Dropdown menu on both platforms, not a phone page. Only
 advertised in-memory tiers are offered: Standard, Fast (`priority` or `fast`),

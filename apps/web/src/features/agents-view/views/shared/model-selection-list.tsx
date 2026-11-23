@@ -234,21 +234,15 @@ export function ModelSelectionList(props: {
               <span>{t('nav.agents')}</span>
               <Show when={!searching()}>
                 <Button
-                  variant="ghost"
-                  appearance="bare"
+                  variant="link"
                   size="xs"
-                  class={cn(
-                    '-mr-1.5 flex h-6 gap-0.5 rounded-md pl-2 pr-1.5 text-xs font-medium text-ink-muted not-touch:hover:bg-ink/12',
-                    props.mobile &&
-                      'h-7 min-h-7 touch:min-h-7 text-sm leading-5'
-                  )}
+                  class="-mr-1.5"
                   onClick={() => {
                     nav.setPage('agents');
                     if (!props.mobile) search?.focus();
                   }}
                 >
                   {t('agentControls.seeAll')}
-                  <CaretRight class={props.mobile ? 'size-4' : 'size-3.5'} />
                 </Button>
               </Show>
             </div>

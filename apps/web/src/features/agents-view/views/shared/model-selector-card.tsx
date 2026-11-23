@@ -18,11 +18,11 @@ export function ModelSelectorCard(props: {
     state.model?.toLowerCase() !== 'auto';
   return (
     <div
-      class="m-2 flex flex-col bg-ink/8"
+      class="flex flex-col"
       classList={{
-        'rounded-lg gap-2.5 px-3 pt-2.5 pb-3.5': !props.mobile && controls(),
-        'rounded-lg px-3 py-2': !props.mobile && !controls(),
-        'rounded-[20px] gap-3.5 px-1.5 pt-1.5 pb-4': Boolean(props.mobile),
+        'gap-2.5 px-3 pt-2.5 pb-3.5': !props.mobile && controls(),
+        'px-3 py-2': !props.mobile && !controls(),
+        'gap-3.5 px-1.5 pt-1.5 pb-4': Boolean(props.mobile),
       }}
     >
       <div

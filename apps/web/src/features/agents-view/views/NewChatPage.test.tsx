@@ -435,9 +435,13 @@ describe('agent-led new conversation', () => {
     expect(
       screen.queryByRole('textbox', { name: 'Search agents and models' })
     ).toBeNull();
-    fireEvent.click(
-      within(screen.getByRole('dialog')).getAllByRole('button')[0]
-    );
+    const card = screen.getByRole('dialog');
+    expect(card.classList.contains('p-0')).toBe(true);
+    const name = within(card).getAllByRole('button')[0];
+    const content = name.parentElement?.parentElement;
+    expect(content?.parentElement).toBe(card);
+    expect(content?.className).not.toMatch(/m-2|bg-ink\/8|rounded-/);
+    fireEvent.click(name);
     expect(
       await screen.findByRole('textbox', { name: 'Search agents and models' })
     ).toBeTruthy();
@@ -1763,6 +1767,27 @@ describe('agent-led new conversation', () => {
       })
     );
   });
+  it.each([false, true])(
+    'shows Thinking only after a non-default choice (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      page();
+      openAgents();
+      fireEvent.click(screen.getByRole('button', { name: 'GPT-5.6' }));
+      const trigger = screen.getByRole('button', {
+        name: 'Choose an agent or model',
+      });
+      expect(trigger.textContent).not.toContain('Low');
+      if (touch) fireEvent.click(trigger);
+      const slider = screen.getByRole('slider', { name: 'Thinking' });
+      slider.focus();
+      fireEvent.keyDown(slider, { key: 'End' });
+      expect(trigger.textContent).toContain('Ultra');
+      fireEvent.keyDown(slider, { key: 'Home' });
+      expect(trigger.textContent).not.toContain('Low');
+      expect(trigger.textContent).not.toContain('Ultra');
+    }
+  );
   it('retains Thinking on reopen and resets it on a new model pick', async () => {
     const send = page();
     openAgents();

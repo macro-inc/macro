@@ -317,7 +317,7 @@ Code shows a content-width repository-and-branch pill beside the tabs. The
 repository and branch each open their own sheet; selecting a new repository
 resets the starting branch. A paired local runtime locks its branch to main.
 The composer stays expanded while repository, branch, or model overlays are open.
-The model pill shows the selected name, available Thinking level, and nonstandard speed glyph. Thinking and Speed live on the card; its name opens the model sheet. Dismissing restores editor focus.
+The model pill shows the selected name, a non-default Thinking level, and a nonstandard speed glyph. The default Thinking level stays hidden in the pill. Thinking and Speed live on the card; its name opens the model sheet. Dismissing restores editor focus.
 Tapping an agent bubble selects its agent and focuses the composer during the
 tap, as required for the iOS keyboard; changing Chat or Code afterward remains possible.
 Outside taps collapse the island. The touch keyboard's Enter inserts a newline;
@@ -637,8 +637,9 @@ the shimmer.
   row. Focusing a session input on a phone also expands it. Height changes animate
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
-  The unified trigger shows its provider or agent icon and name, the available Thinking level, and an accent speed glyph for Fast or Ultrafast. Routine configuration retains its model override label.
+  The unified trigger shows its provider or agent icon and name, a Thinking level only when it differs from the model default, and an accent speed glyph for Fast or Ultrafast. Routine configuration retains its model override label.
 - Tap the model trigger to open a card 6px above it. Tap the name to reach search, recent agent bubbles, Auto, Recent models, and More models. Before any model picks, Suggested shows the runtime's frontier list. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet, including Suggested models. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns directly to the card, then dismisses it. On desktop, picking returns to the card; on phone it closes the sheet. A custom agent keeps a name-only card and its model overrides remain available in the selection list.
+  The popover is the card surface, without a second padded frame, on desktop and phone. Desktop selection pages have their own 400px width and content-driven height capped at 40rem or the available viewport, with internal scrolling; they do not inherit the compact card's size. See all is a text-only link-style Button. The phone selection sheet keeps its independent sizing and navigation.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
   Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat

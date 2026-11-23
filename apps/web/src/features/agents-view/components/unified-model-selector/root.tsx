@@ -25,6 +25,8 @@ export type UnifiedModelSelectorState = {
   disabled?: boolean;
   effort?: SelectSessionConfigOption;
   effortValue?: string;
+  /** Advertised model default, separate from the running session's current value. */
+  defaultEffortValue?: string;
   effortDisabled?: boolean;
   speeds?: readonly string[];
   /** Discovered speed tiers for each Suggested model; absent means unknown. */

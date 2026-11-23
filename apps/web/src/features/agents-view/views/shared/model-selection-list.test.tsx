@@ -24,6 +24,7 @@ function setup() {
     onModel: choose,
     onEffort: vi.fn(),
     onSpeed: vi.fn(),
+    onCreate: vi.fn(),
   };
   render(() => (
     <UnifiedModelSelectorRoot state={state}>
@@ -53,5 +54,16 @@ describe('model selection list', () => {
     expect(nav.page()).toBe('all');
     expect(screen.getByRole('button', { name: 'GPT-6.1 Sol' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'DeepSeek Flash' })).toBeTruthy();
+  });
+
+  it('opens the agents page from the text-only See all action', () => {
+    const { nav } = setup();
+    const seeAll = screen.getByRole('button', { name: 'See all' });
+    expect(seeAll.classList.contains('text-link')).toBe(true);
+    expect(seeAll.classList.contains('bg-transparent')).toBe(true);
+    expect(seeAll.querySelector('svg')).toBeNull();
+    fireEvent.click(seeAll);
+    expect(nav.page()).toBe('agents');
+    expect(screen.getByRole('button', { name: 'Agents' })).toBeTruthy();
   });
 });

@@ -45,7 +45,11 @@ export function DesktopModelSelector() {
       <Popover.Portal>
         <Popover.Content
           ref={content}
-          class="portal-scope menu-surface z-modal w-[360px] max-w-[calc(100vw-1rem)] rounded-2xl overflow-hidden outline-none"
+          class="portal-scope menu-surface z-modal flex max-h-[min(40rem,var(--kb-popper-content-available-height,80dvh))] max-w-[calc(100vw-1rem)] flex-col rounded-2xl p-0 overflow-hidden outline-none"
+          classList={{
+            'w-[360px]': nav.page() === 'card',
+            'w-[400px]': nav.page() !== 'card',
+          }}
           style={{
             'box-shadow':
               'inset 0 0 0 1px var(--color-edge-muted), 0 16px 40px #00000040',
@@ -64,13 +68,11 @@ export function DesktopModelSelector() {
           <Show
             when={nav.page() === 'card'}
             fallback={
-              <div class="flex max-h-[min(40rem,var(--kb-popper-content-available-height))] flex-col">
-                <ModelSelectionList
-                  navigation={nav}
-                  onPick={backToCard}
-                  onBack={goBack}
-                />
-              </div>
+              <ModelSelectionList
+                navigation={nav}
+                onPick={backToCard}
+                onBack={goBack}
+              />
             }
           >
             <ModelSelectorCard onSelect={() => nav.setPage('list')} />

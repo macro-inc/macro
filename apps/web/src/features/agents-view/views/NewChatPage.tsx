@@ -596,6 +596,7 @@ export function NewChatPage(props: {
         loading: props.rosterLoading,
         effort: effort(),
         effortValue: effortOverride()?.value,
+        defaultEffortValue: effort()?.currentValue,
         speeds: speedOption()?.option.options.map((option) => option.value),
         speedValue: speedOverride()?.value,
         suggestedHarness: macro()?.harness ?? selected()?.harness,

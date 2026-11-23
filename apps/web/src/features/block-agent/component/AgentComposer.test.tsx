@@ -1,9 +1,11 @@
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
+import type { DiscoverAgentCapabilitiesRequest } from '@service-agent-harness/generated/schemas';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal, mergeProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
+import type { SelectSessionConfigOption } from '../state/session-config';
 import type { AgentInputProps } from '../ui/AgentInput';
 import type { QueuedPromptsProps } from '../ui/QueuedPrompts';
 import { AgentComposer } from './AgentComposer';
@@ -38,6 +40,10 @@ const mocks = vi.hoisted(() => ({
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
   model: undefined as UnifiedModelSelectorState | undefined,
+  capabilityTarget: undefined as
+    | (() => DiscoverAgentCapabilitiesRequest | undefined)
+    | undefined,
+  capabilities: () => ({ configOptions: [] as SelectSessionConfigOption[] }),
   queued: undefined as QueuedPromptsProps | undefined,
 }));
 
@@ -54,6 +60,21 @@ vi.mock('@channel/Input', () => ({
 }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
+vi.mock('@queries/agents/capabilities', () => ({
+  useAgentCapabilitiesQuery: (
+    target: () => DiscoverAgentCapabilitiesRequest | undefined
+  ) => {
+    mocks.capabilityTarget = target;
+    return {
+      get isSuccess() {
+        return target() !== undefined;
+      },
+      get data() {
+        return mocks.capabilities();
+      },
+    };
+  },
+}));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     session: () => mocks.session(),
@@ -107,6 +128,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   mocks.turn = () => 'idle';
   mocks.metadata = () => undefined;
+  mocks.capabilityTarget = undefined;
+  mocks.capabilities = () => ({ configOptions: [] });
   mocks.session = () => ({ canEdit: false });
   mocks.issue.mockResolvedValue({ isErr: () => false });
   setPreferredSpeed('priority');
@@ -119,6 +142,37 @@ it('passes opening context to the composer without issuing it', () => {
   expect(mocks.issue).not.toHaveBeenCalled();
 });
 
+it('keeps the advertised default separate from confirmed session effort and scopes it to the model', () => {
+  const effort: SelectSessionConfigOption = {
+    id: 'opaque-effort',
+    name: 'Thinking',
+    description: null,
+    category: 'thought_level',
+    type: 'select',
+    currentValue: 'high',
+    options: [
+      { value: 'low', name: 'Low', description: null, group: null },
+      { value: 'high', name: 'High', description: null, group: null },
+    ],
+  };
+  const [model, setModel] = createSignal('gpt-6.1-sol');
+  mocks.session = () => ({ canEdit: true, harness: 'in-memory' });
+  mocks.metadata = () => ({ model: model(), configOptions: [effort] });
+  mocks.capabilities = () => ({
+    configOptions: [{ ...effort, currentValue: 'low' }],
+  });
+  render(() => <AgentComposer />);
+  expect(mocks.model?.effort?.currentValue).toBe('high');
+  expect(mocks.model?.defaultEffortValue).toBe('low');
+  expect(mocks.capabilityTarget?.()).toEqual({
+    harness: 'in-memory',
+    model: 'gpt-6.1-sol',
+  });
+  setModel('gpt-6-astra');
+  expect(mocks.capabilityTarget?.()?.model).toBe('gpt-6-astra');
+  mocks.session = () => ({ canEdit: true, harness: 'macrod' });
+  expect(mocks.capabilityTarget?.()).toBeUndefined();
+});
 describe('view-only session controls', () => {
   it('disables and guards prompt, model, stop, queue, and attachment actions', async () => {
     render(() => <AgentComposer />);
