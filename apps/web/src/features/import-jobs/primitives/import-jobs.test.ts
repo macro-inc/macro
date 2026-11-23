@@ -136,7 +136,7 @@ it('keeps an import that finished with failures until it is dismissed', () => {
   }));
   vi.advanceTimersByTime(60_000);
   expect(jobs().map((job) => job.phase)).toEqual([
-    { kind: 'completed', partial: true },
+    { kind: 'completed', outcome: { kind: 'some', problems: null } },
     // An unknown kind still lists, read as Macro's side.
     { kind: 'failed', errorKind: 'internal' },
   ]);
@@ -190,7 +190,7 @@ it('keeps a partly failed import listed however old, until dismissed', () => {
   }));
   // Ten days after it finished.
   expect(jobs().map((job) => job.phase)).toEqual([
-    { kind: 'completed', partial: true },
+    { kind: 'completed', outcome: { kind: 'some', problems: null } },
   ]);
   dispose();
 });

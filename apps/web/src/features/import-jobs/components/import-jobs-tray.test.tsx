@@ -107,6 +107,33 @@ describe('a failed import offers what to do next', () => {
   });
 });
 
+describe('finished import labels', () => {
+  it('says what a finished import wrote', () => {
+    for (const [outcome, label] of [
+      [{ kind: 'all' }, 'Imported'],
+      [{ kind: 'nothing' }, 'Nothing imported'],
+      [{ kind: 'some', problems: 1 }, 'Imported with 1 problem'],
+      [{ kind: 'some', problems: 3 }, 'Imported with 3 problems'],
+      [{ kind: 'some', problems: null }, 'Imported with some problems'],
+    ] as const) {
+      cleanup();
+      tray([
+        {
+          key: 'notion:completed:1',
+          source: 'notion',
+          phase: { kind: 'completed', outcome },
+          sessionId: undefined,
+          dismissable: true,
+        },
+      ]);
+      const row = screen.getByRole('listitem', { name: 'Notion' });
+      expect(
+        row.querySelector('[data-slot="item-description"]')?.textContent
+      ).toBe(label);
+    }
+  });
+});
+
 describe('failed import labels', () => {
   it('stay short enough for two lines beside the row actions', () => {
     for (const errorKind of [

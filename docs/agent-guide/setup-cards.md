@@ -72,7 +72,7 @@ Notion access lost`) or `Import cancelled`. **Open the <Source> import** opens t
 session presenting the review, once one does; Slack rows have no session.
 A failed row offers **Reconnect <Source>** when the connection was revoked,
 expired or unusable, and **View details** (its review) otherwise; a partly
-failed import reads `Imported with some failures`. A finished or cancelled
+failed import reads `Imported with N problems` (`Imported with some problems` until its report counts them), and one that wrote nothing reads `Nothing imported`. A finished or cancelled
 run leaves after about five seconds; a failed one stays until **Dismiss the
 <Source> import** or a week; a partly failed one stays until dismissed; a
 plan waiting for approval stays for an hour after its last change.

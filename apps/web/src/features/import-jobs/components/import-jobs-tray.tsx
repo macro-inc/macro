@@ -52,8 +52,17 @@ function phaseLabel(source: ImportSource, phase: ImportJobPhase): string {
     .with({ kind: 'importingChannels' }, ({ channels }) =>
       t('importJobs.importingChannels', { count: channels })
     )
-    .with({ kind: 'completed' }, ({ partial }) =>
-      partial ? t('importJobs.completedPartly') : t('importJobs.completed')
+    .with({ kind: 'completed' }, ({ outcome }) =>
+      match(outcome)
+        .with({ kind: 'all' }, () => t('importJobs.completed'))
+        .with({ kind: 'nothing' }, () => t('importJobs.completedNothing'))
+        .with({ kind: 'some', problems: null }, () =>
+          t('importJobs.completedPartly')
+        )
+        .with({ kind: 'some' }, ({ problems }) =>
+          t('importJobs.completedWithProblems', { count: problems ?? 0 })
+        )
+        .exhaustive()
     )
     .with({ kind: 'failed' }, ({ errorKind }) => failedLabel(source, errorKind))
     .with({ kind: 'cancelled' }, () => t('importJobs.cancelled'))

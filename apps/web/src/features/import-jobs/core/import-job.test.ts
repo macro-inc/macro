@@ -73,7 +73,7 @@ describe('importJob', () => {
       },
       { report: undefined, slackChannelsImporting: 0 }
     );
-    expect(done.phase).toEqual({ kind: 'completed', partial: false });
+    expect(done.phase).toEqual({ kind: 'completed', outcome: { kind: 'all' } });
     expect(done.dismissable).toBe(true);
   });
 
@@ -149,5 +149,54 @@ describe('visibleImportRuns', () => {
     );
 
     expect(visible.map((run) => run.source)).toEqual(['jira', 'notion']);
+  });
+});
+
+describe('a finished import', () => {
+  const finished = (report: NotionImportReport | undefined) =>
+    importJob(
+      {
+        source: 'notion',
+        status: 'completed',
+        error:
+          '2 objects could not be fully imported. See the report for details.',
+        updated_at: '2026-11-06T12:00:00Z',
+      },
+      { report, slackChannelsImporting: 0 }
+    ).phase;
+  const failure = (title: string) => ({
+    importId: title,
+    title,
+    kind: 'page' as const,
+    reason: "Notion couldn't be reached.",
+  });
+
+  it('that wrote nothing says so', () => {
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 0,
+        failures: [failure('Roadmap'), failure('Spec')],
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'nothing' } });
+  });
+
+  it('that wrote some counts its problems', () => {
+    expect(
+      finished({
+        ...WRITING,
+        status: 'completed',
+        imported: 3,
+        failures: [failure('Roadmap'), failure('Spec')],
+      })
+    ).toEqual({ kind: 'completed', outcome: { kind: 'some', problems: 2 } });
+  });
+
+  it('with problems but no report yet does not count them', () => {
+    expect(finished(undefined)).toEqual({
+      kind: 'completed',
+      outcome: { kind: 'some', problems: null },
+    });
   });
 });

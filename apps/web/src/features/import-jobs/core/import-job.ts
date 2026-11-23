@@ -18,11 +18,19 @@ export type ImportJobPhase =
   | { kind: 'choosingChannels' }
   | { kind: 'importing'; done: number; total: number }
   | { kind: 'importingChannels'; channels: number }
-  /** `partial` when some objects could not be imported. */
-  | { kind: 'completed'; partial: boolean }
+  | { kind: 'completed'; outcome: CompletedOutcome }
   /** `errorKind` says why, when the server recorded it. */
   | { kind: 'failed'; errorKind: RunErrorKind | null }
   | { kind: 'cancelled' };
+
+/**
+ * What a finished run wrote: everything, nothing, or some of it with
+ * `problems` objects it could not import (`null` until its report says).
+ */
+export type CompletedOutcome =
+  | { kind: 'all' }
+  | { kind: 'nothing' }
+  | { kind: 'some'; problems: number | null };
 
 /** How long a run waiting on the owner (a plan to approve) stays listed. */
 export const RECENT_MS = 60 * 60 * 1000;
@@ -150,7 +158,7 @@ export function importJobPhase(
     })
     .with('completed', () => ({
       kind: 'completed',
-      partial: Boolean(run.error),
+      outcome: completedOutcome(run, report),
     }))
     .with('failed', () => ({
       kind: 'failed',
@@ -158,6 +166,16 @@ export function importJobPhase(
     }))
     .with('dismissed', () => ({ kind: 'cancelled' }))
     .exhaustive();
+}
+
+function completedOutcome(
+  run: ImportRun,
+  report: NotionImportReport | undefined
+): CompletedOutcome {
+  const problems = report?.failures?.length ?? 0;
+  if (!run.error && problems === 0) return { kind: 'all' };
+  if (report?.imported === 0) return { kind: 'nothing' };
+  return { kind: 'some', problems: problems > 0 ? problems : null };
 }
 
 /** Completed fraction for a determinate phase, or null when unmeasured. */

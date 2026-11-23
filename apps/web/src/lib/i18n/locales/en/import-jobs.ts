@@ -30,7 +30,12 @@ export default {
     other: 'Importing {{count}} channels',
   },
   completed: 'Imported',
-  completedPartly: 'Imported with some failures',
+  completedPartly: 'Imported with some problems',
+  completedNothing: 'Nothing imported',
+  completedWithProblems: {
+    one: 'Imported with {{count}} problem',
+    other: 'Imported with {{count}} problems',
+  },
   reconnect: 'Reconnect {{source}}',
   viewDetails: 'View details',
   reconnected: '{{source}} is reconnected',
