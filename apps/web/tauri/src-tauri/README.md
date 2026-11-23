@@ -758,6 +758,26 @@ exist. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
+Promotion waits for the `QA macOS release app` job: it mounts the notarized DMG
+the release built, checks it against the build's `macro-dmg-SHA256SUMS` and its
+stapled Gatekeeper verdict, and launches the app from it on the macOS runner's
+GUI session with the smoke suite of `apps/web/tests/macos/qa.mjs` (window,
+screenshot, soak, crash report, clean quit, app log). A launch that shows no
+window or screenshot is retried once; a crash, crash report, panic or a second
+failed launch fails the job, so `desktop-stable` and its download links keep the
+previous version, and `Alert native build failures` says so in its post. The
+versioned release still gets the installers `publish-installers` attaches, but
+not the update signatures `publish-release` makes, so `Desktop Release Watch`
+reports those missing 4 hours later unless a re-run has promoted the release.
+The release app embeds the production PostHog key, so the job blocks the
+analytics proxy host (read from `src/lib/analytics/analytics.ts`) in
+`/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
+`summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
+`qa-macos` reruns, then `publish-release` promotes. `Desktop QA macOS` (workflow
+dispatch, any ref) runs the same harness on an unsigned build; its `full` suite
+adds the src-tauri `cargo test`, linked with the DMG build's Apple linker
+(`.#tauri-desktop-apple-linker`) because Nix's cctools `ld` crashes on it.
+
 Public download links never name a version. While `desktop-stable` serves a
 release's `latest.json`, the next step of the same job copies that release's
 installers onto `desktop-stable` as `Macro-macos-arm64.dmg` and

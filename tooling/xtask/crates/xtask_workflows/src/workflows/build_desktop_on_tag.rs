@@ -3,7 +3,8 @@
 //! dispatch. Generated into `build_desktop_on_tag.yml`.
 //!
 //! The reusable job definitions live in [`super::build_appimage_on_tag`] and
-//! [`super::build_dmg_on_tag`].
+//! [`super::build_dmg_on_tag`]. The macOS release QA job comes from
+//! [`super::desktop_qa_macos`]; promotion to `desktop-stable` waits for it.
 
 use gh_workflow::expr::typed::{
     Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, github, input,
@@ -13,7 +14,7 @@ use gh_workflow::{
     WorkflowInput,
 };
 
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
+use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, desktop_qa_macos, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -44,6 +45,11 @@ const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
         git_ref: StepOutput::new("resolve", "ref"),
     },
 );
+
+/// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`). The publish jobs
+/// attach every artifact they download to the release, so they download only
+/// these, never the QA results.
+const BUILD_ARTIFACT_PATTERN: &str = "macro-*";
 
 /// The job that attaches the installers to the release.
 const PUBLISH_INSTALLERS: JobHandle<()> = JobHandle::new("publish-installers", ());
@@ -85,17 +91,27 @@ pub fn build_desktop_on_tag() -> Workflow {
             build_appimage_on_tag::publish_job(
                 resolved_ref(),
                 xtask_paths::runtime_path!("release-artifacts/*"),
+                Some(BUILD_ARTIFACT_PATTERN),
             )
             .name("Publish desktop installers")
             .add_needs(RESOLVE_REF)
             .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
             .add_needs(build_dmg_on_tag::BUILD_DMG),
         )
+        // The signed DMG must launch and pass QA before any installed app is
+        // offered it. Installers still reach the versioned release without it.
+        .add_job(
+            desktop_qa_macos::QA_RELEASE,
+            desktop_qa_macos::qa_release_job(resolved_ref())
+                .add_needs(RESOLVE_REF)
+                .add_needs(build_dmg_on_tag::BUILD_DMG),
+        )
         .add_job(
             "publish-release",
             publish_desktop_job()
                 .add_needs(RESOLVE_REF)
-                .add_needs(PUBLISH_INSTALLERS),
+                .add_needs(PUBLISH_INSTALLERS)
+                .add_needs(desktop_qa_macos::QA_RELEASE),
         )
 }
 
@@ -116,9 +132,10 @@ fn publish_desktop_job() -> Job {
         .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::setup_nix())
         .add_step(steps::derive_artifact_metadata(resolved_ref()))
-        .add_step(steps::download_artifacts(xtask_paths::runtime_path!(
-            "release-artifacts"
-        )))
+        .add_step(steps::download_artifacts(
+            xtask_paths::runtime_path!("release-artifacts"),
+            Some(BUILD_ARTIFACT_PATTERN),
+        ))
         .add_step(
             Step::new("Sign updater artifacts")
                 .run(include_str!("scripts/sign_desktop_updates.sh"))
