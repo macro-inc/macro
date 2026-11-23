@@ -40,6 +40,7 @@ CHANNELS_E2E_STACK_URL=https://localhost:22609 \
 | `CHANNELS_E2E_RUN_DIR` | Where the run keeps its sign-ins, the long history it made, its report and traces. Default `.run` here. Give two runs at once a directory each. |
 | `CHANNELS_E2E_PEOPLE` | Email addresses, comma separated, four for each worker (owner, two teammates, an outsider), for a stack seeded with others. They must carry the display names the scenario gives (Ada Owner, Ben Member, Cy Teammate, Dee Outsider), which the tests look for on screen. |
 | `CHANNELS_E2E_WORKERS` | Parallel workers, default 4. The seed scenario has people for six. |
+| `CHANNELS_E2E_KEEP_NOTIFICATIONS` | Set, global setup leaves the people's notifications as earlier runs left them; by default it removes them, so a run does not carry the load of the runs before it. |
 | `CHANNELS_E2E_FIRST_CAST` | The first worker's people, counted from 0 (default). A second run at the same time on the same stack needs people of its own: give it the number of workers the first run has. |
 | `CHANNELS_E2E_VIDEO` | Set to record a video of every test. |
 | `VITE_ENABLE_CHANNEL_LOCAL_SYNC` | Set to `true` when the app under test was built with it, as CI does for both the build and the run: only that build keeps channels on the device, and a known defect can be marked for one build alone. |

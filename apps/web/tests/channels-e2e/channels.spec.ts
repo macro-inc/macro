@@ -17,7 +17,7 @@ import {
   sidebarSectionOf,
   systemLine,
 } from './harness/management';
-import { channelListRead, holdChannelList } from './harness/network';
+import { holdChannelList } from './harness/network';
 
 // If this fails, a person cannot start a private channel: it does not open,
 // is missing from their list, or will not take its first message.
@@ -121,13 +121,10 @@ test('CHN-03 renaming a channel updates its header and list row, and tells both 
   const renamed = unique('renamed');
 
   const view = new ChannelView(page, channel.id);
-  const listed = channelListRead(page);
   await view.open();
   const benPage = await pageFor('ben');
   const benView = new ChannelView(benPage, channel.id);
   await benView.open();
-  // A rename saved while the list is still being read is CHN-16's.
-  await listed;
 
   await chooseChannelAction(page, 'Rename');
   const dialog = page.getByRole('dialog', { name: 'Rename item' });
@@ -156,10 +153,6 @@ test('CHN-04 a rename shows in the header of a member who has the channel open',
   people,
   pageFor,
 }) => {
-  // Known defect on main: the other member's list row and the system line
-  // change at once, but the header and the composer's placeholder keep the
-  // old name until the page is reloaded.
-  knownDefect('both');
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['before the rename']);
   const renamed = unique('renamed');
@@ -467,7 +460,6 @@ test('CHN-16 a rename saved while the list of channels is still being read shows
   ada,
   people,
 }) => {
-  knownDefect('both');
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['before the rename']);
   const renamed = unique('renamed');

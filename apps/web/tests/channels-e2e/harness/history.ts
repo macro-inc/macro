@@ -150,6 +150,8 @@ export async function clearFavoriteChannels(ofCast: number): Promise<void> {
  * for days held 20,000 and its pages were minutes behind on their writes.
  */
 export async function clearNotifications(ofCast: number): Promise<void> {
+  // Kept to study a stack as its runs have left it.
+  if (process.env.CHANNELS_E2E_KEEP_NOTIFICATIONS) return;
   await Promise.all(
     PERSON_KEYS.map(async (key) => {
       const http = await apiFor(key, ofCast);

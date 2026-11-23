@@ -209,33 +209,10 @@ export async function loseWriteAnswers(
   return () => context.unroute(SERVICES, handler);
 }
 
-/** The requests a page reads its list of channels with, a hundred to a page. */
-const CHANNEL_LIST = '**/dss/comms/channels?**';
-
-/**
- * Resolves when the page has read its whole list of channels. Start it before
- * the page opens. A person with thousands of channels reads the list for
- * seconds, and a rename saved meanwhile never shows in the header (CHN-16);
- * a cast that has run the suite some forty times is such a person.
- */
-export function channelListRead(page: Page): Promise<void> {
-  return page
-    .waitForResponse(
-      async (response) => {
-        if (!response.url().includes('/dss/comms/channels?')) return false;
-        if (!response.ok()) return false;
-        try {
-          const body: { next_cursor?: string | null } = await response.json();
-          return !body.next_cursor;
-        } catch {
-          // the page moved on before the answer could be read
-          return false;
-        }
-      },
-      { timeout: 120_000 }
-    )
-    .then(() => undefined);
-}
+/** Where a page asks for its list of channels, among much else. */
+const GRAPHQL = '**/dss/items/soup/graphql';
+/** The read a page fills its list of channels with, page after page. */
+const CHANNEL_LIST_READ = 'SoupChannelDirectoryBackfill';
 
 /**
  * Holds back the answers to the page's reading of its list of channels: the
@@ -247,8 +224,15 @@ export async function holdChannelList(
 ): Promise<() => Promise<void>> {
   const held: Array<() => void> = [];
   let holding = true;
-  await page.route(CHANNEL_LIST, async (route) => {
+  await page.route(GRAPHQL, async (route) => {
     try {
+      const asked: { operationName?: string } | null = route
+        .request()
+        .postDataJSON();
+      if (asked?.operationName !== CHANNEL_LIST_READ) {
+        await route.fallback();
+        return;
+      }
       const answer = await route.fetch();
       if (holding) await new Promise<void>((letGo) => held.push(letGo));
       await route.fulfill({ response: answer });

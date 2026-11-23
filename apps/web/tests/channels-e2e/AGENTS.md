@@ -100,10 +100,9 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - `blockWrites` and `loseWriteAnswers` match the four message mutations by
   name; a broader match also stops the read-marker writes a page makes.
 - Every run leaves its channels on the stack, and a page reads its whole
-  list of channels, a hundred to a request, after every load: a cast that has
-  run the suite some forty times reads for seconds. A rename saved meanwhile
-  never reaches the header (CHN-16), so a test that renames in the app waits
-  with `channelListRead` first (CHN-03). Check a test that started failing on
+  list of channels after every load (`SoupChannelDirectoryBackfill`, over
+  GraphQL): a cast that has run the suite some forty times reads for seconds.
+  `holdChannelList` makes that last (CHN-16). Check a test that started failing on
   an old stack against a cast that has run little (`CHANNELS_E2E_FIRST_CAST`).
 - Every run also leaves each person some thousands of notifications, and on
   some builds a page read the person's whole feed of them again on every
