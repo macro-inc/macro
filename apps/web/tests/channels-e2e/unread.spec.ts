@@ -357,9 +357,6 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
   ben,
   people,
 }) => {
-  // Product defect: the first message ever posted in a channel puts no
-  // unread mark on the other member's row; the second message does.
-  knownDefect('both');
   const made = await channelsNamed(ada, [people.ben], 'open', 'fresh', 'used');
   await ada.post(made.used, 'earlier');
   await new ChannelView(page, made.open).open();
