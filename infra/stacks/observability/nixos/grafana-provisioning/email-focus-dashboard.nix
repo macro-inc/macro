@@ -141,22 +141,33 @@ let
         }
       )
     ])
-    (timeseries 104 "Classifications and due dates" "Classifier calls and due date asks." "short" [
-      (
-        emailFocus.metric env "ClassifierCalls" "Sum" 300
-        // {
-          id = "calls";
-          refId = "Calls";
-        }
-      )
-      (
-        emailFocus.metric env "DueDateCalls" "Sum" 300
-        // {
-          id = "dues";
-          refId = "Dues";
-        }
-      )
-    ])
+    (timeseries 104 "Classifications and due dates"
+      "Classifier calls, due date asks, and asks whose model answer the harness rejected (it cited text the thread doesn't have, so the thread got no date; not a failure)."
+      "short"
+      [
+        (
+          emailFocus.metric env "ClassifierCalls" "Sum" 300
+          // {
+            id = "calls";
+            refId = "Calls";
+          }
+        )
+        (
+          emailFocus.metric env "DueDateCalls" "Sum" 300
+          // {
+            id = "dues";
+            refId = "Dues";
+          }
+        )
+        (
+          emailFocus.metric env "DueDateRejected" "Sum" 300
+          // {
+            id = "rejected";
+            refId = "Rejected";
+          }
+        )
+      ]
+    )
     (timeseries 105 "Top of tab filled (p95)"
       "From an inbox being found in the rollout to its last 3 days classified."
       "s"

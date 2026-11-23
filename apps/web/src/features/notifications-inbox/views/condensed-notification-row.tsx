@@ -1,6 +1,6 @@
 import { HomeListEntity } from '@app/features/home/components/HomeListEntity';
 import { t } from '@app/lib/i18n';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import type { EntityData, WithNotification } from '@entity';
 import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import CheckIcon from '@icon/system/regular/check.svg';
@@ -22,7 +22,7 @@ export function CondensedNotificationRow(props: {
   onClick: (event: MouseEvent) => void;
   onDone: () => void;
 }) {
-  const channels = useChannelsContext();
+  const directory = useChannelDirectory();
   const entity = createMemo(
     (): WithNotification<EntityData> => ({
       ...rowEntity(props.row),
@@ -31,9 +31,12 @@ export function CondensedNotificationRow(props: {
   );
   const channelName = () => {
     const current = entity();
-    return current.type === 'channel_thread'
-      ? getChannelThreadName(current, channels.channelsById())
-      : undefined;
+    if (current.type !== 'channel_thread') return undefined;
+    const channel = loadedChannel(directory.lookup(current.channelId));
+    return getChannelThreadName(
+      current,
+      channel ? { [channel.id]: channel } : {}
+    );
   };
   return (
     <div

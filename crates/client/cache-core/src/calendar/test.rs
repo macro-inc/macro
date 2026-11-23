@@ -267,20 +267,20 @@ fn gaps_are_the_uncovered_parts_of_the_request() {
 }
 
 #[test]
-fn page_watermarks_lower_each_link_and_adopt_new_links() {
+fn page_watermarks_lower_each_tracked_link() {
     let stored = [link("a", 10), link("b", 5)];
     let merged = apply_watermark_update(
         Some(&stored),
         Some(&CalendarWatermarkUpdate::Merge {
-            links: vec![link("a", 7), link("b", 9), link("c", 3)],
+            links: vec![link("a", 7), link("b", 9)],
         }),
         &[],
     );
-    assert_eq!(merged, [link("a", 7), link("b", 5), link("c", 3)]);
+    assert_eq!(merged, [link("a", 7), link("b", 5)]);
     let again = apply_watermark_update(
         Some(&merged),
         Some(&CalendarWatermarkUpdate::Merge {
-            links: vec![link("a", 7), link("b", 9), link("c", 3)],
+            links: vec![link("a", 7), link("b", 9)],
         }),
         &[],
     );
@@ -288,23 +288,73 @@ fn page_watermarks_lower_each_link_and_adopt_new_links() {
 }
 
 #[test]
+fn a_first_page_adopts_its_links() {
+    assert_eq!(
+        apply_watermark_update(
+            None,
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("a", 4), link("b", 9)],
+            }),
+            &[],
+        ),
+        [link("a", 4), link("b", 9)]
+    );
+}
+
+#[test]
+fn a_page_leaves_a_link_untracked_that_appeared_after_rows_were_cached() {
+    // Rows cached while only `a` was visible hold none of `c`'s changes up
+    // to 30. Adopting 30 would skip them for good; untracked, `c` is left out
+    // of the next delta, and the server resets the cache.
+    let stored = [link("a", 10)];
+    assert_eq!(
+        apply_watermark_update(
+            Some(&stored),
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("a", 12), link("c", 30)],
+            }),
+            &[],
+        ),
+        [link("a", 10)]
+    );
+    // Rows cached while no link was visible at all.
+    assert_eq!(
+        apply_watermark_update(
+            Some(&[]),
+            Some(&CalendarWatermarkUpdate::Merge {
+                links: vec![link("c", 30)],
+            }),
+            &[],
+        ),
+        []
+    );
+}
+
+#[test]
 fn deltas_advance_untouched_links_and_keep_concurrent_lowerings() {
     let since = vec![link("a", 10), link("b", 5)];
-    let to = vec![link("a", 20), link("b", 8), link("c", 4)];
+    let to = vec![link("a", 20), link("b", 8)];
     let advance = CalendarWatermarkUpdate::Advance {
         since: since.clone(),
         to,
     };
     assert_eq!(
         apply_watermark_update(Some(&since), Some(&advance), &[]),
-        [link("a", 20), link("b", 8), link("c", 4)]
+        [link("a", 20), link("b", 8)]
     );
 
     // A page lowered `a` while the delta was in flight: its change is replayed.
     let lowered = [link("a", 3), link("b", 5)];
     assert_eq!(
         apply_watermark_update(Some(&lowered), Some(&advance), &[]),
-        [link("a", 3), link("b", 8), link("c", 4)]
+        [link("a", 3), link("b", 8)]
+    );
+
+    // Another tab's delta removed `b` while this one was in flight and wrote
+    // its rows again: `b` comes back, so the next delta can remove them.
+    assert_eq!(
+        apply_watermark_update(Some(&[link("a", 10)]), Some(&advance), &[]),
+        [link("a", 20), link("b", 8)]
     );
 
     // A delta from an empty watermark bootstraps every link.
@@ -315,6 +365,27 @@ fn deltas_advance_untouched_links_and_keep_concurrent_lowerings() {
     assert_eq!(
         apply_watermark_update(None, Some(&bootstrap), &[]),
         [link("a", 2)]
+    );
+}
+
+#[test]
+fn a_reset_tracks_every_link_of_its_watermark() {
+    // The reset a new link causes must leave nothing untracked, or every
+    // later delta would reset again.
+    let stored = CalendarSyncState {
+        watermark: Some(vec![link("a", 4)]),
+        freshness: CalendarFreshness::Fresh,
+    };
+    let reset = CalendarCommit {
+        reset: true,
+        watermark: Some(CalendarWatermarkUpdate::Merge {
+            links: vec![link("a", 9), link("c", 30)],
+        }),
+        ..CalendarCommit::default()
+    };
+    assert_eq!(
+        next_sync_state(&stored, &reset).watermark,
+        Some(vec![link("a", 9), link("c", 30)])
     );
 }
 

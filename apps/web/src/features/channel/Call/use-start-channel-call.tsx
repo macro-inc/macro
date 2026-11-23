@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import { useChannelTab } from '@channel/Channel/ChannelTabContext';
 import {
+  channelMemberIds,
   useChannel,
   useChannelName,
   useChannelType,
@@ -33,11 +34,12 @@ export function useStartChannelCall(channelId: () => string) {
   const userId = useUserId();
   const participantIds = createMemo(() => {
     const currentUser = userId();
+    const current = channel();
     return [
       ...(currentUser ? [currentUser] : []),
-      ...(channel()?.participants ?? [])
-        .filter((participant) => participant.user_id !== currentUser)
-        .map((participant) => participant.user_id),
+      ...(current ? channelMemberIds(current) : []).filter(
+        (id) => id !== currentUser
+      ),
     ];
   });
   const channelName = useChannelName(channelId());
