@@ -73,6 +73,7 @@ function fakeTimer(running?: RunningTimer) {
     start,
     stop,
     discard: vi.fn(),
+    exclusive: vi.fn(),
   };
   return { timer, start, stop };
 }

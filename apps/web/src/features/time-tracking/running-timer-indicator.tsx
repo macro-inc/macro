@@ -1,4 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
 import { enableTimeTracking } from '@core/constant/featureFlags';
@@ -11,7 +12,7 @@ import { RunningTimerRail as RunningTimerRailView } from './views/running-timer-
 function openTask(taskId: string, newSplit: boolean) {
   const result = openDocument('task', taskId, undefined, newSplit);
   if (result?.status === 'reused' && result.owner !== result.sourceOwner) {
-    toast.alert('Content already open');
+    toast.alert(t('timeTracking.alreadyOpen'));
   }
 }
 

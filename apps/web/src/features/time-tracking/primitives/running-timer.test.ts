@@ -120,6 +120,24 @@ it('starts through the server when online', async () => {
   );
 });
 
+it('refuses a second timer change while one is in flight', async () => {
+  let finish: (value: unknown) => void = () => undefined;
+  query.startTimer.mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    })
+  );
+  const state = mountTimer();
+  const first = state.start({ taskId: 'task-1' });
+  const second = await state.start({ taskId: 'task-2' });
+  expect(second.isErr() && second.error).toMatchObject({ code: 'BUSY' });
+  expect(state.busy()).toBe(true);
+  finish(ok({ kind: 'committed', data: undefined }));
+  await first;
+  expect(state.busy()).toBe(false);
+  expect(query.startTimer).toHaveBeenCalledOnce();
+});
+
 it('re-reads the timer when another session changes it', async () => {
   mountTimer();
   await query.onChange?.({ timer: false, taskId: 'task-1' });

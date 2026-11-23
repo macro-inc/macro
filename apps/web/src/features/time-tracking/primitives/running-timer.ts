@@ -2,6 +2,10 @@ import {
   createBrowserOfflineSignal,
   deviceLooksOffline,
 } from '@core/util/connectivity';
+import type {
+  StartTimerMutation,
+  StopTimerMutation,
+} from '@service-storage/graphql/generated/graphql';
 import type { Client } from '@urql/core';
 import { err } from 'neverthrow';
 import {
@@ -34,6 +38,26 @@ const OFFLINE = {
   message: 'Timer changes need a connection',
 } as const;
 
+const BUSY = {
+  kind: 'refused',
+  code: 'BUSY',
+  message: 'Another timer change is in progress',
+} as const;
+
+type StartArgs = { taskId: string; startedAt?: string };
+type StopArgs = { timerId: string; endedAt?: string; logAll?: boolean };
+
+/** The timer writes, for use inside one exclusive change. */
+export type TimerOps = {
+  start: (
+    args: StartArgs
+  ) => Promise<TimeWriteResult<StartTimerMutation['startTimer']>>;
+  stop: (
+    args: StopArgs
+  ) => Promise<TimeWriteResult<StopTimerMutation['stopTimer']>>;
+  discard: (timerId: string) => Promise<TimeWriteResult<null>>;
+};
+
 /**
  * The person's one running timer, shared by every surface that shows it.
  * Its count runs on this device's clock, corrected by the server's, and
@@ -46,7 +70,12 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     dependencies.client
   );
   const browserOffline = createBrowserOfflineSignal();
-  const offline = () => browserOffline() || deviceLooksOffline();
+  // The browser's events only prompt a fresh look; the native monitor decides
+  // when it knows, as deviceLooksOffline does.
+  const offline = () => {
+    browserOffline();
+    return deviceLooksOffline();
+  };
 
   const [offset, setOffset] = createSignal(0);
   createEffect(
@@ -74,14 +103,24 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     }
   );
 
+  const ops: TimerOps = {
+    start: (args) => startTimer(args, { client: dependencies.client() }),
+    stop: (args) => stopTimer(args, { client: dependencies.client() }),
+    discard: (timerId) =>
+      discardTimer({ timerId }, { client: dependencies.client() }),
+  };
+
+  // One timer change at a time: a second one while another is in flight is
+  // refused, so a double press or a press during Undo sends nothing.
   const [busy, setBusy] = createSignal(false);
-  async function write<T>(
-    run: (client: Client) => Promise<TimeWriteResult<T>>
+  async function exclusive<T>(
+    run: (timerOps: TimerOps) => Promise<TimeWriteResult<T>>
   ): Promise<TimeWriteResult<T>> {
     if (offline()) return err(OFFLINE);
+    if (busy()) return err(BUSY);
     setBusy(true);
     try {
-      return await run(dependencies.client());
+      return await run(ops);
     } finally {
       setBusy(false);
     }
@@ -101,12 +140,12 @@ export function createRunningTimer(dependencies: RunningTimerDependencies) {
     busy,
     /** Timer writes need a connection. */
     offline,
-    start: (args: { taskId: string; startedAt?: string }) =>
-      write((client) => startTimer(args, { client })),
-    stop: (args: { timerId: string; endedAt?: string; logAll?: boolean }) =>
-      write((client) => stopTimer(args, { client })),
+    start: (args: StartArgs) => exclusive((timerOps) => timerOps.start(args)),
+    stop: (args: StopArgs) => exclusive((timerOps) => timerOps.stop(args)),
     discard: (timerId: string) =>
-      write((client) => discardTimer({ timerId }, { client })),
+      exclusive((timerOps) => timerOps.discard(timerId)),
+    /** Several timer changes as one: no other timer change runs between them. */
+    exclusive,
   };
 }
 

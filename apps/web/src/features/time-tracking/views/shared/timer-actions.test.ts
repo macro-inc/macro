@@ -85,7 +85,11 @@ function fakeTimer(running: RunningTimer | undefined) {
     start: vi.fn(),
     stop: vi.fn(),
     discard: vi.fn(),
+    exclusive: vi.fn(),
   } satisfies RunningTimerState;
+  timer.exclusive.mockImplementation((run) =>
+    run({ start: timer.start, stop: timer.stop, discard: timer.discard })
+  );
   return timer;
 }
 
@@ -142,9 +146,96 @@ it('says what a switch saved, and Undo puts the first timer back', async () => {
   await vi.waitFor(() => expect(calls).toHaveLength(3));
   expect(calls).toEqual([
     'discard timer-2',
-    'remove',
     `start task-a ${DESIGN.startedAt}`,
+    'remove',
   ]);
+});
+
+it('keeps the saved entry when Undo cannot start the first timer again', async () => {
+  const timer = fakeTimer(DESIGN);
+  timer.start
+    .mockResolvedValueOnce(
+      ok({
+        kind: 'committed',
+        data: {
+          timeTracking: {
+            id: 'tracking',
+            serverNow: '',
+            runningTimer: WIREFRAMES,
+          },
+          stoppedEntry: SAVED,
+          stoppedTask: null,
+        },
+      })
+    )
+    .mockResolvedValueOnce(
+      err({ kind: 'refused', code: 'OFFLINE', message: 'offline' })
+    );
+  timer.discard.mockResolvedValue(ok({ kind: 'committed', data: null }));
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  mocks.success.mock.calls[0]?.[1].actions[0].onClick();
+  await vi.waitFor(() =>
+    expect(mocks.failure).toHaveBeenCalledWith(
+      'Could not undo. Check the time logged on both tasks.'
+    )
+  );
+  expect(mocks.remove).not.toHaveBeenCalled();
+});
+
+it('names and undoes only the timer the server says it stopped', async () => {
+  const timer = fakeTimer({ ...DESIGN, id: 'timer-seen-here' });
+  timer.start.mockResolvedValue(
+    ok({
+      kind: 'committed',
+      data: {
+        timeTracking: {
+          id: 'tracking',
+          serverNow: '',
+          runningTimer: WIREFRAMES,
+        },
+        stoppedEntry: SAVED,
+        stoppedTask: null,
+      },
+    })
+  );
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(mocks.success).toHaveBeenCalledOnce());
+  expect(mocks.success.mock.calls[0]?.[0]).toBe(
+    'Stopped the timer on Your running timer and logged 1h 12m. Now timing Wireframes.'
+  );
+});
+
+it('resolves a timer past the limit even before this device has read it', async () => {
+  const timer = fakeTimer(undefined);
+  timer.start
+    .mockResolvedValueOnce(
+      err({
+        kind: 'over-limit',
+        timer: {
+          id: DESIGN.id,
+          taskId: DESIGN.taskId,
+          startedAt: DESIGN.startedAt,
+        },
+      })
+    )
+    .mockResolvedValueOnce(ok({ kind: 'committed', data: undefined }));
+  timer.discard.mockResolvedValue(ok({ kind: 'committed', data: null }));
+  mocks.choice = { kind: 'discard' };
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(timer.start).toHaveBeenCalledTimes(2));
+  expect(timer.discard).toHaveBeenCalledWith(DESIGN.id);
+});
+
+it('says nothing about a press while another timer change runs', async () => {
+  const timer = fakeTimer(undefined);
+  timer.start.mockResolvedValue(
+    err({ kind: 'refused', code: 'BUSY', message: 'busy' })
+  );
+  actionsFor(timer).start('task-b');
+  await vi.waitFor(() => expect(timer.start).toHaveBeenCalledOnce());
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(mocks.failure).not.toHaveBeenCalled();
 });
 
 it('confirms a stop with the length and an Edit action', async () => {

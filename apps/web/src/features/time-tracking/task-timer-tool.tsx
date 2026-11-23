@@ -42,7 +42,7 @@ export function useTaskTimerTool(
     icon: Icon,
     action: () => {
       const state = live();
-      if (!state) return;
+      if (!state || state.timer.busy()) return;
       if (timingThis()) state.actions.stop();
       else state.actions.start(taskId());
     },

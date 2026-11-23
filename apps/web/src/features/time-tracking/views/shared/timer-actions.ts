@@ -4,6 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { TimeEntryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { openDialog } from '@ui/components/ImperativeDialog';
+import { err } from 'neverthrow';
 import { EditEntryDialog } from '../../components/edit-entry-dialog';
 import {
   type OverLimitChoice,
@@ -27,7 +28,9 @@ function runningTaskName(timer: RunningTimer): string {
   return taskName(timer.task?.name);
 }
 
-function failureMessage(error: TimeWriteError): string {
+/** What to say about a refused timer change; nothing for a press while another runs. */
+function failureMessage(error: TimeWriteError): string | undefined {
+  if (error.kind === 'refused' && error.code === 'BUSY') return undefined;
   if (error.kind === 'refused' && error.code === 'OFFLINE') {
     return t('timeTracking.timerOffline');
   }
@@ -64,6 +67,15 @@ function chooseOverLimit(
 export function createTimerActions(capabilities: TimeTrackingCapabilities) {
   const { runningTimer } = capabilities;
   const writes = createTimeEntryWrites(capabilities);
+  const fail = (error: TimeWriteError) => {
+    const message = failureMessage(error);
+    if (message) toast.failure(message);
+  };
+  /** The running timer's task name, when it is the timer the server named. */
+  const nameOf = (timerId: string, local: RunningTimer | undefined) =>
+    local?.id === timerId
+      ? runningTaskName(local)
+      : t('timeTracking.yourRunningTimer');
 
   const showLogged = (entry: TimeEntryFieldsFragment, name: string) => {
     toast.success(
@@ -100,7 +112,7 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
     if (!choice) return false;
     if (choice.kind === 'discard') {
       const discarded = await runningTimer.discard(timer.id);
-      if (discarded.isErr()) toast.failure(failureMessage(discarded.error));
+      if (discarded.isErr()) fail(discarded.error);
       return discarded.isOk();
     }
     const stopped = await runningTimer.stop(
@@ -109,7 +121,7 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
         : { timerId: timer.id, endedAt: choice.endedAt }
     );
     if (stopped.isErr()) {
-      toast.failure(failureMessage(stopped.error));
+      fail(stopped.error);
       return false;
     }
     const entry =
@@ -118,20 +130,29 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
     return true;
   }
 
+  /**
+   * Undo a switch from what the server says it stopped: discard the new
+   * timer, start the stopped one again at its own start, and only then delete
+   * the entry it saved, so a failed step never loses the time. No other timer
+   * change runs in between.
+   */
   async function undoSwitch(
-    previous: RunningTimer,
-    entry: TimeEntryFieldsFragment,
+    stopped: TimeEntryFieldsFragment,
     newTimerId: string
   ) {
-    const discarded = await runningTimer.discard(newTimerId);
-    if (discarded.isErr()) return toast.failure(t('timeTracking.undoFailed'));
-    const removed = await writes.remove(entry);
-    if (removed.isErr()) return toast.failure(t('timeTracking.undoFailed'));
-    const restarted = await runningTimer.start({
-      taskId: previous.taskId,
-      startedAt: previous.startedAt,
+    const startedAt = stopped.startedAt;
+    if (!startedAt) return toast.failure(t('timeTracking.undoFailed'));
+    const undone = await runningTimer.exclusive(async (timerOps) => {
+      const discarded = await timerOps.discard(newTimerId);
+      if (discarded.isErr()) return err(discarded.error);
+      const restarted = await timerOps.start({
+        taskId: stopped.taskId,
+        startedAt,
+      });
+      if (restarted.isErr()) return err(restarted.error);
+      return writes.remove(stopped);
     });
-    if (restarted.isErr()) toast.failure(t('timeTracking.undoFailed'));
+    if (undone.isErr()) toast.failure(t('timeTracking.undoFailed'));
   }
 
   async function start(taskId: string): Promise<void> {
@@ -142,25 +163,27 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       const previous = runningTimer.timer();
       const started = await runningTimer.start({ taskId });
       if (started.isErr()) {
-        if (started.error.kind === 'over-limit' && previous) {
+        if (started.error.kind === 'over-limit') {
           const resolved = await resolveOverLimit(
             started.error.timer,
-            runningTaskName(previous)
+            nameOf(started.error.timer.id, previous)
           );
           if (resolved) await start(taskId);
           return;
         }
-        toast.failure(failureMessage(started.error));
+        fail(started.error);
         return;
       }
       const data =
         started.value.kind === 'committed' ? started.value.data : undefined;
       const stoppedEntry = data?.stoppedEntry;
       const newTimer = data?.timeTracking.runningTimer;
-      if (!stoppedEntry || !previous || !newTimer) return;
+      if (!stoppedEntry || !newTimer) return;
+      // A saved timer entry keeps its timer's id: name the task only when it
+      // is the timer this device saw running.
       toast.success(
         t('timeTracking.switched', {
-          previous: runningTaskName(previous),
+          previous: nameOf(stoppedEntry.id, previous),
           length: formatLength(stoppedEntry.minutes),
           task: runningTaskName(newTimer),
         }),
@@ -171,7 +194,7 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
               label: t('timeTracking.undo'),
               onClick: () =>
                 fireAndForget(
-                  undoSwitch(previous, stoppedEntry, newTimer.id),
+                  undoSwitch(stoppedEntry, newTimer.id),
                   'time-tracking-undo'
                 ),
             },
@@ -194,10 +217,13 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
       const stopped = await runningTimer.stop({ timerId: timer.id });
       if (stopped.isErr()) {
         if (stopped.error.kind === 'over-limit') {
-          await resolveOverLimit(stopped.error.timer, name);
+          await resolveOverLimit(
+            stopped.error.timer,
+            nameOf(stopped.error.timer.id, timer)
+          );
           return;
         }
-        toast.failure(failureMessage(stopped.error));
+        fail(stopped.error);
         return;
       }
       const entry =
@@ -213,7 +239,7 @@ export function createTimerActions(capabilities: TimeTrackingCapabilities) {
     const timer = runningTimer.timer();
     if (!timer) return;
     const discarded = await runningTimer.discard(timer.id);
-    if (discarded.isErr()) toast.failure(failureMessage(discarded.error));
+    if (discarded.isErr()) fail(discarded.error);
   }
 
   return {

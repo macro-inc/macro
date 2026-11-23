@@ -76,10 +76,13 @@ export function OverLimitDialog(props: OverLimitDialogProps): JSX.Element {
     )
   );
   const stoppedMs = () => new Date(stoppedAt()).getTime();
+  // An entry is at most 24 hours, so a stated stop is too.
+  const latestStopMs = () =>
+    Math.min(props.nowMs, startMs() + MAX_ENTRY_MINUTES * MINUTE_MS);
   const stoppedValid = () =>
     !Number.isNaN(stoppedMs()) &&
     stoppedMs() > startMs() &&
-    stoppedMs() <= props.nowMs;
+    stoppedMs() <= latestStopMs();
   const stoppedHint = () => {
     if (!stoppedValid()) return '';
     const moment = new Date(stoppedMs());
@@ -109,7 +112,7 @@ export function OverLimitDialog(props: OverLimitDialogProps): JSX.Element {
             class="rounded-md border border-edge-muted bg-transparent px-2 py-1.5 text-sm text-ink"
             value={stoppedAt()}
             min={format(startMs(), LOCAL_INPUT)}
-            max={format(props.nowMs, LOCAL_INPUT)}
+            max={format(latestStopMs(), LOCAL_INPUT)}
             onInput={(event) => setStoppedAt(event.currentTarget.value)}
           />
         </label>

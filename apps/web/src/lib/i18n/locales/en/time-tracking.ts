@@ -49,6 +49,8 @@ export default {
   timerRunningSince: 'Timer running since {{time}}',
   timerOn: 'Timer on {{task}}',
   untitledTask: 'Untitled task',
+  yourRunningTimer: 'Your running timer',
+  alreadyOpen: 'Content already open',
   logged: 'Logged {{length}} on {{task}}',
   edit: 'Edit',
   switched:
