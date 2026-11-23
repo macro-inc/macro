@@ -106,17 +106,19 @@ export function AgentComposer(props: {
 
   const [configuring, setConfiguring] = createSignal(false);
   const chooseModel = async (model: string, selection?: EffortSelection) => {
-    if (readOnly() || configuring()) return;
+    if (readOnly() || configuring()) return false;
     setConfiguring(true);
     try {
       await selectModel(model, selection);
       if (!selection) setPreferredSpeed('standard');
+      return true;
     } catch (error) {
       toast.failure(
         error instanceof Error
           ? error.message
           : 'The model settings could not be changed'
       );
+      return false;
     } finally {
       setConfiguring(false);
     }
@@ -396,8 +398,7 @@ export function AgentComposer(props: {
                 pending() ||
                 configuring() ||
                 changingEffort() !== undefined,
-              onModel: (model) =>
-                fireAndForget(chooseModel(model), 'agent-composer'),
+              onModel: chooseModel,
               onEffort: (choice) => {
                 if (
                   changingModel(messages(), metadata()?.model ?? null) !==
@@ -405,8 +406,7 @@ export function AgentComposer(props: {
                 )
                   return;
                 const model = metadata()?.model;
-                if (model)
-                  fireAndForget(chooseModel(model, choice), 'agent-composer');
+                if (model) return chooseModel(model, choice);
               },
               onSpeed: setPreferredSpeed,
               onCloseAutoFocus: restoreInputFocus,

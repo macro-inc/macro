@@ -23,6 +23,10 @@ export function createModelSelectorNavigation(
     setQuery: (query: string) => setState('query', query),
     setPage: (page: ModelSelectorPage) => setState({ page, query: '' }),
     changeOpen,
+    escape: () =>
+      state.page === 'card'
+        ? changeOpen(false)
+        : setState({ page: 'card', query: '' }),
     back: () =>
       setState({ page: state.page === 'list' ? 'card' : 'list', query: '' }),
   };

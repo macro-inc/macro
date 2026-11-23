@@ -638,7 +638,7 @@ the shimmer.
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
   The unified trigger shows its provider or agent icon and name, the available Thinking level, and an accent speed glyph for Fast or Ultrafast. Routine configuration retains its model override label.
-- Tap the model trigger to open a card 6px above it. Tap the name to reach search, recent agent bubbles, Auto, Recent models, and More models. Before any model picks, Suggested shows the runtime's frontier list. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet, including Suggested models. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns one page, then dismisses the card. On desktop, picking returns to the card; on phone it closes the sheet. A custom agent keeps a name-only card and its model overrides remain available in the selection list.
+- Tap the model trigger to open a card 6px above it. Tap the name to reach search, recent agent bubbles, Auto, Recent models, and More models. Before any model picks, Suggested shows the runtime's frontier list. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet, including Suggested models. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns directly to the card, then dismisses it. On desktop, picking returns to the card; on phone it closes the sheet. A custom agent keeps a name-only card and its model overrides remain available in the selection list.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
   Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
@@ -667,7 +667,7 @@ the shimmer.
   default and clears a previous model override. A selected multi-model agent
   retains a Model group in the selection list for one-shot overrides.
   A check identifies the selected model, including a configured default.
-  Escape returns one selection page, then dismisses the card.
+  Escape returns directly to the card, then dismisses it.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Machines.
   An unavailable paired machine retains its connection action and Offline badge.
   The same badge appears in the `@` menu, where offline agents cannot be mentioned at all

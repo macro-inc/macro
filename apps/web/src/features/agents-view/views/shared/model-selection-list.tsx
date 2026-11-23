@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { matchesModelQuery } from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretRight from '@icon/system/regular/caret-right.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -92,7 +93,11 @@ export function ModelSelectionList(props: {
   };
   const pickModel = (id: string, override = false) => {
     if (state.disabled || (!override && state.suggestedDisabled)) return;
-    (override ? state.onModel : (state.onSuggestedModel ?? state.onModel))(id);
+    const result = (
+      override ? state.onModel : (state.onSuggestedModel ?? state.onModel)
+    )(id);
+    if (result instanceof Promise)
+      fireAndForget(result, 'agents.model-selector');
     props.onPick();
   };
   const pickAgent = (agent: RosterAgent) => {
@@ -100,7 +105,11 @@ export function ModelSelectionList(props: {
     if (agent.unavailableReason) {
       if (!agent.connectLabel) return;
       state.onConnect?.(agent);
-    } else state.onAgent?.(agent);
+    } else {
+      const result = state.onAgent?.(agent);
+      if (result instanceof Promise)
+        fireAndForget(result, 'agents.model-selector');
+    }
     props.onPick();
   };
   const focusRow = (last = false) => {

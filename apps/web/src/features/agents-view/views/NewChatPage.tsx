@@ -139,10 +139,10 @@ export function NewChatPage(props: {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
   const { openSettings } = useSettingsState();
-  const recentAgents = createRecentAgentSelections(userId());
+  const recentAgents = createMemo(() => createRecentAgentSelections(userId()));
   const repositories = createRecentRepositories(userId());
-  const preferredInmem = createPreferredInmemModel(userId());
-  const preferredEffort = createPreferredEffort(userId());
+  const preferredInmem = createMemo(() => createPreferredInmemModel(userId()));
+  const preferredEffort = createMemo(() => createPreferredEffort(userId()));
   const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
@@ -196,7 +196,7 @@ export function NewChatPage(props: {
     // Falling back to Macro before availability is known would open the
     // compact composer, then swap to the last agent's layout once it settles.
     const settling = props.rosterLoading || props.availabilityLoading;
-    const recent = recentAgents
+    const recent = recentAgents()
       .ids()
       .find((id) =>
         options.some(
@@ -221,7 +221,7 @@ export function NewChatPage(props: {
     const preferred =
       modelOverride() ??
       (agent.id === MACRO_PERSONA_ID
-        ? preferredInmem.model()
+        ? preferredInmem().model()
         : agent.defaultModel);
     return selectedCatalog.models().some((option) => option.id === preferred)
       ? preferred
@@ -269,7 +269,7 @@ export function NewChatPage(props: {
   const selectedEffort = () => {
     const target = capabilityTarget();
     if (!target) return;
-    const choice = preferredEffort.effort(JSON.stringify(target));
+    const choice = preferredEffort().effort(JSON.stringify(target));
     const config = effort();
     // Retain it while the selected model's discovery refreshes; startup
     // revalidates against the runtime.
@@ -281,7 +281,7 @@ export function NewChatPage(props: {
   };
   const rememberEffort = (choice: EffortChoice) => {
     const target = capabilityTarget();
-    if (target) preferredEffort.remember(JSON.stringify(target), choice);
+    if (target) preferredEffort().remember(JSON.stringify(target), choice);
   };
   const effortOverride = () => {
     const config = effort();
@@ -436,7 +436,7 @@ export function NewChatPage(props: {
   ) => {
     const persona = coder ?? selected();
     if (!persona) return;
-    recentAgents.remember(persona.id);
+    recentAgents().remember(persona.id);
     const repo = !coder && canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
     const model = coder ? undefined : composerModelOverride();
@@ -489,7 +489,7 @@ export function NewChatPage(props: {
     setPendingMention(undefined);
     setAgentId(agent.id);
     if (agent.id === MACRO_PERSONA_ID) {
-      if (model) preferredInmem.remember(model);
+      if (model) preferredInmem().remember(model);
       // Still set the override so the trigger updates when Macro was
       // already selected (agent id unchanged would otherwise skip a render).
       setModelOverride(model);
@@ -506,7 +506,7 @@ export function NewChatPage(props: {
     const harness =
       agent.harness === 'macro-inmem' ? 'in-memory' : agent.harness;
     if (harness === 'in-memory' || harness === 'cursor') {
-      preferredEffort.forget(JSON.stringify({ harness, model }));
+      preferredEffort().forget(JSON.stringify({ harness, model }));
     }
     setPreferredSpeed('standard');
   };
@@ -607,14 +607,17 @@ export function NewChatPage(props: {
             : undefined,
         onModel: (model) => {
           const agent = selected();
-          if (agent) selectPickerModel(agent, model);
+          if (!agent) return false;
+          selectPickerModel(agent, model);
+          return true;
         },
         onSuggestedModel: (model) => {
           const agent =
             options().find((option) => option.id === MACRO_PERSONA_ID) ??
             selected();
-          if (agent && !agent.unavailableReason)
-            selectPickerModel(agent, model);
+          if (!agent || agent.unavailableReason) return false;
+          selectPickerModel(agent, model);
+          return true;
         },
         onAgent: (agent) => selectAgent(agent),
         onConnect: connect,

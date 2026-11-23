@@ -1,6 +1,7 @@
-import { beginInteraction } from '@app/observability/flow';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, mergeProps, Show } from 'solid-js';
 import { createRecentAgentSelections } from '../block-agent/context/recent-agent-selections';
 import { createRecentModelSelections } from '../block-agent/context/recent-model-selections';
@@ -21,13 +22,43 @@ export function UnifiedModelSelector(props: {
   const track = (
     action: string,
     attributes: Record<string, string>,
-    run: () => void
+    run: () => unknown,
+    applied?: () => void
   ) => {
-    const interaction = beginInteraction(action, { attributes });
+    const account = userId();
+    const operation = startUiOperation(action, { attributes });
+    const finish = (result: unknown) => {
+      if (userId() !== account) {
+        operation.cancel();
+        return;
+      }
+      if (result === false) {
+        operation.span.error('Selector action was not applied');
+        operation.finish('error');
+        return;
+      }
+      applied?.();
+      operation.afterPaint();
+    };
+    const fail = (error: unknown) => {
+      operation.span.error(error);
+      operation.finish('error');
+    };
     try {
-      run();
-    } finally {
-      interaction.end();
+      const result = operation.run(run);
+      if (result instanceof Promise) {
+        const settle = async () => {
+          try {
+            finish(await result);
+          } catch (error) {
+            fail(error);
+          }
+        };
+        fireAndForget(settle(), 'agents.model-selector');
+      } else finish(result);
+    } catch (error) {
+      fail(error);
+      throw error;
     }
   };
   const state = mergeProps(() => props.state, {
@@ -38,22 +69,28 @@ export function UnifiedModelSelector(props: {
       return recentAgents().ids();
     },
     onModel: (id: string) =>
-      track('agents.model_selector.pick', { 'model.id': id }, () => {
-        props.state.onModel(id);
-        recentModels().remember(id);
-      }),
+      track(
+        'agents.model_selector.pick',
+        { 'model.id': id },
+        () => props.state.onModel(id),
+        () => recentModels().remember(id)
+      ),
     onSuggestedModel: (id: string) =>
-      track('agents.model_selector.pick', { 'model.id': id }, () => {
-        (props.state.onSuggestedModel ?? props.state.onModel)(id);
-        recentModels().remember(id);
-      }),
+      track(
+        'agents.model_selector.pick',
+        { 'model.id': id },
+        () => (props.state.onSuggestedModel ?? props.state.onModel)(id),
+        () => recentModels().remember(id)
+      ),
     onAgent: (
       agent: Parameters<NonNullable<UnifiedModelSelectorState['onAgent']>>[0]
     ) =>
-      track('agents.model_selector.agent', { 'agent.id': agent.id }, () => {
-        props.state.onAgent?.(agent);
-        recentAgents().remember(agent.id);
-      }),
+      track(
+        'agents.model_selector.agent',
+        { 'agent.id': agent.id },
+        () => (props.state.onAgent ? props.state.onAgent(agent) : false),
+        () => recentAgents().remember(agent.id)
+      ),
     onEffort: (choice: Parameters<UnifiedModelSelectorState['onEffort']>[0]) =>
       track(
         'agents.model_selector.effort',

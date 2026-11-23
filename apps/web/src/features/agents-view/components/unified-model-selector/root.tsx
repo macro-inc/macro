@@ -7,6 +7,7 @@ import type {
 } from '../../../block-agent/state/session-config';
 import type { RosterAgent } from '../../core/roster';
 
+export type SelectorActionResult = void | boolean | Promise<void | boolean>;
 export type UnifiedModelSelectorState = {
   model?: string;
   models: CatalogModelOption[];
@@ -30,9 +31,9 @@ export type UnifiedModelSelectorState = {
   suggestedSpeeds?: Readonly<Record<string, readonly string[]>>;
   suggestedHarness?: string;
   speedValue?: string;
-  onModel: (model: string) => void;
-  onSuggestedModel?: (model: string) => void;
-  onAgent?: (agent: RosterAgent) => void;
+  onModel: (model: string) => SelectorActionResult;
+  onSuggestedModel?: (model: string) => SelectorActionResult;
+  onAgent?: (agent: RosterAgent) => SelectorActionResult;
   onConnect?: (agent: RosterAgent) => void;
   onCreate?: () => void;
   onEffort: (choice: EffortChoice) => void;

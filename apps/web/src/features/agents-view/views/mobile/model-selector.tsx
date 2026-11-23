@@ -62,7 +62,7 @@ export function MobileModelSelector() {
       <MobileDrawer
         onEscapeKeyDown={(event) => {
           event.preventDefault();
-          nav.back();
+          nav.escape();
         }}
         open={sheetOpen()}
         onOpenChange={(open) => {

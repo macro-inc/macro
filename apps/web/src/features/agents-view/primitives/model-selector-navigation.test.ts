@@ -3,6 +3,23 @@ import { describe, expect, it, vi } from 'vitest';
 import { createModelSelectorNavigation } from './model-selector-navigation';
 
 describe('card selector navigation', () => {
+  it('returns directly to the card from every selection page on Escape', () => {
+    createRoot((dispose) => {
+      const nav = createModelSelectorNavigation();
+      nav.changeOpen(true);
+      for (const page of ['list', 'all', 'agents'] as const) {
+        nav.setPage(page);
+        nav.setQuery('query');
+        nav.escape();
+        expect(nav.page()).toBe('card');
+        expect(nav.query()).toBe('');
+        expect(nav.open()).toBe(true);
+      }
+      nav.escape();
+      expect(nav.open()).toBe(false);
+      dispose();
+    });
+  });
   it('resets nested pages and search only when the selector is dismissed', () => {
     createRoot((dispose) => {
       const changed = vi.fn();

@@ -54,7 +54,7 @@ export function DesktopModelSelector() {
           onEscapeKeyDown={(event) => {
             if (nav.page() !== 'card') {
               event.preventDefault();
-              goBack();
+              backToCard();
             }
           }}
         >
