@@ -23,20 +23,17 @@ render(
             {
               id: 'a',
               label: 'Searched documents',
-              detail: null,
               status: 'completed',
             },
             {
               id: 'b',
               label: 'Read release board',
-              detail: null,
               status: 'completed',
             },
-            { id: 'c', label: 'Update task', detail: null, status: 'failed' },
+            { id: 'c', label: 'Update task', status: 'failed' },
             {
               id: 'd',
               label: 'Read task',
-              detail: null,
               status: 'interrupted',
             },
           ]}
