@@ -1,25 +1,24 @@
-/** The agent permissions page and the Permissions section of the agent editor. */
+/** Agent permissions in Settings → Agents, and the controls chat cards share. */
 export default {
   title: 'Permissions',
-  description:
-    'What {{agent}} may do in the programs it runs for you. <b>Allow</b> runs without asking, <b>Ask</b> waits for your approval, <b>Never</b> refuses the program before it runs.',
+  permissionsButton: 'Permissions',
+  agentPermissions: "{{agent}}'s permissions",
+  sectionDescription:
+    'What this agent may do in its programs. Changes save right away.',
+  toolPermissionsTitle: 'Tool permissions',
+  toolPermissionsDescription:
+    'Choose a default for each action. Add exceptions by entity.',
   settingsChanged: {
     one: '{{count}} setting changed',
     other: '{{count}} settings changed',
   },
   setByAgentCount: { other: '{{count}} set by {{agent}} itself' },
   reset: 'Reset permissions',
-  nothingToReset: 'Everything is already Always allow',
   scopeLead:
     'Applies to every program {{agent}} runs in sessions where agent permissions are on.',
   scopeBody:
     'A program reaches Macro only through steps these settings check; the code it runs on the side can’t reach Macro at all. {{agent}}’s other tools and your connected apps aren’t covered: they work as before, even where a setting says Never.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
-  searchLabel: 'Search permissions',
-  searchPlaceholder: 'Search groups and tools',
-  matchGroups: { one: '{{count}} group', other: '{{count}} groups' },
-  matchTools: { one: '{{count}} tool', other: '{{count}} tools' },
-  searchStatus: '{{groups}} · {{tools}} match “{{query}}”',
   loading: 'Loading permissions',
 
   allow: 'Allow',
@@ -31,44 +30,46 @@ export default {
   allowHint: 'Always allow: runs without asking',
   askHint: 'Ask permission: waits for your approval each time',
   neverHint: 'Never allow: refused before anything runs',
-  sessionFloor: 'Limited to {{state}} for this session by {{agent}}',
   controlLabel: '{{group}}: {{action}}',
+  defaultLabel: '{{action}} default',
+
+  actionRead: 'Read',
+  actionCreate: 'Create',
+  actionEdit: 'Edit',
+  actionSend: 'Send',
+  actionDelete: 'Delete',
+  actionHeader: 'Action',
+  defaultHeader: 'Default permission',
+  defaultMenu: '{{action}} default permission',
+  exceptionCount: { one: '{{count}} exception', other: '{{count}} exceptions' },
+  toolSettingCount: {
+    one: '{{count}} tool setting',
+    other: '{{count}} tool settings',
+  },
+  exceptionsTitle: '{{action}} exceptions',
+  addException: 'Add exception',
+  addExceptionFor: 'Add a {{action}} exception',
+  searchEntities: 'Search entities',
+  noEntityMatch: 'No entity matches',
+  choosePermission: 'Choose permission',
+  useDefault: 'Use default ({{state}})',
+  clearException: '{{entity}}: use default ({{state}})',
+  othersFollow: {
+    one: 'The other entity follows the {{action}} default.',
+    other: 'The other {{count}} entities follow the {{action}} default.',
+  },
+  allFollow: {
+    one: 'The one entity with {{action}} tools follows the default.',
+    other: 'All {{count}} entities follow the {{action}} default.',
+  },
+  individualTools: 'Individual tools',
+  removeToolSetting: 'Remove the setting for {{tool}}',
 
   toolCount: { one: '{{count}} tool', other: '{{count}} tools' },
-  asksBeforeCreating: 'Asks before creating',
-  asksBeforeReading: 'Asks before reading',
-  asksBeforeUpdating: 'Asks before updating',
-  asksBeforeDeleting: 'Asks before deleting',
-  asksBeforeSending: 'Asks before sending',
-  neverCreates: 'Never creates',
-  neverReads: 'Never reads',
-  neverUpdates: 'Never updates',
-  neverDeletes: 'Never deletes',
-  neverSends: 'Never sends',
-  toolsCustomized: {
-    one: '{{count}} tool customized',
-    other: '{{count}} tools customized',
-  },
-  restrictedByAgent: 'Restricted by the agent',
-  sessionLimited: 'Limited for this session',
-  allAllowed: 'All allowed',
-  asksForEverything: 'Asks for everything',
-  neverForEverything: 'Never allowed',
-  expandGroup: 'Show {{group}}',
-
   differCount: { one: '{{count}} differs', other: '{{count}} differ' },
   noTools: 'No tools yet',
   setByAgent: 'Set by agent',
-  setByAgentHint: '{{agent}} restricted itself on {{date}}. You can change it.',
   thisSession: 'This session',
-
-  individualTools: 'Individual tools',
-  individualToolsHint: 'Set a tool to differ from its action above.',
-  differNow: { one: '{{count}} differs now.', other: '{{count}} differ now.' },
-  toolFilter: 'Which tools to show',
-  filterAll: 'All',
-  filterDiffers: 'Differs',
-  showMore: { other: 'Show {{count}} more' },
   toolDiffers: 'Differs · {{action}} is {{state}}',
   ownSetting: 'Own setting',
   follows: 'follows {{action}}',
@@ -83,34 +84,15 @@ export default {
   loadFailedBody: 'Check your connection and try again.',
   tryAgain: 'Try again',
   unavailable: "Permissions aren't available for this agent.",
-  noMatch: 'Nothing matches “{{query}}”',
-  noMatchBody: 'Search finds groups, actions and tool names.',
-  clearSearch: 'Clear search',
 
   resetTitle: "Reset {{agent}}'s permissions?",
-  resetBody: 'Every setting goes back to Always allow.',
+  resetBody: 'Every setting goes back to Allow.',
   resetBodyAgent: {
     one: 'That includes one that {{agent}} set for itself.',
     other: 'That includes {{count}} that {{agent}} set for itself.',
-  },
-  resetBodyTools: {
-    one: "One of them is an individual tool's setting.",
-    other: '{{count}} of them are individual tool settings.',
   },
   resetBodyEnd:
     "Limits {{agent}} set for a single session stay until that session ends. This can't be undone.",
   resetConfirm: 'Reset',
   cancel: 'Cancel',
-
-  sectionDescription:
-    'What this agent may do in its programs. Changes save right away.',
-  restrictionCount: {
-    one: '{{count}} restriction',
-    other: '{{count}} restrictions',
-  },
-  allAllowedBody: 'Runs those programs without asking.',
-  inGroup: '{{phrase}} · {{group}}',
-  moreRestrictions: { other: '{{count}} more' },
-  manage: 'Manage',
-  agentPermissions: "{{agent}}'s permissions",
 };

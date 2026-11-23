@@ -19,6 +19,10 @@ async function shot(
   const path = SHOTS
     ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}-${THEME ?? 'dark'}.png`
     : test.info().outputPath(`${name}.png`);
+  // Let carets and menus finish moving before the picture.
+  await page.evaluate(() =>
+    Promise.all(document.getAnimations().map((animation) => animation.finished))
+  );
   // The transcript (or the page) scrolls inside the window, as in the app:
   // grow the window to all of it for the picture, then put it back.
   const size = page.viewportSize();
@@ -103,7 +107,7 @@ for (const { language, program } of LANGUAGES) {
   });
 }
 
-test('the permissions page says which programs it covers', async ({
+test('the settings set action defaults and entity exceptions', async ({
   page,
   isMobile,
 }) => {
@@ -114,23 +118,72 @@ test('the permissions page says which programs it covers', async ({
     )
   ).toBeVisible();
   await expect(
-    page.getByText('What Scout may do in the programs it runs for you.', {
-      exact: false,
-    })
-  ).toBeVisible();
-  await expect(
     page.getByText('Scout’s other tools and your connected apps', {
       exact: false,
     })
   ).toBeVisible();
-  await page.getByRole('button', { name: /Email/ }).first().click();
-  const send = page.getByRole('radiogroup', { name: 'Email: Send' });
-  await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();
-  // Let the group finish opening before the picture.
-  await page.evaluate(() =>
-    Promise.all(document.getAnimations().map((animation) => animation.finished))
+  const control = (
+    scope: import('@playwright/test').Page | import('@playwright/test').Locator,
+    name: string
+  ) => scope.getByRole('radiogroup', { name });
+  await expect(
+    control(page, 'Delete default permission').getByRole('radio', {
+      name: 'Never',
+    })
+  ).toBeChecked();
+  await shot(page, 'settings-collapsed', isMobile);
+
+  // Read: two exceptions, the other entities follow the default.
+  await page.getByRole('button', { name: /^Read(?! default)/ }).click();
+  const read = page.getByRole('region', { name: 'Read exceptions' });
+  await expect(
+    control(read, 'Contacts & CRM: Read').getByRole('radio', { name: 'Ask' })
+  ).toBeChecked();
+  await expect(
+    control(read, 'Outside chats: Read').getByRole('radio', { name: 'Never' })
+  ).toBeChecked();
+  await expect(read).toContainText(
+    'The other 4 entities follow the Read default.'
   );
-  await shot(page, 'page', isMobile);
+  await shot(page, 'settings-read', isMobile);
+
+  // Add exception → Email → Ask.
+  await read.getByRole('button', { name: 'Add a Read exception' }).click();
+  await expect(
+    page.getByRole('menuitem', { name: 'Contacts & CRM' })
+  ).toHaveCount(0);
+  await shot(page, 'settings-choose-entity', isMobile);
+  await page.getByRole('menuitem', { name: 'Email' }).click();
+  const email = control(read, 'Email: Read');
+  await expect(email).toBeVisible();
+  await shot(page, 'settings-choose-permission', isMobile);
+  await email.getByText('Ask', { exact: true }).click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-saved',
+    /"email.read":"ask"/
+  );
+  await expect(read).toContainText(
+    'The other 3 entities follow the Read default.'
+  );
+
+  // Its ✕ (Use default) removes it.
+  await read
+    .getByRole('button', { name: 'Email: use default (Allow)' })
+    .click();
+  await expect(page.locator('body')).not.toHaveAttribute(
+    'data-saved',
+    /email.read/
+  );
+
+  // The Send default.
+  await control(page, 'Send default permission')
+    .getByText('Allow', { exact: true })
+    .click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-defaults',
+    /^(?!.*send)/
+  );
+  await shot(page, 'settings-changed', isMobile);
 });
 
 test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
@@ -143,13 +196,10 @@ test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
   await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();
   await shot(page, 'show-permissions', isMobile);
   await send.getByText('Allow', { exact: true }).click();
+  // An explicit Allow is kept as the exception, though it is the default.
   await expect(page.locator('body')).toHaveAttribute(
     'data-saved',
-    /"email.destroy":"never"/
-  );
-  await expect(page.locator('body')).not.toHaveAttribute(
-    'data-saved',
-    /email.send/
+    /"email.send":"always"/
   );
   await expect(send.getByRole('radio', { name: 'Allow' })).toBeChecked();
 });

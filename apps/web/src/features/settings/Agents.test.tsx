@@ -82,35 +82,23 @@ vi.mock('./components/auto-archive-setting', () => ({
   AutoArchiveSetting: () => null,
 }));
 
-// The permissions page has its own suite; here only its entry points. The
-// flag is a signal, so a test can turn it off under an open page.
+// The permissions panel has its own suite; here only its entry points. The
+// flag is a signal, so a test can turn it off under an open panel.
 const [permissionsFlag, setPermissionsFlag] = createSignal(false);
 const permissionMocks = vi.hoisted(() => ({ served: true }));
 vi.mock('@app/features/agent-permissions', () => ({
   useAgentPermissionsFlag: () => permissionsFlag,
   useAgentPermissionsAvailable: () => () =>
     permissionsFlag() && permissionMocks.served,
-  AgentPermissionsSection: (props: {
-    agentId: string;
-    onManage: () => void;
-  }) => (
-    <button type="button" onClick={() => props.onManage()}>
-      Manage permissions of {props.agentId}
-    </button>
-  ),
-  AgentPermissionsPage: (props: {
+  AgentPermissionsPanel: (props: {
     agentId: string;
     agentName: string;
-    onBack: () => void;
+    focus?: { group: string };
   }) => (
-    <div>
-      <h1>
-        Permissions page of {props.agentName} ({props.agentId})
-      </h1>
-      <button type="button" onClick={() => props.onBack()}>
-        Back from permissions
-      </button>
-    </div>
+    <section aria-label={`Permissions of ${props.agentName}`}>
+      Permissions panel of {props.agentName} ({props.agentId})
+      {props.focus ? ` at ${props.focus.group}` : ''}
+    </section>
   ),
 }));
 
@@ -1070,152 +1058,136 @@ describe('Agents', () => {
       channel_ids: [],
     };
 
-    it('opens from the agent editor and returns to the unsaved form', () => {
+    const panel = (name: string) =>
+      screen.queryByRole('region', { name: `Permissions of ${name}` });
+
+    // jsdom has no layout; a link scrolls the row into view.
+    beforeEach(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it("expands Macro's permissions inline under its row", () => {
       setPermissionsFlag(true);
-      agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      fireEvent.input(screen.getByLabelText('Instructions'), {
-        target: { value: 'Draft instructions' },
+      const toggle = screen.getByRole('button', {
+        name: "Macro's permissions",
       });
-
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      fireEvent.click(toggle);
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      // The Macro persona's permissions are the new Macro bot's.
+      expect(panel('Macro')?.textContent).toContain(
+        '00000000-0000-0000-0000-00000000a2a2'
       );
-      expect(
-        screen.getByRole('heading', {
-          name: 'Permissions page of Bug fixer (agent-1)',
-        })
-      ).toBeTruthy();
-
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Back from permissions' })
-      );
-      expect(
-        (screen.getByLabelText('Instructions') as HTMLTextAreaElement).value
-      ).toBe('Draft instructions');
+      // The list stays: the panel is under the row, not a page.
+      expect(screen.getByRole('heading', { name: 'Your agents' })).toBeTruthy();
+      fireEvent.click(toggle);
+      expect(panel('Macro')).toBeNull();
     });
 
-    it('closes the permissions page first on a phone Back', () => {
-      device.touch = true;
+    it("expands an agent's permissions, one row at a time", () => {
       setPermissionsFlag(true);
       agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      fireEvent.input(screen.getByLabelText('Instructions'), {
-        target: { value: 'Draft instructions' },
-      });
       fireEvent.click(
-        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
       );
-
-      const goBack = vi.fn();
-      expect(runSplitBack({ canGoBack: () => true, goBack })).toBe(true);
-      expect(
-        screen.queryByRole('heading', { name: /Permissions page of/ })
-      ).toBeNull();
-      expect(
-        (screen.getByLabelText('Instructions') as HTMLTextAreaElement).value
-      ).toBe('Draft instructions');
-      expect(goBack).not.toHaveBeenCalled();
-    });
-
-    it('is not in the editor while the flag is off or when creating', () => {
-      agentMocks.query.data = [ownAgent];
-      render(() => <Agents {...agentsPageProps} />);
-      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      expect(
-        screen.queryByRole('button', { name: /Manage permissions/ })
-      ).toBeNull();
-    });
-
-    it("opens Macro's permissions for the new Macro bot from its row", () => {
-      setPermissionsFlag(true);
-      render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Bug fixer')?.textContent).toContain('agent-1');
       fireEvent.click(
         screen.getByRole('button', { name: "Macro's permissions" })
       );
-      expect(
-        screen.getByRole('heading', {
-          name: 'Permissions page of Macro (00000000-0000-0000-0000-00000000a2a2)',
-        })
-      ).toBeTruthy();
+      expect(panel('Macro')).toBeTruthy();
+      expect(panel('Bug fixer')).toBeNull();
     });
 
-    it("hides Macro's shield when the API has no permissions for it", () => {
+    it("hides Macro's Permissions when the API has none for it", () => {
       setPermissionsFlag(true);
       permissionMocks.served = false;
+      agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
       expect(
         screen.queryByRole('button', { name: "Macro's permissions" })
       ).toBeNull();
+      // An agent the viewer manages always has permissions; its panel says
+      // so itself if the API has none.
+      expect(
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
+      ).toBeTruthy();
     });
 
-    it('closes an open permissions page when the flag turns off', () => {
+    it('scrolls a linked row into view once, not again after the editor', () => {
+      setPermissionsFlag(true);
+      agentMocks.query.data = [ownAgent];
+      requestAgentPermissions('agent-1');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+      expect(panel('Bug fixer')).toBeTruthy();
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides Permissions and an open panel when the flag turns off', () => {
       setPermissionsFlag(true);
       agentMocks.query.data = [ownAgent];
       render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(
-        screen.getByRole('button', { name: "Macro's permissions" })
+        screen.getByRole('button', { name: "Bug fixer's permissions" })
       );
-      expect(
-        screen.getByRole('heading', { name: /Permissions page of Macro/ })
-      ).toBeTruthy();
+      expect(panel('Bug fixer')).toBeTruthy();
       setPermissionsFlag(false);
-      expect(
-        screen.queryByRole('heading', { name: /Permissions page/ })
-      ).toBeNull();
-      expect(
-        screen.queryByRole('button', { name: "Macro's permissions" })
-      ).toBeNull();
+      expect(panel('Bug fixer')).toBeNull();
+      expect(screen.queryByRole('button', { name: /'s permissions$/ })).toBe(
+        null
+      );
+    });
 
+    it('shows the permissions inside the agent editor', () => {
       setPermissionsFlag(true);
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Back from permissions' })
-      );
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
-      fireEvent.click(
-        screen.getByRole('button', { name: 'Manage permissions of agent-1' })
-      );
-      expect(
-        screen.getByRole('heading', { name: /Permissions page of Bug fixer/ })
-      ).toBeTruthy();
-      setPermissionsFlag(false);
-      expect(
-        screen.queryByRole('heading', { name: /Permissions page/ })
-      ).toBeNull();
-      expect(
-        screen.queryByRole('button', { name: /Manage permissions/ })
-      ).toBeNull();
+      expect(panel('Bug fixer')?.textContent).toContain('agent-1');
+    });
+
+    it('is not in the editor while the flag is off', () => {
+      agentMocks.query.data = [ownAgent];
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      expect(panel('Bug fixer')).toBeNull();
     });
 
     it('holds a permissions link until the flag is on', () => {
       agentMocks.query.data = [ownAgent];
       requestAgentPermissions('agent-1');
       render(() => <Agents {...agentsPageProps} />);
-      expect(
-        screen.queryByRole('heading', { name: /Permissions page/ })
-      ).toBeNull();
+      expect(panel('Bug fixer')).toBeNull();
       expect(agentSettingsRequest()).toBeDefined();
 
       setPermissionsFlag(true);
-      expect(
-        screen.getByRole('heading', { name: /Permissions page of Bug fixer/ })
-      ).toBeTruthy();
+      expect(panel('Bug fixer')).toBeTruthy();
       expect(agentSettingsRequest()).toBeUndefined();
     });
 
-    it("opens an agent's permissions when asked to by a link", () => {
+    it("expands an agent's row when a link asks, at the linked group", () => {
       setPermissionsFlag(true);
       agentMocks.query.data = [ownAgent];
       requestAgentPermissions('agent-1', { group: 'email' });
       render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Bug fixer')?.textContent).toContain('at email');
       expect(
-        screen.getByRole('heading', {
-          name: 'Permissions page of Bug fixer (agent-1)',
-        })
-      ).toBeTruthy();
+        screen
+          .getByRole('button', { name: "Bug fixer's permissions" })
+          .getAttribute('aria-expanded')
+      ).toBe('true');
       expect(agentSettingsRequest()).toBeUndefined();
+    });
+
+    it("expands Macro's row for a link to the Macro persona", () => {
+      setPermissionsFlag(true);
+      requestAgentPermissions('00000000-0000-0000-0000-00000000a2a2');
+      render(() => <Agents {...agentsPageProps} />);
+      expect(panel('Macro')).toBeTruthy();
     });
   });
 

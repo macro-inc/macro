@@ -21,8 +21,8 @@ describe('groupGatedOperations', () => {
     ]);
     expect(groups.map((group) => group.group)).toEqual(['email', 'documents']);
     expect(groups[0].operations.map((op) => op.operation)).toEqual([
-      'delete_label',
       'send_message',
+      'delete_label',
     ]);
     expect(groups[1].operations.map((op) => op.operation)).toEqual([
       'edit_document',

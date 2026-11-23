@@ -2,8 +2,9 @@ import type { PermissionFocus } from '@app/features/agent-permissions';
 import { createSignal } from 'solid-js';
 
 /**
- * Asks the Agents settings page to open one agent's editor, its permissions
- * page, or the create form with a machine already chosen under Where it runs.
+ * Asks the Agents settings page to open one agent's editor, expand its
+ * permissions under its row, or open the create form with a machine already
+ * chosen under Where it runs.
  */
 export type AgentSettingsRequest =
   | { id: number; type: 'edit'; agentId: string }
@@ -26,8 +27,8 @@ export function requestAgentDetail(agentId: string) {
 }
 
 /**
- * Opens an agent's permissions page (the Macro persona's too), optionally
- * at one group, action or tool.
+ * Expands an agent's permissions under its row (the Macro persona's too),
+ * optionally at one group, action or tool.
  */
 export function requestAgentPermissions(
   agentId: string,

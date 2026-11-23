@@ -1846,9 +1846,9 @@ Agents → Permissions) before it runs. The cards name no language:
   email and edit documents · Allowed for this session by you`.
 - **Never**: nothing runs. The call renders as its own **Blocked by
   permissions** card (outside the tool group) naming what the program could
-  have done and the refused operations, with **Review permissions** (opens the
-  agent's permissions page beside the chat, at the first refused group, action
-  or tool) for people who can edit the agent and `Only people who can edit
+  have done and the refused operations, with **Review permissions** (opens
+  Settings → Agents beside the chat with the agent's permissions expanded, at
+  the first refused action or tool) for people who can edit the agent and `Only people who can edit
   <Agent> can change this.` for others.
 - A declined, cancelled or expired hold leaves a quiet row in the tool group,
   `Didn't run a program that may … · Declined`, not counted as a failure. A
@@ -1865,14 +1865,16 @@ to the agent's permissions. Every surface and its flag:
 
 When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
 permissions**: its one-line reason, then the asked groups' actions (only those
-some tool has) and tools with the same `Allow · Ask · Never` controls as the settings page, reading the
+some tool has) and tools with `Allow · Ask · Never` controls, reading the
 session's view (the agent's own limits for the session carry a **This
-session** badge). A click saves to the agent at once; **All permissions** opens
-the page. People who can't edit the agent see the controls disabled and `Only
-people who can edit <Agent> can change these.`
+session** badge). Setting a group's action to its default clears the
+exception; any other state saves one. A click saves to the agent at once;
+**All permissions** opens the agent's permissions in Settings → Agents.
+People who can't edit the agent see the controls disabled and `Only people
+who can edit <Agent> can change these.`
 
 Backend-free check (desktop and phone), with the blocked and approval cards
-for JS tools programs and the permissions page:
+for JS tools programs and the settings component:
 `bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
 from `apps/web`; set `PERMISSIONS_SCREENSHOT_DIR` to keep its screenshots and
 `PERMISSIONS_THEME=light` for Macro Light.

@@ -24,9 +24,10 @@ import {
   PermissionToolRow,
   type ToolRowStatus,
 } from '../components/permission-tool-row';
+import type { PermissionFocus } from '../core/model';
 import {
   actionPermission,
-  changeForAction,
+  changeForException,
   groupActionTarget,
   groupPermissions,
   ruleFor,
@@ -40,7 +41,6 @@ import {
   useSessionToolPermissionsQuery,
   useToolPermissionCatalogQuery,
 } from '../queries/permissions';
-import type { PermissionFocus } from './agent-permissions-list';
 import { useOpenAgentPermissions } from './open-agent-permissions';
 import { usePermissionChanges } from './permission-changes';
 
@@ -225,7 +225,9 @@ export function ShowPermissionsCard(props: {
                                   changes.apply(
                                     groupActionTarget(group, action),
                                     state,
-                                    changeForAction(group, action, state)
+                                    // An explicit choice is kept, even one
+                                    // equal to the action's default.
+                                    changeForException(group, action, state)
                                   ),
                                   'agent-permissions'
                                 )
