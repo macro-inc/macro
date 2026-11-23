@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $2 of a deleted account's list rows, read in primary-key order and\n-- deleted by row address, so every plan stays an index range plus a tid\n-- scan. The account check is repeated so an account created since the scan\n-- keeps its rows.\nDELETE FROM contact_list_members\nWHERE ctid = ANY (ARRAY(\n    SELECT m.ctid\n    FROM contact_list_members m\n    WHERE m.user_id = $1\n    ORDER BY m.user_id, m.contact_user_id, m.list_key\n    LIMIT $2\n))\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = $1)\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE lower(u.email) = substr($1, 7))\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "411e14560b3102c79f432259d6c7b243242bea161d2515190e4ac9b95e3d9eb1"
+}

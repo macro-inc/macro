@@ -7,7 +7,8 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 
-/// Get all user IDs that are active participants in a channel.
+/// Get all user IDs that are active participants in a channel, as of up to
+/// ten seconds ago.
 #[tracing::instrument(err, skip(pool))]
 #[cfg_attr(
     not(test),
@@ -19,6 +20,16 @@ use uuid::Uuid;
     )
 )]
 pub async fn get_channel_users(
+    pool: &PgPool,
+    channel_id: &Uuid,
+) -> Result<Vec<MacroUserIdStr<'static>>, sqlx::Error> {
+    read_channel_users(pool, channel_id).await
+}
+
+/// Get all user IDs that are active participants in a channel now, past the
+/// cache [`get_channel_users`] answers from.
+#[tracing::instrument(err, skip(pool))]
+pub async fn read_channel_users(
     pool: &PgPool,
     channel_id: &Uuid,
 ) -> Result<Vec<MacroUserIdStr<'static>>, sqlx::Error> {

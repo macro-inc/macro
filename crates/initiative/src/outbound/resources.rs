@@ -278,6 +278,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                 SystemPropertyKey::PRIORITY_UUID,
                 SystemPropertyKey::ASSIGNEES_UUID,
                 SystemPropertyKey::DUE_DATE_UUID,
+                SystemPropertyKey::START_DATE_UUID,
             ];
             let mut output = HashMap::new();
             for batch in receipts.chunks(100) {
@@ -313,8 +314,12 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                                     refs.into_iter().map(|entity| entity.entity_id).collect()
                             }
                             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(date))) => {
-                                snapshot.due_date = Some(date)
+                                snapshot.due_date = Some(date.at())
                             }
+                            (
+                                Some(SystemPropertyKey::StartDate),
+                                Some(PropertyValue::Date(date)),
+                            ) => snapshot.start_date = Some(date.at()),
                             _ => (),
                         }
                     }

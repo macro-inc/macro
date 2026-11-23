@@ -765,7 +765,6 @@ export default {
     searchNoResults: 'कोई सेटिंग नहीं मिली। “हस्ताक्षर”, “थीम” या “कैलेंडर” खोजकर देखें।',
     backToSettings: 'सेटिंग पर वापस जाएं',
     closeSettings: 'सेटिंग बंद करें',
-    goToTab: 'सेटिंग टैब {{number}} पर जाएं',
     editProfile: 'प्रोफ़ाइल में बदलाव करें',
     logOut: 'लॉग आउट करें',
     yourAccount: 'आपका खाता',

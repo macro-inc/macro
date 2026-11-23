@@ -8,8 +8,10 @@ mod hydration;
 mod pass_reads;
 mod people;
 mod retirement;
+mod staged_hydrate;
 pub use hydration::HydrationScope;
 pub use pass_reads::{PassReadSet, PassReads};
+pub use staged_hydrate::StagedHydrate;
 #[cfg(test)]
 mod test;
 
@@ -70,6 +72,7 @@ use predicate_index::{
     OptimisticProjectionMutation, RecordKey as PredicateRecordKey, ValidatedIndexQuery,
 };
 use serde_json::Value as Json;
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -151,6 +154,14 @@ pub enum ReadResult {
     Hit { data: Json },
     /// Not answerable; forward to the network.
     Miss,
+}
+
+/// A response's payload and how to resolve its entities, for normalizing.
+#[derive(Clone, Copy)]
+struct NetworkData<'a> {
+    variables: &'a serde_json::Map<String, Json>,
+    data: &'a Json,
+    entity_resolvers: &'a EntityResolverLookup,
 }
 
 /// Borrowed inputs for one network response write.
@@ -243,6 +254,23 @@ struct PersistedChanges {
     revision_advanced: bool,
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
+}
+
+/// A merge of normalized updates into stored records, computed but not
+/// written.
+struct PersistPlan {
+    field_changes: Vec<crate::field_changes::RecordFieldChange>,
+    changed: BTreeSet<EntityKey<'static>>,
+    search_changed_buckets: BTreeSet<String>,
+    viewer_fields: ViewerFields,
+    /// Changed records, for storage and then the hot tier.
+    to_persist: Vec<(EntityKey<'static>, Record)>,
+    /// Unchanged records, for the hot tier only, each noting whether it was
+    /// taken from there.
+    unchanged: Vec<(EntityKey<'static>, Record, bool)>,
+    /// For each update in order, whether its record is in `to_persist`.
+    persisted: Vec<bool>,
+    revision_advanced: bool,
 }
 
 /// Result of hydrating a query while returning only non-`@cacheOnly` fields.
@@ -392,6 +420,28 @@ pub const IDENTITY_META_KEY: &str = "__meta:identity";
 pub const IDENTITY_VALUE_FIELD: &str = "identity";
 const STORAGE_GENERATION_META_KEY: &str = "__meta:storage-generation";
 const STORAGE_GENERATION_VALUE_FIELD: &str = "generation";
+/// Prefix of the engine's own metadata keys, which no entity key can carry.
+const METADATA_KEY_PREFIX: &str = "__meta:";
+
+/// `keys` without the engine's metadata. Deleting the account witness
+/// while its records stay would let the next account bind over them, and the
+/// engine keeps the witness and authority in memory besides; only a reset or
+/// clear removes them.
+fn without_metadata<'k>(keys: &'k [EntityKey<'static>]) -> Cow<'k, [EntityKey<'static>]> {
+    if keys
+        .iter()
+        .any(|key| key.0.starts_with(METADATA_KEY_PREFIX))
+    {
+        Cow::Owned(
+            keys.iter()
+                .filter(|key| !key.0.starts_with(METADATA_KEY_PREFIX))
+                .cloned()
+                .collect(),
+        )
+    } else {
+        Cow::Borrowed(keys)
+    }
+}
 
 /// Hydration/binding state of the session identity tag for this cache.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1522,6 +1572,63 @@ impl<S: Storage> Engine<S> {
         .map(|(result, _)| result)
     }
 
+    /// Normalizes a network response into the records it writes.
+    fn network_records(
+        schema: &crate::meta::Schema,
+        response_records: Option<ResponseRecords>,
+        op: &crate::document::Operation,
+        input: NetworkData<'_>,
+        retain_pages: bool,
+        allow_contacts: bool,
+    ) -> Result<crate::normalize::NormalizeResult, EngineError<S::Error>> {
+        let NetworkData {
+            variables,
+            data,
+            entity_resolvers,
+        } = input;
+        let mut normalized =
+            normalize_with_dependencies(schema, op, variables, data, entity_resolvers)?;
+        Self::complete_network_records(
+            schema,
+            response_records,
+            op,
+            (variables, data),
+            &mut normalized.updates,
+            retain_pages,
+            allow_contacts,
+        )?;
+        Ok(normalized)
+    }
+
+    /// Turns a response's normalized records into those it writes: adds the
+    /// records the host derives from it, refuses an unfenced contact, and
+    /// drops hydration pages unless they are kept.
+    fn complete_network_records(
+        schema: &crate::meta::Schema,
+        response_records: Option<ResponseRecords>,
+        op: &crate::document::Operation,
+        (variables, data): (&serde_json::Map<String, Json>, &Json),
+        updates: &mut RecordUpdates,
+        retain_pages: bool,
+        allow_contacts: bool,
+    ) -> Result<(), EngineError<S::Error>> {
+        if let Some(records) = response_records {
+            let extra = records(schema, op, variables, data, updates)?;
+            updates.extend(extra);
+        }
+        if !allow_contacts
+            && updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
+        if !retain_pages {
+            crate::page_retention::omit_hydration_pages(updates);
+        }
+        Ok(())
+    }
+
     async fn write_network(
         &mut self,
         origin_op: Option<OpId>,
@@ -1559,20 +1666,17 @@ impl<S: Storage> Engine<S> {
         // Leaving it unscoped made every open Quick Access list replay its
         // search on each event, whatever the event touched.
         let reports_search_changes = is_query || op.kind == OperationKind::Subscription;
+        let mut normalized = normalized;
+        Self::complete_network_records(
+            &self.schema,
+            self.response_records,
+            op,
+            (variables, data),
+            &mut normalized.updates,
+            retain_pages,
+            allow_contacts,
+        )?;
         let mut updates = normalized.updates;
-        if let Some(records) = self.response_records {
-            updates.extend(records(&self.schema, op, variables, data, &updates)?);
-        }
-        if !allow_contacts
-            && updates
-                .keys()
-                .any(|key| key.typename() == Some("GraphqlContact"))
-        {
-            return Err(EngineError::UnfencedContactWrite);
-        }
-        if !retain_pages {
-            crate::page_retention::omit_hydration_pages(&mut updates);
-        }
 
         if let Some(observed) = identity {
             match self.bound_identity().await? {
@@ -1883,30 +1987,39 @@ impl<S: Storage> Engine<S> {
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
-        let projection_keys = projections
-            .iter()
-            .map(|mutation| mutation.record_key().clone())
-            .collect();
+        let plan = self.plan_persist(updates, &projections).await?;
+        self.apply_persist(plan, projections).await
+    }
+
+    /// Reads what [`Self::persist_updates`] merges into and computes the
+    /// merge, writing nothing. The plan holds while storage is unchanged.
+    async fn plan_persist(
+        &mut self,
+        updates: RecordUpdates,
+        projections: &[ProjectionMutation],
+    ) -> Result<PersistPlan, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey<'static>, Record> = HashMap::new();
+        // Each staged record notes whether it came from the hot tier.
+        let mut staging: HashMap<EntityKey<'static>, (Record, bool)> =
+            HashMap::with_capacity(updates.len());
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
         let mut kept = self.take_kept_reads();
         let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
+        let mut from_hot: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
-            match self.hot.peek(key) {
+            if self.hot.contains(key) {
+                from_hot.push(key.clone());
+                continue;
+            }
+            match kept.as_mut().and_then(|kept| kept.record(key)) {
                 Some(record) => {
-                    staging.insert(key.clone(), record.clone());
+                    staging.extend(record.map(|record| (key.clone(), (record, false))));
+                    from_kept.push(key.clone());
                 }
-                None => match kept.as_mut().and_then(|kept| kept.record(key)) {
-                    Some(record) => {
-                        staging.extend(record.map(|record| (key.clone(), record)));
-                        from_kept.push(key.clone());
-                    }
-                    None => missing.push(key.clone()),
-                },
+                None => missing.push(key.clone()),
             }
         }
         if !missing.is_empty() {
@@ -1917,7 +2030,7 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             for (key, record) in missing.iter().zip(fetched) {
                 if let Some(r) = record {
-                    staging.insert(key.clone(), r);
+                    staging.insert(key.clone(), (r, false));
                 }
             }
         }
@@ -1935,9 +2048,18 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             for (key, record) in from_kept.into_iter().zip(fetched) {
                 match record {
-                    Some(record) => staging.insert(key, record),
+                    Some(record) => staging.insert(key, (record, false)),
                     None => staging.remove(&key),
                 };
+            }
+        }
+        // Hot records are taken out rather than cloned, once the reads above
+        // have succeeded. The plan holds them until it is applied: reads in
+        // between find them in storage, which still has them. A plan that is
+        // dropped leaves them out, since storage may have moved on by then.
+        for key in from_hot {
+            if let Some(record) = self.hot.pop(&key) {
+                staging.insert(key, (record, true));
             }
         }
 
@@ -1946,10 +2068,11 @@ impl<S: Storage> Engine<S> {
         let mut search_changed_buckets = BTreeSet::new();
         let mut viewer_fields = ViewerFields::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
-        let mut touched = Vec::with_capacity(updates.len());
+        let mut unchanged: Vec<(EntityKey<'static>, Record, bool)> = Vec::new();
+        let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
-            let (merged, did_change) = match staging.remove(&key) {
-                Some(mut existing) => {
+            let (merged, did_change, was_hot) = match staging.remove(&key) {
+                Some((mut existing, was_hot)) => {
                     // Compare only fields supplied by this partial response,
                     // overlaid onto the existing row, without cloning its body.
                     let before = snapshot_search_fields(&key, &existing);
@@ -1969,40 +2092,81 @@ impl<S: Storage> Engine<S> {
                             &mut search_changed_buckets,
                         );
                     }
-                    (existing, did_change)
+                    (existing, did_change, was_hot)
                 }
                 None => {
                     field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
                         key: key.clone(),
                     });
                     collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
-                    (update, true)
+                    (update, true, false)
                 }
             };
             if did_change {
                 changed.insert(key.clone());
-                to_persist.push((key.clone(), merged.clone()));
+                to_persist.push((key, merged));
+            } else {
+                unchanged.push((key, merged, was_hot));
             }
-            touched.push((key, merged));
+            persisted.push(did_change);
         }
 
         // Unchanged bases are already durable, including those fetched after
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections, kept.as_ref())
-                .await?
+            match self
+                .projection_mutations_change(projections, kept.as_ref())
+                .await
+            {
+                Ok(advanced) => advanced,
+                Err(error) => return Err(self.restore_unchanged(unchanged, error)),
+            }
         } else {
             true
         };
+        Ok(PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            unchanged,
+            persisted,
+            revision_advanced,
+        })
+    }
+
+    /// Writes a [`PersistPlan`] and publishes it to the hot tier.
+    async fn apply_persist(
+        &mut self,
+        plan: PersistPlan,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            unchanged,
+            persisted,
+            revision_advanced,
+        } = plan;
+        let projection_keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect();
         // A refetch that changes no record and no projection authority has
         // nothing to store. Pending layers still get their shadows rebased in
         // the storage write, as before.
-        if revision_advanced || !self.optimistic.is_empty() {
-            self.storage
-                .put_batch_with_projections(to_persist, projections)
+        if (revision_advanced || !self.optimistic.is_empty())
+            && let Err(error) = self
+                .storage
+                .put_records_with_projections(&to_persist, projections)
                 .await
-                .map_err(EngineError::Storage)?;
+        {
+            return Err(self.restore_unchanged(unchanged, EngineError::Storage(error)));
         }
         let revision = if revision_advanced {
             self.advance_revision()?
@@ -2020,8 +2184,19 @@ impl<S: Storage> Engine<S> {
         }
         // Publish only after the atomic write succeeds. Otherwise a failed
         // write could poison the hot tier and make its retry look unchanged.
-        for (key, record) in touched {
-            self.hot.put(key, record);
+        // Records go in in update order, so the LRU ends as it did when every
+        // record was cloned into one list.
+        let mut to_persist = to_persist.into_iter();
+        let mut unchanged = unchanged.into_iter();
+        for persisted in persisted {
+            let next = if persisted {
+                to_persist.next()
+            } else {
+                unchanged.next().map(|(key, record, _)| (key, record))
+            };
+            if let Some((key, record)) = next {
+                self.hot.put(key, record);
+            }
         }
         Ok(PersistedChanges {
             field_changes,
@@ -2031,6 +2206,25 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
         })
+    }
+
+    /// Puts back the hot records a failed plan or write left unchanged, and
+    /// returns its error. A record already back in the hot tier, because a
+    /// read put it there since the plan took it, stays as it is. Records read
+    /// from storage stay out, so the failed write evicts nothing. Changed
+    /// records taken from the hot tier stay out too: they hold the merge, and
+    /// storage still has the value before it, which the next read loads.
+    fn restore_unchanged(
+        &mut self,
+        unchanged: Vec<(EntityKey<'static>, Record, bool)>,
+        error: EngineError<S::Error>,
+    ) -> EngineError<S::Error> {
+        for (key, record, was_hot) in unchanged {
+            if was_hot && !self.hot.contains(&key) {
+                self.hot.put(key, record);
+            }
+        }
+        error
     }
 
     async fn projection_mutations_change(
@@ -3346,6 +3540,15 @@ impl<S: Storage> Engine<S> {
         Ok(self.revisioned(affected))
     }
 
+    /// Registers an active operation against every visible change, until its
+    /// next read registers the records it depends on, and drops its retained
+    /// watch view, so its next watch reads it whole: for a host that gave up a
+    /// read of the operation before it ran.
+    pub fn register_operation_broadly(&mut self, op_id: OpId) {
+        self.deps.set_op_broad(op_id);
+        self.query_watches.remove(op_id);
+    }
+
     /// Unregisters an active operation (urql teardown).
     pub fn teardown_operation(&mut self, op_id: OpId) {
         self.deps.remove_op(op_id);
@@ -3390,12 +3593,14 @@ impl<S: Storage> Engine<S> {
     /// Use this for an explicit server-provided cache-deletion effect.
     /// Cross-engine notifications for records already written to shared
     /// storage should use
-    /// [`Self::invalidate_keys`] instead.
+    /// [`Self::invalidate_keys`] instead. Engine metadata keys (`__meta:`) are
+    /// left in place.
     pub async fn delete_keys(
         &mut self,
         keys: &[EntityKey<'static>],
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch(keys)
@@ -3559,12 +3764,14 @@ impl<S: PredicateIndexStorage> Engine<S> {
     }
 
     /// Atomically delete records and update projections that depend on them.
+    /// Engine metadata keys (`__meta:`) are left in place.
     pub async fn delete_keys_with_projection_changes(
         &mut self,
         keys: &[EntityKey<'static>],
         projections: Vec<ProjectionMutation>,
     ) -> Result<Revisioned<BTreeSet<OpId>>, EngineError<S::Error>> {
         self.ensure_revision_can_advance()?;
+        let keys = &*without_metadata(keys);
         let affected = self.deps.ops_for_keys(keys.iter());
         self.storage
             .delete_batch_with_projection_changes(keys, projections)

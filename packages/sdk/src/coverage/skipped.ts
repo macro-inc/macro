@@ -187,26 +187,24 @@ export const calendarBacklog =
   [] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
-  'addMcpServer',
-  'browsePipedreamMcpCatalog',
+  // Connection management (consent, sign-in and its callbacks) is the web
+  // app's; agents connect through the harness's connected-apps routes.
+  'addConnectorServer',
+  'browseConnectorCatalog',
+  'completeConnectorConnect',
+  'connectorOauthCallback',
+  'connectorOauthClientMetadata',
+  'listConnectors',
+  'removeConnector',
+  'startConnectorConnect',
+  'updateConnector',
   'callTool',
-  'completePipedreamMcpConnect',
-  'completePipedreamMcpConnection',
-  'createPipedreamMcpToken',
-  'deletePipedreamMcpConnection',
-  'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
   'getChatsForAttachmentHandler',
   'getCitationHandler',
   'getMemoryHandler',
   'healthHandler',
-  'listMcpServers',
-  'listPipedreamMcpConnections',
-  'listPipedreamMcpOverlays',
-  'mcpAuthCallback',
-  'mcpOauthClientMetadata',
-  'recoverPipedreamMcpConnection',
   'rejectToolCall',
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
@@ -225,9 +223,6 @@ export const cognitionExcluded = [
   // Proposes SQL for the web app's in-browser engine to execute.
   'generateDatabaseQuery',
   'setPricingHandler',
-  'startMcpAuth',
-  'updateMcpServer',
-  'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
 ] as const satisfies readonly (keyof CognitionSdk)[];
@@ -507,8 +502,17 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog =
-  [] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog = [
+  // Time entries and the running timer, wrapped by the time tracking SDK methods.
+  'deleteTimeEntry',
+  'discardTimer',
+  'getTimer',
+  'listTimeEntries',
+  'logTime',
+  'startTimer',
+  'stopTimer',
+  'updateTimeEntry',
+] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

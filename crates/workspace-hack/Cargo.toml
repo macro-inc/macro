@@ -16,7 +16,6 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
@@ -121,6 +120,7 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
+rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
@@ -183,7 +183,6 @@ zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
@@ -293,6 +292,7 @@ prost = { version = "0.12", features = ["prost-derive"] }
 quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
+rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }

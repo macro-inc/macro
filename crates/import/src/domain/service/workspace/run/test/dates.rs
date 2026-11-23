@@ -12,7 +12,7 @@ async fn written_pages_keep_their_notion_dates(pool: PgPool) {
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
