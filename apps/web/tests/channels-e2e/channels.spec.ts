@@ -290,8 +290,7 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
 
   const confirm = page.getByRole('dialog', { name: 'Delete item?' });
-  await page.getByRole('button', { name: 'Channel actions' }).click();
-  await channelAction(page, 'Delete').click();
+  await chooseChannelAction(page, 'Delete');
   await confirm.getByRole('button', { name: 'Delete item' }).click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
@@ -434,9 +433,6 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
   ada,
   people,
 }) => {
-  // Known defect on main: when nothing else reaches the person around the
-  // deletion, their open page keeps the channel and its composer until a
-  // reload. In about 1 run in 3.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['soon gone']);
   const view = new ChannelView(page, channel.id);

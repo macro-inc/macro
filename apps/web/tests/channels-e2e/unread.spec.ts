@@ -345,6 +345,7 @@ test('UNR-09 the first message in a new channel marks it unread for the other me
   await findConversations(page, made.tag);
   const fresh = conversationRow(page, `${made.tag}-fresh`);
   await expect(fresh).toBeVisible();
+  await expect(unreadDot(fresh)).toHaveCount(0);
 
   await ben.post(made.fresh, 'first ever');
   await ben.post(made.used, 'later than the first');
