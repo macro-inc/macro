@@ -61,6 +61,17 @@ export const CONTACT_SECTIONS = [
   'calls',
 ] as const;
 
+/**
+ * Information panel order for both records, as in the rest of the app:
+ * details, Properties, the company's own sections, then References.
+ */
+export const RECORD_PANEL_ORDER = {
+  details: 10,
+  properties: 20,
+  lists: 30,
+  sharing: 40,
+  references: 50,
+} as const;
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];
 export type ContactSection = (typeof CONTACT_SECTIONS)[number];
 export type CrmRecordSection = CompanySection | ContactSection;

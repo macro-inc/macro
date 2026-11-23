@@ -1,10 +1,22 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 
 async function archive(page: Page) {
   await page.getByRole('button', { name: 'Archive', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).not.toHaveAttribute('data-transitioning');
   return dialog;
+}
+
+/** Opens the information panel and waits for it to stop moving. */
+async function openDetails(page: Page, kind: string) {
+  await page.goto(`/?kind=${kind}`);
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  await expect(
+    page.getByRole('region', { name: 'Record details' })
+  ).toBeVisible();
+  await page.waitForFunction(() =>
+    document.getAnimations().every((motion) => motion.playState !== 'running')
+  );
 }
 test.beforeEach(async ({ page }) => {
   await page.route('https://**', (route) => route.abort());
@@ -313,24 +325,74 @@ test('Team Visible and Archived are exclusive and preserve scoped search', async
   ).toBeVisible();
 });
 
-test('Details uses the same record details then references order', async ({
+test('Details lists record details, properties, company sections, then references', async ({
   page,
 }) => {
   for (const kind of ['contact', 'company']) {
-    await page.goto(`/?kind=${kind}`);
-    await page
-      .getByRole('button', { name: 'Show details', exact: true })
-      .click();
-    const details = page.getByText('Record details', { exact: true });
-    const references = page.getByText('References', { exact: true });
-    await expect(details).toBeVisible();
-    await expect(references).toBeVisible();
-    expect((await details.boundingBox())!.y).toBeLessThan(
-      (await references.boundingBox())!.y
+    await openDetails(page, kind);
+    const titles = [
+      'Record details',
+      'Properties',
+      ...(kind === 'company' ? ['Email sharing'] : []),
+      'References',
+    ];
+    const tops: number[] = [];
+    for (const title of titles) {
+      const heading = page.getByRole('button', { name: title, exact: true });
+      await expect(heading).toBeVisible();
+      tops.push((await heading.boundingBox())!.y);
+    }
+    expect(tops).toEqual([...tops].sort((a, b) => a - b));
+  }
+});
+
+test('Details rows and the references empty state use the panel type scale', async ({
+  page,
+}) => {
+  const style = (locator: Locator) =>
+    locator.evaluate((element) => {
+      const computed = getComputedStyle(element);
+      return { fontSize: computed.fontSize, color: computed.color };
+    });
+  for (const kind of ['contact', 'company']) {
+    await openDetails(page, kind);
+    const details = page.getByRole('region', { name: 'Record details' });
+    const properties = page.getByRole('region', { name: 'Properties' });
+    const propertyLabel = properties.getByText('Phone', { exact: true });
+    const propertyValue = properties.getByText('+1 555 0100', { exact: true });
+    await expect(propertyLabel).toBeVisible();
+    const labelStyle = await style(propertyLabel);
+    const labelX = (await propertyLabel.boundingBox())!.x;
+    expect(labelStyle.fontSize).toBe(
+      (
+        await style(
+          page.getByRole('button', { name: 'Record details', exact: true })
+        )
+      ).fontSize
     );
-    if (kind === 'company')
-      await expect(
-        page.getByText('Email sharing', { exact: true })
-      ).toBeVisible();
+    const labels =
+      kind === 'company' ? ['Name', 'Website'] : ['Name', 'Email', 'Company'];
+    for (const label of labels) {
+      const cell = details.getByText(label, { exact: true });
+      expect(await style(cell)).toEqual(labelStyle);
+      expect((await cell.boundingBox())!.x).toBe(labelX);
+    }
+    const name = details.getByText(
+      kind === 'company' ? 'Example company' : 'Example person',
+      { exact: true }
+    );
+    expect(await style(name)).toEqual(await style(propertyValue));
+    const empty = page.getByText(`Nothing references this ${kind} yet.`, {
+      exact: true,
+    });
+    const references = page.getByRole('button', {
+      name: 'References',
+      exact: true,
+    });
+    if ((await references.getAttribute('aria-expanded')) !== 'true')
+      await references.click();
+    await expect(empty).toBeVisible();
+    expect(await style(empty)).toEqual(labelStyle);
+    expect((await empty.boundingBox())!.x).toBe(labelX);
   }
 });
