@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
-import { homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
+import { channelNameRest, homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
 import { authRefreshTimeoutClass } from './lib/compare.ts';
 
 type ClassEntry = { n: number; example: unknown };
@@ -83,7 +83,40 @@ function reclassifyAuthTimeouts(run: string, classes: Record<string, ClassEntry>
   return moved;
 }
 
+/**
+ * A DOM-phase read recorded before lib/dom.ts set a thread row's channel name
+ * aside (closure N1) stopped at that row: compareDom reports the first
+ * positional difference only. Moves each such `dom:text` to
+ * `dom:channel-name-snapshot:rest-unrecorded`, which N1 closes on the
+ * evidence of dbg-channel-name.ts, a re-read of the same world compared whole.
+ */
+function reclassifyDomNames(run: string, classes: Record<string, ClassEntry>): { job: unknown; from: string; to: string; names: string }[] {
+  const path = join(outDir, run, 'dom.jsonl');
+  if (!existsSync(path)) return [];
+  const moved: { job: unknown; from: string; to: string; names: string }[] = [];
+  type Row = { kind: string; id: string; text: string };
+  for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
+    const rec = JSON.parse(line) as { job: unknown; diffs?: { cls: string; old?: Row; new?: Row }[] };
+    for (const d of rec.diffs ?? []) {
+      if (!/ dom:text$/.test(d.cls) || d.old?.kind !== 'entity' || d.new?.kind !== 'entity' || d.old.id !== d.new.id || !d.old.id.includes('|s14:channel_thread|')) continue;
+      const rest = channelNameRest(d.old.text, d.new.text);
+      if (rest === null) continue;
+      const entry = classes[d.cls];
+      if (!entry) continue;
+      entry.n -= 1;
+      if (entry.n <= 0) delete classes[d.cls];
+      const to = d.cls.replace(/ dom:text$/, ' dom:channel-name-snapshot:rest-unrecorded');
+      const names = `old "${d.old.text.slice(0, d.old.text.length - rest.length)}" new "${d.new.text.slice(0, d.new.text.length - rest.length)}"`;
+      classes[to] ??= { n: 0, example: { job: rec.job, from: d.cls, names } };
+      classes[to].n += 1;
+      moved.push({ job: rec.job, from: d.cls, to, names });
+    }
+  }
+  return moved;
+}
+
 const outDir
+
  = join(import.meta.dirname, 'out');
 const runs = readdirSync(outDir).filter((name) => existsSync(join(outDir, name, 'summary.json')));
 const report: Record<string, unknown> = {};
@@ -94,6 +127,7 @@ for (const run of runs.sort()) {
   const closedBy: Record<string, number> = {};
   const reclassified = summary.sequences?.classes ? reclassifyHeldDom(run, summary.sequences.classes) : [];
   const authTimeouts = summary.sequences?.classes ? reclassifyAuthTimeouts(run, summary.sequences.classes) : [];
+  const domNames = summary.dom?.classes ? reclassifyDomNames(run, summary.dom.classes) : [];
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
     for (const [cls, entry] of Object.entries(classes)) {
@@ -115,6 +149,7 @@ for (const run of runs.sort()) {
     retries: summary.retries ?? {},
     reclassified,
     authTimeouts,
+    domNames,
     closedBy,
     open,
   };

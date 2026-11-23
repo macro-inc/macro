@@ -6,6 +6,7 @@
 
 import { classify } from './classify.ts';
 import { compareDom, type Difference, type DomRow } from './compare.ts';
+import { channelNameRest } from './dom-held.ts';
 import { q, sql, type Stack, type User } from './stack.ts';
 
 type EntityRow = Extract<DomRow, { kind: 'entity' }>;
@@ -66,8 +67,33 @@ export async function compareHomeDom(stack: Stack, viewer: User, oldRows: DomRow
     setAside = new Set(initiatives.map((row) => row.id));
   }
   const rest = pruneHeaders(newRows.filter((row) => row.kind !== 'entity' || !setAside.has(row.id)));
-  diffs.push(...compareDom(normalize(pruneHeaders(oldRows)), normalize(rest), label));
+  const named = withSharedChannelNames(normalize(pruneHeaders(oldRows)), normalize(rest));
+  if (named.rows.length) diffs.push({ signature: `${label} dom:channel-name-snapshot`, kind: 'dom', detail: named.rows.join(' | ').slice(0, 600) });
+  diffs.push(...compareDom(named.old, named.new, label));
   return diffs;
+}
+
+/**
+ * Both sides' rows with a channel-thread row's channel name set to
+ * `<channel>` where the two sides show it apart only in that name, one of them
+ * the notification's snapshot (lib/dom-held.ts channelNameRest, closure N1),
+ * so the comparison goes on to the rows after it. Lists each such row.
+ */
+function withSharedChannelNames(oldRows: DomRow[], newRows: DomRow[]): { old: DomRow[]; new: DomRow[]; rows: string[] } {
+  const newById = new Map<string, EntityRow>();
+  for (const row of newRows) if (row.kind === 'entity') newById.set(row.id, row);
+  const rests = new Map<string, string>();
+  const rows: string[] = [];
+  for (const row of oldRows) {
+    if (row.kind !== 'entity' || entityOf(row)?.type !== 'channel_thread') continue;
+    const other = newById.get(row.id);
+    const rest = other ? channelNameRest(row.text, other.text) : null;
+    if (!other || rest === null) continue;
+    rests.set(row.id, rest);
+    rows.push(`${entityOf(row)?.id}: old "${row.text.slice(0, row.text.length - rest.length)}" new "${other.text.slice(0, other.text.length - rest.length)}"`);
+  }
+  const rewrite = (list: DomRow[]) => list.map((row) => (row.kind === 'entity' && rests.has(row.id) ? { ...row, text: `<channel>${rests.get(row.id)}` } : row));
+  return { old: rewrite(oldRows), new: rewrite(newRows), rows };
 }
 
 export { classify };

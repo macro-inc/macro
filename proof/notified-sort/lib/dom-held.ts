@@ -61,8 +61,71 @@ export function withoutDayRollover(e: CompactDom): CompactDom {
   return { oldMounted: strip(e.oldMounted), newMounted: strip(e.newMounted), oldReload: strip(e.oldReload), newReload: strip(e.newReload) };
 }
 
+/** The channel name a harness notification carries (lib/notify.ts: channelName is the world's channel key). */
+const SNAPSHOT_NAME = /^(?:v\d+-(?:pub|priv|dm)|tch)/;
+
+/** `rest` when `snapshot` is the notification's channel name followed by `rest` and `other` is another name followed by the same `rest`. */
+function restAfterNames(snapshot: string, other: string): string | null {
+  const m = SNAPSHOT_NAME.exec(snapshot);
+  if (!m) return null;
+  const rest = snapshot.slice(m[0].length);
+  return rest && other !== snapshot && other.endsWith(rest) && other.length > rest.length ? rest : null;
+}
+
+/**
+ * The rest of two texts of one channel-thread row that differ only in the
+ * channel name in front, one of them the name the notification carries, else
+ * null. Home names a
+ * thread's channel from the channel directory and, while the directory has not
+ * answered for that channel, from the notification's own snapshot
+ * (features/home/components/HomeList.tsx:121-128,
+ * features/entity/utils/channel-thread-name.ts:10-11): the same code on main
+ * and the branch, so which name a read catches depends on when the directory
+ * answered (closure N1).
+ */
+export function channelNameRest(a: string, b: string): string | null {
+  return restAfterNames(a, b) ?? restAfterNames(b, a);
+}
+
+/**
+ * The rows with each channel-thread row's channel name set to `<channel>` where
+ * the four lists show that row with exactly two texts (time labels aside), one
+ * with the notification's snapshot name and one with another name in front of
+ * the same rest. Any other change to the row still counts.
+ */
+export function withoutChannelNameSnapshots(e: CompactDom): CompactDom {
+  const lists = [e.oldMounted, e.newMounted, e.oldReload, e.newReload];
+  const variants = new Map<string, Set<string>>();
+  for (const row of lists.flat()) {
+    const k = keyOf(row);
+    if (!k?.startsWith('channel_thread/')) continue;
+    const base = splitLabel(row).base;
+    const set = variants.get(k) ?? new Set<string>();
+    set.add(base.slice(base.indexOf(' ') + 1));
+    variants.set(k, set);
+  }
+  const rests = new Map<string, string>();
+  for (const [k, set] of variants) {
+    if (set.size !== 2) continue;
+    const [a, b] = [...set];
+    const rest = channelNameRest(a, b);
+    if (rest !== null) rests.set(k, rest);
+  }
+  if (!rests.size) return e;
+  const rewrite = (rows: string[]) =>
+    rows.map((row) => {
+      const k = keyOf(row);
+      const rest = k ? rests.get(k) : undefined;
+      if (rest === undefined) return row;
+      const { base } = splitLabel(row);
+      const head = base.slice(0, base.indexOf(' ') + 1);
+      return `${head}<channel>${rest}${row.slice(base.length)}`;
+    });
+  return { oldMounted: rewrite(e.oldMounted), newMounted: rewrite(e.newMounted), oldReload: rewrite(e.oldReload), newReload: rewrite(e.newReload) };
+}
+
 export function heldApartFromShared(input: CompactDom): { newHeld: boolean; oldHeld: boolean; shared: string[] } {
-  const e = withoutDayRollover(input);
+  const e = withoutChannelNameSnapshots(withoutDayRollover(input));
   const om = rowsByKey(e.oldMounted), nm = rowsByKey(e.newMounted), or = rowsByKey(e.oldReload), nr = rowsByKey(e.newReload);
   const keys = new Set([...om.keys(), ...nm.keys(), ...or.keys(), ...nr.keys()]);
   const shared = new Set<string>();
@@ -156,8 +219,12 @@ export function staleMailLabels(e: CompactDom): { ok: boolean; rows: { key: stri
 export function homeCheckClosure(recorded: CompactDom, open: string[]): { suffix: string; held: ReturnType<typeof heldApartFromShared>; mail: ReturnType<typeof staleMailLabels>['rows'] } | null {
   const e = withoutBranchOnlyInitiatives(recorded);
   const held = heldApartFromShared(e);
+  const named = withoutChannelNameSnapshots(e);
+  const textOnly = open.every((cls) => cls.endsWith(' dom:text'));
+  // The mounted sides apart only in which channel name a thread row caught (N1).
+  if (textOnly && JSON.stringify(named.oldMounted.map(norm)) === JSON.stringify(named.newMounted.map(norm))) return { suffix: 'dom:channel-name-snapshot', held, mail: [] };
   if (held.newHeld) return { suffix: 'dom:old-behind-reload', held, mail: [] };
-  if (!open.every((cls) => cls.endsWith(' dom:text'))) return null;
+  if (!textOnly) return null;
   if (onlyStaleTimeLabels(e)) return { suffix: 'dom:stale-time-label', held, mail: [] };
   const mail = staleMailLabels(e);
   return mail.ok ? { suffix: 'dom:stale-mail-label', held, mail: mail.rows } : null;

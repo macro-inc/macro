@@ -147,6 +147,15 @@ export const CLOSURES: Closure[] = [
       "Invisible as a difference between main and the branch: the same timeout can fire on either side, depending only on which tab's refresh the stack answers late, and no row is compared on an errored read.",
   },
   {
+    id: 'N1',
+    match: /(^|\s)dom:channel-name-snapshot(:rest-unrecorded)?$/,
+    title: "A thread row names its channel by the notification's snapshot until the channel directory answers, on both sides",
+    cause:
+      "Home names a channel thread's channel with loadedChannel(directory.lookup(entity.channelId)) (features/home/components/HomeList.tsx:121-128); lookupChannel stays pending until the directory is complete or a by-id read answers (lib/queries/channel/directory.ts:261-292), and while it is pending getChannelThreadName falls back to the channelName the notification carried (features/entity/utils/channel-thread-name.ts:10-11 and the loop after it). None of the three files differs between main and the branch (git diff 6449317189c 485bb0f7c72 on them is empty). The harness writes the world's channel key ('v2-priv', 'tch') as that snapshot (lib/notify.ts:72, :82) and gives the channel another name ('priv 996'), so a read taken before the directory answered shows the key and one after shows the name. Which side a read catches first is timing: in the quiet run main's DOM-phase read showed 'v2-priv' where the branch's showed 'priv 996' (lane v2, signal), and at lane v4 sequence 4 step 9 both reloads showed 'v4-priv' while both mounted Homes showed 'priv 472'. lib/dom.ts now sets the name aside on a row where it is the only difference and goes on comparing the rows after it; dbg-channel-name.ts reopens a lane's Home on both sides and logs, every 2 s, each thread row whose name differs and when the two agree.",
+    outcome:
+      "Invisible as a difference between main and the branch: both run the same lookup and fallback, and both settle on the channel's current name once the directory answers. A user sees the snapshot only for a channel renamed since the notification, briefly, on either side.",
+  },
+  {
     id: 'B1',
     match: /^live:[a-z]+:old-behind:[a-z-]+\/[a-z_-]+$|(^|\s)dom:old-behind-reload$/,
     title: "Main's mounted list stays behind its own reload where the branch's has caught up",

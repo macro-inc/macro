@@ -8,8 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { classify, sameInstant } from './classify.ts';
 import { closureOf } from './closed.ts';
 import { authRefreshTimeoutClass, compareSnapshots, refCheck, type Snapshot } from './compare.ts';
-import { heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels, withoutDayRollover } from './dom-held.ts';
-import { parseRowId } from './dom.ts';
+import { channelNameRest, heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels, withoutChannelNameSnapshots, withoutDayRollover } from './dom-held.ts';
+import { compareHomeDom, parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
 import { discrepancies, instant, project, sameRows } from './project.ts';
@@ -318,6 +318,43 @@ describe('withoutDayRollover', () => {
     expect(withoutDayRollover(e)).toBe(e);
     const one = { oldMounted: mountedOld, newMounted: reload, oldReload: reload, newReload: reload };
     expect(withoutDayRollover(one)).toBe(one);
+  });
+});
+
+describe('channel names', () => {
+  const thread = (id: string, text: string) => ({ kind: 'entity' as const, id: `s8:soup-row|s6:entity|s14:channel_thread|s1:${id}|s5:today|u`, text, unread: false, labels: [] });
+  const doc = (id: string, text: string) => ({ kind: 'entity' as const, id: `s8:soup-row|s6:entity|s8:document|s1:${id}|s5:today|u`, text, unread: false, labels: [] });
+  it('sees a snapshot name against another name in front of the same rest', () => {
+    expect(channelNameRest('v2-privYou:root 1B Seed:a reply<t:m>', 'priv 996You:root 1B Seed:a reply<t:m>')).toBe('You:root 1B Seed:a reply<t:m>');
+    expect(channelNameRest('team-3501You:hi', 'tchYou:hi')).toBe('You:hi');
+    expect(channelNameRest('priv 996You:root 1', 'priv 997You:root 1')).toBeNull();
+    expect(channelNameRest('v2-privYou:root 1', 'priv 996You:root 2')).toBeNull();
+    expect(channelNameRest('v2-privYou:root 1', 'v2-privYou:root 1')).toBeNull();
+  });
+  it('sets the name aside and still compares the rows after it', async () => {
+    const old = [thread('a', 'v2-privYou:root<t:m>'), doc('d', 'Doc<t:m>')];
+    const same = await compareHomeDom(undefined as never, undefined as never, old, [thread('a', 'priv 996You:root<t:m>'), doc('d', 'Doc<t:m>')], 'home');
+    expect(same.map((d) => d.signature)).toEqual(['home dom:channel-name-snapshot']);
+    expect(closureOf('home dom:channel-name-snapshot')?.id).toBe('N1');
+    const apart = await compareHomeDom(undefined as never, undefined as never, old, [thread('a', 'priv 996You:root<t:m>'), doc('d', 'Other<t:m>')], 'home');
+    expect(apart.map((d) => d.signature)).toEqual(['home dom:channel-name-snapshot', 'home dom:text']);
+    const renamed = await compareHomeDom(undefined as never, undefined as never, [thread('a', 'priv 1You:root<t:m>')], [thread('a', 'priv 2You:root<t:m>')], 'home');
+    expect(renamed.map((d) => d.signature)).toEqual(['home dom:text']);
+  });
+  it('rewrites recorded rows only where a thread shows exactly a snapshot and one other name', () => {
+    const t = (name: string, label = '3h') => `channel_thread/a/today/u ${name}You:root${label}`;
+    const e = { oldMounted: [t('priv 4')], newMounted: [t('priv 4', '4h')], oldReload: [t('v4-priv')], newReload: [t('v4-priv')] };
+    expect(withoutChannelNameSnapshots(e).oldReload).toEqual(['channel_thread/a/today/u <channel>You:root3h']);
+    expect(withoutChannelNameSnapshots(e).newMounted).toEqual(['channel_thread/a/today/u <channel>You:root4h']);
+    const three = { ...e, newMounted: [t('priv 5')] };
+    expect(withoutChannelNameSnapshots(three)).toBe(three);
+  });
+  it('closes a Home check apart only in a thread name', () => {
+    const t = (name: string) => `channel_thread/a/today/u ${name}You:root3h`;
+    const d = 'document/d/today/u Doc3h';
+    const e = { oldMounted: ['# Today', t('v2-priv'), d], newMounted: ['# Today', t('priv 9'), d], oldReload: ['# Today', t('priv 9'), d], newReload: ['# Today', t('priv 9'), d] };
+    expect(homeCheckClosure(e, ['seq home touch signal dom:text'])?.suffix).toBe('dom:channel-name-snapshot');
+    expect(homeCheckClosure({ ...e, newMounted: ['# Today', t('priv 9'), 'document/d/today/u Other3h'] }, ['seq home touch signal dom:text'])?.suffix).not.toBe('dom:channel-name-snapshot');
   });
 });
 
