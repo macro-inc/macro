@@ -39,7 +39,7 @@ const mocks = vi.hoisted(() => ({
   input: undefined as AgentInputProps | undefined,
   model: undefined as UnifiedModelSelectorState | undefined,
   queued: undefined as QueuedPromptsProps | undefined,
-  queueEntries: () => [
+  queueEntries: (): { actionId: string; kind: string; prompt?: string }[] => [
     { actionId: 'queued-1', kind: 'prompt', prompt: 'Queued request' },
   ],
 }));

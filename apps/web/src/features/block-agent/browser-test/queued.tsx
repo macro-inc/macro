@@ -75,6 +75,8 @@ function Fixture() {
     }))
   );
   const [log, setLog] = createSignal<string[]>([]);
+  // Controlled like the session composer, which keeps its draft per session.
+  const [draft, setDraft] = createSignal('');
   const record = (line: string) => setLog((lines) => [...lines, line]);
   // A steered message is shown as sent at once, so it leaves the queue.
   const steer = (actionId: string) => {
@@ -148,6 +150,8 @@ function Fixture() {
                             <AgentInput
                               busy
                               autofocus
+                              draft={draft()}
+                              onDraftChange={setDraft}
                               placeholder="Message the agent, @mention anything"
                               onSend={(markdown) => record(`send: ${markdown}`)}
                               onStop={() => record('stop')}
