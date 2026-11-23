@@ -333,7 +333,8 @@ test('keeps the reading position and unsaved input when the text size changes', 
 
 type ScrollEndWindow = Window & {
   holdScrollEnds?: boolean;
-  deliverScrollEnds?: () => void;
+  deliverScrollEnds?: () => number;
+  deliveredScrollEnds?: number;
 };
 
 test('keeps lanes mounted when a scroll ends just as the text size changes', async ({
@@ -361,10 +362,13 @@ test('keeps lanes mounted when a scroll ends just as the text size changes', asy
       clearTimer(id);
     };
     target.deliverScrollEnds = () => {
+      let count = 0;
       for (const [id, run] of held) {
         held.delete(id);
         run();
+        count += 1;
       }
+      return count;
     };
   });
   const cdp = await page.context().newCDPSession(page);
@@ -382,14 +386,24 @@ test('keeps lanes mounted when a scroll ends just as the text size changes', asy
   await page.getByRole('button', { name: 'New group', exact: true }).click();
   const name = page.getByLabel('New group name');
   await name.fill('Renewals');
-  // Created after the board's own observers, so it runs after them.
+  // Created after the board's own observers, so it runs after them. It
+  // delivers only when the lane width changes, not on its first report.
   await page.evaluate(() => {
+    const target = window as ScrollEndWindow;
     const end = document.querySelector('[data-kanban-board-column="-1"]');
     if (!end) throw new Error('end column not rendered');
-    new ResizeObserver(() =>
-      (window as ScrollEndWindow).deliverScrollEnds?.()
-    ).observe(end);
+    let width = end.getBoundingClientRect().width;
+    target.deliveredScrollEnds = 0;
+    new ResizeObserver(() => {
+      const next = end.getBoundingClientRect().width;
+      if (next === width) return;
+      width = next;
+      target.deliveredScrollEnds =
+        (target.deliveredScrollEnds ?? 0) + (target.deliverScrollEnds?.() ?? 0);
+    }).observe(end);
   });
+  const delivered = () =>
+    page.evaluate(() => (window as ScrollEndWindow).deliveredScrollEnds ?? 0);
   const setRoot = async (size: number) => {
     await cdp.send('Page.setFontSizes', { fontSizes: { standard: size } });
     await expect
@@ -399,8 +413,12 @@ test('keeps lanes mounted when a scroll ends just as the text size changes', asy
       .toBe(`${size}px`);
   };
   await setRoot(20);
+  await expect.poll(delivered).toBeGreaterThan(0);
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('Renewals');
+  await page.evaluate(() => {
+    (window as ScrollEndWindow).deliveredScrollEnds = 0;
+  });
   // Shrinking at the end: the browser clamps the offset itself while the
   // board re-measures, and a report from before must still not move it.
   await name.press('Escape');
@@ -413,6 +431,7 @@ test('keeps lanes mounted when a scroll ends just as the text size changes', asy
     (element as HTMLElement).focus({ preventScroll: true })
   );
   await setRoot(16);
+  await expect.poll(delivered).toBeGreaterThan(0);
   await expect(control).toBeFocused();
   await expect(control).toBeInViewport({ ratio: 1 });
   await cdp.detach();
