@@ -690,6 +690,7 @@ pub(crate) type TimeTrackingServiceType = time_tracking::domain::service::TimeTr
     time_tracking::outbound::pg_time_repo::PgTimeTrackingRepository,
     EntityAccessService,
     time_tracking::outbound::kafka_events::BrokerTimeEntryEventPublisher<DssEventBroker>,
+    time_tracking::outbound::gateway_updates::GatewayTimeTrackingUpdates,
 >;
 
 /// Type alias for the time tracking router state.

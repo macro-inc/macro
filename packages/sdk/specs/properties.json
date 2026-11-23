@@ -1980,6 +1980,7 @@
           "CHANNEL",
           "CHAT",
           "COMPANY",
+          "CONTACT",
           "DATABASE_ROW",
           "DOCUMENT",
           "INITIATIVE",

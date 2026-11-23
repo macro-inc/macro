@@ -4,7 +4,7 @@ use crate::domain::models::backfill::{
 };
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::invalidation::ContactsInvalidation;
-use crate::domain::models::list::InboxSource;
+use crate::domain::models::list::{ContactList, InboxSource};
 use crate::domain::models::listed::ListedContact;
 use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
@@ -152,6 +152,17 @@ pub trait ContactListReader: Send + Sync + 'static {
         &self,
         viewer: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// One page of the members of one of the viewer's lists, in contact-id
+    /// order after the cursor. The viewer is never a member of their own
+    /// lists, `teammates` included.
+    fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.
@@ -228,6 +239,21 @@ pub trait PeopleSearchService: Send + Sync + 'static {
         query: &PeopleSearchQuery,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// The members of one of a viewer's lists, for authenticated inbound adapters.
+pub trait ContactListMembersService: Send + Sync + 'static {
+    /// One page of the authenticated viewer's members of `list`, in contact-id
+    /// order after the cursor. Read from the list-aware directory for every
+    /// viewer, whatever store the `contacts-list-reads` flag picks for their
+    /// other reads: only it records lists.
+    fn list_members(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        list: ContactList,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
 /// The people typed text names, for authenticated inbound adapters.

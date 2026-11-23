@@ -25,6 +25,7 @@ import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
+  DateApiValue,
   DateProperty,
   Property,
   PropertyApiValues,
@@ -117,7 +118,12 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
     props.entityType,
     props.includeMetadata ?? false
   );
-  const allProperties = useAllProperties();
+  // The definitions this entity can take: the same list Add property asks for,
+  // so it is already loaded when the picker opens.
+  const allProperties = useAllProperties(
+    () => true,
+    () => props.entityType
+  );
   const [pendingDefinitionIds, setPendingDefinitionIds] = createSignal<
     Set<string>
   >(new Set());
@@ -381,9 +387,7 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   getEmptyLabel={props.getEmptyLabel}
                   property={property()}
                   otherDateEnd={() => otherDateEnd(property())}
-                  saveOtherDateEnd={(end, value) =>
-                    saveOne(end, { valueType: 'DATE', value })
-                  }
+                  saveOtherDateEnd={(end, value) => saveOne(end, value)}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
                       property().propertyDefinitionId
@@ -623,7 +627,7 @@ function SidePanelPropertyRow(props: {
   otherDateEnd?: () => DateProperty | undefined;
   saveOtherDateEnd?: (
     property: DateProperty,
-    value: Date | null
+    value: DateApiValue
   ) => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
