@@ -3941,6 +3941,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-diff-fuzz"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "cache-core",
+ "cache-turso",
+ "clap",
+ "pollster",
+ "predicate-index",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "tokio",
+ "tracing",
+ "turso_core",
+ "uuid",
+]
+
+[[package]]
 name = "cache-schema"
 version = "0.1.0"
 dependencies = [
