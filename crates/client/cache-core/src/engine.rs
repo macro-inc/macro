@@ -2712,12 +2712,12 @@ impl<S: Storage> Engine<S> {
                 .map(|candidate| candidate.id)
                 .ok_or(EngineError::UnknownTransaction(transaction))?;
             let write_result = self.rollback_optimistic_write(transaction, claim).await?;
-            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(
-                Box::new(SupersededMutationResult {
+            return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(Box::new(
+                SupersededMutationResult {
                     write_result,
                     replacement_transaction_id,
-                }),
-            ));
+                },
+            )));
         }
         if !self
             .storage
