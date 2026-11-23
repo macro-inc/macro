@@ -419,7 +419,8 @@ attachment in the attachment grid, not as message markdown.
 
 ## Ask AI entry points
 
-**Ask AI** in desktop search (including Tab) and the command menu opens
+**Ask AI** in desktop search (its button, or Cmd+Enter, Ctrl+Enter
+elsewhere, even from the search field) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready. With the Agents workspace enabled, an empty search replaces its
 split with the Agents workspace's new-conversation composer; otherwise it opens an
