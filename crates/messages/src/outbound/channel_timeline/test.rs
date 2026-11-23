@@ -3,6 +3,7 @@ use std::sync::{Arc, Mutex};
 use activity::domain::timeline::TimelineActivity;
 use chrono::DateTime;
 use macro_event_broker::{EventBrokerError, MacroEventBroker};
+use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
@@ -31,7 +32,7 @@ impl MacroEventBroker for RecordingBroker {
 
 fn update() -> AddressedChannelTimelineUpdate {
     AddressedChannelTimelineUpdate {
-        recipients: vec!["macro|a@example.com".into()],
+        recipients: vec![MacroUserIdStr::parse_from_str("macro|a@example.com").unwrap()],
         update: ChannelTimelineUpdate::activity(
             CHANNEL,
             12,

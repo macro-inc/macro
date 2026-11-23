@@ -3,6 +3,7 @@ use activity::domain::timeline::TimelineActivity;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use futures::StreamExt;
 use messages::domain::delivery::{MessageAudienceAccess, MessageRealtime};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use messages::domain::models::MessageParent;
 use messages::domain::timeline_updates::{
     ChannelActivityUpdates, ChannelTimelineAudience, ChannelTimelineUpdatePublisher,
@@ -59,16 +60,30 @@ impl TimelinePublisher {
 /// Reads a channel's active participants for live timeline updates.
 pub(crate) struct ChannelParticipantAudience<R>(pub(crate) R);
 
+/// The channel repository could not read the participants.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to read channel participants: {0:#}")]
+pub(crate) struct ParticipantReadError(anyhow::Error);
+
 impl<R: channels::domain::ports::ChannelRepo> ChannelTimelineAudience
     for ChannelParticipantAudience<R>
 {
-    async fn participants(&self, channel_id: uuid::Uuid) -> Result<Vec<String>, rootcause::Report> {
-        let participants = self.0.get_participants(channel_id).await.map_err(|error| {
-            rootcause::report!("failed to read channel participants: {}", error.into())
-        })?;
+    type Err = ParticipantReadError;
+
+    async fn participants(
+        &self,
+        channel_id: uuid::Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
+        let participants = self
+            .0
+            .get_participants(channel_id)
+            .await
+            .map_err(|error| ParticipantReadError(error.into()))?;
+        // A stored participant id that does not parse names no subscriber.
         Ok(participants
-            .into_iter()
-            .map(|participant| participant.user_id)
+            .iter()
+            .filter_map(|participant| MacroUserIdStr::parse_from_str(&participant.user_id).ok())
+            .map(CowLike::into_owned)
             .collect())
     }
 }

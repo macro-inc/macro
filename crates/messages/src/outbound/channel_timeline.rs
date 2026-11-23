@@ -8,7 +8,7 @@ mod test;
 #[cfg(feature = "consumer")]
 pub use consumer::ChannelTimelineTopicConsumer;
 
-use macro_event_broker::{Event, MacroEvent, TopicEvent};
+use macro_event_broker::{Event, EventBrokerError, MacroEvent, TopicEvent};
 use macro_event_topics::MacroChannelTimelineTopic;
 use serde::{Deserialize, Serialize};
 
@@ -82,12 +82,11 @@ impl<Broker> BrokerChannelTimelinePublisher<Broker> {
 impl<Broker: macro_event_broker::MacroEventBroker> ChannelTimelineUpdatePublisher
     for BrokerChannelTimelinePublisher<Broker>
 {
-    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report> {
+    type Err = EventBrokerError;
+
+    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err> {
         self.broker
             .send_event(&ChannelTimelineMacroEvent::updated(update.clone()))
             .map(drop)
-            .map_err(|error| {
-                rootcause::report!("failed to publish channel timeline update: {error}")
-            })
     }
 }

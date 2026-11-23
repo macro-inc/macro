@@ -17,6 +17,7 @@ pub use fanout::{ChannelTimelineFanout, ChannelTimelineUpdateSource};
 use std::collections::HashSet;
 
 use activity::domain::timeline::TimelineActivity;
+use macro_user_id::{cowlike::CowLike as _, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -62,16 +63,33 @@ impl ChannelTimelineUpdate {
 /// change committed, the same audience as `message_update`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AddressedChannelTimelineUpdate {
-    /// User ids of the participants to deliver to.
-    pub recipients: Vec<String>,
+    /// The participants to deliver to.
+    pub recipients: Vec<MacroUserIdStr<'static>>,
     /// The hydrated change.
     pub update: ChannelTimelineUpdate,
 }
 
+/// Why a live timeline update was not published.
+#[derive(Debug, thiserror::Error)]
+pub enum ChannelTimelineError {
+    /// The channel's participants could not be read.
+    #[error("failed to read channel participants: {0:?}")]
+    Audience(rootcause::Report),
+    /// The changed message could not be read.
+    #[error("failed to read the changed message")]
+    Read(#[from] MessageError),
+    /// The update could not be handed to the publisher.
+    #[error("failed to publish channel timeline update: {0:?}")]
+    Publish(rootcause::Report),
+}
+
 /// Publishes addressed updates to every process serving subscriptions.
 pub trait ChannelTimelineUpdatePublisher: Send + Sync + 'static {
+    /// Why an update could not be scheduled.
+    type Err: std::error::Error + Send + Sync + 'static;
+
     /// Schedule `update` for delivery; best effort, like `message_update`.
-    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report>;
+    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err>;
 }
 
 /// Reads the current state of changed messages, as a changes page does.
@@ -97,11 +115,31 @@ impl<R: MessageRepository> ChannelMessageChangeLoader for R {
 /// The users a channel's live updates are for: its active participants, the
 /// audience channel message delivery addresses.
 pub trait ChannelTimelineAudience: Send + Sync + 'static {
-    /// The channel's active participants' user ids.
+    /// Why the participants could not be read.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// The channel's active participants.
     fn participants(
         &self,
         channel_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<String>, rootcause::Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
+}
+
+/// The users in `users` with a valid user id. Realtime delivery addresses
+/// users by plain id; an id that does not parse names no subscriber.
+fn recipients(users: impl IntoIterator<Item = String>) -> Vec<MacroUserIdStr<'static>> {
+    users
+        .into_iter()
+        .filter_map(|user| {
+            MacroUserIdStr::parse_from_str(&user)
+                .map(|user| user.into_owned())
+                // The id is personal data, so it stays out of the log.
+                .inspect_err(|_| {
+                    tracing::warn!("skipping live update recipient with an invalid id")
+                })
+                .ok()
+        })
+        .collect()
 }
 
 /// Publishes recorded channel activity as live timeline updates.
@@ -132,7 +170,7 @@ impl<A: ChannelTimelineAudience, P: ChannelTimelineUpdatePublisher> ChannelActiv
         &self,
         channel_id: Uuid,
         activities: impl IntoIterator<Item = (TimelineActivity, Option<i64>)>,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<(), ChannelTimelineError> {
         let updates: Vec<_> = activities
             .into_iter()
             .filter_map(|(activity, seq)| {
@@ -144,7 +182,11 @@ impl<A: ChannelTimelineAudience, P: ChannelTimelineUpdatePublisher> ChannelActiv
             return Ok(());
         }
 
-        let recipients = self.audience.participants(channel_id).await?;
+        let recipients = self
+            .audience
+            .participants(channel_id)
+            .await
+            .map_err(|error| ChannelTimelineError::Audience(report(error)))?;
         let mut first_error = None;
         for update in updates {
             let published = self.publisher.publish(&AddressedChannelTimelineUpdate {
@@ -152,7 +194,7 @@ impl<A: ChannelTimelineAudience, P: ChannelTimelineUpdatePublisher> ChannelActiv
                 update,
             });
             if let Err(error) = published {
-                first_error.get_or_insert(error);
+                first_error.get_or_insert(ChannelTimelineError::Publish(report(error)));
             }
         }
         first_error.map_or(Ok(()), Err)
@@ -212,7 +254,7 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
         &self,
         event: &MessageEvent,
         users: HashSet<String>,
-    ) -> Result<(), rootcause::Report> {
+    ) -> Result<(), ChannelTimelineError> {
         let (MessageParent::Channel(channel_id), Some(seq)) = (&event.parent, event.seq) else {
             return Ok(());
         };
@@ -226,8 +268,7 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
         let messages = self
             .changes
             .load_message_changes(*channel_id, &[message_id])
-            .await
-            .map_err(|error| rootcause::report!("channel timeline update read failed: {error}"))?;
+            .await?;
 
         // As in a changes page, an id the read no longer finds was hard-deleted.
         let removed_ids = if messages.iter().any(|change| change.id() == message_id) {
@@ -237,17 +278,23 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
         };
         span.record("removed", !removed_ids.is_empty());
 
-        self.publisher.publish(&AddressedChannelTimelineUpdate {
-            recipients: users.into_iter().collect(),
-            update: ChannelTimelineUpdate {
-                channel_id: *channel_id,
-                seq,
-                messages,
-                activities: Vec::new(),
-                removed_ids,
-            },
-        })
+        self.publisher
+            .publish(&AddressedChannelTimelineUpdate {
+                recipients: recipients(users),
+                update: ChannelTimelineUpdate {
+                    channel_id: *channel_id,
+                    seq,
+                    messages,
+                    activities: Vec::new(),
+                    removed_ids,
+                },
+            })
+            .map_err(|error| ChannelTimelineError::Publish(report(error)))
     }
+}
+
+fn report(error: impl std::error::Error + Send + Sync + 'static) -> rootcause::Report {
+    rootcause::Report::new(error).into_dynamic()
 }
 
 impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdatePublisher>
@@ -271,6 +318,6 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
             self.realtime.send(event, users.clone()),
             self.publish_update(event, users)
         );
-        sent.and(published)
+        sent.and(published.map_err(report))
     }
 }
