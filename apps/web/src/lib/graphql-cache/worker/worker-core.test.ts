@@ -3782,6 +3782,55 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it.each([
+      [
+        true,
+        ['prepare:first', 'stage', 'read:client:visible', 'commit', 'write'],
+      ],
+      // A failed stage may have marked storage for reset: it fails the
+      // hydrate before any read runs, and the rest keep their order.
+      [false, ['prepare:first', 'stage', 'write', 'read:client:visible']],
+    ])(
+      'runs the reads sent while a hydrate stages its write before the write (staged: %s)',
+      async (stagedOk, expected) => {
+        const order: string[] = [];
+        const { engine, release } = splitEngine(order);
+        const stageStarted = Promise.withResolvers<void>();
+        const releaseStage = Promise.withResolvers<void>();
+        const staged = {
+          ...engine,
+          stageHydrate: vi.fn(async () => {
+            order.push('stage');
+            stageStarted.resolve();
+            await releaseStage.promise;
+            if (!stagedOk) throw new Error('stage failed');
+          }),
+        };
+        const { core, port, messages } = await start(staged);
+        release();
+
+        const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+        await stageStarted.promise;
+        sent.push(
+          core.handleRequest(port, {
+            generation: TEST_AUTHORITY_GENERATION,
+            id: 3,
+            kind: 'write',
+            query: 'query Current { current }',
+            data: { current: true },
+          }),
+          core.handleRequest(port, read(4, 'client:visible'))
+        );
+        releaseStage.resolve();
+        await Promise.all(sent);
+
+        expect(order).toEqual(expected);
+        expect(
+          messages.filter((message) => !message.ok).map((message) => message.id)
+        ).toEqual(stagedOk ? [] : [2]);
+      }
+    );
+
     it('writes with hydrateQuery when the engine cannot split a hydrate', async () => {
       const order: string[] = [];
       const { engine } = splitEngine(order);

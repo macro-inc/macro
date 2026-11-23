@@ -7,7 +7,9 @@ mod calendar;
 mod hydration;
 mod people;
 mod retirement;
+mod staged_hydrate;
 pub use hydration::HydrationScope;
+pub use staged_hydrate::StagedHydrate;
 #[cfg(test)]
 mod test;
 
@@ -147,6 +149,14 @@ pub enum ReadResult {
     Miss,
 }
 
+/// A response's payload and how to resolve its entities, for normalizing.
+#[derive(Clone, Copy)]
+struct NetworkData<'a> {
+    variables: &'a serde_json::Map<String, Json>,
+    data: &'a Json,
+    entity_resolvers: &'a EntityResolverLookup,
+}
+
 /// Borrowed inputs for one network response write.
 #[derive(Debug, Clone, Copy)]
 pub struct NetworkWrite<'a> {
@@ -210,6 +220,18 @@ struct PersistedChanges {
     revision_advanced: bool,
     search_changed_buckets: BTreeSet<String>,
     viewer_fields: ViewerFields,
+}
+
+/// A merge of normalized updates into stored records, computed but not
+/// written.
+struct PersistPlan {
+    field_changes: Vec<crate::field_changes::RecordFieldChange>,
+    changed: BTreeSet<EntityKey<'static>>,
+    search_changed_buckets: BTreeSet<String>,
+    viewer_fields: ViewerFields,
+    to_persist: Vec<(EntityKey<'static>, Record)>,
+    touched: Vec<(EntityKey<'static>, Record)>,
+    revision_advanced: bool,
 }
 
 /// Result of hydrating a query while returning only non-`@cacheOnly` fields.
@@ -1420,6 +1442,40 @@ impl<S: Storage> Engine<S> {
             .map(|(result, _)| result)
     }
 
+    /// Normalizes a network response into the records it writes.
+    fn network_records(
+        schema: &crate::meta::Schema,
+        response_records: Option<ResponseRecords>,
+        op: &crate::document::Operation,
+        input: NetworkData<'_>,
+        retain_pages: bool,
+        allow_contacts: bool,
+    ) -> Result<crate::normalize::NormalizeResult, EngineError<S::Error>> {
+        let NetworkData {
+            variables,
+            data,
+            entity_resolvers,
+        } = input;
+        let mut normalized =
+            normalize_with_dependencies(schema, op, variables, data, entity_resolvers)?;
+        if let Some(records) = response_records {
+            let extra = records(schema, op, variables, data, &normalized.updates)?;
+            normalized.updates.extend(extra);
+        }
+        if !allow_contacts
+            && normalized
+                .updates
+                .keys()
+                .any(|key| key.typename() == Some("GraphqlContact"))
+        {
+            return Err(EngineError::UnfencedContactWrite);
+        }
+        if !retain_pages {
+            crate::page_retention::omit_hydration_pages(&mut normalized.updates);
+        }
+        Ok(normalized)
+    }
+
     async fn write_network(
         &mut self,
         origin_op: Option<OpId>,
@@ -1458,22 +1514,19 @@ impl<S: Storage> Engine<S> {
         // Leaving it unscoped made every open Quick Access list replay its
         // search on each event, whatever the event touched.
         let reports_search_changes = is_query || op.kind == OperationKind::Subscription;
-        let normalized =
-            normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
+        let normalized = Self::network_records(
+            &self.schema,
+            self.response_records,
+            op,
+            NetworkData {
+                variables,
+                data,
+                entity_resolvers: &entity_resolvers,
+            },
+            retain_pages,
+            allow_contacts,
+        )?;
         let mut updates = normalized.updates;
-        if let Some(records) = self.response_records {
-            updates.extend(records(&self.schema, op, variables, data, &updates)?);
-        }
-        if !allow_contacts
-            && updates
-                .keys()
-                .any(|key| key.typename() == Some("GraphqlContact"))
-        {
-            return Err(EngineError::UnfencedContactWrite);
-        }
-        if !retain_pages {
-            crate::page_retention::omit_hydration_pages(&mut updates);
-        }
 
         if let Some(observed) = identity {
             match self.bound_identity().await? {
@@ -1763,10 +1816,17 @@ impl<S: Storage> Engine<S> {
         updates: RecordUpdates,
         projections: Vec<ProjectionMutation>,
     ) -> Result<PersistedChanges, EngineError<S::Error>> {
-        let projection_keys = projections
-            .iter()
-            .map(|mutation| mutation.record_key().clone())
-            .collect();
+        let plan = self.plan_persist(updates, &projections).await?;
+        self.apply_persist(plan, projections).await
+    }
+
+    /// Reads what [`Self::persist_updates`] merges into and computes the
+    /// merge, writing nothing. The plan holds while storage is unchanged.
+    async fn plan_persist(
+        &self,
+        updates: RecordUpdates,
+        projections: &[ProjectionMutation],
+    ) -> Result<PersistPlan, EngineError<S::Error>> {
         // Load current values (hot tier, then storage) so merges detect real
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
@@ -1843,10 +1903,40 @@ impl<S: Storage> Engine<S> {
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections).await?
+            self.projection_mutations_change(projections).await?
         } else {
             true
         };
+        Ok(PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            touched,
+            revision_advanced,
+        })
+    }
+
+    /// Writes a [`PersistPlan`] and publishes it to the hot tier.
+    async fn apply_persist(
+        &mut self,
+        plan: PersistPlan,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<PersistedChanges, EngineError<S::Error>> {
+        let PersistPlan {
+            field_changes,
+            changed,
+            search_changed_buckets,
+            viewer_fields,
+            to_persist,
+            touched,
+            revision_advanced,
+        } = plan;
+        let projection_keys = projections
+            .iter()
+            .map(|mutation| mutation.record_key().clone())
+            .collect();
         // A refetch that changes no record and no projection authority has
         // nothing to store. Pending layers still get their shadows rebased in
         // the storage write, as before.
