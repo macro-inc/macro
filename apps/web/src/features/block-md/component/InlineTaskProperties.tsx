@@ -190,8 +190,7 @@ export function InlineTaskProperties() {
       field,
       enabled: startDateEnabled,
       other: () => dateEnd(field === 'due' ? 'start' : 'due'),
-      saveOther: (property, value) =>
-        saveOne(property, { valueType: 'DATE', value }),
+      saveOther: (property, value) => saveOne(property, value),
     });
   };
 
