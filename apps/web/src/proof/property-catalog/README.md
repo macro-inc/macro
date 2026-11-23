@@ -302,6 +302,18 @@ The counts measure work attempted, not successes, and are not interchangeable:
   times the attempt), up to 8 loads; each failed load is in `harnessErrors`,
   and `harnessReloadRetries` counts the reloads made. A write whose request is
   lost fails on both sides alike.
+- The local database runs with `max_parallel_workers_per_gather = 0`
+  (`ALTER DATABASE macrodb SET …`; `RESET` undoes it). Once earlier runs have
+  grown the catalog tables to about 150,000 rows, the catalog listings plan
+  parallel, and each pooled connection that ran one keeps about 1.2 MB of
+  dynamic shared memory; with about 140 connections the container's 64 MB
+  `/dev/shm` fills and reads fail on both sides with `could not resize shared
+  memory segment`. Plans change only speed, not rows or their order.
+- Stopping a run kills its pages with requests in flight. Once, that left a
+  pooled storage-service connection inside a transaction, and every request
+  that drew it failed (`current transaction is aborted`) for ten minutes, until
+  the pool dropped it. Restart the storage service before a run that follows a
+  stopped one.
 - A settle timeout (level `settle`) records what that side was still waiting
   on, as `waitedOn` in `settleTimeouts` (every one, uncapped up to 1,000),
   `diffs` and `examples`: its busy queries and readers (`busy`, taken in the
