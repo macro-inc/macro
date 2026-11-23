@@ -45,8 +45,9 @@ export function RouteDownload() {
   const [phone, setPhone] = createSignal<PhonePlatform>();
 
   onMount(() => {
-    setVisitor(detectVisitorPlatform(navigator.userAgent));
-    setPhone(detectPhonePlatform(navigator.userAgent));
+    const { userAgent, maxTouchPoints } = navigator;
+    setVisitor(detectVisitorPlatform(userAgent, maxTouchPoints));
+    setPhone(detectPhonePlatform(userAgent, maxTouchPoints));
   });
 
   return (

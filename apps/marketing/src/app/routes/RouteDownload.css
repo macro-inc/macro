@@ -94,8 +94,9 @@
   text-align: center;
 }
 
+/* With the action column's 12px gap, 20px below the installers. */
 .downloads-page .downloads-note {
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .downloads-note a {
@@ -103,7 +104,7 @@
 }
 
 .downloads-page .downloads-alternatives {
-  margin-top: 14px;
+  margin-top: 0;
   color: #777;
   font-size: 13px;
   line-height: 1.5;
@@ -204,8 +205,7 @@
 }
 
 @media (max-width: 767px) {
-  .downloads-page .downloads-desktop-only,
-  .downloads-page .downloads-mobile.downloads-desktop-only {
+  .downloads-page .downloads-desktop-only {
     display: none;
   }
   .downloads-page ul.downloads-phone-only {

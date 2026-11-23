@@ -279,7 +279,8 @@ is unchanged; run `apps/web` separately when testing local signup changes.
 `/download` is headed “Download Macro Alpha” and says “Available for macOS and
 Linux”. A Mac or Linux visitor gets one primary button for their own installer
 (Apple silicon DMG or x86_64 AppImage) with its requirement caption, and the
-other platforms as quiet “Also available for …” links. Windows, ChromeOS and
+other platforms as quiet “Also available for …” links. Windows, ChromeOS,
+tablets (an iPad's Mac user agent is told apart by its touch screen) and
 undetected computers (and the prerendered HTML) get every installer as equal
 secondary buttons and a note pointing to the web app; Windows's note says a
 native Windows app is on the way. Platforms come from `DESKTOP_PLATFORMS` in

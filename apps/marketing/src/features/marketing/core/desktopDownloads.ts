@@ -32,14 +32,23 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };
 
-export type VisitorPlatform = DesktopPlatform | 'windows' | 'chromeos';
+export type VisitorPlatform = DesktopPlatform | 'windows';
 
-/** The visitor's desktop operating system; phones and others are undefined. */
+/**
+ * iPadOS Safari asks for desktop sites with a Mac user agent; only its touch
+ * screen tells it apart from a Mac.
+ */
+function isIpad(userAgent: string, maxTouchPoints: number): boolean {
+  return /macintosh/i.test(userAgent) && maxTouchPoints > 1;
+}
+
+/** The visitor's desktop operating system; phones, tablets and others are undefined. */
 export function detectVisitorPlatform(
-  userAgent: string
+  userAgent: string,
+  maxTouchPoints = 0
 ): VisitorPlatform | undefined {
-  if (/android|iphone|ipad|ipod/i.test(userAgent)) return undefined;
-  if (/cros/i.test(userAgent)) return 'chromeos';
+  if (/android|iphone|ipad|ipod|\bCrOS\b/i.test(userAgent)) return undefined;
+  if (isIpad(userAgent, maxTouchPoints)) return undefined;
   if (/macintosh|mac os x/i.test(userAgent)) return 'macos';
   if (/windows/i.test(userAgent)) return 'windows';
   if (/linux/i.test(userAgent)) return 'linux';
@@ -80,10 +89,12 @@ export const PHONE_PLATFORM_DETAILS: Record<
 
 /** The visitor's phone operating system, if the browser is on one. */
 export function detectPhonePlatform(
-  userAgent: string
+  userAgent: string,
+  maxTouchPoints = 0
 ): PhonePlatform | undefined {
   if (/android/i.test(userAgent)) return 'android';
   if (/iphone|ipad|ipod/i.test(userAgent)) return 'ios';
+  if (isIpad(userAgent, maxTouchPoints)) return 'ios';
   return undefined;
 }
 

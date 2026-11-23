@@ -26,10 +26,21 @@ describe('detectVisitorPlatform', () => {
     ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows'],
     ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', undefined],
     ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', undefined],
-    ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)', 'chromeos'],
+    ['Mozilla/5.0 (X11; CrOS x86_64 14541.0.0)', undefined],
     ['', undefined],
   ])('detects %s', (userAgent, platform) => {
     expect(detectVisitorPlatform(userAgent)).toBe(platform);
+  });
+});
+
+describe('iPad', () => {
+  // iPadOS Safari's default, desktop-class user agent.
+  const IPAD = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)';
+
+  it('is a phone platform, not a Mac, when the screen is touch', () => {
+    expect(detectVisitorPlatform(IPAD, 5)).toBeUndefined();
+    expect(detectPhonePlatform(IPAD, 5)).toBe('ios');
+    expect(detectVisitorPlatform(IPAD, 0)).toBe('macos');
   });
 });
 
@@ -57,7 +68,7 @@ describe('installerPlatform', () => {
   });
 
   it('has none for other computers', () => {
-    for (const visitor of ['windows', 'chromeos', undefined] as const)
+    for (const visitor of ['windows', undefined] as const)
       expect(installerPlatform(visitor)).toBeUndefined();
   });
 });
