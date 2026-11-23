@@ -122,6 +122,16 @@ describe('NativeApp', () => {
     expect(screen.queryByRole('button', { name: 'Download' })).toBeNull();
   });
 
+  it('has no Updates section in desktop builds without the updater', async () => {
+    host.platform = 'desktop';
+    answerNativeCommands('embedded');
+    mountWith('Idle', 'Disabled');
+
+    expect(await screen.findByText('2026.1119.1')).toBeTruthy();
+    expect(screen.queryByText('Updates')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('restarts the desktop app into a downloaded app update', async () => {
     host.platform = 'desktop';
     answerNativeCommands('embedded');

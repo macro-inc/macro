@@ -162,9 +162,17 @@ export function NativeAppPage(props: { updates?: NativeAppUpdates }) {
   // asks; the desktop app's own updater is not over the air.
   const showOta = () =>
     enableAutoUpdateUiOverride ?? !disableAutoUpdateUiFlag().enabled;
-  const [version] = createResource(installedVersion);
-  const [bundleInfo] = createResource(getBundleDebugInfo);
-  const [buildDate] = createResource(getNativeBuildDate);
+  // Read once loaded, never while pending: a pending read would suspend the
+  // settings tab's boundary and blank the page until every IPC call answers.
+  const [versionResource] = createResource(installedVersion);
+  const [bundleResource] = createResource(getBundleDebugInfo);
+  const [buildDateResource] = createResource(getNativeBuildDate);
+  const version = () =>
+    versionResource.state === 'ready' ? versionResource() : undefined;
+  const bundleInfo = () =>
+    bundleResource.state === 'ready' ? bundleResource() : undefined;
+  const buildDate = () =>
+    buildDateResource.state === 'ready' ? buildDateResource() : undefined;
   const showUpdates = () => {
     if (!inDesktopApp) return showOta();
     const status = props.updates?.nativeUpdateStatus().status;
