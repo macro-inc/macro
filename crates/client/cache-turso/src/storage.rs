@@ -258,6 +258,18 @@ impl TursoStorage {
         }
     }
 
+    /// Browser-test-only: whether the open-time checks could be skipped, after
+    /// running all of them anyway.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_run_skippable_open_checks(&self) -> Result<bool, TursoStorageError> {
+        let connection = self.connection();
+        let fresh_schema = has_fresh_schema(&connection)?;
+        validate_frozen_schema(&connection)?;
+        validate_statements(&connection)?;
+        Ok(fresh_schema)
+    }
+
     /// Browser-test-artifact-only helper used by the storage-control worker.
     #[cfg(feature = "browser-test-hooks")]
     #[doc(hidden)]
@@ -1135,20 +1147,20 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
-            let entries = prepare_records(entries)?;
+            let mut entries = prepare_records(entries)?;
             if entries.is_empty() {
                 return Ok(());
             }
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
+                for (index, entry) in entries.iter_mut().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut statement,
                         vec![
                             text(&entry.key.typename),
                             text(&entry.key.id),
-                            Value::from_blob(entry.value.clone()),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
                         ],
                     )?;
                     require_changed(changed, 1)?;
@@ -1165,31 +1177,18 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let entries = prepare_records(entries)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)?;
-                write_projection_mutations(&connection, projections)
-            })
-        })();
-        self.latch_result(result)
+        self.put_encoded_with_projections(|| prepare_records(entries), projections)
+    }
+
+    async fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_encoded_with_projections(
+            || prepare_records(entries.iter().map(|(key, record)| (key, record))),
+            projections,
+        )
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -3474,13 +3473,21 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
         })
         .map_err(TursoStorageError::initialization)?;
         enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
-        validate_frozen_schema(connection)?;
+        if !has_fresh_schema(connection)? {
+            validate_frozen_schema(connection)?;
+        }
         return Ok(false);
     }
 
     // Ordinary reopen only validates compatibility and pending writes. A changed
     // derived projection performs one bounded rebuild before serving queries.
-    validate_frozen_schema(connection)?;
+    // A schema identical to the one this build creates passed the structural
+    // and statement checks in this build's tests, so only a different schema
+    // pays for them again.
+    let fresh_schema = has_fresh_schema(connection)?;
+    if !fresh_schema {
+        validate_frozen_schema(connection)?;
+    }
     let metadata = driver::query(
         connection,
         "SELECT key, value FROM meta WHERE key IN ('scope', 'namespace', 'storage_schema_version') ORDER BY key ASC",
@@ -3519,6 +3526,73 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
         }
         None => false,
     };
+    if !fresh_schema {
+        validate_statements(connection)?;
+    }
+    validate_queue_consistency(connection)?;
+    validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
+    derived_sorts::ensure_version(connection)?;
+    ensure_search_projection_version(connection)?;
+    calendar::ensure_projection_version(connection)?;
+    people_sql::open(connection)?;
+    Ok(migrated)
+}
+
+/// The digest of `sqlite_schema` in a database this build creates; see
+/// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
+/// the new value whenever the schema or how turso records it changes.
+const FRESH_SCHEMA_DIGEST: u128 = 0xc05ad605542917515f7a3408e414ed25;
+
+/// Whether the database holds exactly the schema this build creates.
+fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
+    Ok(schema_digest(connection)? == Some(FRESH_SCHEMA_DIGEST))
+}
+
+/// FNV-1a over every `sqlite_schema` row's type, name, table and SQL, in a
+/// fixed order. Root pages are left out: they differ between databases with
+/// the same schema. `None` when a column holds something other than text or
+/// null, which no schema this build accepts has.
+fn schema_digest(connection: &Db) -> Result<Option<u128>, TursoStorageError> {
+    const OFFSET: u128 = 0x6c62272e07bb014262b821756295c58d;
+    const PRIME: u128 = 0x0000000001000000000000000000013b;
+    fn feed(hash: &mut u128, bytes: &[u8]) {
+        for byte in bytes {
+            *hash ^= u128::from(*byte);
+            *hash = hash.wrapping_mul(PRIME);
+        }
+    }
+    let rows = driver::query(
+        connection,
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let mut hash = OFFSET;
+    feed(&mut hash, &(rows.len() as u64).to_le_bytes());
+    for row in &rows {
+        if row.len() != 4 {
+            return Ok(None);
+        }
+        for value in row {
+            match value {
+                Value::Null => feed(&mut hash, &[0]),
+                Value::Text(text) => {
+                    let text = text.as_str().as_bytes();
+                    feed(&mut hash, &[1]);
+                    feed(&mut hash, &(text.len() as u64).to_le_bytes());
+                    feed(&mut hash, text);
+                }
+                _ => return Ok(None),
+            }
+        }
+    }
+    Ok(Some(hash))
+}
+
+/// Prepares every statement the storage runs, so a schema that cannot run
+/// them requests a reset at open instead of failing a later read or write.
+fn validate_statements(connection: &Db) -> Result<(), TursoStorageError> {
     for sql in [
         RECORD_GET,
         RECORD_UPSERT,
@@ -3558,14 +3632,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
     {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
-    validate_queue_consistency(connection)?;
-    validate_optimistic_shadow_consistency(connection)?;
-    page_retention::compact_legacy_pages(connection)?;
-    derived_sorts::ensure_version(connection)?;
-    ensure_search_projection_version(connection)?;
-    calendar::ensure_projection_version(connection)?;
-    people_sql::open(connection)?;
-    Ok(migrated)
+    Ok(())
 }
 
 fn save_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
@@ -5088,18 +5155,62 @@ struct EncodedRecord {
     contact: Option<Record>,
 }
 
-fn prepare_records(
-    entries: Vec<(EntityKey<'static>, Record)>,
-) -> Result<Vec<EncodedRecord>, TursoStorageError> {
+impl TursoStorage {
+    /// Writes the records `prepare` encodes, with projection changes, in one
+    /// transaction. Encoding runs once storage is known healthy.
+    fn put_encoded_with_projections(
+        &mut self,
+        prepare: impl FnOnce() -> Result<Vec<EncodedRecord>, TursoStorageError>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare()?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
+                for (index, entry) in entries.iter_mut().enumerate() {
+                    require_changed(
+                        driver::execute_prepared(
+                            &mut statement,
+                            vec![
+                                text(&entry.key.typename),
+                                text(&entry.key.id),
+                                Value::from_blob(std::mem::take(&mut entry.value)),
+                            ],
+                        )?,
+                        1,
+                    )?;
+                    self.fault_after(TestFaultSite::Put, index)?;
+                }
+                write_derived_rows(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+}
+
+/// Encodes records for storage. An owned batch drops each decoded record once
+/// it is encoded.
+fn prepare_records<K, R>(
+    entries: impl IntoIterator<Item = (K, R)>,
+) -> Result<Vec<EncodedRecord>, TursoStorageError>
+where
+    K: std::borrow::Borrow<EntityKey<'static>>,
+    R: std::borrow::Borrow<Record>,
+{
     entries
         .into_iter()
         .map(|(key, record)| {
-            let value = encode_record(&record);
+            let (key, record) = (key.borrow(), record.borrow());
+
+            let value = encode_record(record);
             Ok(EncodedRecord {
-                key: RecordKey::from_entity(&key)?,
-                search_documents: project_encoded_search_documents(&key, &record, &value),
+                key: RecordKey::from_entity(key)?,
+                search_documents: project_encoded_search_documents(key, record, &value),
                 value,
-                calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                calendar_range: cache_core::calendar::project_calendar_range(key, record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
                         .fields

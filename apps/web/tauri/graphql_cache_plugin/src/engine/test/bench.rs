@@ -12,11 +12,14 @@
 use super::*;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 const SCOPE: &str = "cache-bench";
 const NIL: &str = "00000000-0000-0000-0000-000000000000";
 
+#[derive(Clone)]
 struct Op {
     lane: String,
     write: bool,
@@ -191,10 +194,51 @@ impl Samples {
     }
 }
 
-/// `CACHE_BENCH_IDLE_CHECKPOINT` runs the host the way an engine with an idle
-/// point does: [`idle`] checkpoints between steps once the WAL is due.
+/// `CACHE_BENCH_IDLE_CHECKPOINT` leaves the engine quiet between steps, as a
+/// person using the app does, so its idle task copies the WAL once it is due.
 fn idle_checkpoints() -> bool {
     std::env::var_os("CACHE_BENCH_IDLE_CHECKPOINT").is_some()
+}
+
+/// `CACHE_BENCH_SKIP_CONTENDED` leaves out the contended pass.
+fn contended_reads() -> bool {
+    std::env::var_os("CACHE_BENCH_SKIP_CONTENDED").is_none()
+}
+
+/// Reads while background hydration of seed pages keeps the engine busy, as
+/// the browser half's contended pass does. Returns each hydrate's time.
+async fn contended_pass(
+    handle: &EngineHandle,
+    docs: &Arc<BTreeMap<String, String>>,
+    background: &Arc<Vec<Op>>,
+    identity: &str,
+    threads: &[String],
+    home: &Variables,
+    samples: &mut Samples,
+) -> Vec<f64> {
+    let stop = Arc::new(AtomicBool::new(false));
+    let task = {
+        let handle = handle.clone();
+        let docs = Arc::clone(docs);
+        let ops = Arc::clone(background);
+        let identity = identity.to_owned();
+        let stop = Arc::clone(&stop);
+        tauri::async_runtime::spawn(async move {
+            let mut ms = Vec::new();
+            for op in ops.iter().cycle() {
+                if stop.load(Ordering::SeqCst) {
+                    break;
+                }
+                let started = Instant::now();
+                apply(&handle, &docs, op, &identity).await;
+                ms.push(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            ms
+        })
+    };
+    read_pass(handle, docs, threads, home, samples).await;
+    stop.store(true, Ordering::SeqCst);
+    task.await.unwrap()
 }
 
 /// Opens without resetting: a database a reused run cannot open (another
@@ -207,18 +251,21 @@ fn open(path: &Path) -> EngineHandle {
     EngineHandle::with_schema(storage, None, cache_core::meta::bundled_schema())
 }
 
-/// The engine's idle point, outside every timed step: checkpoint when due,
-/// recording how long it took and how many frames it copied.
+/// A quiet moment outside every timed step, long enough for the engine's idle
+/// task to run; the lock waits out a copy still going. Records each copy that
+/// ran: how long it took and how many frames it copied.
 async fn idle(handle: &EngineHandle, samples: &mut Samples) {
     if !idle_checkpoints() {
         return;
     }
-    let started = Mark::now();
-    let state = handle.inner.lock().await;
-    let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
-    drop(state);
-    if checkpoint.ran {
-        samples.record("idle.checkpoint", started);
+    std::thread::sleep(std::time::Duration::from_millis(150));
+    drop(handle.inner.lock().await);
+    for (ms, checkpoint) in crate::engine::idle::take_copies() {
+        samples
+            .ms
+            .entry("idle.checkpoint".to_owned())
+            .or_default()
+            .push(ms);
         samples
             .ms
             .entry("idle.checkpoint.frames".to_owned())
@@ -405,6 +452,31 @@ fn keys(result: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// `CACHE_BENCH_READ_GAP_MS` waits a random time before each read
+/// (exponential, with that mean), so reads arrive at moments independent of
+/// the engine's work, as a person's do, instead of each right after the
+/// last. Reads run on the bench's own thread, so the wait never holds up
+/// the background hydrates on the async runtime.
+fn read_gap() {
+    static STATE: std::sync::atomic::AtomicU64 =
+        std::sync::atomic::AtomicU64::new(0x9E37_79B9_7F4A_7C15);
+    let Some(mean) = std::env::var("CACHE_BENCH_READ_GAP_MS")
+        .ok()
+        .and_then(|value| value.parse::<f64>().ok())
+    else {
+        return;
+    };
+    let mut x = STATE.load(Ordering::Relaxed);
+    x ^= x << 13;
+    x ^= x >> 7;
+    x ^= x << 17;
+    STATE.store(x, Ordering::Relaxed);
+    let uniform = ((x >> 11) as f64 + 0.5) / (1u64 << 53) as f64;
+    std::thread::sleep(std::time::Duration::from_secs_f64(
+        -uniform.ln() * mean / 1000.0,
+    ));
+}
+
 async fn read_pass(
     handle: &EngineHandle,
     docs: &BTreeMap<String, String>,
@@ -413,6 +485,7 @@ async fn read_pass(
     samples: &mut Samples,
 ) -> serde_json::Value {
     for (tab, request) in mail_tabs() {
+        read_gap();
         let started = Mark::now();
         let result = handle
             .entity_filter(serde_json::from_value(request).unwrap())
@@ -424,6 +497,7 @@ async fn read_pass(
     }
     let mail_rows = &docs["fragment:MailItemFields"];
     let soup_rows = &docs["fragment:SoupItemFields"];
+    read_gap();
     let started = Mark::now();
     let inbox = serde_json::to_value(
         handle
@@ -433,6 +507,7 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.inbox.filter", started);
+    read_gap();
     let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&inbox))
@@ -440,6 +515,7 @@ async fn read_pass(
         .unwrap();
     samples.record("mail.inbox.rows", started);
     if let Some(cursor) = inbox.get("nextCursor").filter(|cursor| !cursor.is_null()) {
+        read_gap();
         let started = Mark::now();
         let next = serde_json::to_value(
             handle
@@ -449,6 +525,7 @@ async fn read_pass(
         )
         .unwrap();
         samples.record("mail.inbox.page2.filter", started);
+        read_gap();
         let started = Mark::now();
         handle
             .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&next))
@@ -456,6 +533,7 @@ async fn read_pass(
             .unwrap();
         samples.record("mail.inbox.page2.rows", started);
     }
+    read_gap();
     let started = Mark::now();
     let all = serde_json::to_value(
         handle
@@ -465,16 +543,19 @@ async fn read_pass(
     )
     .unwrap();
     samples.record("mail.all.filter", started);
+    read_gap();
     let started = Mark::now();
     handle
         .read_records_by_keys(mail_rows.clone(), "MailItemFields".into(), keys(&all))
         .await
         .unwrap();
     samples.record("mail.all.rows", started);
+    read_gap();
     let started = Mark::now();
     let core = serde_json::to_value(handle.entity_filter(core_args(50)).await.unwrap()).unwrap();
     samples.record("soup.core.filter", started);
     if matches!(core["kind"].as_str(), Some("complete" | "reconciled")) {
+        read_gap();
         let started = Mark::now();
         handle
             .read_records_by_keys(soup_rows.clone(), "SoupItemFields".into(), keys(&core))
@@ -482,6 +563,7 @@ async fn read_pass(
             .unwrap();
         samples.record("soup.core.rows", started);
     }
+    read_gap();
     let started = Mark::now();
     handle
         .read(
@@ -495,6 +577,7 @@ async fn read_pass(
         .unwrap();
     samples.record("soup.home.readQuery", started);
     for thread in threads {
+        read_gap();
         let started = Mark::now();
         let variables = serde_json::from_value(
             serde_json::json!({ "threadId": thread, "offset": 0, "limit": 20 }),
@@ -512,10 +595,12 @@ async fn read_pass(
             .unwrap();
         samples.record("thread.readQuery", started);
     }
+    read_gap();
     let started = Mark::now();
     handle.search(search("")).await.unwrap();
     samples.record("search.empty", started);
     for query in ["pro", "project update", "zzqx"] {
+        read_gap();
         let started = Mark::now();
         handle.search(search(query)).await.unwrap();
         samples.record("search.typed", started);
@@ -533,8 +618,8 @@ fn native_cache_bench() {
     let data = PathBuf::from(std::env::var_os("CACHE_BENCH_DATA").expect("CACHE_BENCH_DATA"));
     let runs: usize = std::env::var_os("CACHE_BENCH_RUNS")
         .map_or(5, |runs| runs.to_str().unwrap().parse().unwrap());
-    let docs: BTreeMap<String, String> =
-        serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap();
+    let docs: Arc<BTreeMap<String, String>> =
+        Arc::new(serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap());
     let meta: serde_json::Value =
         serde_json::from_slice(&std::fs::read(data.join("meta.json")).unwrap()).unwrap();
     let threads: Vec<String> = meta["threadIds"]
@@ -593,6 +678,16 @@ fn native_cache_bench() {
             % variants;
         let mut counts = serde_json::Value::Null;
         let mut rss_kb = Vec::new();
+        let mut contended = Samples::default();
+        let mut background_ms = Vec::new();
+        // Background hydration during the contended pass replays seed pages.
+        let background: Arc<Vec<Op>> = Arc::new(
+            seed.iter()
+                .take(40)
+                .cloned()
+                .map(|op| Op { write: false, ..op })
+                .collect(),
+        );
         for _ in 0..runs {
             let started = Mark::now();
             let handle = open(&path);
@@ -633,6 +728,21 @@ fn native_cache_bench() {
                     idle(&handle, &mut samples).await;
                 }
             }
+            if contended_reads() {
+                background_ms.extend(
+                    contended_pass(
+                        &handle,
+                        &docs,
+                        &background,
+                        &identity,
+                        &threads,
+                        &home,
+                        &mut contended,
+                    )
+                    .await,
+                );
+                idle(&handle, &mut samples).await;
+            }
             rss_kb.push(memory_kb("VmRSS"));
             handle.shutdown().unwrap();
             variant = (variant + 1) % variants;
@@ -649,6 +759,16 @@ fn native_cache_bench() {
                 (lane, serde_json::json!({ "ops": ops, "bytes": bytes, "ms": (ms * 10.0).round() / 10.0 }))
             })
             .collect();
+        // Every contended read, and the same reads uncontended, raw, so rounds
+        // can be pooled.
+        let raw = |from: &Samples| -> Vec<f64> {
+            contended
+                .ms
+                .keys()
+                .flat_map(|name| from.ms.get(name).into_iter().flatten().copied())
+                .collect()
+        };
+        let (contended_ms, uncontended_ms) = (raw(&contended), raw(&samples));
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
@@ -658,6 +778,10 @@ fn native_cache_bench() {
                 "counts": counts,
                 "lanes": lanes,
                 "steps": samples.summary(),
+                "contended": contended.summary(),
+                "contendedMs": contended_ms,
+                "uncontendedMs": uncontended_ms,
+                "background": { "hydrates": background_ms.len(), "meanMs": background_ms.iter().sum::<f64>() / background_ms.len().max(1) as f64 },
                 "io": samples.io_summary(),
                 "memory": { "rssKbPerRun": rss_kb, "peakRssKb": memory_kb("VmHWM") },
                 "variants": variants,
@@ -793,5 +917,244 @@ fn native_cache_parity_dump() {
                 pages.as_array().map_or(0, Vec::len)
             );
         }
+    });
+}
+
+/// How a read of the stall pass ended for its caller.
+#[derive(Clone, Copy, PartialEq)]
+enum Outcome {
+    Answered,
+    TimedOut,
+    /// An error or a panic before the deadline: neither answered nor late.
+    Failed,
+}
+
+/// One read of the stall pass's mix.
+#[derive(Clone)]
+enum StallRead {
+    Thread(String),
+    Inbox,
+    Search(&'static str),
+}
+
+/// Runs one read the way Tauri runs a command: on a task of its own that
+/// nobody can cancel, so a caller that stops waiting leaves it running.
+fn spawn_read(
+    handle: &EngineHandle,
+    docs: &BTreeMap<String, String>,
+    read: &StallRead,
+    request_id: String,
+) -> tauri::async_runtime::JoinHandle<bool> {
+    let handle = reading(handle, request_id);
+    let (document, read) = (docs["EmailThreadPage"].clone(), read.clone());
+    tauri::async_runtime::spawn(async move {
+        // Whether it succeeded; an abandoned read fails after its caller left.
+        match read {
+            StallRead::Thread(thread) => handle
+                .read(
+                    None,
+                    document,
+                    Some("EmailThreadPage".into()),
+                    serde_json::from_value(
+                        serde_json::json!({ "threadId": thread, "offset": 0, "limit": 20 }),
+                    )
+                    .unwrap(),
+                    vec![],
+                )
+                .await
+                .map(drop),
+            StallRead::Inbox => handle
+                .entity_filter(mail_args(50, "INBOX", None))
+                .await
+                .map(drop),
+            StallRead::Search(query) => handle.search(search(query)).await.map(drop),
+        }
+        .is_ok()
+    })
+}
+
+/// The handle a read with this request id runs on.
+fn reading(handle: &EngineHandle, request_id: String) -> EngineHandle {
+    handle.clone().abandonable(Some(request_id))
+}
+
+/// What a caller does with a read it stopped waiting for.
+fn abandon(handle: &EngineHandle, request_id: &str) {
+    handle.abandon(request_id);
+}
+
+/// Readers that each wait up to `CACHE_BENCH_STALL_DEADLINE_MS` (100) for a
+/// read, then give up and send the next, while the engine is held for
+/// `CACHE_BENCH_STALL_MS` (1000), as a slow command holds it. Measures how
+/// the reads issued after the stall fare: a read left running after its
+/// caller gave up still takes its turn on the engine.
+#[test]
+#[ignore = "benchmark: needs CACHE_BENCH_DATA with a database native_cache_bench seeded"]
+fn native_stall_bench() {
+    let env_ms = |name: &str, default: u64| {
+        std::env::var(name)
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(default)
+    };
+    let deadline = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_DEADLINE_MS", 100));
+    let stall = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_MS", 1000));
+    let after = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_AFTER_MS", 4000));
+    let readers = env_ms("CACHE_BENCH_STALL_READERS", 8) as usize;
+    let rounds = env_ms("CACHE_BENCH_RUNS", 3) as usize;
+    let data = PathBuf::from(std::env::var_os("CACHE_BENCH_DATA").expect("CACHE_BENCH_DATA"));
+    let docs: Arc<BTreeMap<String, String>> =
+        Arc::new(serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap());
+    let meta: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data.join("meta.json")).unwrap()).unwrap();
+    let mut mix: Vec<StallRead> = meta["threadIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .take(5)
+        .map(|id| StallRead::Thread(id.as_str().unwrap().to_owned()))
+        .collect();
+    mix.extend([
+        StallRead::Inbox,
+        StallRead::Search("pro"),
+        StallRead::Search("project update"),
+    ]);
+    let mix = Arc::new(mix);
+    // A copy, so the stall pass never changes the database the main bench reuses.
+    let dir = tempfile::tempdir().unwrap();
+    for entry in std::fs::read_dir(data.join("native")).unwrap() {
+        let entry = entry.unwrap();
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("cache.turso")
+        {
+            std::fs::copy(entry.path(), dir.path().join(entry.file_name())).unwrap();
+        }
+    }
+    let path = dir.path().join("cache.turso");
+
+    tauri::async_runtime::block_on(async move {
+        let handle = open(&path);
+        handle
+            .entity_filter(mail_args(50, "INBOX", None))
+            .await
+            .unwrap();
+        // (ms after the stall ended at issue, outcome, ms)
+        let mut reads: Vec<(f64, Outcome, f64)> = Vec::new();
+        let mut timed_out_during = 0usize;
+        for round in 0..rounds {
+            let stop = Arc::new(AtomicBool::new(false));
+            let stall_start: Arc<std::sync::OnceLock<Instant>> = Arc::default();
+            let stall_end: Arc<std::sync::OnceLock<Instant>> = Arc::default();
+            let tasks: Vec<_> = (0..readers)
+                .map(|reader| {
+                    let (handle, docs, mix, stop, stall_start, stall_end) = (
+                        handle.clone(),
+                        Arc::clone(&docs),
+                        Arc::clone(&mix),
+                        Arc::clone(&stop),
+                        Arc::clone(&stall_start),
+                        Arc::clone(&stall_end),
+                    );
+                    tauri::async_runtime::spawn(async move {
+                        let mut out = Vec::new();
+                        let mut during = 0usize;
+                        let mut n = reader;
+                        while !stop.load(Ordering::SeqCst) {
+                            let id = format!("bench:{round}:{reader}:{n}");
+                            let read = &mix[n % mix.len()];
+                            n += readers;
+                            let issued = Instant::now();
+                            let task = spawn_read(&handle, &docs, read, id.clone());
+                            let outcome = match tokio::time::timeout(deadline, task).await {
+                                Ok(Ok(true)) => Outcome::Answered,
+                                Ok(_) => Outcome::Failed,
+                                Err(_) => {
+                                    abandon(&handle, &id);
+                                    Outcome::TimedOut
+                                }
+                            };
+                            let ms = issued.elapsed().as_secs_f64() * 1000.0;
+                            match (stall_start.get(), stall_end.get()) {
+                                (_, Some(end)) if issued >= *end => out.push((
+                                    issued.duration_since(*end).as_secs_f64() * 1000.0,
+                                    outcome,
+                                    ms,
+                                )),
+                                (Some(start), _) if issued >= *start => {
+                                    during += usize::from(outcome == Outcome::TimedOut);
+                                }
+                                // Issued before the engine was held: warm-up.
+                                _ => {}
+                            }
+                        }
+                        (out, during)
+                    })
+                })
+                .collect();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            {
+                let _held = handle.inner.write().await;
+                let _ = stall_start.set(Instant::now());
+                tokio::time::sleep(stall).await;
+                let _ = stall_end.set(Instant::now());
+            }
+            tokio::time::sleep(after).await;
+            stop.store(true, Ordering::SeqCst);
+            for task in tasks {
+                let (out, during) = task.await.unwrap();
+                reads.extend(out);
+                timed_out_during += during;
+            }
+            // Let reads still running drain before the next round.
+            let _ = handle.inner.write().await;
+        }
+        let answered: Vec<f64> = {
+            let mut ms: Vec<f64> = reads
+                .iter()
+                .filter(|r| r.1 == Outcome::Answered)
+                .map(|r| r.2)
+                .collect();
+            ms.sort_by(f64::total_cmp);
+            ms
+        };
+        let quantile = |q: f64| -> f64 {
+            answered
+                .get(((q * answered.len() as f64).ceil() as usize).saturating_sub(1))
+                .map_or(f64::NAN, |ms| (ms * 10.0).round() / 10.0)
+        };
+        // Per round, the issue time of the last read after the stall that
+        // timed out: until then the engine still served reads nobody waited for.
+        let timed_out: Vec<f64> = reads
+            .iter()
+            .filter(|r| r.1 == Outcome::TimedOut)
+            .map(|r| (r.0 * 10.0).round() / 10.0)
+            .collect();
+        let last_timeout = timed_out.iter().copied().fold(0.0_f64, f64::max);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "readers": readers,
+                "deadlineMs": deadline.as_millis() as u64,
+                "stallMs": stall.as_millis() as u64,
+                "afterMs": after.as_millis() as u64,
+                "rounds": rounds,
+                "timedOutDuringStall": timed_out_during,
+                "afterStall": {
+                    "issued": reads.len(),
+                    "answered": answered.len(),
+                    "timedOut": timed_out.len(),
+                    "failed": reads.iter().filter(|r| r.1 == Outcome::Failed).count(),
+                    "lastTimeoutIssuedMs": last_timeout,
+                    "answeredMs": { "p50": quantile(0.5), "p90": quantile(0.9), "p99": quantile(0.99) },
+                },
+                "answeredAfterStallMs": answered,
+                "timedOutIssuedAtMs": timed_out,
+            }))
+            .unwrap()
+        );
+        // Reads given up on may still hold clones; the copy goes with the temp dir.
+        drop(handle);
     });
 }

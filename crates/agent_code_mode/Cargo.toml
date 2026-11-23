@@ -25,11 +25,10 @@ import = { path = "../import" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
+connectors = { path = "../connectors" }
 macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
 nutype = { workspace = true }
-pipedream_mcp = { path = "../pipedream_mcp" }
 rootcause = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }

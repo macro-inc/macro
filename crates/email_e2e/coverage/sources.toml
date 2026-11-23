@@ -86,7 +86,8 @@ envelope = "crates/models_email/src/email/service/crm_cleanup.rs::CrmCleanupPubs
 
 [[queue]]
 name = "link-manager"
-consumes = ["LinkManagerQueue"]
+aliases = ["link-maintenance"]
+consumes = ["LinkManagerQueue", "LinkMaintenanceQueue"]
 type = "crates/models_email/src/email/service/pubsub.rs::LinkManagerMessage"
 at = ""
 
@@ -152,6 +153,10 @@ type = "crates/outlook_emulator/src/fault.rs::Route"
 # of these files. Listed for the report, not counted.
 [[loop]]
 file = "services/email_service/src/mailbox_sync_worker.rs"
+
+# The Outlook sync flags' refresh loop, run by the pubsub workers and the API.
+[[loop]]
+file = "services/email_service/src/outlook_flags.rs"
 
 [[loop]]
 file = "services/email_service/src/backfill_outbox.rs"

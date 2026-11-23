@@ -50,7 +50,7 @@ export function useChannelTabItems(
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
     ENABLE_CALLS &&
-    !channel()?.agent_dm &&
+    !channel()?.agentDm &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -60,7 +60,7 @@ export function useChannelTabItems(
     let filtered = [...CHANNEL_TABS];
     if (channelType() === ChannelType.direct_message)
       filtered = filtered.filter((tab) => tab.value !== 'participants');
-    if (!ENABLE_CALLS || channel()?.agent_dm)
+    if (!ENABLE_CALLS || channel()?.agentDm)
       filtered = filtered.filter((tab) => tab.value !== 'calls');
     if (!showCallTab())
       filtered = filtered.filter((tab) => tab.value !== 'call');
