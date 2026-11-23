@@ -106,7 +106,7 @@ export function FeaturePageSection(props: {
   id: string;
   aura?: TutorialVideoId;
   title: string | readonly string[];
-  description: string | readonly string[];
+  description: string;
   /** A real app screen; product pages use these instead of drawn demos. Children follow it. */
   screen?: FeatureScreen;
   demo?: FeatureDemoComposition;
@@ -156,20 +156,7 @@ export function FeaturePageSection(props: {
           </span>
         </h2>
         <p>
-          {typeof props.description === 'string' ? (
-            <ProductCopy text={props.description} />
-          ) : (
-            <For each={props.description}>
-              {(phrase, index) => (
-                <>
-                  {index() > 0 && ' '}
-                  <span class="subheading-phrase">
-                    <ProductCopy text={phrase} />
-                  </span>
-                </>
-              )}
-            </For>
-          )}
+          <ProductCopy text={props.description} />
         </p>
         {props.more}
       </header>

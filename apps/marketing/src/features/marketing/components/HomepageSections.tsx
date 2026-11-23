@@ -23,7 +23,7 @@ import './homepage/homepage-sections.css';
 type Section = {
   id: string;
   title: string;
-  description: readonly string[];
+  description: string;
   caption: readonly string[];
   tutorial: TutorialVideoId;
   screen: string;
@@ -38,12 +38,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'home',
     title: 'One inbox for your work.',
-    description: [
-      'Check your workspace from Home.',
-      'Your email, chat messages, tasks,',
-      'and @mentions land in one place',
-      'alongside replies from your agents.',
-    ],
+    description:
+      'Home puts the work that needs your attention in one place. Catch up on your email, team chat, tasks, and replies from an agent in the same list.',
     caption: [
       'When our last startup grew to twenty people, engineering, sales, and marketing each had their own tools.',
       'We wanted one place to catch up on a customer email, a doc we’d been editing, or a pull request waiting for review.',
@@ -55,14 +51,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'email',
     title: 'Organized and prioritized email.',
-    description: [
-      'Macro Mail tags and prioritizes email',
-      'from all your accounts. Use',
-      'the same shortcuts as Superhuman',
-      'and draft replies with agents.',
-      'Your inbox shares a workspace',
-      'with chat, docs, tasks, and code.',
-    ],
+    description:
+      'Macro Mail brings all your accounts into one inbox. Use the same keys you use in Superhuman and share a live email thread with your team in chat.',
     caption: [
       'We wanted the speed of Superhuman, the multitasking of Outlook, and a single inbox for all our accounts.',
       'When we share a customer’s email in chat, the next reply shows up there too.',
@@ -75,13 +65,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'chat',
     title: 'Chat for people and agents.',
-    description: [
-      'Macro Chat brings people and agents',
-      'together in channels. You can',
-      '@mention an agent in the thread',
-      'and it can pick up the task',
-      'with the whole conversation in view.',
-    ],
+    description:
+      'Macro Chat puts your team and its agents in the same channels. Tag an agent in a thread and it can read what led up to the task before it gets to work.',
     caption: [
       'Slack was where we talked about the work we did in other apps.',
       'We wanted to share a customer email in a channel, talk it through, and turn the message into a task right there.',
@@ -94,12 +79,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'tasks',
     title: 'Turn conversations into tasks.',
-    description: [
-      'Create tasks from email and',
-      'team chat. Assign people or',
-      'agents, and keep task status in',
-      'sync with linked pull requests.',
-    ],
+    description:
+      'Create a task from a team chat or a customer email. Pass the task to a teammate or an agent. The linked pull request keeps the task up to date.',
     caption: [
       'We used Linear and really tried to keep it up to date, but the conversation that moved the work forward was happening in chat.',
       'Now we make the task from the message so whoever picks it up can read the original discussion.',
@@ -112,12 +93,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'docs',
     title: 'High speed agentic documents.',
-    description: [
-      'Write markdown with a full',
-      'version history and @links to',
-      'your work. See live cursors',
-      'as you edit with agents.',
-    ],
+    description:
+      'Docs keep a version history of your markdown and link back to the work you mention. Edit alongside an agent and see its cursor move as you work.',
     caption: [
       'We liked the simplicity of Obsidian, the mentions in Notion, and being able to edit a plain markdown file with our own agents.',
       'We wanted all of that in the same editor with live collaboration.',
@@ -131,12 +108,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'calendar',
     title: 'A really fast calendar, with agents that do the scheduling.',
-    description: [
-      'All your Google and Microsoft',
-      'calendars in one view. Find',
-      'time with your team and ask',
-      'agents to handle the invites.',
-    ],
+    description:
+      'See your calendars from Google and Microsoft together in one place. Ask an agent to find a time that works for your team and put it on the calendar.',
     caption: [
       'We liked being able to send someone a Calendly link.',
       'We wanted to see what they wrote on the booking form alongside their company record and the emails leading up to the call.',
@@ -149,13 +122,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'calls',
     title: 'Calls that feed into team memory.',
-    description: [
-      'Call from any channel or DM.',
-      'Record the call and give',
-      'your team and agents a transcript.',
-      'A lot of the important context',
-      'in a company is spoken.',
-    ],
+    description:
+      'You can start a call in any channel or DM. Save both the recording and the transcript so you and your agents can find a detail that came up on the call.',
     caption: [
       'We wanted the ease of a Slack huddle and the option to send a guest a link, like Google Meet.',
       'We run standups in our engineering channel so an agent can read the transcript afterward and write up the tasks we agreed on.',
@@ -168,11 +136,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'crm',
     title: 'CRM that keeps itself up to date.',
-    description: [
-      'Macro CRM stays up to date from',
-      'your email and team chat.',
-      'No separate tool to maintain.',
-    ],
+    description:
+      'Macro CRM keeps up with the work your team does in email and chat. Open a company record to see who spoke to the customer last and what they said.',
     caption: [
       'We could open a deal in HubSpot or Salesforce and still have to ask the person working on it what was actually going on.',
       'In Macro we can open the company record and read the emails and call notes ourselves.',
@@ -185,13 +150,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'agents',
     title: 'Agents with omniscient context.',
-    description: [
-      'Macro brings email, chats, docs,',
-      'and CRM into one memory system',
-      'shared across your whole team.',
-      'DM an agent, @mention one in',
-      'a channel, or assign it a task.',
-    ],
+    description:
+      'Agents share one memory of your team’s email, chat, docs, and CRM. Start a chat with an agent, tag one in a thread, or ask it to take on a task.',
     caption: [
       'We wanted to ask an agent about a customer and have it remember the conversations our teammates had with them, too.',
       'It can read the earlier emails and call notes before it drafts a reply.',
@@ -204,15 +164,8 @@ const SECTIONS: readonly Section[] = [
   {
     id: 'coding',
     title: 'From bug report to merged pull request.',
-    description: [
-      'Track a fix as a task.',
-      'Review the linked pull request',
-      'and merge it from chat.',
-      'Get comments straight from GitHub',
-      'and @mentions in your inbox.',
-      'The code stays linked to',
-      'the discussion that started it.',
-    ],
+    description:
+      'Review the code beside the task and the thread that started it. Read the diff and merge the fix in the same thread. GitHub comments go to your inbox.',
     caption: [
       'We wanted to review a GitHub fix in the channel where someone reported the bug.',
       'You can open the diff beside the original discussion and merge the pull request from there.',
@@ -334,10 +287,7 @@ export function HomepageSections() {
         id="pricing"
         aura="home"
         title="One plan for all your work."
-        description={[
-          'Start free and upgrade when',
-          'you need more AI or storage.',
-        ]}
+        description="Start free and get more AI usage and storage on a paid plan."
         more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
       >
         <ul class="homepage-modules" aria-label="Included modules">
@@ -354,12 +304,7 @@ export function HomepageSections() {
         id="open-source"
         aura="github"
         title="Fully open source. Not open core."
-        description={[
-          'Macro is fully open source',
-          'under the AGPLv3. You can',
-          'read and fork the code',
-          'or run the workspace yourself.',
-        ]}
+        description="Macro is fully open source under the AGPLv3. Read the code, fork the repo, or run it on your own."
       >
         <CloneCommand />
         <SectionCaption
