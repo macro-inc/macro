@@ -120,13 +120,17 @@ pub async fn get_property_definition_with_owner(
 }
 
 /// Sorts definitions the way every definition listing answers: by lowercased
-/// display name, compared in Rust, keeping the order of names that compare
-/// equal. The database collation orders names differently (it skips spaces
-/// and punctuation), so a listing sorted only in SQL would disagree with the
-/// listing that carries options, and clients that cache both as one list would
-/// see it reorder.
-fn sort_by_lowercase_name<T>(rows: &mut [T], name: impl Fn(&T) -> &str) {
-    rows.sort_by_cached_key(|row| name(row).to_lowercase());
+/// display name, compared in Rust, then by id among names that compare equal.
+/// The database collation orders names differently (it skips spaces and
+/// punctuation), and neither listing's rows arrive in a fixed order for equal
+/// names, so a listing sorted only in SQL would disagree with the listing that
+/// carries options, and clients that cache both as one list would see it
+/// reorder.
+fn sort_by_lowercase_name<T>(rows: &mut [T], key: impl Fn(&T) -> (&str, Uuid)) {
+    rows.sort_by_cached_key(|row| {
+        let (name, id) = key(row);
+        (name.to_lowercase(), id)
+    });
 }
 
 /// Gets property definitions based on optional team and optional user access.
@@ -187,7 +191,7 @@ pub async fn list_property_definitions(
             })
         })
         .collect();
-    sort_by_lowercase_name(&mut result, |d| &d.display_name);
+    sort_by_lowercase_name(&mut result, |d| (&d.display_name, d.id));
 
     Ok(result)
 }
@@ -417,7 +421,9 @@ async fn read_property_definitions_with_options(
 
     let mut results: Vec<PropertyDefinitionWithOptions> = property_map.into_values().collect();
 
-    sort_by_lowercase_name(&mut results, |d| &d.definition.display_name);
+    sort_by_lowercase_name(&mut results, |d| {
+        (&d.definition.display_name, d.definition.id)
+    });
 
     Ok(results)
 }
