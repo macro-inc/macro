@@ -405,10 +405,17 @@ function trString(pair, s) {
   for (const [o, n] of pair.subst) out = out.split(o).join(n);
   return out;
 }
+// The harness sorts a Map's entries and a Set's members by OLD's raw ids;
+// once those ids are translated, NEW's order is their order, so sort again.
+const byKey = (a, b) => (String(a[0]) < String(b[0]) ? -1 : String(a[0]) > String(b[0]) ? 1 : 0);
+const byJson = (a, b) => (J(a) < J(b) ? -1 : J(a) > J(b) ? 1 : 0);
 function tr(pair, x) {
   if (!pair) return x;
   if (Array.isArray(x)) return x.map((v) => tr(pair, v));
   if (x && typeof x === 'object') {
+    const keys = Object.keys(x);
+    if (keys.length === 1 && keys[0] === '<map>' && Array.isArray(x['<map>'])) return { '<map>': tr(pair, x['<map>']).sort(byKey) };
+    if (keys.length === 1 && keys[0] === '<set>' && Array.isArray(x['<set>'])) return { '<set>': tr(pair, x['<set>']).sort(byJson) };
     const o = {};
     for (const [k, v] of Object.entries(x)) o[trString(pair, k)] = tr(pair, v);
     return o;
@@ -1607,12 +1614,17 @@ const REFUSAL_STATUSES = new Set([400, 403, 404, 409, 422]);
 const optValue = (v) => (v && typeof v === 'object' ? v.value : v);
 // The GraphQL operations each NEW hook may send, the last one the write itself.
 // Writes the head resolves with nothing where main resolved with the changed
-// option. The head's hooks type the result `void`, so the type check proves no
-// caller reads it; the one caller, the tag editor, passes `onSuccess: onClose`
-// (`() => void`). The value is left out of their mutation-result comparison.
+// option (updates) or `{ success: true }` (deletes). The head's hooks type the
+// result `void`, so the type check proves no caller reads it: the tag editor
+// passes `onSuccess: onClose` (`() => void`), Settings → Tags passes no
+// callback, and the option and definition deletes have no caller outside
+// tests. The value is left out of their mutation-result comparison.
 const VALUE_DROPPED = {
   updateTag: 'TagEditorDialog closes on success and reads no value',
   updateOption: 'no caller outside tests',
+  deleteTag: 'TagEditorDialog closes on success; Settings → Tags reads nothing',
+  deleteOption: 'no caller outside tests',
+  deleteDef: 'no caller outside tests',
 };
 const NEW_OPS = {
   createDef: ['CreatePropertyDefinition'],
@@ -2227,6 +2239,20 @@ const failures = [...R.crashes];
 const stoppedOnCatch = !!R.mutant?.firstCatch && E.STOP_ON_CATCH !== '0';
 if (R.counts.sequences < CONFIG.seqs && !stoppedOnCatch) failures.push(`ran ${R.counts.sequences} of ${CONFIG.seqs} sequences`);
 if (!R.moduleChecks.old || !R.moduleChecks.neu) failures.push('no module check passed on one side');
+// Outside a mutant run, every difference must have a cause the harness
+// classifies (timestamps, error shape, tie order, main's staleness): a data or
+// state difference left over fails the run.
+if (!R.mutant) {
+  const open = Object.entries(R.diffSignatures).filter(([k]) => /^[^|]*\|(diff|state)\|/.test(k));
+  const n = open.reduce((a, [, c]) => a + c, 0);
+  if (n) failures.push(`${n} unexplained differences in ${open.length} signatures`);
+}
+// A page load the harness retried and then finished is counted and kept; any
+// other harness error means a comparison did not happen.
+{
+  const n = R.totals.harnessErrors - (R.harnessReloadRetries ?? 0);
+  if (n > 0) failures.push(`${n} harness errors besides retried page loads`);
+}
 if (R.sqlFailures) failures.push(`${R.sqlFailures} out-of-band SQL writes failed or changed no rows`);
 if (!R.collation || R.collation.error || R.collation.mismatches.length) failures.push(`collation check: ${JSON.stringify(R.collation).slice(0, 300)}`);
 log(`collation: ${R.collation?.strings ?? 0} tie-key strings lowercase the same in PostgreSQL${R.collation?.mismatches?.length ? ` except ${R.collation.mismatches.length}` : ''}`);

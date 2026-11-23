@@ -17,8 +17,10 @@ serving the web app at `$BASE` (default `https://localhost:24709`), and its
 Postgres container in `$PG_CONTAINER`. All accounts are synthetic
 (`pc-*@*.fuzz.test`). Results go to `out/<run>/results.json`; `run.sh` exits
 non-zero when a run crashed, ran fewer sequences than asked, the OLD page did
-not run the base commit's modules, a mutant was not applied or not caught, or
-an optimistic-state check failed.
+not run the base commit's modules, a mutant was not applied or not caught, an
+optimistic-state check failed, a run other than a mutant's left a data or state
+difference the harness does not classify, or a harness error other than a
+retried page load happened.
 
 ## What runs
 
@@ -44,6 +46,8 @@ an optimistic-state check failed.
   the same paths; `syncIds` pairs the rest by identity after every write:
   definitions by their fields, options by value, order and color, tag sets by
   scope). A pairing that would override another counts in `idMap.conflicts`.
+  A caller's Map or Set comes out of the page sorted by that world's ids, so
+  OLD's entries are sorted again once translated.
   Timestamps compare as `<ts>`, and `updated_at` as unchanged or later.
 - Write transport: every write either page sends is watched. OLD must send
   REST and no GraphQL mutation; NEW must send only the GraphQL operations its
@@ -110,7 +114,8 @@ an optimistic-state check failed.
   told of (another account's) leaving both behind, the head no staler than
   main; `oldStale.inherited` counts them.
 - `VALUE_DROPPED` (`run.mjs`) lists writes the head resolves with nothing
-  where main resolved with the changed option (`updateTag`, `updateOption`):
+  where main resolved with the changed option (`updateTag`, `updateOption`) or
+  `{ success: true }` (`deleteTag`, `deleteOption`, `deleteDef`):
   their hooks type the result `void`, so the type check proves no caller reads
   it. Their result compares as `{ok, toasts}`; `valueDropped` counts them.
 - `DUMP=n` writes the first `n` differences (not ties or timestamp formats)
