@@ -2,7 +2,7 @@ import { t } from '@app/lib/i18n';
 import XIcon from '@icon/system/regular/x.svg';
 import type { ToolPermissionState } from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { groupIcon } from './group-icon';
 import { stateLabel } from './labels';
 import { PermissionStateControl } from './permission-state-control';
@@ -21,6 +21,8 @@ export function ExceptionRow(props: {
   state?: ToolPermissionState;
   defaultState: ToolPermissionState;
   editable: boolean;
+  /** A follower's own restriction on the row. */
+  marker?: JSX.Element;
   onSelect: (state: ToolPermissionState | null) => void;
 }) {
   const Icon = groupIcon(props.group);
@@ -34,6 +36,7 @@ export function ExceptionRow(props: {
       <div class="flex min-w-0 flex-1 basis-36 items-center gap-3">
         <Icon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
         <span class="min-w-0 truncate text-sm text-ink">{props.name}</span>
+        {props.marker}
       </div>
       <div class="ml-auto flex shrink-0 items-center gap-1 touch:w-full">
         <Show when={props.editable}>

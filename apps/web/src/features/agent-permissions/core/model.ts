@@ -188,13 +188,19 @@ export function exceptionsFor(
   catalog: ToolPermissionCatalog,
   view: AgentToolPermissions,
   action: PermissionAction,
-  pending: PendingLookup = NOTHING_PENDING
+  pending: PendingLookup = NOTHING_PENDING,
+  /** Rules that make a pair an exception too: what a follower inherits. */
+  alsoExceptions: readonly ToolPermissionRule[] = []
 ): Exception[] {
   return entitiesFor(catalog, action).flatMap((group) => {
-    const saving = pending(groupActionTarget(group.id, action));
+    const target = groupActionTarget(group.id, action);
+    const saving = pending(target);
     if (saving !== undefined) return [{ group, state: saving }];
     const pair = actionPermission(groupPermissions(view, group.id), action);
-    if (!pair?.exception) return [];
+    if (!pair) return [];
+    const exception =
+      pair.exception || ruleFor(alsoExceptions, target) !== undefined;
+    if (!exception) return [];
     return [{ group, state: pair.state }];
   });
 }
@@ -224,18 +230,26 @@ export type ToolSetting = {
   tool: ToolPermissionCatalogTool;
   group: ToolPermissionCatalogGroup;
   rule: ToolPermissionRule;
+  /** This policy's own rule, not one it inherits. */
+  own: boolean;
 };
 
-/** Saved rules on individual tools of `action`, for catalog tools only. */
+/**
+ * Saved rules on individual tools of `action`, for catalog tools only: the
+ * policy's own, then (for a follower) inherited ones it has none for.
+ */
 export function toolSettingsFor(
   catalog: ToolPermissionCatalog,
   view: AgentToolPermissions,
-  action: PermissionAction
+  action: PermissionAction,
+  inherited: readonly ToolPermissionRule[] = []
 ): ToolSetting[] {
   return catalog.groups.flatMap((group) =>
-    actionTools(group, action).flatMap((tool) => {
-      const rule = ruleFor(view.rules, toolTarget(tool));
-      return rule ? [{ tool, group, rule }] : [];
+    actionTools(group, action).flatMap((tool): ToolSetting[] => {
+      const own = ruleFor(view.rules, toolTarget(tool));
+      if (own) return [{ tool, group, rule: own, own: true }];
+      const rule = ruleFor(inherited, toolTarget(tool));
+      return rule ? [{ tool, group, rule, own: false }] : [];
     })
   );
 }

@@ -3,6 +3,7 @@ import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import type {
   PermissionAction,
   ToolPermissionCatalogGroup,
+  ToolPermissionRule,
   ToolPermissionState,
 } from '@service-agent-harness/generated/schemas';
 import { cn } from '@ui';
@@ -11,6 +12,7 @@ import type { Exception, ToolSetting } from '../core/model';
 import { EntityPicker } from './entity-picker';
 import { ExceptionRow } from './exception-row';
 import { PermissionStateControl } from './permission-state-control';
+import { RestrictionMarker } from './restriction-marker';
 import { ToolSettingsList } from './tool-settings-list';
 
 /**
@@ -31,6 +33,15 @@ export function ActionAccordion(props: {
   following: number;
   toolSettings: ToolSetting[];
   editable: boolean;
+  /** A follower's own restrictions: on the default, and on each entity. */
+  restrictions?: {
+    onDefault?: ToolPermissionRule;
+    onEntity: (group: string) => ToolPermissionRule | undefined;
+    /** Removes one, when the viewer may. */
+    onRemove?: (rule: ToolPermissionRule) => void;
+  };
+  /** Saved tool settings can be removed. */
+  toolsRemovable: boolean;
   open: boolean;
   onToggle: () => void;
   onDefault: (state: ToolPermissionState) => void;
@@ -118,6 +129,21 @@ export function ActionAccordion(props: {
             </span>
           </Show>
         </button>
+        <Show when={props.restrictions?.onDefault}>
+          {(rule) => (
+            <RestrictionMarker
+              rule={rule()}
+              target={t('agentPermissions.defaultLabel', {
+                action: props.name,
+              })}
+              onRemove={
+                props.restrictions?.onRemove
+                  ? () => props.restrictions?.onRemove?.(rule())
+                  : undefined
+              }
+            />
+          )}
+        </Show>
         <div class="ml-auto shrink-0 touch:w-full">
           <PermissionStateControl
             label={t('agentPermissions.defaultMenu', { action: props.name })}
@@ -167,6 +193,24 @@ export function ActionAccordion(props: {
                   state={state()}
                   defaultState={props.defaultState}
                   editable={props.editable}
+                  marker={
+                    <Show when={props.restrictions?.onEntity(group.id)}>
+                      {(rule) => (
+                        <RestrictionMarker
+                          rule={rule()}
+                          target={t('agentPermissions.controlLabel', {
+                            group: group.name,
+                            action: props.name,
+                          })}
+                          onRemove={
+                            props.restrictions?.onRemove
+                              ? () => props.restrictions?.onRemove?.(rule())
+                              : undefined
+                          }
+                        />
+                      )}
+                    </Show>
+                  }
                   onSelect={(next) => {
                     if (next !== state()) props.onException(group.id, next);
                   }}
@@ -208,7 +252,7 @@ export function ActionAccordion(props: {
           <Show when={props.toolSettings.length > 0}>
             <ToolSettingsList
               settings={props.toolSettings}
-              editable={props.editable}
+              removable={props.toolsRemovable}
               removing={props.removingTool}
               onRemove={props.onRemoveTool}
             />

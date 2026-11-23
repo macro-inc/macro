@@ -4,8 +4,12 @@ import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
 import type { TraceContext } from '@macro-inc/observability';
 import type {
   AgentToolPermissions,
+  DetachToolPermissions,
+  GetAgentToolPermissionSourcesParams,
+  SetToolPermissionSource,
   ToolPermissionCatalog,
   ToolPermissionChanges,
+  ToolPermissionSourceCandidates,
 } from './generated/schemas';
 
 const host = SERVER_HOSTS['agent-harness'];
@@ -103,6 +107,74 @@ export const toolPermissionsClient = {
         method: 'DELETE',
         errorResponseHandler: toolPermissionError,
         trace: { parentSpan },
+      }
+    );
+  },
+
+  /** Makes the agent follow another policy (its source). */
+  setSource(
+    agentId: string,
+    body: SetToolPermissionSource,
+    parentSpan?: TraceContext
+  ) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      `${agentPath(agentId)}/source`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        errorResponseHandler: toolPermissionError,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  /**
+   * Stops following: copies what the source resolves to into the agent's
+   * own settings, then applies `changes`, in one transaction.
+   */
+  detach(
+    agentId: string,
+    body: DetachToolPermissions,
+    parentSpan?: TraceContext
+  ) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      `${agentPath(agentId)}/detach`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        errorResponseHandler: toolPermissionError,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  /**
+   * The policies an agent may follow: for an agent (`agentId`), or for a
+   * new one by its scope.
+   */
+  sources(query: GetAgentToolPermissionSourcesParams) {
+    const params = new URLSearchParams();
+    if (query.agentId) params.set('agentId', query.agentId);
+    if (query.scope) params.set('scope', query.scope);
+    if (query.teamId) params.set('teamId', query.teamId);
+    return fetchWithToken<
+      ToolPermissionSourceCandidates,
+      typeof TOOL_PERMISSION_REFUSED
+    >(`${host}/agent-tool-permissions/sources?${params}`, {
+      errorResponseHandler: toolPermissionError,
+      trace: FEATURE_OFF_IS_EXPECTED,
+    });
+  },
+
+  /** A policy's resolved permissions, read-only (a source's preview). */
+  policy(policyId: string) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      `${host}/agent-tool-permissions/policies/${encodeURIComponent(policyId)}`,
+      {
+        errorResponseHandler: toolPermissionError,
+        trace: FEATURE_OFF_IS_EXPECTED,
       }
     );
   },

@@ -16,7 +16,9 @@ import { agentToolPermissionKeys } from './keys';
  * agent has no permissions to show), which reads as `null`: callers hide
  * the surface rather than showing an error.
  */
-async function orUnavailable<T>(load: () => Promise<T>): Promise<T | null> {
+export async function orUnavailable<T>(
+  load: () => Promise<T>
+): Promise<T | null> {
   try {
     return await load();
   } catch (error) {
@@ -98,11 +100,32 @@ export function useSessionToolPermissionsQuery(
   );
 }
 
-function storeView(view: AgentToolPermissions) {
+/** A cached view of an agent that follows another policy. */
+function followsAPolicy(data: unknown): boolean {
+  return (
+    typeof data === 'object' &&
+    data !== null &&
+    'source' in data &&
+    data.source !== null &&
+    data.source !== undefined
+  );
+}
+
+export function storeView(view: AgentToolPermissions) {
   queryClient.setQueryData(
     agentToolPermissionKeys.agent(view.agentId).queryKey,
     view
   );
+  // Agents following this one resolve through it, so every other agent's
+  // view and every policy preview is read again.
+  queryClient.invalidateQueries({
+    queryKey: agentToolPermissionKeys.agent._def,
+    predicate: (query) =>
+      query.queryKey[2] !== view.agentId && followsAPolicy(query.state.data),
+  });
+  queryClient.invalidateQueries({
+    queryKey: agentToolPermissionKeys.policy._def,
+  });
   // A session's view layers its own limits over the agent's, so it is read
   // again rather than patched. The save settles once that read lands, so a
   // control reading the session view never shows the old state between.
@@ -158,6 +181,14 @@ function resetPermissionsMutationOptions(agentId: string) {
       ),
     onSuccess: storeView,
   };
+}
+
+/** For a new agent, whose id isn't known when the form mounts. */
+export async function setPermissionsNow(variables: SetPermissionsVariables) {
+  const options = setPermissionsMutationOptions(variables.agentId);
+  const view = await options.mutationFn(variables);
+  await options.onSuccess(view);
+  return view;
 }
 
 export function useSetAgentToolPermissionsMutation(agentId: Accessor<string>) {

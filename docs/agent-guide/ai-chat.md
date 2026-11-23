@@ -1879,7 +1879,9 @@ session** badge). Setting a group's action to its default clears the
 exception; any other state saves one. A click saves to the agent at once;
 **All permissions** opens the agent's permissions in Settings → Agents.
 People who can't edit the agent see the controls disabled and `Only people
-who can edit <Agent> can change these.`
+who can edit <Agent> can change these.` For an agent that follows another's permissions the
+card is read-only too, with `<Agent> follows @handle’s permissions: change
+what it follows in its settings.`
 
 Backend-free check (desktop and phone), with the blocked and approval cards
 for JS tools programs and the settings component:

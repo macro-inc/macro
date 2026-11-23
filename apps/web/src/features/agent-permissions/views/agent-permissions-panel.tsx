@@ -16,6 +16,7 @@ import type {
 import { Button } from '@ui';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Match, Show, Switch } from 'solid-js';
+import { FollowingNote, sourceMention } from '../components/following-note';
 import {
   PermissionsLoadError,
   PermissionsReadOnlyNote,
@@ -30,6 +31,7 @@ import {
   settingCounts,
   targetKey,
 } from '../core/model';
+import { followerRules } from '../core/references';
 import {
   useAgentToolPermissionsQuery,
   useResetAgentToolPermissionsMutation,
@@ -67,6 +69,8 @@ export function AgentPermissionsPanel(props: {
   focus?: PermissionFocus;
   /** Shows the "Tool permissions" title and its description. */
   heading?: boolean;
+  /** Leaves out what the agent follows, when the caller shows it. */
+  hideSource?: boolean;
 }) {
   const catalogQuery = useToolPermissionCatalogQuery();
   const viewQuery = useAgentToolPermissionsQuery(() => props.agentId);
@@ -101,6 +105,11 @@ export function AgentPermissionsPanel(props: {
     return settingCounts(current.catalog, current.view.rules);
   };
   // Reset clears hidden rules too, so it's offered while any rule is saved.
+  // Reset on a follower removes only its own restrictions.
+  const followedMention = () => {
+    const source = ready()?.view.source;
+    return source ? sourceMention(source) : undefined;
+  };
   const anySaved = () => (ready()?.view.rules.length ?? 0) > 0;
 
   const changes = usePermissionChanges({
@@ -161,10 +170,31 @@ export function AgentPermissionsPanel(props: {
           <Match when={ready()}>
             {(loaded) => (
               <>
+                <Show when={!props.hideSource && loaded().view.source}>
+                  {(source) => (
+                    <>
+                      <FollowingNote source={source()} />
+                      <Show when={loaded().view.canSetSource}>
+                        <p class="px-1 text-xs text-ink-extra-muted">
+                          {t('agentPermissions.followsEditHint')}
+                        </p>
+                      </Show>
+                    </>
+                  )}
+                </Show>
                 <ToolPermissions
                   catalog={loaded().catalog}
                   view={loaded().view}
-                  editable={loaded().view.canEdit}
+                  editable={loaded().view.canEdit && !loaded().view.source}
+                  follower={
+                    loaded().view.source
+                      ? {
+                          inherited: followerRules(loaded().view),
+                          restrictions: loaded().view.rules,
+                          canRemove: loaded().view.canEdit,
+                        }
+                      : undefined
+                  }
                   heading={props.heading}
                   initialAction={
                     props.focus
@@ -213,7 +243,9 @@ export function AgentPermissionsPanel(props: {
                       onClick={() => setConfirmingReset(true)}
                     >
                       <ArrowCounterClockwiseIcon class="size-3.5 shrink-0 pointer-events-none" />
-                      {t('agentPermissions.reset')}
+                      {ready()?.view.source
+                        ? t('agentPermissions.removeRestrictions')
+                        : t('agentPermissions.reset')}
                     </Button>
                   </Show>
                 </div>
@@ -227,6 +259,8 @@ export function AgentPermissionsPanel(props: {
         open={confirmingReset()}
         agent={props.agentName}
         byAgent={counts().byAgent}
+        follows={followedMention()}
+        followed={ready()?.view.kind === 'persona'}
         pending={resetMutation.isPending}
         onOpenChange={setConfirmingReset}
         onConfirm={() => fireAndForget(reset(), 'agent-permissions')}

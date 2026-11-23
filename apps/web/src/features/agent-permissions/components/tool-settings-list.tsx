@@ -14,7 +14,8 @@ import { PermissionStateGlyph } from './permission-state-glyph';
  */
 export function ToolSettingsList(props: {
   settings: ToolSetting[];
-  editable: boolean;
+  /** The settings can be removed here. */
+  removable: boolean;
   /** The setting's removal is saving. */
   removing: (setting: ToolSetting) => boolean;
   onRemove: (setting: ToolSetting) => void;
@@ -50,7 +51,7 @@ export function ToolSettingsList(props: {
                   <PermissionStateGlyph state={setting().rule.state} />
                   {stateLabel(setting().rule.state)}
                 </span>
-                <Show when={props.editable}>
+                <Show when={props.removable && setting().own}>
                   <Button
                     type="button"
                     variant="ghost"

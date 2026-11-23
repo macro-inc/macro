@@ -20,6 +20,7 @@ import {
   QueryClientProvider,
   useQuery,
 } from '@tanstack/solid-query';
+import { err, ok } from 'neverthrow';
 import { createSignal, Suspense } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -85,8 +86,29 @@ vi.mock('./components/auto-archive-setting', () => ({
 // The permissions panel has its own suite; here only its entry points. The
 // flag is a signal, so a test can turn it off under an open panel.
 const [permissionsFlag, setPermissionsFlag] = createSignal(false);
-const permissionMocks = vi.hoisted(() => ({ served: true }));
+const permissionMocks = vi.hoisted(() => ({
+  served: true,
+  applyDraft: vi.fn(),
+}));
 vi.mock('@app/features/agent-permissions', () => ({
+  refusalMessage: () => undefined,
+  applyPermissionsDraft: permissionMocks.applyDraft,
+  EditAgentPermissions: (props: { agentId: string; agentName: string }) => (
+    <section aria-label={`Permissions of ${props.agentName}`}>
+      Editor permissions of {props.agentName} ({props.agentId})
+    </section>
+  ),
+  NewAgentPermissions: (props: {
+    share: 'Private' | 'Team';
+    draft: (read: () => unknown) => void;
+  }) => {
+    props.draft(() => ({
+      mode: 'own',
+      sourcePolicyId: `default-${props.share}`,
+      changes: [],
+    }));
+    return <section aria-label="New agent permissions">{props.share}</section>;
+  },
   useAgentPermissionsFlag: () => permissionsFlag,
   useAgentPermissionsAvailable: () => () =>
     permissionsFlag() && permissionMocks.served,
@@ -1148,6 +1170,64 @@ describe('Agents', () => {
       render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
       expect(panel('Bug fixer')?.textContent).toContain('agent-1');
+    });
+
+    it("saves a new agent's permissions once the agent exists", async () => {
+      setPermissionsFlag(true);
+      permissionMocks.applyDraft.mockResolvedValue(ok(undefined));
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+      const dialog = screen.getByRole('region', { name: 'New agent' });
+      expect(
+        within(dialog).getByRole('region', { name: 'New agent permissions' })
+          .textContent
+      ).toBe('Private');
+      fireEvent.input(within(dialog).getByLabelText('Name'), {
+        target: { value: 'Bug fixer' },
+      });
+      fireEvent.click(within(dialog).getByLabelText('Team'));
+      // The section follows Who can use it.
+      expect(
+        within(dialog).getByRole('region', { name: 'New agent permissions' })
+          .textContent
+      ).toBe('Team');
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Create agent' })
+      );
+      await waitFor(() =>
+        expect(permissionMocks.applyDraft).toHaveBeenCalledWith(
+          'created-agent',
+          {
+            mode: 'own',
+            sourcePolicyId: 'default-Team',
+            changes: [],
+          }
+        )
+      );
+    });
+
+    it("offers Retry when a new agent's permissions fail to save", async () => {
+      setPermissionsFlag(true);
+      permissionMocks.applyDraft.mockResolvedValue(err(new Error('refused')));
+      render(() => <Agents {...agentsPageProps} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add agent' }));
+      const dialog = screen.getByRole('region', { name: 'New agent' });
+      fireEvent.input(within(dialog).getByLabelText('Name'), {
+        target: { value: 'Bug fixer' },
+      });
+      fireEvent.click(
+        within(dialog).getByRole('button', { name: 'Create agent' })
+      );
+      await waitFor(() =>
+        expect(agentMocks.toastFailure).toHaveBeenCalledWith(
+          'Agent created, but its permissions weren’t saved',
+          expect.objectContaining({
+            actions: [expect.objectContaining({ label: 'Retry' })],
+          })
+        )
+      );
+      // The agent exists either way: the form closes.
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     });
 
     it('is not in the editor while the flag is off', () => {

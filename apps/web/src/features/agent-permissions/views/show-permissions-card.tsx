@@ -4,6 +4,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwiseIcon from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
+import LinkIcon from '@icon/system/regular/link-simple.svg';
 import LockIcon from '@icon/system/regular/lock-simple.svg';
 import ShieldCheckIcon from '@icon/system/regular/shield-check.svg';
 import { queryReadyGate } from '@queries/gate';
@@ -17,6 +18,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { sourceMention } from '../components/following-note';
 import { groupIcon } from '../components/group-icon';
 import { stateLabel } from '../components/labels';
 import { PermissionActionRow } from '../components/permission-action-row';
@@ -89,6 +91,10 @@ export function ShowPermissionsCard(props: {
     return current.kind === 'ready' ? current : undefined;
   };
   const canEdit = () => ready()?.view.canEdit ?? false;
+  // A following agent's permissions are its source's: read-only here, as in
+  // its settings (its own restrictions are removed there).
+  const source = () => ready()?.view.source ?? undefined;
+  const canChange = () => canEdit() && !source();
   const blocks = () => {
     const current = ready();
     return current ? selectionBlocks(current.catalog, props.selection) : [];
@@ -218,7 +224,7 @@ export function ShowPermissionsCard(props: {
                               catalog={loaded().catalog}
                               view={loaded().view}
                               agentName={props.agentName}
-                              canEdit={canEdit()}
+                              canEdit={canChange()}
                               pendingState={changes.pendingState}
                               onAction={(group, action, state) =>
                                 fireAndForget(
@@ -266,20 +272,29 @@ export function ShowPermissionsCard(props: {
       </Switch>
       <Show when={ready()}>
         <p class="flex items-center gap-1.5 px-4 py-3 text-xs leading-4 text-ink-extra-muted">
-          <Show
-            when={canEdit()}
-            fallback={
-              <>
-                <LockIcon aria-hidden="true" class="size-3.5 shrink-0" />
-                {t('agentPermissionsChat.cardReadOnly', {
-                  agent: props.agentName,
-                })}
-              </>
-            }
-          >
-            <CheckIcon aria-hidden="true" class="size-3.5 shrink-0" />
-            {t('agentPermissionsChat.cardSaves', { agent: props.agentName })}
-          </Show>
+          <Switch>
+            <Match when={source()}>
+              {(followed) => (
+                <>
+                  <LinkIcon aria-hidden="true" class="size-3.5 shrink-0" />
+                  {t('agentPermissionsChat.cardFollows', {
+                    agent: props.agentName,
+                    source: sourceMention(followed()),
+                  })}
+                </>
+              )}
+            </Match>
+            <Match when={canEdit()}>
+              <CheckIcon aria-hidden="true" class="size-3.5 shrink-0" />
+              {t('agentPermissionsChat.cardSaves', { agent: props.agentName })}
+            </Match>
+            <Match when={true}>
+              <LockIcon aria-hidden="true" class="size-3.5 shrink-0" />
+              {t('agentPermissionsChat.cardReadOnly', {
+                agent: props.agentName,
+              })}
+            </Match>
+          </Switch>
         </p>
       </Show>
     </section>

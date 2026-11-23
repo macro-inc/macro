@@ -16,7 +16,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CATALOG, VIEW } from '../tests/fixtures';
+import { CATALOG, FOLLOWING_VIEW, VIEW } from '../tests/fixtures';
 import { ShowPermissionsCard } from './show-permissions-card';
 
 const client = vi.hoisted(() => ({
@@ -149,6 +149,19 @@ describe('ShowPermissionsCard', () => {
         },
       ],
     });
+  });
+
+  it('is read-only for an agent that follows another', async () => {
+    renderCard({ ...VIEW, source: FOLLOWING_VIEW.source });
+    await screen.findByRole('radiogroup', { name: 'Email: Send' });
+    expect((option('Email: Send', 'Never') as HTMLInputElement).disabled).toBe(
+      true
+    );
+    expect(
+      screen.getByText(
+        'Scout follows @scout’s permissions: change what it follows in its settings.'
+      )
+    ).toBeTruthy();
   });
 
   it('opens the agent’s permissions page at the group', async () => {
