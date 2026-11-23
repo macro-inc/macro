@@ -681,7 +681,8 @@ export function createSoupLiveQuery(
   // rebuild starts only once no read runs, on a later task: the observer
   // shows a read ended before it lets go of it, and a refetch started in
   // between would share that read's answer instead of reading. The bound
-  // resets only once the chain is whole with no read running: a rebuild
+  // resets when a rebuild ends with the chain whole, or once the chain is
+  // whole with no read running; never midway through a rebuild, which
   // passes through a whole chain after its first page.
   let repairs = 0;
   let failedAt: number | undefined;
