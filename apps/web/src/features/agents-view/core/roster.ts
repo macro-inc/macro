@@ -9,6 +9,7 @@ import {
   MACRO_AGENT_NAME,
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
+import { isMacroNewId } from '@core/constant/macroNew';
 import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
 
 /**
@@ -292,4 +293,22 @@ export function kindForBot(
     roster.find((agent) => agent.botId === bare)?.kind ??
     'agent'
   );
+}
+
+/**
+ * The roster agent a mention names: mentions carry the `bot|<uuid>` principal,
+ * and Macro's mention stands for the default persona, which has no bot id.
+ */
+export function rosterAgentForMention(
+  roster: readonly RosterAgent[],
+  mentionedId: string
+): RosterAgent | undefined {
+  if (!mentionedId.startsWith('bot|')) return undefined;
+  // The @ menu mentions Macro as the agent-session bot (`macroMentionUser`);
+  // older content uses the classic chat bot. Both are Macro's persona.
+  if (isMacroNewId(mentionedId) || isMacroAgentId(mentionedId)) {
+    return roster.find((agent) => agent.id === MACRO_PERSONA_ID);
+  }
+  const botId = mentionedId.slice('bot|'.length);
+  return roster.find((agent) => agent.botId === botId);
 }

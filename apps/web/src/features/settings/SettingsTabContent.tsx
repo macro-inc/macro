@@ -14,10 +14,9 @@ import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
 import { Billing } from './Billing';
 import { Bots } from './Bots';
-import { DesktopApp } from './DesktopApp';
+import { Downloads } from './Downloads';
 import { EmailSettings } from './email-settings';
 import { IntegrationsPage } from './IntegrationsPage';
-import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
@@ -94,11 +93,8 @@ export function SettingsTabContent(props: {
       <Show when={isCurrentTab('Connected')}>
         <IntegrationsPage />
       </Show>
-      <Show when={isCurrentTab('Desktop App')}>
-        <DesktopApp />
-      </Show>
-      <Show when={isCurrentTab('Mobile App')}>
-        <MobileApp />
+      <Show when={isCurrentTab('Downloads')}>
+        <Downloads />
       </Show>
       <Show when={isCurrentTab('Agent')}>
         <Agent />

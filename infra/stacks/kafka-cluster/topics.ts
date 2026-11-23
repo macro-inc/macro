@@ -1,19 +1,11 @@
 import * as fs from 'fs';
 import type { TopicArgs } from '../../packages/resources';
-import { stack } from '../../packages/shared';
 
 const SEVEN_DAYS_MS = '604800000';
-const TEN_DAYS_MS = '864000000';
 
-// The search consumer is draining a production email backlog more than six
-// days deep; ten days keeps its oldest unconsumed events from being deleted
-// before they are indexed. Return to seven once the backlog has drained.
-const RETENTION_MS_OVERRIDES: Record<string, string> =
-  stack === 'prod' ? { 'macro.email': TEN_DAYS_MS } : {};
-
-function topicConfigs(name: string): string {
+function topicConfigs(): string {
   return JSON.stringify({
-    'retention.ms': RETENTION_MS_OVERRIDES[name] ?? SEVEN_DAYS_MS,
+    'retention.ms': SEVEN_DAYS_MS,
     'retention.bytes': '-1', // no max retention size
     'cleanup.policy': 'delete', // deletes log items when needed
     'min.insync.replicas': '2', // durability for minimum # of producers available for ack=all to succeed
@@ -42,7 +34,7 @@ export function getKafkaClusterTopics(): TopicArgs[] {
     topics.push({
       name,
       ...topicArgDefaults,
-      configs: topicConfigs(name),
+      configs: topicConfigs(),
     });
   }
 

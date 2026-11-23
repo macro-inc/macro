@@ -9,10 +9,10 @@
     "get_bundle_debug_info",
     "get_bundle_update_status",
     "get_macos_notification_permission",
-    "get_native_build_time",
     "get_native_update_status",
     "get_pending_share_filenames",
     "grant_bundle_update",
+    "graphql_cache_abandon",
     "graphql_cache_calendar_commit",
     "graphql_cache_calendar_range",
     "graphql_cache_claim_next_mutation",
@@ -134,6 +134,7 @@
     "send_macos_notification",
     "set_bundle_reload_hold",
     "stage_desktop_pasteboard_files",
+    "take_native_update_reports",
     "upload_staged_file_to_presigned_url",
     "whatsapp_passkey_authenticate"
   ]

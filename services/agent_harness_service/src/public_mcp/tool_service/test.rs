@@ -285,10 +285,12 @@ mod code_mode {
         http::Request,
     };
     use code_execution::domain::ExecuteRequest;
+    use rmcp::model::ProtocolVersion;
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
     use serde::Deserialize;
+    use std::collections::BTreeSet;
     use std::sync::Mutex;
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
@@ -504,6 +506,31 @@ mod code_mode {
         rpc_with(app, user, caller, method, params, &[]).await
     }
 
+    /// [`rpc_as`], declaring `protocol_version` in `mcp-protocol-version`.
+    async fn rpc_versioned(
+        app: axum::Router,
+        user: &str,
+        caller: Option<ToolCaller>,
+        method: &str,
+        params: serde_json::Value,
+        protocol_version: Option<String>,
+    ) -> serde_json::Value {
+        match protocol_version {
+            Some(version) => {
+                rpc_with(
+                    app,
+                    user,
+                    caller,
+                    method,
+                    params,
+                    &[("mcp-protocol-version", &version), ("mcp-method", method)],
+                )
+                .await
+            }
+            None => rpc_with(app, user, caller, method, params, &[]).await,
+        }
+    }
+
     /// An RPC as `caller` with extra headers.
     async fn rpc_with(
         app: axum::Router,
@@ -654,6 +681,140 @@ mod code_mode {
             .collect();
         names.sort();
         names
+    }
+
+    /// The handshake a client opens `version` with, as (method, params,
+    /// `mcp-protocol-version` header).
+    fn handshake(version: &ProtocolVersion) -> (&'static str, serde_json::Value, Option<String>) {
+        let client_info = serde_json::json!({"name": "test", "version": "1"});
+        if version.has_initialize() {
+            return (
+                "initialize",
+                serde_json::json!({
+                    "protocolVersion": version,
+                    "capabilities": {},
+                    "clientInfo": client_info,
+                }),
+                None,
+            );
+        }
+        assert_eq!(
+            version,
+            &ProtocolVersion::V_2026_07_28,
+            "protocol {version} is supported but this test doesn't know its handshake: add it, \
+             and make the server answer it with `instructions` for the caller's mode"
+        );
+        (
+            "server/discover",
+            serde_json::json!({"_meta": {
+                "io.modelcontextprotocol/protocolVersion": version,
+                "io.modelcontextprotocol/clientInfo": client_info,
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }}),
+            Some(version.to_string()),
+        )
+    }
+
+    /// The tool names `instructions` mentions, out of every tool the server
+    /// has in any mode.
+    fn named_tools(instructions: &str) -> BTreeSet<String> {
+        let words: BTreeSet<&str> = instructions
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .collect();
+        ai_tools::tools_for(ai_tools::AiHost::Mcp)
+            .toolset
+            .tools
+            .keys()
+            .chain(
+                agent_code_mode::inbound::toolset::user_toolset()
+                    .tools
+                    .keys(),
+            )
+            .filter(|name| words.contains(name.as_str()))
+            .cloned()
+            .collect()
+    }
+
+    /// Every handshake at every protocol version the server supports, for
+    /// every kind of caller, describes the tools that caller is listed, and
+    /// no others. A handshake that falls back to rmcp's default (`get_info`)
+    /// describes the direct tools to a code-mode client, which then calls
+    /// tools it doesn't have.
+    ///
+    /// Checked on the surface paragraph, before the shared guidance
+    /// (`mcp_instructions`) every mode appends: that guidance is written for
+    /// both modes and names a direct tool beside its SDK form.
+    #[tokio::test]
+    async fn every_handshake_describes_the_listed_tools() {
+        let app = app(Arc::new(Runs::default()));
+        let service = catalog_service();
+        let versions = service.supported_protocol_versions();
+        assert!(
+            versions.iter().any(|version| !version.has_initialize()),
+            "the discover handshake must stay covered"
+        );
+        // What production lists in standard mode (`list_tools`' ChatGPT
+        // filter): the HTTP test catalog only stands in for it, so a new
+        // filter there must be mirrored here.
+        let direct_tools: BTreeSet<String> = ai_tools::tools_for(ai_tools::AiHost::Mcp)
+            .toolset
+            .tools
+            .keys()
+            .filter(|name| !HIDDEN_FROM_CHATGPT.contains(&name.as_str()))
+            .cloned()
+            .collect();
+        let callers = [
+            ("api key", Some(ToolCaller::ApiKey)),
+            ("agent", Some(ToolCaller::Agent(BotId::TEST_A))),
+            ("mcp client", mcp_client("Claude Code")),
+            ("chatgpt", mcp_client("ChatGPT")),
+            (
+                "nameless client",
+                Some(ToolCaller::McpClient { name: None }),
+            ),
+        ];
+        for (label, caller) in callers {
+            let listed = rpc_as(
+                app.clone(),
+                USER,
+                caller.clone(),
+                "tools/list",
+                serde_json::json!({}),
+            )
+            .await;
+            let listed: BTreeSet<String> = tool_names(&listed).into_iter().collect();
+            let code_mode = listed.contains("ExecuteCode");
+            for version in versions.iter() {
+                let (method, params, header) = handshake(version);
+                let response =
+                    rpc_versioned(app.clone(), USER, caller.clone(), method, params, header).await;
+                let instructions = response["result"]["instructions"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{label} {method} {version}: {response}"));
+                let surface = instructions
+                    .strip_suffix(&mcp_instructions("https://macro.com"))
+                    .unwrap_or_else(|| {
+                        panic!("{label} {method} {version}: shared guidance missing")
+                    });
+                let named = named_tools(surface);
+                if code_mode {
+                    assert_eq!(
+                        named, listed,
+                        "{label} {method} {version}: instructions name other tools than it lists"
+                    );
+                } else {
+                    let unlisted: Vec<_> = named.difference(&direct_tools).collect();
+                    assert!(
+                        unlisted.is_empty(),
+                        "{label} {method} {version}: instructions name unlisted tools {unlisted:?}"
+                    );
+                    assert!(
+                        named.contains("ReadContent"),
+                        "{label} {method} {version}: direct-tool instructions expected"
+                    );
+                }
+            }
+        }
     }
 
     #[tokio::test]
@@ -1096,6 +1257,11 @@ mod code_mode {
             ] {
                 let answer =
                     rpc_with(app.clone(), USER, caller.clone(), method, params, headers).await;
+                // A refused handshake would also lack the extension.
+                assert!(
+                    answer["result"]["capabilities"].is_object(),
+                    "{label} {method}: {answer}"
+                );
                 let extension = &answer["result"]["capabilities"]["extensions"]["io.modelcontextprotocol/events"];
                 assert_eq!(extension.is_object(), offered, "{label} {method}: {answer}");
             }
@@ -1161,6 +1327,10 @@ mod code_mode {
             ],
         )
         .await;
+        assert!(
+            discovered["result"]["capabilities"].is_object(),
+            "{discovered}"
+        );
         assert!(
             discovered["result"]["capabilities"]
                 .get("extensions")

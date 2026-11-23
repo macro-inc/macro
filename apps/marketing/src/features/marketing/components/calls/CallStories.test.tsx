@@ -8,8 +8,6 @@ import {
   CallTranscriptDemo,
 } from './CallStories';
 
-import { CallTeamMemoryDemo } from './CallTeamMemoryDemo';
-
 let intersections: IntersectionObserverCallback[];
 let motionListeners: (() => void)[];
 let reduced = false;
@@ -381,55 +379,4 @@ it('keeps the completed start-call view for reduced motion on return', () => {
   visible(true);
   expect(view.getByRole('button', { name: 'Leave call' })).toBeTruthy();
   expect(view.queryByRole('button', { name: 'Call' })).toBeNull();
-});
-
-it('shares a channel call with an absent teammate and opens its transcript', () => {
-  const view = render(() => <CallTeamMemoryDemo />);
-  expect(
-    (
-      view.getByRole('checkbox', {
-        name: 'Share with team',
-      }) as HTMLInputElement
-    ).checked
-  ).toBe(true);
-  fireEvent.click(view.getByRole('button', { name: 'Leave call' }));
-  fireEvent.click(view.getByRole('gridcell', { name: /Training prep/ }));
-  expect(view.getByRole('heading', { name: 'Summary' })).toBeTruthy();
-  fireEvent.click(
-    view.getByRole('button', { name: 'Go to 1:02: Julia Westphal' })
-  );
-  expect(playerTime(view.container)).toContain('1:02');
-});
-it('does not expose an unshared recording to the absent teammate', () => {
-  const view = render(() => <CallTeamMemoryDemo />);
-  fireEvent.click(view.getByRole('checkbox', { name: 'Share with team' }));
-  fireEvent.click(view.getByRole('button', { name: 'Leave call' }));
-  expect(view.queryByRole('gridcell', { name: /Training prep/ })).toBeNull();
-  expect(
-    view.getByText('This call wasn’t shared with Gabriel’s team.')
-  ).toBeTruthy();
-});
-
-it('uses the toolbar hang-up control and a cursor to walk through team memory', () => {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    x: 0,
-    y: 0,
-    left: 0,
-    top: 0,
-    width: 800,
-    height: 600,
-    right: 800,
-    bottom: 600,
-    toJSON: () => ({}),
-  });
-
-  const view = render(() => <CallTeamMemoryDemo />);
-  expect(view.queryByRole('button', { name: 'End call' })).toBeNull();
-  visible(true);
-  vi.advanceTimersByTime(1900);
-  const pointer = view.container.querySelector('.call-memory-pointer');
-  expect(pointer).toBeTruthy();
-  vi.advanceTimersByTime(9000);
-  expect(playerTime(view.container)).toContain('1:02');
-  expect(view.container.querySelector('.call-memory-pointer')).toBeNull();
 });

@@ -49,6 +49,8 @@ const RMCP_SERVICE_FILE: &str = "rmcp-3.9.0/src/service.rs";
 #[strum(serialize_all = "snake_case")]
 pub(crate) enum McpMethod {
     Initialize,
+    /// The 2026-07-28 handshake, `server/discover`.
+    Discover,
     /// A request rmcp does not model, such as an MCP Events method.
     Custom,
     ListTools,

@@ -377,6 +377,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             markdown: "Steps: open login on Safari 17.".into(),
             status: Some("In review".into()),
             priority: Some("High".into()),
+            start: None,
             due: Some(Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap()),
             assignees: vec![ContextPerson {
                 id: "macro|sam@example.com".into(),
