@@ -30,6 +30,7 @@ jobs:
       observability_image: ${{ steps.filter.outputs.observability_image }}
       observability_cluster: ${{ steps.filter.outputs.observability_cluster }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
+      desktop_windows: ${{ steps.filter.outputs.desktop_windows }}
     timeout-minutes: 5
     steps:
       - name: Take the request
@@ -574,6 +575,20 @@ jobs:
             macrod_update:
               - 'crates/coding_agent_worker/**'
               - '.github/workflows/test_macrod_update.yml'
+            desktop_windows:
+              - 'apps/web/tauri/src-tauri/**'
+              - 'apps/web/tauri/Cargo.toml'
+              - 'apps/web/tauri/Cargo.lock'
+              - 'apps/web/tauri/graphql_cache_plugin/**'
+              - 'apps/web/tauri/logger/**'
+              - 'apps/web/tauri/macro_bundle_updater_plugin/**'
+              - 'apps/web/tauri/navigation_plugin/**'
+              - 'apps/web/tauri/ios_push_plugin/**'
+              - 'apps/web/tauri/staged_upload_constants/**'
+              - 'apps/web/scripts/desktop-release.mjs'
+              - 'tooling/xtask/crates/xtask_workflows/src/workflows/desktop_windows.rs'
+              - 'tooling/xtask/crates/xtask_workflows/src/workflows/scripts/*windows*'
+              - '.github/workflows/desktop_windows.yml'
   cloud-storage:
     needs:
       - start
@@ -669,6 +684,13 @@ jobs:
     if: needs.start.outputs.macrod_update == 'true'
     name: macrod update
     uses: ./.github/workflows/test_macrod_update.yml
+    secrets: inherit
+  desktop-windows:
+    needs:
+      - start
+    if: needs.start.outputs.desktop_windows == 'true'
+    name: Desktop Windows
+    uses: ./.github/workflows/desktop_windows.yml
     secrets: inherit
   gate:
     needs:

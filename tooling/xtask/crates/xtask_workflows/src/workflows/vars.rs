@@ -72,6 +72,26 @@ pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
 /// Service account CI acts as on Google Play, a repo *variable*.
 pub const GOOGLE_PLAY_SERVICE_ACCOUNT: Var = Var("GOOGLE_PLAY_SERVICE_ACCOUNT");
 
+/// Azure Artifact Signing for the Windows desktop installer, repo *variables*
+/// (ids, not secrets): CI signs in with its GitHub OIDC token as an Entra app
+/// whose federated credential trusts the `desktop-windows-signing` environment
+/// ([`super::desktop_windows`]). While any is empty, Windows builds stay
+/// unsigned workflow artifacts.
+pub const WINDOWS_SIGNING_AZURE_TENANT_ID: Var = Var("WINDOWS_SIGNING_AZURE_TENANT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Entra app's client id.
+pub const WINDOWS_SIGNING_AZURE_CLIENT_ID: Var = Var("WINDOWS_SIGNING_AZURE_CLIENT_ID");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the regional endpoint, such as
+/// `https://eus.codesigning.azure.net`.
+pub const WINDOWS_SIGNING_ENDPOINT: Var = Var("WINDOWS_SIGNING_ENDPOINT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Artifact Signing account.
+pub const WINDOWS_SIGNING_ACCOUNT: Var = Var("WINDOWS_SIGNING_ACCOUNT");
+/// See [`WINDOWS_SIGNING_AZURE_TENANT_ID`]: the Public Trust certificate profile.
+pub const WINDOWS_SIGNING_PROFILE: Var = Var("WINDOWS_SIGNING_PROFILE");
+/// `true` lets a signed Windows build reach the release, the update feed and
+/// the download pages, a repo *variable*. Set it once a person has tested a
+/// signed build on Windows 10 and 11.
+pub const WINDOWS_DESKTOP_RELEASE: Var = Var("WINDOWS_DESKTOP_RELEASE");
+
 /// Cloudflare account id. A repo *variable* (not a secret).
 pub const CLOUDFLARE_ACCOUNT_ID: Var = Var("CLOUDFLARE_ACCOUNT_ID");
 

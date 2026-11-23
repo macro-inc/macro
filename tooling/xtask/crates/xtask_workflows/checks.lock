@@ -27,6 +27,8 @@ check	build_cef_codecs.yml	build-cef	Build CEF with proprietary codecs (macOS ar
 check	build_desktop_on_tag.yml	resolve-ref	Resolve build ref
 check	build_desktop_on_tag.yml	build-appimage	Build AppImage
 check	build_desktop_on_tag.yml	build-dmg	Build macOS DMG
+check	build_desktop_on_tag.yml	build-windows-frontend	Build Windows frontend
+check	build_desktop_on_tag.yml	build-windows	Build Windows installer
 check	build_desktop_on_tag.yml	publish-installers	Publish desktop installers
 check	build_desktop_on_tag.yml	publish-release	Sign and publish desktop updates
 check	build_dmg_on_tag.yml	build-dmg	Build macOS DMG
@@ -106,6 +108,8 @@ check	deploy_web_app.yml	build/build	Build / Build
 check	deploy_web_app.yml	deploy	Deploy
 check	deploy_website.yml	build-deploy	Build and Deploy Website
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
+check	desktop_windows.yml	build-windows-frontend	Build Windows frontend
+check	desktop_windows.yml	build-windows	Build Windows installer
 check	email_e2e.yml	email-e2e	Email end-to-end (${{ matrix.partition }}/3)
 check	email_e2e.yml	email-e2e-search	Email end-to-end (search)
 check	email_e2e.yml	email-e2e-known-bugs	Email end-to-end (known bugs)
@@ -168,6 +172,8 @@ check	pr-ci.yml	observability-cluster/check-manifests	Observability cluster / Ch
 check	pr-ci.yml	macrod-update/linux	macrod update / macrod update (linux)
 check	pr-ci.yml	macrod-update/macos	macrod update / macrod update (macos)
 check	pr-ci.yml	macrod-update/windows	macrod update / macrod update (windows)
+check	pr-ci.yml	desktop-windows/build-windows-frontend	Desktop Windows / Build Windows frontend
+check	pr-ci.yml	desktop-windows/build-windows	Desktop Windows / Build Windows installer
 check	pr-ci.yml	gate	CI gate
 check	pr-privacy-check.yml	check	PR text has no personal or support-channel details
 check	publish-android-play.yml	publish	Upload to internal testing

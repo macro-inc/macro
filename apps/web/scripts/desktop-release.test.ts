@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createManifest, isNewer, releaseIdentity } from './desktop-release.mjs';
+import { createManifest, isNewer, releaseIdentity, tauriReleaseConfig } from './desktop-release.mjs';
 
 describe('desktop releases', () => {
   test('maps calendar tags without losing revision ordering', () => {
@@ -40,5 +40,45 @@ describe('desktop releases', () => {
     expect(manifest.platforms['darwin-aarch64'].url).toContain('/v2026.10.6.1/Macro-2026.1006.1-');
     rmSync(join(dir, 'Macro-2026.1006.1-x86_64-linux.AppImage.sig'));
     expect(() => createManifest(dir, tag, 'macro-inc/macro')).toThrow();
+  });
+
+  test('adds Windows only when its build was released', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'macro-desktop-release-'));
+    directories.push(dir);
+    const tag = 'v2026.10.6.1';
+    const identity = releaseIdentity(tag);
+    const write = (target: string, suffix: string) => {
+      const name = `Macro-${identity.version}-${suffix}`;
+      writeFileSync(join(dir, name), 'artifact');
+      writeFileSync(join(dir, `${name}.sig`), 'signature');
+      writeFileSync(join(dir, `${target}.release.json`), JSON.stringify({ ...identity, enabled: true }));
+    };
+    write('darwin-aarch64', 'aarch64-darwin.app.tar.gz');
+    write('linux-x86_64', 'x86_64-linux.AppImage');
+    expect(Object.keys(createManifest(dir, tag, 'macro-inc/macro').platforms)).toEqual(['darwin-aarch64', 'linux-x86_64']);
+    write('windows-x86_64', 'x86_64-windows-setup.exe');
+    const manifest = createManifest(dir, tag, 'macro-inc/macro');
+    expect(manifest.platforms['windows-x86_64'].url).toBe(
+      'https://github.com/macro-inc/macro/releases/download/v2026.10.6.1/Macro-2026.1006.1-x86_64-windows-setup.exe',
+    );
+    // Its metadata without the signed installer is a broken release, not an absent one.
+    rmSync(join(dir, 'Macro-2026.1006.1-x86_64-windows-setup.exe.sig'));
+    expect(() => createManifest(dir, tag, 'macro-inc/macro')).toThrow();
+  });
+
+  test('builds the Tauri release config from the release identity', () => {
+    expect(tauriReleaseConfig({
+      version: '2026.1006.1', nativeBuild: 202610060001, enabled: true,
+      endpoint: 'https://example.test/latest.json', publicKey: 'key',
+    })).toEqual({
+      version: '2026.1006.1',
+      build: { beforeBuildCommand: '' },
+      bundle: { externalBin: ['binaries/macrod'] },
+      plugins: {
+        'desktop-update': { enabled: true },
+        'macro-bundle-updater': { nativeBuild: 202610060001 },
+        updater: { pubkey: 'key', endpoints: ['https://example.test/latest.json'] },
+      },
+    });
   });
 });

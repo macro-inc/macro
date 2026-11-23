@@ -1,0 +1,437 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/desktop_windows.rs
+name: Desktop Windows smoke
+on:
+  workflow_call: {}
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  build-windows-frontend:
+    name: Build Windows frontend
+    runs-on: namespace-profile-linux-mid;overrides.cache-tag=desktop-windows-frontend
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - id: metadata
+        name: Derive artifact metadata
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          RAW_REF: ${{ github.ref }}
+      - name: Prepare desktop release identity
+        run: nix develop --command bun apps/web/scripts/desktop-release.mjs prepare "$RAW_REF"
+        shell: bash
+        env:
+          RAW_REF: ${{ github.ref }}
+      - name: Build frontend with Nix
+        run: |
+          set -euo pipefail
+
+          # The Windows runner has no Nix, so the bundled frontend is built here, from
+          # the same derivation the AppImage embeds, and handed over as an artifact with
+          # the release identity `desktop-release.mjs prepare` wrote.
+
+          # Vite inlines this at build time (see build_appimage.sh). Release builds must
+          # carry it; the pull request smoke build leaves it out, so the app it launches
+          # on the runner never reports to PostHog.
+          if [ "${REQUIRE_POSTHOG_API_KEY:-}" = true ]; then
+            : "${VITE_POSTHOG_API_KEY:?must be set from the POSTHOG_API_KEY secret so desktop feature flags work}"
+          fi
+
+          # --impure only lets evaluation read VITE_POSTHOG_API_KEY; the build stays sandboxed.
+          nix build \
+            --impure \
+            --option sandbox true \
+            --option download-attempts 10 \
+            --print-build-logs \
+            --out-link frontend-result \
+            ".#tauri-frontend"
+
+          rm -rf windows-input
+          mkdir -p windows-input
+          cp -R --dereference frontend-result windows-input/dist
+          chmod -R u+w windows-input/dist
+          cp apps/web/tauri/desktop-release.json windows-input/desktop-release.json
+          jq -er '.version' apps/web/tauri/desktop-release.json > windows-input/version
+          nix develop --command bun apps/web/scripts/desktop-release.mjs tauri-config windows-input/tauri.release.json
+        shell: bash
+      - name: Upload windows-frontend-${{ steps.metadata.outputs.safe_tag }} artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: windows-input
+          name: windows-frontend-${{ steps.metadata.outputs.safe_tag }}
+          if-no-files-found: error
+          retention-days: '30'
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+  build-windows:
+    needs:
+      - build-windows-frontend
+    name: Build Windows installer
+    runs-on: nscloud-windows-2022-amd64-8x16
+    env:
+      TAURI_CLI_VERSION: '2.11.4'
+    timeout-minutes: 120
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          ref: ${{ github.ref }}
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          sccache: 'false'
+          rust-cache: 'false'
+      - id: metadata
+        name: Derive artifact metadata
+        run: |
+          set -euo pipefail
+          tag="${RAW_REF#refs/tags/}"
+          if [ -z "$tag" ]; then
+            tag="${GITHUB_REF_NAME:-untagged}"
+          fi
+          safe_tag=$(printf '%s' "$tag" | sed 's#[/\\:*?"<>|]#-#g' | tr -d '\r\n')
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "safe_tag=$safe_tag" >> "$GITHUB_OUTPUT"
+        shell: bash
+        env:
+          RAW_REF: ${{ github.ref }}
+      - name: Download frontend
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: windows-frontend-${{ steps.metadata.outputs.safe_tag }}
+          path: windows-input
+      - id: signing
+        name: Configure Authenticode signing
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          # Prepares Authenticode signing through Azure Artifact Signing (formerly
+          # Trusted Signing) and decides whether this build may be published.
+          #
+          # Signing happens inside `cargo tauri build`: the bundler runs
+          # `bundle.windows.signCommand` on Macro.exe, the macrod sidecar, the
+          # uninstaller and the installer. The command is sign_windows_file.ps1, which
+          # runs SignTool with Microsoft's signing dlib. The dlib signs in as the
+          # workload identity this job's GitHub OIDC token stands for, so CI holds no
+          # signing secret, only the non-secret ids in repository variables.
+          #
+          # The tooling is always prepared, so a pull request build proves it still
+          # works; signing is configured only on a release tag with every variable set.
+          # Outputs: signed (the installer will be signed) and publish (it may reach the
+          # release, the update feed and the download pages).
+
+          # Microsoft.ArtifactSigning.Client 1.0.146 is the last release on .NET 8, which
+          # rolls forward to newer runtimes; 1.0.147 and later need .NET 10.
+          $dlibVersion = '1.0.146'
+          $dlibSha256 = '7761E5D8F31E54B764DA21D33CD8B0A2940E1B05526C7DFCB5E94B0431426F70'
+
+          $tools = Join-Path $env:RUNNER_TEMP 'windows-signing'
+          Remove-Item -Recurse -Force $tools -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $tools | Out-Null
+          $package = Join-Path $tools 'dlib.zip'
+          Invoke-WebRequest -MaximumRetryCount 3 -OutFile $package `
+            -Uri "https://api.nuget.org/v3-flatcontainer/microsoft.artifactsigning.client/$dlibVersion/microsoft.artifactsigning.client.$dlibVersion.nupkg"
+          $actual = (Get-FileHash -Algorithm SHA256 $package).Hash
+          if ($actual -ne $dlibSha256) { throw "Artifact Signing client checksum mismatch: $actual" }
+          Expand-Archive -Path $package -DestinationPath (Join-Path $tools 'dlib')
+          $dlib = Join-Path $tools 'dlib\bin\x64\Azure.CodeSigning.Dlib.dll'
+          if (-not (Test-Path $dlib)) { throw "No x64 dlib in the Artifact Signing client" }
+
+          # The newest x64 SignTool of the runner's Windows SDKs.
+          $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue |
+            Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
+          if (-not $signtool) { throw 'No x64 signtool.exe in the Windows SDK' }
+
+          # The dlib is .NET; without a runtime SignTool fails only once it first signs.
+          $runtimes = & dotnet --list-runtimes 2>$null
+          if (-not ($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App (\d+)\.' -and [int]$Matches[1] -ge 8 })) {
+            throw 'The Artifact Signing dlib needs the .NET 8 (or newer) runtime'
+          }
+
+          $signed = $false
+          $publish = $false
+          $config = Join-Path $env:RUNNER_TEMP 'tauri.signing.json'
+          '{}' | Set-Content -Path $config
+
+          $required = 'AZURE_TENANT_ID', 'AZURE_CLIENT_ID', 'ARTIFACT_SIGNING_ENDPOINT', 'ARTIFACT_SIGNING_ACCOUNT', 'ARTIFACT_SIGNING_PROFILE'
+          $missing = @($required | Where-Object { -not [Environment]::GetEnvironmentVariable($_) })
+
+          if ($env:SIGN -ne 'true') {
+            Write-Output 'Not a release tag: the installer stays unsigned.'
+          } elseif ($missing.Count -gt 0) {
+            Write-Output "::warning::Windows signing is not configured (empty: $($missing -join ', ')). The unsigned installer stays a workflow artifact."
+          } else {
+            $metadata = Join-Path $tools 'metadata.json'
+            # Only the workload identity may sign: no fallback to whatever else the
+            # runner happens to be signed in as.
+            @{
+              Endpoint               = $env:ARTIFACT_SIGNING_ENDPOINT
+              CodeSigningAccountName = $env:ARTIFACT_SIGNING_ACCOUNT
+              CertificateProfileName = $env:ARTIFACT_SIGNING_PROFILE
+              ExcludeCredentials     = @(
+                'EnvironmentCredential', 'ManagedIdentityCredential', 'SharedTokenCacheCredential',
+                'VisualStudioCredential', 'VisualStudioCodeCredential', 'AzureCliCredential',
+                'AzurePowerShellCredential', 'AzureDeveloperCliCredential', 'InteractiveBrowserCredential'
+              )
+            } | ConvertTo-Json | Set-Content -Path $metadata
+            $script = Join-Path $env:GITHUB_WORKSPACE 'tooling\xtask\crates\xtask_workflows\src\workflows\scripts\sign_windows_file.ps1'
+            @{
+              bundle = @{
+                windows = @{
+                  signCommand = @{ cmd = 'pwsh'; args = @('-NoProfile', '-NonInteractive', '-File', $script, '%1') }
+                }
+              }
+            } | ConvertTo-Json -Depth 5 | Set-Content -Path $config
+            @(
+              "SIGNTOOL=$($signtool.FullName)"
+              "ARTIFACT_SIGNING_DLIB=$dlib"
+              "ARTIFACT_SIGNING_METADATA=$metadata"
+              "AZURE_FEDERATED_TOKEN_FILE=$(Join-Path $tools 'oidc-token')"
+            ) | Add-Content -Path $env:GITHUB_ENV
+            $signed = $true
+            if ($env:WINDOWS_DESKTOP_RELEASE -eq 'true') {
+              $publish = $true
+            } else {
+              Write-Output '::notice::Signed, but WINDOWS_DESKTOP_RELEASE is not true: the installer stays a workflow artifact until a person has tested it.'
+            }
+          }
+
+          "TAURI_SIGNING_CONFIG=$config" | Add-Content -Path $env:GITHUB_ENV
+          @(
+            "signed=$($signed.ToString().ToLower())"
+            "publish=$($publish.ToString().ToLower())"
+          ) | Add-Content -Path $env:GITHUB_OUTPUT
+        shell: pwsh
+        env:
+          SIGN: 'false'
+      - name: Build bundled macrod
+        run: |
+          set -euo pipefail
+
+          # Windows build of the self-hosted coding-agent daemon, with the runner's MSVC
+          # toolchain.
+          #
+          # See build_agent_daemon_linux.sh for why sqlx runs offline.
+          export SQLX_OFFLINE=true
+
+          # Link the C runtime into the binary. Without this, macrod.exe needs the Visual
+          # C++ redistributable's vcruntime DLLs, which a user's machine may not have.
+          # With an explicit --target, RUSTFLAGS reach only target code, and the cc and
+          # cmake builds of the C dependencies follow it to the static runtime.
+          export RUSTFLAGS="-C target-feature=+crt-static"
+
+          # aws-lc-sys assembles its x86_64 crypto with NASM; it ships those objects
+          # pre-assembled, which saves installing NASM on the runner.
+          export AWS_LC_SYS_PREBUILT_NASM=1
+
+          rustup target add "$TARGET"
+
+          if ! command -v cmake >/dev/null 2>&1; then
+            choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' --no-progress -y
+            export PATH="/c/Program Files/CMake/bin:$PATH"
+          fi
+
+          cargo build --release --package coding_agent_worker --target "$TARGET"
+        shell: bash
+        env:
+          TARGET: x86_64-pc-windows-msvc
+      - name: Build installer
+        run: |
+          set -euo pipefail
+
+          # Builds the per-user NSIS installer with the runner's MSVC toolchain, from
+          # the frontend and release identity the Linux job handed over (windows-input/)
+          # and the macrod the previous step built. tauri.windows.conf.json holds the
+          # Windows settings; windows-input/tauri.release.json the release identity
+          # (version, updater feed and key), as Nix supplies them on macOS and Linux.
+
+          target=x86_64-pc-windows-msvc
+          app=apps/web/tauri/src-tauri
+          export SQLX_OFFLINE=true
+
+          rm -rf apps/web/dist
+          cp -R windows-input/dist apps/web/dist
+          cp windows-input/desktop-release.json apps/web/tauri/desktop-release.json
+          printf production > "$app/.macro-tauri-env"
+          # Tauri's sidecar naming: the bundler strips the triple when installing it.
+          mkdir -p "$app/binaries"
+          cp "target/$target/release/macrod.exe" "$app/binaries/macrod-$target.exe"
+
+          # The same tauri-cli release nixpkgs bundles the AppImage with.
+          cargo install tauri-cli --version "=$TAURI_CLI_VERSION" --locked --root "$RUNNER_TEMP/tauri-cli"
+          export PATH="$RUNNER_TEMP/tauri-cli/bin:$PATH"
+
+          release_config=$(cygpath -w "$PWD/windows-input/tauri.release.json")
+          (
+            cd "$app"
+            cargo tauri build --verbose --bundles nsis \
+              --config "$release_config" \
+              --config "$TAURI_SIGNING_CONFIG"
+          )
+
+          version=$(cat windows-input/version)
+          shopt -s nullglob
+          installers=(apps/web/tauri/target/release/bundle/nsis/*-setup.exe)
+          if [ "${#installers[@]}" -ne 1 ]; then
+            echo "Expected one NSIS installer, found ${#installers[@]}" >&2
+            find apps/web/tauri/target/release/bundle -maxdepth 2 >&2 || true
+            exit 1
+          fi
+          rm -rf artifacts
+          mkdir -p artifacts
+          cp "${installers[0]}" "artifacts/Macro-$version-x86_64-windows-setup.exe"
+          cp windows-input/desktop-release.json artifacts/windows-x86_64.release.json
+          (cd artifacts && sha256sum -- *.exe > macro-windows-SHA256SUMS)
+          echo "INSTALLER=$(cygpath -w "$PWD/artifacts/Macro-$version-x86_64-windows-setup.exe")" >> "$GITHUB_ENV"
+        shell: bash
+      - name: Install, launch and uninstall
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+
+          # Installs the built installer the way a user's machine would run it, checks
+          # what it registered, launches Macro and checks the page loaded in WebView2,
+          # then uninstalls. INSTALLER is the installer's path; EXPECT_SIGNED=true also
+          # requires a valid Authenticode signature on it and on what it installs.
+
+          $installer = $env:INSTALLER
+          if (-not (Test-Path $installer)) { throw "No installer at $installer" }
+
+          function Assert-Signed([string] $Path) {
+            $signature = Get-AuthenticodeSignature -FilePath $Path
+            if ($signature.Status -ne 'Valid') { throw "$Path is not validly signed: $($signature.Status) $($signature.StatusMessage)" }
+            Write-Output "Signed by $($signature.SignerCertificate.Subject): $Path"
+          }
+
+          $expectSigned = $env:EXPECT_SIGNED -eq 'true'
+          if ($expectSigned) { Assert-Signed $installer }
+
+          # /S: silent. Per-user, so no elevation; this also installs WebView2 if the
+          # runner lacks it, through the bootstrapper the installer carries.
+          $install = Start-Process -FilePath $installer -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Installer exited with $($install.ExitCode)" }
+
+          # The macro:// handler sign-in callbacks return through, written to HKCU.
+          $commandKey = 'HKCU:\Software\Classes\macro\shell\open\command'
+          if (-not (Test-Path $commandKey)) { throw 'The installer did not register the macro:// scheme' }
+          $command = (Get-ItemProperty -Path $commandKey).'(default)'
+          if ($command -notmatch '^"([^"]+\.exe)"') { throw "Unexpected macro:// command: $command" }
+          $app = $Matches[1]
+          $installDir = Split-Path $app
+          Write-Output "Installed $app"
+          foreach ($file in @($app, (Join-Path $installDir 'macrod.exe'))) {
+            if (-not (Test-Path $file)) { throw "Missing installed file $file" }
+            if ($expectSigned) { Assert-Signed $file }
+          }
+
+          # WebView2 reads extra Chromium switches from the environment, so the page can
+          # be inspected over the DevTools protocol like any Chromium.
+          $port = 9222
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=$port"
+          $process = Start-Process -FilePath $app -PassThru
+          try {
+            $page = $null
+            $deadline = (Get-Date).AddSeconds(120)
+            while (-not $page -and (Get-Date) -lt $deadline) {
+              if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) before its page loaded" }
+              Start-Sleep -Seconds 2
+              try {
+                $targets = Invoke-RestMethod -Uri "http://127.0.0.1:$port/json/list" -TimeoutSec 5
+                $page = $targets | Where-Object { $_.type -eq 'page' -and $_.url -like 'https://tauri.localhost/*' } | Select-Object -First 1
+              } catch {
+                # DevTools is not listening until WebView2 has started.
+              }
+            }
+            if (-not $page) { throw 'No Macro page at https://tauri.localhost within 120 seconds' }
+
+            # Wait for the app to render text: an origin the protocol handler rejects,
+            # or a bundle that fails to start, leaves the document empty.
+            $socket = [System.Net.WebSockets.ClientWebSocket]::new()
+            $socket.ConnectAsync([Uri]$page.webSocketDebuggerUrl, [Threading.CancellationToken]::None).Wait()
+            $expression = 'JSON.stringify({ href: location.href, state: document.readyState, text: (document.body ? document.body.innerText : "").trim().length })'
+            $result = $null
+            $id = 0
+            $deadline = (Get-Date).AddSeconds(90)
+            while ((Get-Date) -lt $deadline) {
+              if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) while its page loaded" }
+              $id++
+              $request = @{ id = $id; method = 'Runtime.evaluate'; params = @{ expression = $expression; returnByValue = $true } } | ConvertTo-Json -Compress -Depth 4
+              $bytes = [Text.Encoding]::UTF8.GetBytes($request)
+              $socket.SendAsync([ArraySegment[byte]]::new($bytes), 'Text', $true, [Threading.CancellationToken]::None).Wait()
+              $reply = $null
+              while (-not $reply) {
+                $message = [IO.MemoryStream]::new()
+                do {
+                  $buffer = [byte[]]::new(65536)
+                  $receive = $socket.ReceiveAsync([ArraySegment[byte]]::new($buffer), [Threading.CancellationToken]::None)
+                  $receive.Wait()
+                  $message.Write($buffer, 0, $receive.Result.Count)
+                } while (-not $receive.Result.EndOfMessage)
+                $frame = [Text.Encoding]::UTF8.GetString($message.ToArray()) | ConvertFrom-Json
+                # Skip events; only our reply carries our id.
+                if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
+              }
+              $result = $reply.result.result.value | ConvertFrom-Json
+              if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
+              Start-Sleep -Seconds 2
+            }
+            if (-not $result -or $result.text -eq 0) { throw "Macro's page rendered nothing: $($result | ConvertTo-Json -Compress)" }
+            if ($result.href -notlike 'https://tauri.localhost/*') { throw "Macro's page left the app origin: $($result.href)" }
+            Write-Output "Page loaded: $($result | ConvertTo-Json -Compress)"
+            $socket.Dispose()
+
+            Start-Sleep -Seconds 5
+            if ($process.HasExited) { throw "Macro exited with $($process.ExitCode) after loading" }
+          } finally {
+            Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($installDir, [StringComparison]::OrdinalIgnoreCase) } |
+              Stop-Process -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:\WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS
+          }
+
+          # The uninstaller copies itself elsewhere and returns at once, so wait for its work.
+          Start-Process -FilePath (Join-Path $installDir 'uninstall.exe') -ArgumentList '/S' -Wait
+          $deadline = (Get-Date).AddSeconds(60)
+          while (((Test-Path $app) -or (Test-Path $commandKey)) -and (Get-Date) -lt $deadline) { Start-Sleep -Seconds 1 }
+          if (Test-Path $app) { throw "Uninstall left $app" }
+          if (Test-Path $commandKey) { throw 'Uninstall left the macro:// scheme registered' }
+          Write-Output 'Uninstalled'
+        shell: pwsh
+        env:
+          EXPECT_SIGNED: ${{ steps.signing.outputs.signed }}
+      - name: Upload ${{ steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer' }}-${{ steps.metadata.outputs.safe_tag }} artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: artifacts/*
+          name: ${{ steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer' }}-${{ steps.metadata.outputs.safe_tag }}
+          if-no-files-found: error
+          retention-days: '30'

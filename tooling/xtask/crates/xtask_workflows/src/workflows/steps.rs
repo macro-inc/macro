@@ -796,12 +796,16 @@ pub(crate) fn upload_artifact_action(name: &str, path: RuntimePath<'_>) -> Actio
         .retention_days(30)
 }
 
-/// Download all build artifacts into one directory for release publishing.
-pub fn download_artifacts(path: RuntimePath<'_>) -> Step<Use> {
-    ActionsDownloadArtifact::new("Download Build Artifacts")
-        .path(path.as_str())
-        .merge_multiple(true)
-        .step()
+/// Download the build artifacts (all, or those matching `pattern`) into one
+/// directory for release publishing.
+pub fn download_artifacts(path: RuntimePath<'_>, pattern: Option<&str>) -> Step<Use> {
+    let download = ActionsDownloadArtifact::new("Download Build Artifacts");
+    // A pattern keeps artifacts that are not release assets (QA results) out.
+    let download = match pattern {
+        Some(pattern) => download.pattern(pattern),
+        None => download,
+    };
+    download.path(path.as_str()).merge_multiple(true).step()
 }
 
 /// Attach build artifacts to the GitHub release for the resolved release tag.

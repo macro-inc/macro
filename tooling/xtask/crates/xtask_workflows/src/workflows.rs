@@ -63,6 +63,7 @@ mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
+mod desktop_windows;
 mod email_e2e;
 mod email_e2e_alert;
 mod email_e2e_browser;
@@ -196,6 +197,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "desktop_qa_macos",
         file_name: "desktop_qa_macos.yml",
         render_yaml: || render_gh_workflow(desktop_qa_macos::desktop_qa_macos)(),
+    },
+    WorkflowFile {
+        slug: "desktop_windows",
+        file_name: "desktop_windows.yml",
+        render_yaml: || render_gh_workflow(desktop_windows::desktop_windows_smoke)(),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",

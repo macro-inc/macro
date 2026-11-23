@@ -286,3 +286,88 @@ fn older_release_cannot_replace_update_feed_or_latest_release() {
         "{calls}"
     );
 }
+
+fn job<'a>(yaml: &'a str, id: &str, next: &str) -> &'a str {
+    let start = yaml.find(&format!("  {id}:\n")).expect("job");
+    let end = yaml[start..]
+        .find(&format!("  {next}:\n"))
+        .map_or(yaml.len(), |end| start + end);
+    &yaml[start..end]
+}
+
+#[test]
+fn windows_failure_leaves_the_macos_and_linux_release_alone() {
+    let yaml = rendered_yaml();
+    let installers = job(&yaml, "publish-installers", "publish-release");
+    // It waits for Windows, so a published installer ships with the release,
+    // but only macOS and Linux must have succeeded.
+    assert!(installers.contains("- build-windows"), "{installers}");
+    assert!(installers.contains("!cancelled()"), "{installers}");
+    assert!(
+        installers.contains("needs.build-appimage.result == ''success''")
+            && installers.contains("needs.build-dmg.result == ''success''")
+            && !installers.contains("needs.build-windows.result"),
+        "{installers}"
+    );
+    let updates = job(&yaml, "publish-release", "\u{0}");
+    assert!(
+        updates.contains("!cancelled()")
+            && updates.contains("needs.publish-installers.result == ''success''"),
+        "{updates}"
+    );
+}
+
+#[test]
+fn publish_jobs_take_only_release_artifacts() {
+    let yaml = rendered_yaml();
+    for id in ["publish-installers", "publish-release"] {
+        let publish = job(
+            &yaml,
+            id,
+            if id == "publish-installers" {
+                "publish-release"
+            } else {
+                "\u{0}"
+            },
+        );
+        assert!(publish.contains("pattern: macro-*"), "{publish}");
+    }
+    let windows = job(&yaml, "build-windows", "publish-installers");
+    // Only a build allowed to publish uploads under the release prefix.
+    assert!(
+        windows.contains(
+            "steps.signing.outputs.publish == 'true' && 'macro-windows' || 'windows-installer'"
+        ),
+        "{windows}"
+    );
+    let frontend = job(&yaml, "build-windows-frontend", "build-windows");
+    assert!(frontend.contains("name: windows-frontend-"), "{frontend}");
+}
+
+#[test]
+fn windows_release_signs_through_its_environment_identity() {
+    let yaml = rendered_yaml();
+    let windows = job(&yaml, "build-windows", "publish-installers");
+    assert!(windows.contains("id-token: write"), "{windows}");
+    assert!(
+        windows.contains("name: desktop-windows-signing"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("vars.WINDOWS_SIGNING_AZURE_CLIENT_ID"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("vars.WINDOWS_DESKTOP_RELEASE"),
+        "{windows}"
+    );
+    assert!(
+        windows.contains("SIGN: ${{ startsWith(needs.resolve-ref.outputs.ref, 'refs/tags/v') && 'true' || 'false' }}"),
+        "{windows}"
+    );
+    let frontend = job(&yaml, "build-windows-frontend", "build-windows");
+    assert!(
+        frontend.contains("REQUIRE_POSTHOG_API_KEY: 'true'"),
+        "{frontend}"
+    );
+}

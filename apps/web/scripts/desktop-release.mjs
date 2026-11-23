@@ -5,8 +5,11 @@ import { pathToFileURL } from 'node:url';
 
 const CONFIG = 'apps/web/tauri/desktop-release.json';
 const TARGETS = {
-  'darwin-aarch64': '-aarch64-darwin.app.tar.gz',
-  'linux-x86_64': '-x86_64-linux.AppImage',
+  'darwin-aarch64': { suffix: '-aarch64-darwin.app.tar.gz', required: true },
+  'linux-x86_64': { suffix: '-x86_64-linux.AppImage', required: true },
+  // Present only when the Windows build was signed and released; a release
+  // without it keeps Windows users on their current version.
+  'windows-x86_64': { suffix: '-x86_64-windows-setup.exe', required: false },
 };
 
 /** Map existing four-part desktop tags to sortable SemVer and OTA build IDs. */
@@ -51,8 +54,10 @@ export function createManifest(directory, tag, repository) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid release repository');
   const files = readdirSync(directory);
   const platforms = {};
-  for (const [target, suffix] of Object.entries(TARGETS)) {
-    const metadata = JSON.parse(readFileSync(join(directory, `${target}.release.json`), 'utf8'));
+  for (const [target, { suffix, required }] of Object.entries(TARGETS)) {
+    const metadataName = `${target}.release.json`;
+    if (!required && !files.includes(metadataName)) continue;
+    const metadata = JSON.parse(readFileSync(join(directory, metadataName), 'utf8'));
     if (!metadata.enabled || metadata.version !== identity.version || metadata.nativeBuild !== identity.nativeBuild) {
       throw new Error(`Packaged identity disagrees with release tag for ${target}`);
     }
@@ -67,6 +72,21 @@ export function createManifest(directory, tag, repository) {
     };
   }
   return { version: identity.version, notes: `Macro ${identity.tag}`, platforms };
+}
+
+/** The Tauri config a non-Nix release build merges over `tauri.conf.json`;
+ * `nix/tauri-desktop.nix` builds the same plugin settings for macOS and Linux. */
+export function tauriReleaseConfig(config) {
+  return {
+    version: config.version,
+    build: { beforeBuildCommand: '' },
+    bundle: { externalBin: ['binaries/macrod'] },
+    plugins: {
+      'desktop-update': { enabled: config.enabled },
+      'macro-bundle-updater': { nativeBuild: config.nativeBuild },
+      updater: { pubkey: config.publicKey, endpoints: [config.endpoint] },
+    },
+  };
 }
 
 function main([command, ...args]) {
@@ -90,6 +110,11 @@ function main([command, ...args]) {
   } else if (command === 'manifest') {
     const [directory, tag, repository] = args;
     writeFileSync(join(directory, 'latest.json'), `${JSON.stringify(createManifest(directory, tag, repository), null, 2)}\n`);
+  } else if (command === 'tauri-config') {
+    const [output] = args;
+    if (!output) throw new Error('Missing output path');
+    const config = JSON.parse(readFileSync(CONFIG, 'utf8'));
+    writeFileSync(output, `${JSON.stringify(tauriReleaseConfig(config), null, 2)}\n`);
   } else if (command === 'newer') {
     const [candidatePath, currentPath] = args;
     const candidate = JSON.parse(readFileSync(candidatePath, 'utf8'));
@@ -97,7 +122,7 @@ function main([command, ...args]) {
     // Exit 2 distinguishes a superseded/equal release from validation/network errors.
     if (!isNewer(candidate.version, current.version)) process.exitCode = 2;
   } else {
-    throw new Error('Usage: desktop-release.mjs prepare REF | manifest DIR TAG REPO | newer CANDIDATE CURRENT');
+    throw new Error('Usage: desktop-release.mjs prepare REF | manifest DIR TAG REPO | tauri-config OUTPUT | newer CANDIDATE CURRENT');
   }
 }
 

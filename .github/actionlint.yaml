@@ -7,6 +7,7 @@ self-hosted-runner:
     - namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     - namespace-profile-linux-mid
     - namespace-profile-linux-mid;overrides.cache-tag=desktop-linux
+    - namespace-profile-linux-mid;overrides.cache-tag=desktop-windows-frontend
     - namespace-profile-linux-mid;overrides.cache-tag=observability-image
     - namespace-profile-linux-mid;overrides.cache-tag=sync-service-deploy
     - namespace-profile-linux-mid;overrides.cache-tag=web-ci

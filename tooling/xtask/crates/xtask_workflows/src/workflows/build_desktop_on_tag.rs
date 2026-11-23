@@ -1,19 +1,21 @@
-//! `Build Desktop on Tag` — orchestrator workflow that triggers AppImage and DMG
-//! builds in parallel when a release tag is pushed. Also supports manual
-//! dispatch. Generated into `build_desktop_on_tag.yml`.
+//! `Build Desktop on Tag` — orchestrator workflow that triggers AppImage, DMG
+//! and Windows installer builds in parallel when a release tag is pushed. Also
+//! supports manual dispatch. Generated into `build_desktop_on_tag.yml`.
 //!
-//! The reusable job definitions live in [`super::build_appimage_on_tag`] and
-//! [`super::build_dmg_on_tag`].
+//! The reusable job definitions live in [`super::build_appimage_on_tag`],
+//! [`super::build_dmg_on_tag`] and [`super::desktop_windows`]. macOS and Linux
+//! must both build for a release; Windows joins it only when its build
+//! succeeds and may be published.
 
 use gh_workflow::expr::typed::{
-    Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, github, input,
+    Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, input,
 };
 use gh_workflow::{
     Concurrency, Event, Job, Level, Permissions, Push, Run, Step, Workflow, WorkflowDispatch,
     WorkflowInput,
 };
 
-use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, steps, vars};
+use crate::workflows::{build_appimage_on_tag, build_dmg_on_tag, desktop_windows, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -44,6 +46,12 @@ const RESOLVE: StepHandle<ResolveOutputs> = StepHandle::new(
         git_ref: StepOutput::new("resolve", "ref"),
     },
 );
+
+/// The builds' artifacts (`macro-appimage-*`, `macro-dmg-*`, and
+/// `macro-windows-*` when Windows may be published). The publish jobs attach
+/// every artifact they download to the release, so they download only these,
+/// never the Windows frontend or an unpublished installer.
+const BUILD_ARTIFACT_PATTERN: &str = "macro-*";
 
 /// The job that attaches the installers to the release.
 const PUBLISH_INSTALLERS: JobHandle<()> = JobHandle::new("publish-installers", ());
@@ -77,6 +85,17 @@ pub fn build_desktop_on_tag() -> Workflow {
             build_dmg_on_tag::BUILD_DMG,
             build_dmg_on_tag::build_dmg_job(resolved_ref()).add_needs(RESOLVE_REF),
         )
+        .add_job(
+            desktop_windows::WINDOWS_FRONTEND,
+            desktop_windows::frontend_job(resolved_ref(), desktop_windows::Purpose::Release)
+                .add_needs(RESOLVE_REF),
+        )
+        .add_job(
+            desktop_windows::BUILD_WINDOWS,
+            desktop_windows::windows_job(resolved_ref(), desktop_windows::Purpose::Release)
+                .add_needs(RESOLVE_REF)
+                .add_needs(desktop_windows::WINDOWS_FRONTEND),
+        )
         // The installers users download must reach the release on their own.
         // Updater signing needs Doppler, Apple, and the stable channel; none of
         // that may stand between a green build and macro.com/download.
@@ -85,11 +104,21 @@ pub fn build_desktop_on_tag() -> Workflow {
             build_appimage_on_tag::publish_job(
                 resolved_ref(),
                 xtask_paths::runtime_path!("release-artifacts/*"),
+                Some(BUILD_ARTIFACT_PATTERN),
             )
             .name("Publish desktop installers")
             .add_needs(RESOLVE_REF)
             .add_needs(build_appimage_on_tag::BUILD_APPIMAGE)
-            .add_needs(build_dmg_on_tag::BUILD_DMG),
+            .add_needs(build_dmg_on_tag::BUILD_DMG)
+            // Waits for Windows so a published installer ships with this
+            // release, but its failure only leaves Windows out.
+            .add_needs(desktop_windows::BUILD_WINDOWS)
+            .cond(
+                (!cancelled())
+                    .and(RESOLVE_REF.result().eq("success"))
+                    .and(build_appimage_on_tag::BUILD_APPIMAGE.result().eq("success"))
+                    .and(build_dmg_on_tag::BUILD_DMG.result().eq("success")),
+            ),
         )
         .add_job(
             "publish-release",
@@ -108,7 +137,14 @@ fn publish_desktop_job() -> Job {
         // A wedged signer must not hold the channel lock, and must not sit long
         // enough for the runner to be reaped with its logs still unuploaded.
         .timeout_minutes(20u32)
-        .cond(resolved_ref().starts_with("refs/tags/v"))
+        // A status check spans every ancestor job, so without its own it would
+        // skip whenever Windows failed, though the installers it follows did not.
+        .cond(
+            (!cancelled())
+                .and(RESOLVE_REF.result().eq("success"))
+                .and(PUBLISH_INSTALLERS.result().eq("success"))
+                .and(resolved_ref().starts_with("refs/tags/v")),
+        )
         .permissions(Permissions {
             contents: Some(Level::Write),
             ..Default::default()
@@ -116,9 +152,10 @@ fn publish_desktop_job() -> Job {
         .add_step(steps::checkout_ref(resolved_ref()))
         .add_step(steps::setup_nix())
         .add_step(steps::derive_artifact_metadata(resolved_ref()))
-        .add_step(steps::download_artifacts(xtask_paths::runtime_path!(
-            "release-artifacts"
-        )))
+        .add_step(steps::download_artifacts(
+            xtask_paths::runtime_path!("release-artifacts"),
+            Some(BUILD_ARTIFACT_PATTERN),
+        ))
         .add_step(
             Step::new("Sign updater artifacts")
                 .run(include_str!("scripts/sign_desktop_updates.sh"))

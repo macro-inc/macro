@@ -15,11 +15,18 @@ export TAURI_SIGNING_PRIVATE_KEY_PATH="$credentials_dir/updater.key"
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(jq -r '.TAURI_SIGNING_PRIVATE_KEY_PASSWORD // ""' "$credentials_dir/secrets.json")
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD
 
-# Verify against the public key compiled into BOTH packages before publishing.
-jq -er '.publicKey | select(length > 0)' release-artifacts/darwin-aarch64.release.json > "$credentials_dir/mac.pub"
-jq -er '.publicKey | select(length > 0)' release-artifacts/linux-x86_64.release.json > "$credentials_dir/linux.pub"
-cmp "$credentials_dir/mac.pub" "$credentials_dir/linux.pub"
-base64 --decode "$credentials_dir/mac.pub" > "$credentials_dir/minisign.pub"
+# Verify against the public key compiled into EVERY package before publishing.
+# macOS and Linux ship with each release; Windows only once its build is signed
+# and released, so its metadata may be absent.
+targets=(darwin-aarch64 linux-x86_64)
+if [ -e release-artifacts/windows-x86_64.release.json ]; then
+  targets+=(windows-x86_64)
+fi
+for target in "${targets[@]}"; do
+  jq -er '.publicKey | select(length > 0)' "release-artifacts/$target.release.json" > "$credentials_dir/$target.pub"
+  cmp "$credentials_dir/darwin-aarch64.pub" "$credentials_dir/$target.pub"
+done
+base64 --decode "$credentials_dir/darwin-aarch64.pub" > "$credentials_dir/minisign.pub"
 if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets > "$credentials_dir/release.json"; then
   # Reading the collection must succeed before treating the version as absent.
   gh api --paginate --slurp "repos/$RELEASE_REPOSITORY/releases" > "$credentials_dir/releases.json"
@@ -30,9 +37,9 @@ if ! gh release view "$RELEASE_TAG" --repo "$RELEASE_REPOSITORY" --json assets >
   printf '{"assets":[]}' > "$credentials_dir/release.json"
 fi
 shopt -s nullglob
-artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage)
-if [ "${#artifacts[@]}" -ne 2 ]; then
-  echo "Expected one macOS and one Linux updater artifact" >&2
+artifacts=(release-artifacts/*.app.tar.gz release-artifacts/*.AppImage release-artifacts/*-windows-setup.exe)
+if [ "${#artifacts[@]}" -ne "${#targets[@]}" ]; then
+  echo "Expected one updater artifact for each of: ${targets[*]}" >&2
   exit 1
 fi
 for artifact in "${artifacts[@]}"; do
