@@ -36,10 +36,10 @@ Midnight remains fully visible at scroll zero. The current-time line crosses the
 card with an accent time in its gutter. Only the timed card has the shared 32px top
 fade past the opening scroll position; the hour gutter never fades. Bottom clearance
 is limited to the floating New row and a small gap.
-Calendar grid boundaries use the theme's semantic secondary border; half-hour
-lines use its divider token. This covers day columns, month cells, and retained
-all-day boundaries without restoring deliberately hidden chrome. The hover-time
-guide uses the same secondary border, not a locally dimmed text color.
+Calendar grid boundaries use the theme's semantic secondary border in both loading
+and live grids; half-hour lines use its divider token. This covers day columns,
+month cells, and retained all-day boundaries without restoring deliberately hidden
+chrome. The hover-time guide uses the same secondary border, not a locally dimmed text color.
 Day, 3 days, Week, and Month page with a shared five-page native scroll-snap ring
 on phone and desktop. A single unhurried arrow animates through native scrolling.
 Rapid arrows accumulate without dropping presses and jump to the latest target;

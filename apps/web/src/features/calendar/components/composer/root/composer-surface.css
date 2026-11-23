@@ -1,11 +1,17 @@
 @reference "../../../../../index.css";
 
-/* Border the placement owner, not the scrolling form or its nested menus. */
+/* Glass removes physical borders; color its existing one-pixel rim instead. */
 .menu-surface:has(.calendar-composer),
 .elevated-surface:has(.calendar-composer),
-.mobile-sheet:has(.calendar-composer),
+.mobile-sheet:has(.calendar-composer) {
+  @variant dark-mode {
+    --glass-rim-background: var(--color-border-secondary);
+  }
+}
+
+/* Inline agent cards are not glass and retain their existing physical border. */
 [data-calendar-tool-composer] {
   @variant dark-mode {
-    border: 1px solid var(--color-border-secondary);
+    border-color: var(--color-border-secondary);
   }
 }

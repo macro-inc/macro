@@ -25,13 +25,13 @@ export function CalendarGridSkeleton(props: {
 
       <Show when={props.showDayHeader !== false}>
         <div
-          class="grid shrink-0 border-b border-edge-muted"
+          class="grid shrink-0 border-b border-border-secondary"
           style={{ 'grid-template-columns': dayColumns() }}
         >
           <div />
           <For each={days()}>
             {() => (
-              <div class="flex h-14 items-center justify-center border-l border-edge-muted">
+              <div class="flex h-14 items-center justify-center border-l border-border-secondary">
                 <div class="flex flex-col items-center gap-2">
                   <div class="skeleton-shimmer h-2 w-10 rounded-full bg-skeleton" />
                   <div class="skeleton-shimmer size-6 rounded-full bg-skeleton" />
@@ -44,7 +44,7 @@ export function CalendarGridSkeleton(props: {
 
       <Show when={props.showAllDaySlot !== false}>
         <div
-          class="grid shrink-0 border-b border-edge-muted"
+          class="grid shrink-0 border-b border-border-secondary"
           style={{ 'grid-template-columns': dayColumns() }}
         >
           <div class="flex h-12 items-center justify-end pr-2">
@@ -52,7 +52,7 @@ export function CalendarGridSkeleton(props: {
           </div>
           <For each={days()}>
             {() => (
-              <div class="h-12 border-l border-edge-muted px-1 py-2">
+              <div class="h-12 border-l border-border-secondary px-1 py-2">
                 <div class="skeleton-shimmer h-5 w-1/3 rounded bg-skeleton" />
               </div>
             )}
@@ -64,7 +64,7 @@ export function CalendarGridSkeleton(props: {
         <div class="flex w-12 shrink-0 flex-col">
           <For each={SKELETON_TIME_ROWS}>
             {(_, index) => (
-              <div class="relative min-h-8 flex-1 border-t border-edge-muted first:border-t-0">
+              <div class="relative min-h-8 flex-1 border-t border-border-secondary first:border-t-0">
                 <div
                   class="skeleton-shimmer absolute top-0 right-2 h-1.5 rounded-full bg-skeleton"
                   classList={{
@@ -85,10 +85,10 @@ export function CalendarGridSkeleton(props: {
         >
           <For each={days()}>
             {(_, dayIndex) => (
-              <div class="relative flex min-w-0 flex-col border-l border-edge-muted">
+              <div class="relative flex min-w-0 flex-col border-l border-border-secondary">
                 <For each={SKELETON_TIME_ROWS}>
                   {() => (
-                    <div class="min-h-8 flex-1 border-t border-edge-muted first:border-t-0" />
+                    <div class="min-h-8 flex-1 border-t border-border-secondary first:border-t-0" />
                   )}
                 </For>
 

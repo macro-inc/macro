@@ -139,9 +139,10 @@ host lives in `../block-calendar/`.
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Keep composer placement borders on `border-secondary` in dark themes only, including
-  pinned, agent, and phone-sheet containers; preserve light-theme borders.
-- Use `border-secondary` for calendar grid boundaries and `divider` for half-hour
-  lines; never derive grid lines from surface colors or local opacity mixes.
+  pinned, agent, and phone-sheet containers; preserve light-theme borders. On glass
+  containers, color the existing rim instead of overriding its zero border width.
+- Use `border-secondary` for live and loading calendar grid boundaries and `divider`
+  for half-hour lines; never derive grid lines from surface colors or local opacity mixes.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render Bars through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range, shared span lanes and overflow counts. Keep the old PhoneMonth unwired. Open the picked day's sheet without leaving Month; only its title changes to Day. Let explicit day taps and sheet dismissal retire pending focus requests. Give each day an accessible description of all its event titles, including overflow. Preserve the bounded source and visible-row focus path.
