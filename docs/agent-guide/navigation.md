@@ -1338,8 +1338,8 @@ count) on the left and **Create routine** and search on the right;
 
 With a pointer (not touch), routines are cards in a grid of three (two below
 760px wide, one below 480px), under **When something happens** and **On a
-schedule**, each heading with its count. Cards have one fill and no outline,
-and every card is the same height in every state. A card shows a tile with the
+schedule**, each heading with its count. Cards have the surface of Discover's
+cards, and every card is the same height in every state. A card shows a tile with the
 routine's icon tinted by its colour (or its trigger's area; grey while off),
 its name, its description (or, without one, what it does), its **…** menu and
 an on/off switch, and one line under them:

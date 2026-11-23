@@ -4,6 +4,7 @@ import { Button, cn, ToggleSwitch, Tooltip } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { surfaceLook } from '../../routines/components/routine-template-strip';
+import { RoutineSurface } from '../../routines/components/routine-editor';
 import { sentenceText } from '../../routines/core/knobs';
 import type { SuggestionCardModel } from './suggestion-card';
 
@@ -54,7 +55,9 @@ export function SuggestionCompactCard(props: {
   const failure = () =>
     props.model.status.kind === 'failed' ? props.model.status.message : '';
   return (
-    <li class="group/card relative flex h-full min-w-0 list-none flex-col gap-3.5 rounded-xl bg-active p-4 not-touch:hover:shadow-[inset_0_0_0_100vmax_var(--color-hover)]">
+    <li class="group/card min-w-0 list-none">
+      {/* Discover's card surface, so the two grids' cards match. */}
+      <RoutineSurface class="flex h-full flex-col gap-3.5 p-4">
       <div class="flex min-w-0 flex-1 gap-3">
         <span
           aria-hidden="true"
@@ -74,7 +77,7 @@ export function SuggestionCompactCard(props: {
                 ? t('routineSuggestions.openName', { name: props.model.title })
                 : undefined
             }
-            class="min-w-0 truncate text-left text-sm font-medium leading-5 text-ink outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus"
+            class="min-w-0 truncate text-left text-sm font-medium leading-5 text-ink outline-none after:absolute after:inset-0 after:rounded-xl after:content-[''] not-touch:group-hover/card:after:bg-hover focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus"
             onClick={() => props.onOpen()}
           >
             {props.model.title}
@@ -196,6 +199,7 @@ export function SuggestionCompactCard(props: {
           </Match>
         </Switch>
       </div>
+      </RoutineSurface>
     </li>
   );
 }

@@ -7,6 +7,7 @@ import { appearanceColor } from '../../entity-appearance/core/appearance';
 import { canToggleRoutine } from '../core/routine-menu';
 import type { TriggerKind } from '../core/routine-triggers';
 import type { RoutineRow } from '../core/types';
+import { RoutineSurface } from './routine-editor';
 import { RoutineIcon } from './routine-icon';
 import {
   type RoutineRowMenuActions,
@@ -202,11 +203,8 @@ export function RoutineCard(props: {
   menu?: RoutineRowMenuActions;
 }) {
   return (
-    <div
-      class={
-        'group/routine-card relative flex h-full min-w-0 flex-col gap-2 rounded-xl bg-active px-4 py-3.5 not-touch:hover:shadow-[inset_0_0_0_100vmax_var(--color-hover)] group-data-expanded/routine-menu:shadow-[inset_0_0_0_100vmax_var(--color-hover)]'
-      }
-    >
+    // Discover's card surface, so the two pages' cards match.
+    <RoutineSurface class="group/routine-card flex h-full flex-col gap-2 px-4 py-3.5">
       <div class="flex min-w-0 items-center gap-3">
         <RoutineTile row={props.row} />
         <div class="flex min-w-0 flex-1 flex-col">
@@ -214,7 +212,7 @@ export function RoutineCard(props: {
           <button
             type="button"
             class={cn(
-              'min-w-0 truncate text-left text-sm font-medium leading-5 outline-none after:absolute after:inset-0 after:rounded-xl after:content-[""] focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus',
+              'min-w-0 truncate text-left text-sm font-medium leading-5 outline-none after:absolute after:inset-0 after:rounded-xl after:content-[""] not-touch:group-hover/routine-card:after:bg-hover group-data-expanded/routine-menu:after:bg-hover focus-visible:static focus-visible:after:ring-2 focus-visible:after:ring-edge-focus',
               props.row.enabled ? 'text-ink' : 'text-ink-muted'
             )}
             onClick={() => props.onOpen(props.row.id)}
@@ -265,6 +263,6 @@ export function RoutineCard(props: {
             : undefined
         }
       />
-    </div>
+    </RoutineSurface>
   );
 }

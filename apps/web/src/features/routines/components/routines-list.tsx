@@ -27,6 +27,7 @@ import {
   RoutineCardSections,
   RoutinesEmpty,
 } from './routine-cards';
+import { RoutineSurface } from './routine-editor';
 import { RoutineListRow, RoutineRowLayout } from './routine-row';
 import { RoutineRowMenu, type RoutineRowMenuActions } from './routine-row-menu';
 import { RoutineTemplateStrip } from './routine-template-strip';
@@ -361,9 +362,11 @@ function RoutineCardsSkeleton() {
       <RoutineCardGrid>
         <For each={[0, 1, 2]}>
           {() => (
-            <li class="flex h-[90px] flex-col justify-center gap-3 rounded-xl bg-active px-4">
-              <ListSkeleton.Bar class="w-1/2" />
-              <ListSkeleton.Bar class="w-3/4" />
+            <li class="min-w-0">
+              <RoutineSurface class="flex h-[90px] flex-col justify-center gap-3 px-4">
+                <ListSkeleton.Bar class="w-1/2" />
+                <ListSkeleton.Bar class="w-3/4" />
+              </RoutineSurface>
             </li>
           )}
         </For>
