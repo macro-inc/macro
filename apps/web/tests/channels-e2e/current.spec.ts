@@ -4,16 +4,9 @@ import {
   findRow,
   type Named,
   openFromList,
-  openOffline,
   readAndReturn,
-  startAfresh,
 } from './harness/device';
-import {
-  expect,
-  failsSometimes,
-  LOCAL_SYNC_BUILD,
-  test,
-} from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import { noAccess } from './harness/management';
 import { Conversation } from './harness/messages';
 import { goOffline, goOnline } from './harness/network';
@@ -200,32 +193,6 @@ test('SYN-04 a channel changed while the app was closed is right when the app is
 
   await expectShown(again, AFTER_EVERYTHING);
   expect(await serverChannel('ben', made.channel.id)).toEqual(AFTER_EVERYTHING);
-});
-
-// If this fails, the device shows a caught-up channel while connected but
-// goes back to an older copy of it the next time it has to open it offline.
-test('SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection', async ({
-  pageFor,
-  ada,
-  ben,
-}) => {
-  test.skip(!LOCAL_SYNC_BUILD, 'channels open offline only with the flag');
-  const made = await scene(ada, ben);
-  const first = await pageFor('ben');
-  const view = new Conversation(first, made.channel.id);
-  await view.open();
-  await expectShown(view, AT_FIRST);
-  await findRow(first, made.elsewhere);
-  await openFromList(first, made.elsewhere);
-  await changeEverything(ada, ben, made);
-  await findRow(first, made.channel);
-  await openFromList(first, made.channel);
-  await expectShown(view, AFTER_EVERYTHING);
-
-  await startAfresh(first, made.elsewhere);
-  const offline = await openOffline(first, made.channel);
-
-  await expectShown(offline, AFTER_EVERYTHING);
 });
 
 // If this fails, someone away from a busy channel for long enough comes

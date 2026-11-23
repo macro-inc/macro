@@ -212,7 +212,10 @@ export async function loseWriteAnswers(
 /** Where a page asks for its list of channels, among much else. */
 const GRAPHQL = '**/dss/items/soup/graphql';
 /** The read a page fills its list of channels with, page after page. */
-const CHANNEL_LIST_READS = ['SoupChannelDirectoryBackfill', 'ChannelDirectoryPage'];
+const CHANNEL_LIST_READS = [
+  'SoupChannelDirectoryBackfill',
+  'ChannelDirectoryPage',
+];
 
 /** What `holdChannelList` gives a test to wait on. */
 export type HeldChannelList = {

@@ -65,7 +65,7 @@ device-threads-offline	Threads show their replies offline, long ones included		T
 device-cut-off-reload	A thread read on a page that was left, by loading the app again, before the device kept it is kept by the next page		Tested with the client that keeps channels on the device, in the tests that follow it
 device-first-visit	A channel seen once and left at once is held; a message that arrived while it was open is held		Tested with the client that keeps channels on the device, in the tests that follow it
 sync-current	A channel changed while the person was in another channel, offline, reloading or had the app closed is right when they see it again	SYN-01,SYN-02,SYN-03,SYN-04,SYN-09,SYN-10	
-sync-device-equals-server	What the device holds after catching up is what the services hold	SYN-05	
+sync-device-equals-server	What the device holds after catching up is what the services hold		Tested with the client that keeps channels on the device, in the tests that follow it
 sync-far-behind	A channel more than a thousand changes behind is right when opened again	SYN-06	
 sync-link-after-change	An edit made while away shows after arriving through a link to an older message		A test of it was written and dropped: no break of the device copy made it fail, so it showed nothing about it
 sync-removed	A person removed from a channel while away is not shown the messages their device kept	SYN-08	

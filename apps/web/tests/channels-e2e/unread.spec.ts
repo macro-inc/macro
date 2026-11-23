@@ -1,7 +1,7 @@
 import { type Api, unique } from './harness/api';
 import { ChannelView, conversationRow } from './harness/channel';
 import { mentionPerson } from './harness/composer';
-import { expect, failsSometimes, knownDefect, test } from './harness/fixtures';
+import { expect, failsSometimes, test } from './harness/fixtures';
 import type { Person } from './harness/people';
 import {
   chooseFromRowMenu,

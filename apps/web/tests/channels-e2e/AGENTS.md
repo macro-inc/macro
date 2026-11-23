@@ -77,7 +77,7 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   with `codeFetched` already (OFF-02).
 - While `goOffline` waits, the device is connected and left alone, so it
   also brings its recent channels up to date: a test of what a device holds
-  with no such pause (OFF-09, OFF-10, SYN-05) cannot be told from REC-04
+  with no such pause (OFF-09, OFF-10) cannot be told from REC-04
   until that defect is gone.
 - Left alone for a few seconds, a device fetches a channel with something
   unread in it (PRE-01): a test that needs a channel the device has never
