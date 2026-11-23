@@ -40,6 +40,25 @@ pub trait TimeTrackingRollout: Send + Sync {
     async fn enabled_for(&self, user_id: &MacroUserIdStr<'_>) -> bool;
 }
 
+/// What changed in a person's time tracking. Their open sessions read it
+/// again; nothing else travels.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimeTrackingChange {
+    /// Their running timer started, stopped or was discarded.
+    pub timer: bool,
+    /// The task whose entries changed, when any did.
+    pub task_id: Option<String>,
+}
+
+/// Tells every open session of a person (another tab, their phone) that their
+/// time tracking changed, so each reads it again.
+pub trait TimeTrackingUpdates: Send + Sync + 'static {
+    /// Best effort, after the change committed: a failure is logged by the
+    /// adapter, never returned, and a session that misses it reads again when
+    /// it reconnects.
+    fn changed(&self, user_id: &MacroUserIdStr<'static>, change: TimeTrackingChange);
+}
+
 /// What the domain needs to know about a repository failure.
 pub trait RepositoryError: std::error::Error + Send + Sync + 'static {
     /// The write gave up waiting for another write on the same task or timer;

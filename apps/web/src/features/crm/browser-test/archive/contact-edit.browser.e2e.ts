@@ -573,6 +573,76 @@ test('several addresses: make primary, reject a duplicate, add, remove, and keep
   ).toHaveCount(0);
 });
 
+test('Add email ends the last line of addresses in the header and Record details', async ({
+  page,
+}, info) => {
+  await page.goto('/?several&long');
+  await page.getByRole('button', { name: 'Show details', exact: true }).click();
+  await expect(page.getByText('Record details', { exact: true })).toBeVisible();
+  const fields = page.getByRole('group', { name: 'Email', exact: true });
+  await expect(fields).toHaveCount(2);
+  for (const field of await fields.all()) {
+    const last = field
+      .getByRole('button', { name: /^Email options for/ })
+      .last();
+    const add = field.getByRole('button', { name: 'Add email', exact: true });
+    const lastBox = (await last.boundingBox())!;
+    const addBox = (await add.boundingBox())!;
+    const fieldBox = (await field.boundingBox())!;
+    expect(addBox.width).toBe(24);
+    expect(addBox.height).toBe(24);
+    expect(addBox.y).toBe(lastBox.y);
+    expect(addBox.x).toBeGreaterThan(lastBox.x + lastBox.width);
+    expect(addBox.x + addBox.width).toBeLessThanOrEqual(
+      fieldBox.x + fieldBox.width
+    );
+  }
+  await page.screenshot({
+    animations: 'disabled',
+    path: info.outputPath('add-email-beside-addresses.png'),
+  });
+});
+
+test('Tab reaches Add email after the addresses and focus returns to it after Escape and removal', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'Desktop keyboard focus');
+  const personal = `person1@${'gmail.com'}`;
+  await page.goto('/?several');
+  const field = page.getByRole('group', { name: 'Email', exact: true }).first();
+  const options = field.getByRole('button', { name: /^Email options for/ });
+  const add = field.getByRole('button', { name: 'Add email', exact: true });
+
+  await options.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(add).toBeFocused();
+  expect(
+    await add.evaluate((element) => getComputedStyle(element).boxShadow)
+  ).toContain('0px 0px 0px 2px');
+  await page.keyboard.press('Enter');
+  const input = page.getByRole('textbox', { name: 'Email', exact: true });
+  await expect(input).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(input).toBeHidden();
+  await expect(add).toBeFocused();
+
+  await options.nth(1).focus();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('button', { name: 'Make primary', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(options.first()).toHaveText(personal);
+  await expect(options.first()).toBeFocused();
+
+  await options.last().click();
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(options).toHaveCount(2);
+  await expect(add).toBeFocused();
+  expect(await page.evaluate(() => window.archiveFixture.writes())).toBe(2);
+});
+
 test('Remove company confirms, keeps a rejected relation and unlinks once the server commits', async ({
   page,
 }, info) => {

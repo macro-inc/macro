@@ -395,7 +395,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'failures',
     title: 'Some steps failed',
-    note: 'Failures are counted on the summary and marked on their rows.',
+    note: 'Failures are marked on their rows; the summary has no separate failure count.',
     parts: [
       SEARCH_DOCS,
       LIST_FAILED,

@@ -1463,11 +1463,11 @@ returned JSON, or code-mode wording. An `ExecuteCode` call joins the tool group
 of its turn segment and shows only its observed SDK operations, each a compact
 row (label plus status) counted as one step; `SearchTools`, `LoadTools`,
 `DescribeCodeTools` and `ReadCodeDocs` are hidden and not counted. A group
-never opens on its own, so a step that failed and was recovered from is counted
-on the finished row (**Used 6 tools · 1 failed**) and shown in the expanded
-list; a program that failed or timed out before reporting a step is one failed
-step, one that reported steps counts the ones that failed, and one that was
-cancelled is not counted as failed. While the program
+never opens on its own, and its finished row (**Used 6 tools**) counts failed
+steps in its total but shows no separate failure count: a step that failed and
+was recovered from shows as failed only in the expanded list, and a program
+that failed or timed out before reporting a step is one failed step there.
+While the program
 runs, the group's live line names its observed operations. There is no
 separate API-call count wrapper or per-label aggregation once activity is
 available. Activity refreshes about once per second while a run is active,
@@ -1757,18 +1757,23 @@ where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
 review remain independent of this development setting.
 
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
-ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
-appears in the transcript, and the notice `The agent is waiting for your answer above` sits
-over the composer. Forms have one control per field (radios for a choice, an `Other` text
-box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
-plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
-`Open` button that only opens a new tab after you click it. Once answered the card collapses
-to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
-continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+ask you something. A card titled `<bot> is asking`, with the status `Waiting for you` under
+the title, appears in the transcript, and the notice `The agent is waiting for your answer above; Skip lets it continue without one`
+sits over the composer. The same card shows in a channel reply's live tail under the agent's
+typing row. Forms have one control per field (radios for a choice, a `Type your own answer`
+row when the agent allows a custom answer, checkboxes for multi-select, text/number inputs).
+The footer has `Skip` on the left (it declines, and the agent continues without an
+answer) and `Submit` on the right. There is no Cancel: stopping the agent is the
+composer's `Stop`. Submit is disabled until every required question has an answer. A skipped native question reaches the agent as `skipped`. A link
+request shows the target host and URL with an `Open` button that only opens a new tab after
+you click it. An email draft under review has `Skip` under the composer. Once resolved the card
+collapses to `Question · <text>` with `Answered` / `Skipped` / `Cancelled` on the right and
+the agent continues. Messages typed while a question is open queue behind it; the composer's `Stop`
 square cancels the question and the turn. A directly authenticated user with
 edit access to the session may answer; agent runs and runtimes cannot answer
 questions or permission requests, even using a user's credentials. Viewers see
-the form locked with `Waiting for an editor`. The owner and everyone
+the form locked with `Waiting for an editor` and `Only people who can edit this session can
+answer.`, on the session and in the channel tail alike. The owner and everyone
 who has prompted or answered the session also receive an `agent_session_waiting_for_input`
 notification (inbox, browser, and iOS push) when the question is asked; it stays until
 marked done.
@@ -2001,8 +2006,8 @@ dots and the step the agent is on (**Reading AgentMessage.tsx**, **Running bun
 run check**), taking turns every 2s among steps running at once and otherwise
 naming the latest; **Thinking** while the trailing thought streams. No working
 row stacks under it, and an earlier group never shows as working. Once the turn
-moves on, the group settles to **Used N tools**, with failed steps counted in
-the failure color (**· 2 failed**).
+moves on, the group settles to **Used N tools**; failed steps are marked only
+on their own rows inside it.
 
 A subagent row is titled by the call's short description, else the first line
 of its brief, and says **Running**, **Done**, or **Failed**; expanding it shows

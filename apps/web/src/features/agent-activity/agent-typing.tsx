@@ -185,6 +185,7 @@ function AgentTypingEntry(props: {
                 request={request()}
                 controller={interactions}
                 tool={toolFor(request().toolCall)}
+                agentName={name()}
               />
             )}
           </Key>

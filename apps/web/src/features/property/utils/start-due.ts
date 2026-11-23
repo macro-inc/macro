@@ -5,6 +5,7 @@ import {
   formatCompactCalendarTimeRange,
 } from '@app/features/calendar/utils/time-format';
 import {
+  addDays,
   addHours,
   addMinutes,
   differenceInCalendarDays,
@@ -249,36 +250,43 @@ export function startDueDays(start: Date, due: Date): number {
 }
 
 /**
- * The dates after `day` is picked for `field`. A day on the far side of the
- * other end moves that end instead, so the range can never run backwards: a
- * due day before the start becomes the start, and a start day after the due
- * date becomes the due date. `changed` names the end that moved.
+ * The dates after `day` is picked for `field`, so the range never runs
+ * backwards. A due day before the start becomes the start. A start day after
+ * the due date becomes the start and moves the due date with it, keeping the
+ * range's length, as a calendar event's end follows its start; a start on or
+ * before the due date never moves it. `changed` names the ends that moved.
  */
 export function pickDay(
   dates: StartDue,
   field: DateField,
   day: Date
-): { dates: StartDue; changed: DateField } {
+): { dates: StartDue; changed: DateField[] } {
   if (
     field === 'due' &&
     dates.start &&
     differenceInCalendarDays(day, dates.start) < 0
   ) {
-    return { dates: { ...dates, start: day }, changed: 'start' };
+    return { dates: { ...dates, start: day }, changed: ['start'] };
   }
   if (
     field === 'start' &&
     dates.due &&
     differenceInCalendarDays(day, dates.due) > 0
   ) {
-    return { dates: { ...dates, due: day }, changed: 'due' };
+    const days = dates.start
+      ? Math.max(0, differenceInCalendarDays(dates.due, dates.start))
+      : 0;
+    return {
+      dates: { ...dates, start: day, due: addDays(startOfDay(day), days) },
+      changed: ['start', 'due'],
+    };
   }
-  return { dates: { ...dates, [field]: day }, changed: field };
+  return { dates: { ...dates, [field]: day }, changed: [field] };
 }
 
 /**
- * `pickDay` for dates with times: the day picked keeps the time its end had,
- * and an end moved for the other keeps its own time on the new day.
+ * `pickDay` for dates with times: each end that moves keeps its own time of
+ * day on its new day.
  */
 export function pickTimedDay(
   dates: StartDue,
@@ -297,19 +305,18 @@ export function pickTimedDay(
     field,
     startOfDay(day)
   );
-  const moved = picked.changed;
-  const next = {
-    ...dates,
-    [moved]: atClock(picked.dates[moved]!, clockOf(moved)),
-  };
+  const next = { ...dates };
+  for (const end of picked.changed) {
+    next[end] = atClock(picked.dates[end]!, clockOf(end));
+  }
   // Back on one day, the restored times can put the due date before the
-  // start; the end that moved wins, as a picked time does.
+  // start; the end that was picked wins, as a picked time does.
   if (next.start && next.due && next.due < next.start) {
-    return moved === 'due'
+    return field === 'due'
       ? { dates: { ...next, start: next.due }, changed: ['start', 'due'] }
       : { dates: { ...next, due: next.start }, changed: ['start', 'due'] };
   }
-  return { dates: next, changed: [moved] };
+  return { dates: next, changed: picked.changed };
 }
 
 function dayOf(property: Property | undefined): Date | null {

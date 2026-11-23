@@ -124,7 +124,7 @@ it('folds a sealed run to a summary that opens to its steps, without the session
   ));
   expect(live.acquired).toEqual([]);
   expect(view.queryAllByRole('listitem')).toEqual([]);
-  view.getByRole('button', { name: 'Used 2 tools · 1 failed' }).click();
+  view.getByRole('button', { name: 'Used 2 tools' }).click();
   expect(steps(view)).toEqual([
     ['Ran', 'completed'],
     ['ReadFailed', 'failed'],
