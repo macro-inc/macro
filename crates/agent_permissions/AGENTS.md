@@ -44,6 +44,32 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   its access checks. `agent_tool_permission` and `persona_tool_permission`
   are the tables from before ids, copied by migration `20261122220100` and no
   longer read; a cleanup after release drops them.
+- An owned agent's policy may follow another policy, its source
+  (`agent_permission_policy.follows`, `source_policy_id`; migration
+  `20261122233513`), kept by id: a `PolicyChain` of at most `MAX_CHAIN` (5)
+  policies, never a cycle. It resolves through the chain on every call
+  (`resolve::Resolver`): the root (a policy owning its settings) resolves as
+  above, or asks for everything when its source was hard deleted (`Lost`:
+  `follows` with no source); each following level's rows, the policy's own
+  included, only restrict (stricter-of), whoever made them; the overlay comes
+  last. A state the chain gave from a source has `Origin::Source`. Persona
+  (and, later, team) policies are roots. A soft-deleted agent's policy stays
+  and keeps applying, frozen. The store reads a chain and its rules in one
+  statement, and the gate reads it with the overlay in one snapshot
+  (`chain_with_session`), so a source edit, a source change or a detach is
+  seen entirely or not at all.
+- Every change to any source (`set_source`, `detach`) takes one global
+  advisory lock (`agent_permission_policy:sources`) before the policy's lock,
+  then checks, under it, that the source's chain doesn't reach the policy
+  (`source_cycle`) and that the policy's longest follower path plus the
+  source's chain stays within `MAX_CHAIN` (`source_too_deep`); concurrent
+  A→B and B→A can't both pass. Following, when the policy owned its
+  settings, drops its person-made rows and keeps its restrictions as local
+  ones. Detach (`resolve::materialize`) replaces its rows with the snapshot
+  of what the chain resolves to (every default, every pair including hidden
+  ones and groups only rows name, every catalog operation; explicit choices
+  stay explicit, local restrictions stay restrictions; session overlays and
+  approvals are not copied), in one transaction.
 - Tighten-only compares, before and after the change, every operation's
   effective state, every catalog group's every action (hidden pairs too) and
   every action's default (`domain/resolve.rs` `tighten_only`); a change that
@@ -63,15 +89,17 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   soon as the registry maps an operation there: resolution never reads the
   view. `restricted` counts operations, so hidden rules don't change it.
 - Expected refusals (off, not found, forbidden, needs a person, would loosen,
-  unknown target) log at WARN; only `Internal` logs at ERROR.
+  unknown target, a source refused) log at WARN; only `Internal` logs at
+  ERROR.
 
 ## Start here
 
 - `src/domain/service.rs`: who may read, set, tighten, reset; `resolve_calls`
-  for a run's gate, which reads the saved rules and the session overlay in
-  one snapshot (`rules_with_session`), never as two reads a write can fall
+  for a run's gate, which reads the policy's chain and the session overlay in
+  one snapshot (`chain_with_session`), never as two reads a write can fall
   between.
-- `src/domain/resolve.rs`: resolution, the view, tighten-only.
+- `src/domain/resolve.rs`: resolution, the view, tighten-only;
+  `resolve/chain.rs`: resolution through a chain and `materialize`.
 - `src/inbound/axum_router.rs`: routes, credential mapping, error codes.
 - `src/domain/admission.rs`: `admit`, the gate's question: every
   operation a program may call sorted into blocked / ask / allowed as
@@ -146,6 +174,9 @@ the tags when the flag goes.
 - The session overlay's kind and target checks were widened for `action`
   NOT VALID (`20261122224406`) and validated in their own migration
   (`20261122224441`).
+- A chain longer than `MAX_CHAIN` or a cycle can only come from hand-edited
+  rows; reading one is an error (`ChainError`), and the gate then refuses
+  the run.
 - The handler decides nothing: it maps the credential to `Credential` and the
   service applies every rule. Loosening and reset need `PersonSession`.
 - With the rollout off for the caller, every route answers 404.
