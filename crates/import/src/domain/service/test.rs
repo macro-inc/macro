@@ -324,3 +324,55 @@ fn notion_database_heavy_pages_are_detected() {
     );
     assert!(!notion_page_is_mostly_database(&substantive));
 }
+
+/// A source's tools come from the one connection the connectors services
+/// count for its app, and from nothing else.
+#[tokio::test]
+async fn source_tools_load_only_the_counted_connection() {
+    use connectors::fake::{FakeConnection, FakeConnectors};
+    let user = admission::user();
+    let tools = |fake: FakeConnectors| async move {
+        source_tools(&fake.build(), &admission::user(), ImportSource::Notion)
+            .await
+            .unwrap()
+            .map(|tools| {
+                tools
+                    .catalog()
+                    .into_iter()
+                    .map(|tool| tool.name)
+                    .collect::<Vec<_>>()
+            })
+    };
+
+    let connected = FakeConnectors::new()
+        .with_connection(
+            &user,
+            FakeConnection::app("notion")
+                .named("Notion")
+                .with_tools(&["notion-fetch"]),
+        )
+        .with_connection(
+            &user,
+            FakeConnection::app("linear")
+                .named("Linear")
+                .with_tools(&["list-issues"]),
+        );
+    let names = tools(connected).await.unwrap();
+    assert_eq!(names.len(), 1);
+    assert!(names[0].ends_with("notion-fetch"));
+
+    // An old native Notion server is a server added by URL, not Notion.
+    let native = FakeConnectors::new().with_connection(
+        &user,
+        FakeConnection::server("https://mcp.notion.com/mcp").with_tools(&["notion-fetch"]),
+    );
+    assert!(tools(native).await.is_none());
+
+    let disabled = FakeConnectors::new().with_connection(
+        &user,
+        FakeConnection::app("notion")
+            .with_tools(&["notion-fetch"])
+            .disabled(),
+    );
+    assert!(tools(disabled).await.is_none());
+}

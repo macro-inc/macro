@@ -1,5 +1,5 @@
 import '@entity/composed/ListEntity.css';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { MaybeEntityRow, MultiSelectCheckbox, UnreadIndicator } from '@entity';
 import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
@@ -30,14 +30,18 @@ type InboxListEntityProps = BaseListEntityProps & {
 };
 
 export function InboxListEntity(props: InboxListEntityProps) {
-  const channels = useChannelsContext();
+  const directory = useChannelDirectory();
 
   const entity = createMemo(() => {
     const scoped = scopeThreadNotifications(props.entity);
     if (scoped.type !== 'channel_thread') return scoped;
+    const current = loadedChannel(directory.lookup(scoped.channelId));
     return {
       ...scoped,
-      name: getChannelThreadName(scoped, channels.channelsById()),
+      name: getChannelThreadName(
+        scoped,
+        current ? { [current.id]: current } : {}
+      ),
     };
   });
 

@@ -4,7 +4,7 @@ import { defineViewTour } from '@app/features/tours/core/view-tour';
 export const documentsTour = defineViewTour({
   id: 'documents',
   title: 'Documents',
-  connector: { kind: 'mcp', label: 'Notion', tools: ['Notion'] },
+  connector: { kind: 'mcp', label: 'Notion', apps: ['notion'] },
   video: { youtubeId: 'V8wE8Hq5_qw', title: 'Macro Docs', duration: '1:09' },
   steps: [
     {
