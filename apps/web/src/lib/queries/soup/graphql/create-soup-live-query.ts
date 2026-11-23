@@ -672,7 +672,9 @@ export function createSoupLiveQuery(
   // starts, so one a hidden tab deferred follows the same rules, and a
   // rebuild starts only once no read runs, on a later task: the observer
   // shows a read ended before it lets go of it, and a refetch started in
-  // between would share that read's answer instead of reading.
+  // between would share that read's answer instead of reading. The bound
+  // resets only once the chain is whole with no read running: a rebuild
+  // passes through a whole chain after its first page.
   let repairs = 0;
   let failedAt: number | undefined;
   const rebuildChain = async () => {
@@ -686,10 +688,7 @@ export function createSoupLiveQuery(
     } finally {
       repair = undefined;
     }
-    if (!chainBroken()) {
-      repairs = 0;
-      return;
-    }
+    if (disposed || !chainBroken()) return;
     if (failed) {
       failedAt = networkAnswers();
       return;
@@ -716,12 +715,13 @@ export function createSoupLiveQuery(
     on(
       [chainBroken, () => query.isFetching, networkAnswers],
       ([broken, fetching]) => {
-        if (!broken) {
-          repairs = 0;
-          failedAt = undefined;
+        if (fetching) return;
+        if (broken) {
+          scheduleRepair();
           return;
         }
-        if (!fetching) scheduleRepair();
+        repairs = 0;
+        failedAt = undefined;
       }
     )
   );

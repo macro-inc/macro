@@ -3368,6 +3368,30 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     });
 
+    it('keeps its bound through rebuilds that pass a whole chain midway', async () => {
+      const { fake, dispose } = await breakChain();
+      try {
+        // Each rebuild's first page makes the chain whole for a moment; a
+        // live update of that page breaks it again before the rebuild ends.
+        for (let round = 0; round < 3; round += 1) {
+          const at = 3 + round * 3;
+          await vi.waitFor(() => expect(fake.executions).toHaveLength(at + 1));
+          expect(cursorOf(fake.executions[at])).toBeNull();
+          fake.executions[at].next(page('removed', 'after-removed'));
+          await vi.waitFor(() => expect(fake.executions).toHaveLength(at + 2));
+          fake.executions[at + 1].next(page('a', 'after-a'));
+          await vi.waitFor(() => expect(fake.executions).toHaveLength(at + 3));
+          fake.executions[at].next(page('a', 'after-a'));
+          fake.executions[at + 2].next(page('b', 'after-b'));
+        }
+        await settle();
+        await settle();
+        expect(fake.executions).toHaveLength(12);
+      } finally {
+        dispose();
+      }
+    });
+
     it('keeps a failed rebuild that ended while another page read ran', async () => {
       const { fake, dispose } = await breakChain();
       try {
