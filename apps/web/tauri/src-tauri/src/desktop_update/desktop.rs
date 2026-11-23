@@ -346,10 +346,7 @@ async fn check<R: Runtime>(
     else {
         // A saved download is for a version this app already runs, or one
         // the feed withdrew.
-        store
-            .remove()
-            .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove an obsolete native update download"))
-            .ok();
+        remove_saved(store);
         report(app, coordinator, timing, Outcome::UpToDate);
         publish(app, coordinator, Status::Idle);
         return Ok(true);
@@ -358,6 +355,10 @@ async fn check<R: Runtime>(
     // macOS refuses to open, so stay on this one.
     if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
         tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
+        // A saved download is for this release or an older one, which this
+        // release supersedes; it would otherwise stay on disk until the OS is
+        // upgraded.
+        remove_saved(store);
         report(
             app,
             coordinator,
@@ -424,6 +425,13 @@ async fn check<R: Runtime>(
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
         .ok();
     Ok(true)
+}
+
+fn remove_saved(store: &Store) {
+    store
+        .remove()
+        .inspect_err(|error| tracing::warn!(error = ?error.kind(), "could not remove an obsolete native update download"))
+        .ok();
 }
 
 /// This platform's minimum OS version in the feed (`minimumSystemVersion`,

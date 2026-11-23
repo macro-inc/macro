@@ -684,7 +684,8 @@ signature they belong to. A quit, crash or failed attempt keeps what arrived;
 the next attempt or launch, offered the same update, resumes with an HTTP
 `Range` request (a server that answers with the whole file replaces the saved
 bytes), and a complete file is reused without downloading. A different
-offered update, or a feed that offers none, deletes the saved files. The whole
+offered update, a release that needs a newer OS, or a feed that offers none,
+deletes the saved files. The whole
 file is verified with Tauri's updater signature (the updater's own
 `minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
 eligible for installation, and read and verified again just before installing;
