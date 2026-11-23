@@ -34,7 +34,10 @@ export async function checkpoints(browser: Browser) {
       Object.keys(localStorage)
         .filter(
           (key) =>
-            key.startsWith('graphql-soup-backfill:') && key.includes(userId)
+            key.startsWith('graphql-soup-backfill:') &&
+            key.includes(userId) &&
+            // A lane's `:failed` marker holds a bare storage generation.
+            !key.endsWith(':failed')
         )
         .map((key) => ({
           key,
