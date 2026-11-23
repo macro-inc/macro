@@ -49,7 +49,7 @@ export function RunningTimerRail(props: {
             data-sidebar-next-item="running-timer"
           >
             <StopIcon class="size-2.5 shrink-0" />
-            <span class="text-[10px] font-medium leading-none tabular-nums">
+            <span class="text-xxs font-medium leading-none tabular-nums">
               {formatCompactClock(timer.seconds())}
             </span>
           </Popover.Trigger>
