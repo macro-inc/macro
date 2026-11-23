@@ -119,11 +119,14 @@ a failing step resets as before, and so does a file an older build opens after
 a newer one upgraded it. Bumping the version without registering a step fails
 to compile; clearing `STEPS` declares that every older file resets. The
 plugin's `graphql_cache.native.open` span records the version a file came from
-as `graphql_cache.storage.upgraded_from`.
+as `graphql_cache.storage.upgraded_from`, and logs an event with it and the
+open's duration inside the init command's `graphql_cache.ipc.receive` span,
+which carries the webview's trace id as `upstream.trace_id`.
 
 Browser database names embed the storage version, so a browser build with a new
 storage version still opens a new database and backfills, leaving the older one
-for any tab still running the older bundle.
+for any tab still running the older bundle. A browser open never runs a step:
+an older version found under the current name resets, as before steps existed.
 
 ## Network refreshes
 

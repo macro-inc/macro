@@ -249,7 +249,7 @@ impl TursoStorage {
     ) -> Result<(Self, TursoStorageOpenOutcome), TursoStorageOpenFailure> {
         let fresh = session.disposition() == OpenDisposition::Fresh;
         let connection = Db::uncached(session.connection());
-        let result = initialize(&connection, scope, fresh);
+        let result = initialize(&connection, scope, fresh, OlderStorage::Reset);
         drop(connection);
         match result {
             Ok(_) => Ok((
@@ -842,7 +842,12 @@ fn open_native_database(
         let error = TursoStorageError::turso(error);
         return Err(if fresh { error } else { error.initialization() });
     }
-    let initialized = match initialize(&Db::uncached(connection.clone()), scope, fresh) {
+    let initialized = match initialize(
+        &Db::uncached(connection.clone()),
+        scope,
+        fresh,
+        OlderStorage::Upgrade,
+    ) {
         Ok(initialized) => initialized,
         Err(error) => {
             if connection.close().is_err() {
@@ -3611,9 +3616,35 @@ struct Initialized {
     storage_upgraded_from: Option<u32>,
 }
 
+/// What opening does with a file written at an older storage version.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OlderStorage {
+    /// Runs the registered upgrade steps: a native file keeps its path
+    /// across builds.
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "only native opens upgrade")
+    )]
+    Upgrade,
+    /// Resets it as incompatible. A browser database's name embeds the
+    /// storage version (`cache_core::codec::cache_database_name`), so an older
+    /// version under the current name was not written by the build that named
+    /// it.
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(dead_code, reason = "only the browser open resets older versions")
+    )]
+    Reset,
+}
+
 /// Validates or initializes a database, first upgrading one written at an
-/// older storage version in place.
-fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, TursoStorageError> {
+/// older storage version in place when `older` allows it.
+fn initialize(
+    connection: &Db,
+    scope: &str,
+    fresh: bool,
+    older: OlderStorage,
+) -> Result<Initialized, TursoStorageError> {
     enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
     if fresh {
         driver::write_transaction(connection, || {
@@ -3656,8 +3687,13 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
     // own is never upgraded. A schema identical to the one this build creates
     // passed the structural and statement checks in this build's tests, so
     // only a different schema pays for them again.
-    check_owner(connection, scope)?;
-    let storage_upgraded_from = migration::upgrade(connection)?;
+    let storage_upgraded_from = match older {
+        OlderStorage::Upgrade => {
+            check_owner(connection, scope)?;
+            migration::upgrade(connection)?
+        }
+        OlderStorage::Reset => None,
+    };
     let fresh_schema = has_fresh_schema(connection)?;
     if !fresh_schema {
         validate_frozen_schema(connection)?;

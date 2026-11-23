@@ -17,7 +17,8 @@
 //!
 //! Only native files reach a step: a browser database's name embeds the
 //! storage version, so a browser build opens a new database instead
-//! (`cache_core::codec::cache_database_name`).
+//! (`cache_core::codec::cache_database_name`), and resets an older version
+//! found under its own name (`OlderStorage::Reset`).
 //!
 //! A step's SQL is frozen when the step is registered: it must not use the
 //! current schema constants, because a later version may change them while the

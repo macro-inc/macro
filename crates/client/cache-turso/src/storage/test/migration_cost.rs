@@ -237,7 +237,9 @@ fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
         .unwrap();
     let connection = Db::uncached(connection);
     let mut phases = Vec::new();
-    driver::execute(&connection, "BEGIN IMMEDIATE", vec![]).unwrap();
+    // `driver::write_transaction` opens the runner's transaction with a
+    // deferred `BEGIN`, so the first statement takes the write lock here too.
+    driver::execute(&connection, "BEGIN", vec![]).unwrap();
     for sql in crate::storage::migration::UPGRADE_11_TO_12 {
         let started = Instant::now();
         driver::execute(&connection, sql, vec![]).unwrap();
