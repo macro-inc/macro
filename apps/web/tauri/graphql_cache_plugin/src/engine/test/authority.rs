@@ -395,3 +395,39 @@ fn native_first_non_denied_proof_preserves_offline_mail() {
         }
     });
 }
+
+/// An abandoned read skips reading, not its turn: an interrupted retirement
+/// it finds is finished and announced before anything queued behind it runs.
+#[test]
+fn an_abandoned_read_still_finishes_an_interrupted_retirement() {
+    let (sender, events) = std::sync::mpsc::channel();
+    let handle = spawn_handle();
+    block_on(bind(&handle));
+    let handle = handle.with_authority_listener("profile".into(), move |authority| {
+        sender.send(authority.clone()).unwrap();
+    });
+    block_on(async {
+        let before = handle.current_authority("profile").await.unwrap();
+        let mut state = handle.inner.lock().await;
+        state
+            .engine
+            .begin_authority_transition("profile", before.generation, "team:denied".into(), true)
+            .await
+            .unwrap();
+    });
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    abandon_queued(
+        &handle,
+        "read-1",
+        reader.read(
+            Some("client:1".to_owned()),
+            "{ user { id } }".into(),
+            None,
+            Variables::new(),
+            vec![],
+        ),
+    );
+    let recovered = events.try_recv().unwrap();
+    assert!(recovered.ready);
+    assert_eq!(recovered.policy.as_deref(), Some("team:denied"));
+}
