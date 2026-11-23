@@ -14,10 +14,9 @@
   };
 
   macro.cluster = {
-    # Off for the first rollout: each application waits for a manual sync
-    # after its diff has been read in Argo CD (README "Bootstrap"). On once
-    # the cluster has been tested.
-    autoSync = false;
+    # Argo CD applies every merge to main. Off only while a rollout needs each
+    # application synced by hand (README "Bootstrap", "Going back").
+    autoSync = true;
     name = "observability";
     region = "us-east-2";
     kubernetesVersion = "1.37.0";
@@ -35,6 +34,7 @@
     # then reach the edge through `kubectl port-forward` with a Host header.
     grafanaHosts = [ "grafana.macro-internal.com" ];
     otlpHosts = [ "otlp.macro-internal.com" ];
+    argocdHosts = [ "argo.macro-internal.com" ];
     # From the switch's step 2: the AWS layer's listener rules use the target
     # groups, so a pod is ready only once the ALB reports it healthy
     # (modules/edge.nix).
@@ -42,6 +42,7 @@
     targetGroups = {
       grafana = "obs-k8s-grafana";
       otlp = "obs-k8s-otlp";
+      argocd = "obs-k8s-argocd";
     };
     zones = [
       "us-east-2a"
@@ -52,6 +53,10 @@
       "10.88.1.0/24"
     ];
   };
+
+  # ../aws settings `hosts.argocd`, which also makes its DNS record and
+  # certificate.
+  macro.argocd.hostname = "argo.macro-internal.com";
 
   macro.grafana = {
     hostname = "grafana.macro-internal.com";

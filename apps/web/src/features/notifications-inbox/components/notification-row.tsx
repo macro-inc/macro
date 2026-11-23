@@ -28,8 +28,6 @@ export type NotificationRowProps = {
   unfolded: boolean;
   unseen: boolean;
   highlighted: boolean;
-  /** Another stack is open, so this row steps back. */
-  receded?: boolean;
   /** The last row of its date section, which has no separator below it. */
   endsSection?: boolean;
   /** Buttons that act on the notification, below its text. */
@@ -46,13 +44,13 @@ export type NotificationRowProps = {
  * the panel, each with a hairline below it that starts where its text does, as
  * in Messages; a section's last row has none. Several notifications show as a
  * stack: a phone unfolds it from a caret on the first line, and elsewhere a
- * caret with how many more there are sits at the bottom of the row. Unfolded,
- * its notifications list below it, indented to its text.
+ * caret with how many more there are sits at the bottom of the row and turns
+ * into Hide once it is open, so it folds from where it unfolded. Unfolded, its
+ * notifications list below it, indented to its text.
  * An unread row has a dot in the gutter left of its avatar, as in Messages; a
  * read row leaves the gutter empty, so avatars stay in line.
- * With a pointer, Mark done shows on hover in its own slot at the end of the
- * first line, held empty otherwise, so it sits in the same spot on every row
- * and nothing moves. Touch marks done by swiping the row. A phone shows larger
+ * With a pointer, Mark done takes the time's place on hover, so nothing moves.
+ * Touch marks done by swiping the row. A phone shows larger
  * text, and a read row fades its avatar, so unread ones stand out at a glance.
  */
 export function NotificationRow(props: NotificationRowProps) {
@@ -74,7 +72,7 @@ export function NotificationRow(props: NotificationRowProps) {
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
-        'group/notification relative w-full min-w-0 flex-1 transition-opacity',
+        'group/notification relative w-full min-w-0 flex-1',
         // The list's hover and active tints laid over the panel, opaque so the
         // avatar's badge can cut itself out in the same color.
         'bg-(--inbox-row-surface) [--inbox-row-surface:var(--color-panel)]',
@@ -82,8 +80,7 @@ export function NotificationRow(props: NotificationRowProps) {
           ? '[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_6%)]'
           : 'not-touch:hover:[--inbox-row-surface:color-mix(in_srgb,var(--color-panel),var(--color-content-0)_3%)]',
         // A tap leaves the row focused, which mustn't look chosen on a phone.
-        'mobile:[--inbox-row-surface:var(--color-panel)]',
-        props.receded && 'opacity-40 not-touch:hover:opacity-100'
+        'mobile:[--inbox-row-surface:var(--color-panel)]'
       )}
       onMouseMove={() => props.onHover()}
       onClick={(event) => props.onClick(event)}
@@ -120,13 +117,30 @@ export function NotificationRow(props: NotificationRowProps) {
             <span
               data-card-time=""
               class={cn(
-                'shrink-0 text-xs mobile:text-[13px] mobile:leading-[18px]',
+                'relative shrink-0 text-xs mobile:text-[13px] mobile:leading-[18px]',
                 props.unseen
                   ? 'text-ink-extra-muted mobile:text-ink-muted'
                   : 'text-ink-extra-muted/80'
               )}
             >
-              {props.time}
+              <span class="block not-touch:group-hover/notification:invisible">
+                {props.time}
+              </span>
+              {/* Touch marks done by swiping the row instead. */}
+              <span class="absolute top-1/2 -right-1.5 hidden -translate-y-1/2 not-touch:group-hover/notification:block">
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={t('notificationsInbox.markDone')}
+                  tooltip={t('notificationsInbox.markDone')}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    props.onDone();
+                  }}
+                >
+                  <CheckIcon class="size-4" />
+                </Button>
+              </span>
             </span>
             <Show when={isStack() && caretOnTop()}>
               <Button
@@ -154,24 +168,6 @@ export function NotificationRow(props: NotificationRowProps) {
                 />
               </Button>
             </Show>
-            {/* Mark done's slot, held on every row with a pointer so the button
-                shows in the same place on all of them; touch swipes instead. */}
-            <span class="relative hidden size-4 shrink-0 not-touch:block">
-              <span class="absolute top-1/2 left-1/2 hidden -translate-x-1/2 -translate-y-1/2 not-touch:group-hover/notification:block">
-                <Button
-                  size="icon-sm"
-                  variant="ghost"
-                  aria-label={t('notificationsInbox.markDone')}
-                  tooltip={t('notificationsInbox.markDone')}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    props.onDone();
-                  }}
-                >
-                  <CheckIcon class="size-4" />
-                </Button>
-              </span>
-            </span>
           </div>
           <Show when={props.what}>
             {(what) => (
@@ -220,12 +216,12 @@ export function NotificationRow(props: NotificationRowProps) {
               {props.actions}
             </div>
           </Show>
-          {/* Unfolded, the caret moves to the bottom of the stack's last
-              notification as Hide. */}
-          <Show when={isStack() && !caretOnTop() && !props.unfolded}>
+          {/* Unfolded, it reads Hide, as the one below the stack's last
+              notification does. */}
+          <Show when={isStack() && !caretOnTop()}>
             <StackFoldButton
               count={props.count}
-              unfolded={false}
+              unfolded={props.unfolded}
               onToggle={toggle}
             />
           </Show>
@@ -284,8 +280,9 @@ export function UnreadGutter(props: { unseen: boolean; nested?: boolean }) {
 }
 
 /**
- * A stack's caret at its bottom, with what it does: how many more there are
- * while it is folded, or Hide once it is open.
+ * A stack's caret, with what it does: how many more there are while it is
+ * folded, or Hide once it is open. Its row and, once open, its last
+ * notification show it.
  */
 export function StackFoldButton(props: {
   /** How many notifications the stack stands for. */

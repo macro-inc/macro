@@ -1218,6 +1218,17 @@ export type ClaudeSignInComplete = {
 };
 
 /**
+ * A failed computer route's body.
+ */
+export type ClaudeSignInError = {
+    code?: null | SignInRecoveryCode;
+    /**
+     * Safe to show, but not to branch on.
+     */
+    message: string;
+};
+
+/**
  * `POST /harnesses/{harness_id}/claude-sign-in` answer.
  */
 export type ClaudeSignInStarted = {
@@ -1310,27 +1321,23 @@ export type ConnectMcpServer = {
  */
 export type ConnectMcpServerResponse = {
     /**
-     * Whether the user already had this server before the call.
-     */
-    alreadyConnected: boolean;
-    /**
-     * Whether the server holds the user's sign-in.
-     */
-    authenticated: boolean;
-    /**
-     * Whether the server's tools are turned on.
+     * Whether its tools are turned on.
      */
     enabled: boolean;
     /**
-     * The server's display name.
+     * The connector's display name.
      */
     serverName: string;
+    /**
+     * Where the user stands with it.
+     */
+    status: ConnectorStatus;
     /**
      * What happened and what the user still has to do.
      */
     summary: string;
     /**
-     * The server's URL.
+     * The server's URL, normalized.
      */
     url: string;
 };
@@ -1428,6 +1435,11 @@ export type ConnectedToolSearch = {
      */
     unsearched: Array<ConnectedApp>;
 };
+
+/**
+ * Where a user stands with an app or server.
+ */
+export type ConnectorStatus = 'connected' | 'disabled' | 'needsReauth' | 'notConnected';
 
 /**
  * An advertised action, not a tool loaded into the current turn.
@@ -1781,9 +1793,7 @@ export type DiscoveryResult = {
      */
     app: DiscoveredApp;
     /**
-     * Whether this caller has an enabled connection. For an app that
-     * connects through its own MCP server, that connection is checked
-     * there, not in Pipedream.
+     * Whether this caller's connection to the app is usable now.
      */
     connected: boolean;
     operation: 'inspect';
@@ -3005,6 +3015,12 @@ export type SharePermissionV2 = {
     owner: string;
     teamShareAccessLevel?: null | AccessLevel;
 };
+
+/**
+ * How the user recovers from a failed Claude sign-in. The web dialog
+ * chooses its way out from this, never from the message.
+ */
+export type SignInRecoveryCode = 'invalid_code' | 'malformed_code' | 'sign_in_expired' | 'computer_unreachable' | 'computer_busy' | 'rollout_disabled';
 
 /**
  * The session the user is choosing to leave behind.
@@ -5054,15 +5070,17 @@ export type StartClaudeSignInData = {
 };
 
 export type StartClaudeSignInErrors = {
-    400: unknown;
-    403: unknown;
-    404: unknown;
-    409: unknown;
-    410: unknown;
-    422: unknown;
-    503: unknown;
-    504: unknown;
+    400: ClaudeSignInError;
+    403: ClaudeSignInError;
+    404: ClaudeSignInError;
+    409: ClaudeSignInError;
+    410: ClaudeSignInError;
+    422: ClaudeSignInError;
+    503: ClaudeSignInError;
+    504: ClaudeSignInError;
 };
+
+export type StartClaudeSignInError = StartClaudeSignInErrors[keyof StartClaudeSignInErrors];
 
 export type StartClaudeSignInResponses = {
     200: ClaudeSignInStarted;
@@ -5083,15 +5101,17 @@ export type CompleteClaudeSignInData = {
 };
 
 export type CompleteClaudeSignInErrors = {
-    400: unknown;
-    403: unknown;
-    404: unknown;
-    409: unknown;
-    410: unknown;
-    422: unknown;
-    503: unknown;
-    504: unknown;
+    400: ClaudeSignInError;
+    403: ClaudeSignInError;
+    404: ClaudeSignInError;
+    409: ClaudeSignInError;
+    410: ClaudeSignInError;
+    422: ClaudeSignInError;
+    503: ClaudeSignInError;
+    504: ClaudeSignInError;
 };
+
+export type CompleteClaudeSignInError = CompleteClaudeSignInErrors[keyof CompleteClaudeSignInErrors];
 
 export type CompleteClaudeSignInResponses = {
     200: ClaudeSignedIn;

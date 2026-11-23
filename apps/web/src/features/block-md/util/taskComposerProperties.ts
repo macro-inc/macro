@@ -379,10 +379,13 @@ export function createTaskComposerProperties(args: {
       return;
     setVisiblePropertyIds((current) => [...current, id]);
   };
+  // Start Date is set through the due date's picker, never added on its own.
   const writableProperties = () =>
-    availableDefinitions().map((definition) =>
-      toPropertyDefinitionDomain(definition, options().get(definition.id))
-    );
+    availableDefinitions()
+      .filter((definition) => definition.id !== SYSTEM_PROPERTY_IDS.START_DATE)
+      .map((definition) =>
+        toPropertyDefinitionDomain(definition, options().get(definition.id))
+      );
   const availableProperties = () =>
     writableProperties().filter(
       (definition) => !args.hiddenPropertyIds?.includes(definition.id)
@@ -406,9 +409,14 @@ export function createTaskComposerProperties(args: {
         args.values?.() ?? propertyValues,
         options()
       ),
+      ...(timedDraft(definition.id) ? { hasTime: true } : {}),
       options: options().get(definition.id),
     } as Property;
   };
+  function timedDraft(definitionId: string) {
+    const value = (args.values?.() ?? propertyValues)[definitionId];
+    return value?.valueType === 'DATE' && value.hasTime === true;
+  }
   const properties = (): Property[] => filterMap(visibleIds(), draftProperty);
   /**
    * The pills plus the properties the host edits with its own control. An
@@ -464,6 +472,7 @@ export function createTaskComposerProperties(args: {
     propertyValues,
     setPropertyValues,
     properties,
+    draftProperty,
     draftProperties,
     visiblePropertyIds,
     setVisiblePropertyIds,

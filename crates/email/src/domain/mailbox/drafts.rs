@@ -79,7 +79,7 @@ impl<R: DraftRepository, G: DraftGateway, M: DraftMaterializer> MailboxDraftServ
                             .release_draft(
                                 &lease,
                                 match &error {
-                                    MailboxError::Provider(e) => super::retry_seconds(e),
+                                    MailboxError::Provider(e) => super::retry::retry_seconds(e),
                                     _ => 30,
                                 },
                             )

@@ -44,7 +44,8 @@ macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
-opentelemetry-otlp = { workspace = true }
+# OTLP/HTTP for a computer's telemetry intake; rustls, as the guest has no OpenSSL.
+opentelemetry-otlp = { workspace = true, features = ["http-proto", "reqwest-blocking-client", "reqwest-rustls"] }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 nom = { workspace = true }

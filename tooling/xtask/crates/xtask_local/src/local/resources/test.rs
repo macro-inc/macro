@@ -89,6 +89,8 @@ fn slack_import_queues_match_deployment_and_have_redrive() {
                     main.name,
                     dlq.name,
                     macro_queues::EmailCrmPopulationQueue::LOCAL,
+                    macro_queues::LinkManagerQueue::LOCAL,
+                    macro_queues::LinkMaintenanceQueue::LOCAL,
                 ]
                 .contains(&queue.name)
             })
@@ -114,4 +116,24 @@ fn webhook_fifo_queue_uses_a_full_url_override() {
         queue.bindings[0].1.value(queue.name),
         "http://localstack:4566/000000000000/webhook-event-queue.fifo"
     );
+}
+
+/// A purge outlasts SQS's 30 s default before its first renewal at 60 s, so a
+/// local link-manager queue without the deployed 300 s runs it twice.
+#[test]
+fn link_manager_queues_keep_the_deployed_visibility_timeout() {
+    for name in [
+        macro_queues::LinkManagerQueue::LOCAL,
+        macro_queues::LinkMaintenanceQueue::LOCAL,
+    ] {
+        let queue = QUEUES
+            .iter()
+            .find(|queue| queue.name == name)
+            .expect("link-manager queue is created locally");
+        assert_eq!(
+            queue.attributes()[&aws_sdk_sqs::types::QueueAttributeName::VisibilityTimeout],
+            "300",
+            "{name}"
+        );
+    }
 }

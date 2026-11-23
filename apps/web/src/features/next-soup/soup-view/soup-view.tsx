@@ -41,7 +41,6 @@ import {
   CollapsedSoupViewTabs,
   MobileSoupViewTabs,
   SoupViewTabs,
-  useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { useIsHomeView } from '@app/features/next-soup/soup-view/use-is-home-view';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
@@ -593,7 +592,6 @@ interface SoupViewListProps {
     event?: KeyboardEvent | MouseEvent
   ) => boolean;
   uploadProjectId?: string;
-  disableTabHotkeys?: boolean;
   customScrollbarHidden?: boolean;
   scopeId?: string;
 }
@@ -614,7 +612,6 @@ export const SoupViewList = (props: SoupViewListProps) => (
       onOpenProject={props.onOpenProject}
       onOpenEntity={props.onOpenEntity}
       uploadProjectId={props.uploadProjectId}
-      disableTabHotkeys={props.disableTabHotkeys}
       timestamp={props.timestamp}
       navigationKey={props.navigationKey}
       emptyState={props.emptyState}
@@ -787,7 +784,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
-  const { applyTabPreset } = useApplyPreset();
 
   // Resolve imported components at mount, not during module evaluation: the
   // legacy block registry can import Soup while the entity barrel is loading.
@@ -814,12 +810,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     splitHandle: panel.handle,
     virtualizerHandle,
     currentView,
-    activeTab,
-    applyTabPreset,
     fetchNextGroupPage,
     onOpenProject: props.onOpenProject,
     onOpenEntity: props.onOpenEntity,
-    disableTabHotkeys: props.disableTabHotkeys,
   });
 
   // Create markDone action for swipe/click handlers

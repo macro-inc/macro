@@ -3,7 +3,7 @@ import { useOpenAgentDm } from '@app/features/agent-dms/open-agent-dm';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -46,7 +46,7 @@ import { createBotAvatarUpload } from './createBotAvatarUpload';
 
 export function BotDetail(props: { botId: string; onBack: () => void }) {
   const agentDm = ENABLE_AGENT_DMS ? useOpenAgentDm() : undefined;
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamOwner = useIsTeamOwner();
@@ -95,11 +95,12 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
   );
 
   const assignedChannels = createMemo(() => {
-    const channelsById = channelsContext.channelsById();
     return (botChannelsQuery.data ?? []).map((channel) => ({
       id: channel.channel_id,
       name:
-        channelsById[channel.channel_id]?.name?.trim() ||
+        loadedChannel(
+          channelDirectory.lookup(channel.channel_id)
+        )?.name?.trim() ||
         channel.name?.trim() ||
         'Unnamed channel',
     }));

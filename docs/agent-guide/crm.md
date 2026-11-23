@@ -245,6 +245,9 @@ matches are left unchanged. CRM settings and domain admission still apply.
 
 Company and contact headers group `Copy link` separately from the side-panel toggle.
 Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+With the keyboard on the record pane (as a record opens, with nothing focused,
+or after a click on its text), Tab, Shift+Tab and the number keys move along
+them.
 On phones and tablets, the current section appears as a labeled header island
 with a caret. When the host collapses it, the section icon and caret keep its
 accessible label. Embedded phone headers put the switcher below the breadcrumb
@@ -524,8 +527,8 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
-Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, or **Lost**, independent
-of Stage. Edit it from the table, a board card, a record's Pipelines card, or
+Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, **Lost**, or **Declined**
+(a deal the team turned down: closed, but not lost), independent of Stage. Edit it from the table, a board card, a record's Pipelines card, or
 Add deal; select it in filters or board grouping like any other select. New
 entries start Open. Existing exact “Closed won” and “Closed lost” stage labels
 seed the outcome once, with the stages themselves retained.
@@ -620,7 +623,7 @@ Rows match companies by domain and contacts by email, creating missing ones
 pipeline columns of the same name, adding missing custom select options. Monetary
 amounts and currency codes occupy separate CSV columns; omitted currencies
 default to USD, and unsupported currency or Outcome labels refuse the affected
-row. Outcome exports and imports as Open, Won or Lost. A record
+row. Outcome exports and imports as Open, Won, Lost or Declined. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
@@ -673,9 +676,11 @@ and adds only missing rows. A pipeline's own **Import CSV** also takes a
 Companies export. Use preview
 and cancel for browser checks against hosted dev data.
 
-`CRM settings` shows the settings in the Customers pane, in place of the open
-list, pipeline, or record, and highlights its sidebar item. The back arrow
-(**Close CRM settings**) returns to that same list, pipeline, or record; picking
+The sidebar's **Settings** (named `CRM settings`, as Calendar's sidebar
+**Settings** is named `Calendar settings`) shows CRM settings in the Customers
+pane under a **Settings** title, in place of the open list, pipeline, or record,
+and highlights its sidebar item. The back arrow (**Close settings**) returns to
+that same list, pipeline, or record; picking
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
@@ -838,6 +843,12 @@ It changes in place; for owners and admins it shows on and fixed, with the
 reason, and one note under the list says they always have CRM access. A member
 whose access is off reads **No CRM access** on their row's summary line.
 A failed save keeps the previous state and can be retried; members do not see these controls.
+CRM settings (Settings > CRM, and the CRM sidebar's settings entry) opens with
+**Who can use CRM**, the same switch for every person Members shows as a person
+row, in the same order, each named `CRM access for <name>`. Owners and admins show
+it on and disabled, with **Owner · Always has CRM access** or **Admin · Always has
+CRM access** on their row. Both places write the same team setting, so a change in
+one shows in the other; members, and everyone while the flag is off, see no section.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,
 drop retired snapshots when the cache generation changes. A CRM deep

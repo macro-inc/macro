@@ -154,7 +154,7 @@ pub(super) async fn purge_unshared(api: &MacroApi, unshared: &mut Vec<EntityId>)
     *unshared = kept;
 }
 
-/// Deletes a document for good. A trashed document stays in search.
+/// Deletes a document for good. A trashed document stays in the index.
 pub(super) async fn purge_document(api: &MacroApi, id: EntityId) -> Result<(), ApiError> {
     api.send_done(
         Call::new(

@@ -54,12 +54,13 @@ import { fixtureSearchFields } from './search-extractions-fixture';
 import '@fontsource-variable/inter';
 import '../../../index.css';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import { createPersonList } from '@core/context/quickAccess/person-list';
 import type { QuickAccessContextValue } from '@core/context/quickAccess/types';
 import { UserContextProvider } from '@core/context/user';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, Show } from 'solid-js';
 import { DraftEditor } from '../components/draft-editor';
@@ -711,7 +712,9 @@ export function UniversalInputFixture(
       <UserContextProvider>
         <QuickAccessContextProvider value={quickAccess}>
           <EmailLinksContextProvider>
-            <ChannelsContextProvider>
+            <ChannelDirectoryProvider
+              directory={staticChannelDirectory(() => [])}
+            >
               <main
                 ref={(element) => {
                   if (params.has('mobile-search'))
@@ -872,7 +875,7 @@ export function UniversalInputFixture(
                   </div>
                 </Show>
               </main>
-            </ChannelsContextProvider>
+            </ChannelDirectoryProvider>
           </EmailLinksContextProvider>
         </QuickAccessContextProvider>
       </UserContextProvider>

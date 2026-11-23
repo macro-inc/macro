@@ -150,6 +150,9 @@ through the same service.
   delivery; keep tombstone checks when changing either delivery boundary.
 - Channel join requests count in both top-level and channel-feed notification
   filters; keep these filters aligned with the web notification classifier.
+  Channel invites count in the top-level filter only: the notifications inbox
+  lists an invite on its channel's top-level row, so Chat's unread edge must
+  show it too, while Home's channel feed leaves invites out.
 - A `calendar_event_join_request` insert is skipped by a `notification` trigger
   when its event has gone or been cancelled or its request is no longer pending,
   since queued ingress can run after that cleanup. `create_notification` reads
@@ -173,6 +176,10 @@ through the same service.
   `fix(notification): stop recording notification payloads` history).
 - Android call pushes carry W3C trace context inside their existing JSON offer;
   keep propagation in the outbound SNS adapter, with no baggage or payload logging.
+- Ingress queue messages carry the sender's `traceparent`/`tracestate`
+  (`IngressQueueMessage.trace_context`, `src/trace_context.rs`); the worker's
+  `notification.ingress.process` span links to it, keeping its own parent.
+  Never forward baggage or put payloads on that span.
 - iOS egress binds `recipientId` to each receiving account; channel pushes carry
   an optional typed `navigation` destination, with `threadId: null` for a root
   message. Preserve older payloads that omit these fields.

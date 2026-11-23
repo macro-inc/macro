@@ -17,6 +17,11 @@ use crate::config::{HarnessCredentials, MacroApi};
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 const HARNESS_ACTING_USER_HEADER: &str = "x-macro-harness-for-macro-user-id";
 
+/// How long the service has to answer one call, so a request it accepts and
+/// never answers fails instead of holding up the trigger stream that awaits it.
+/// Generous: a control call can wait on the session's runtime handshake.
+const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// A failure calling the agent-harness service.
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
@@ -104,9 +109,11 @@ impl HarnessApi {
         let response = self
             .http
             .post(format!("{}/agent-sessions", self.base))
+            .headers(crate::telemetry::trace_headers(None))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, acting_user.as_ref())
             .json(request)
+            .timeout(CALL_TIMEOUT)
             .send()
             .await?;
         if response.status() == StatusCode::CONFLICT {
@@ -147,6 +154,7 @@ impl HarnessApi {
         let response = self
             .http
             .post(format!("{}/agent-sessions/{session}/control", self.base))
+            .headers(crate::telemetry::trace_headers(None))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
             .json(&ControlRequest {
@@ -155,6 +163,7 @@ impl HarnessApi {
                 client_id: None,
                 action,
             })
+            .timeout(CALL_TIMEOUT)
             .send()
             .await?;
         refuse_errors(response).await?;

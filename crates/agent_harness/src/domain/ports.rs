@@ -174,6 +174,9 @@ pub struct RuntimeAccepts {
     pub apply_agent: bool,
 }
 
+/// A harness and one of its runtime connections.
+pub type HarnessConnection = (HarnessId, RuntimeConnectionId);
+
 /// Durable attach/detach bookkeeping for harness runtime connections.
 ///
 /// The registry itself is in-process liveness; this is what lets the rest of
@@ -200,11 +203,13 @@ pub trait HarnessPresence: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
 
     /// These connections are still held by this process, so a crash of this
-    /// process stops vouching for them.
+    /// process stops vouching for them. Returns the ones whose rows were
+    /// missing and had to be written again: one that closed after `live` was
+    /// listed is among them, and the caller closes it again.
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>>;
 }
 
 /// Resolves the runtime configuration for a bot that may receive agent

@@ -6,6 +6,7 @@ import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { make, pipe, toPromise } from 'wonka';
 import type {
   ChannelListItemFieldsFragment,
   ChannelListNotificationFieldsFragment,
@@ -181,6 +182,67 @@ it('preserves initiative identity, properties, and metadata separately from fold
       updatedAt: '2026-09-26',
     },
   });
+});
+
+it('keeps whether a date property has its time of day set', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const property = (id: string, dateValue: string, dateHasTime: boolean) => ({
+    id,
+    propertyDefinitionId: id,
+    displayName: id,
+    dataType: 'DATE' as const,
+    isMultiSelect: false,
+    specificEntityType: null,
+    isSystem: true,
+    isMetadata: false,
+    value: {
+      __typename: 'GraphqlDatePropertyValue' as const,
+      dateValue,
+      dateHasTime,
+    },
+  });
+  const mapped = mapGraphqlSoupItem({
+    __typename: 'GraphqlSoupInitiative',
+    appearance: null,
+    id: 'initiative',
+    entityType: 'INITIATIVE',
+    displayName: 'Launch',
+    metadata: {
+      ownerId: 'owner',
+      createdAt: '2026-09-01',
+      updatedAt: '2026-09-26',
+      viewedAt: null,
+    },
+    viewerPermission: {
+      __typename: 'GraphqlAccessLevelPermission',
+      accessLevel: 'EDIT',
+    },
+    properties: [
+      property('start', '2026-09-28T14:30:00Z', true),
+      property('due', '2026-09-30T00:00:00Z', false),
+    ],
+    notifications: [],
+    isFavorited: false,
+    frecencyScore: null,
+    cacheProjection: null,
+  });
+
+  expect(mapped).toMatchObject({
+    data: {
+      properties: [
+        {
+          value: {
+            type: 'Date',
+            value: '2026-09-28T14:30:00Z',
+            has_time: true,
+          },
+        },
+        { value: { type: 'Date', value: '2026-09-30T00:00:00Z' } },
+      ],
+    },
+  });
+  if (mapped?.tag !== 'initiative') throw new Error('expected an initiative');
+  expect(mapped.data.properties[1]?.value).not.toHaveProperty('has_time');
 });
 
 it('skips a Soup item type from a newer server', async () => {
@@ -378,6 +440,7 @@ const mocks = vi.hoisted(() => {
     realtimeClient,
     replaceSubscriptions,
     initializeCrmCacheOwner: vi.fn(async () => {}),
+    cachedQuery: vi.fn(),
     platformFetch,
     toastFailure,
     telemetryError: vi.fn(),
@@ -481,6 +544,7 @@ vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
+  HYDRATE_ONLY_CONTEXT_KEY: 'normalizedCacheHydrateOnly',
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
 vi.mock('@macro-inc/observability', async (importOriginal) => {
@@ -529,6 +593,9 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./channel-membership', () => ({
+  channelMembershipReceiptExchange: () => ({ kind: 'membership-receipt' }),
+}));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
 }));
@@ -567,6 +634,11 @@ vi.mock('@urql/core', () => ({
       expect(receiptIndex).toBeGreaterThanOrEqual(0);
       expect(receiptIndex).toBeLessThan(subscriptionIndex);
       if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+      const membershipIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'membership-receipt'
+      );
+      expect(membershipIndex).toBeGreaterThan(receiptIndex);
+      expect(membershipIndex).toBeLessThan(subscriptionIndex);
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
@@ -577,6 +649,7 @@ vi.mock('@urql/core', () => ({
     const host = cacheExchange.host;
     return {
       kind: 'cached',
+      query: (...args: unknown[]) => mocks.cachedQuery(...args),
       mutation: () => ({
         toPromise: async () => {
           await host.enqueueOptimisticMutation();
@@ -601,12 +674,15 @@ it('maps the unread and mention aliases without pretending either is the full no
     ownerId: 'owner',
     organizationId: null,
     channelTeamId: null,
+    autoJoinTeam: false,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
     viewedAt: null,
     interactedAt: null,
     isParticipant: true,
     participants: [],
+    botParticipants: [],
+    agentDm: null,
     latestMessage: null,
     latestNonThreadMessage: null,
     cacheProjection: null,
@@ -1441,6 +1517,31 @@ describe('GraphQL Soup browser cache session gate', () => {
       readers.dispose();
     }
   );
+
+  it('leaves a hydration request once its signal aborts', async () => {
+    let left = false;
+    // Like urql's, the request ends only when its subscriber leaves: urql
+    // replaces a fetch signal with its own.
+    const held = make<never>(() => () => {
+      left = true;
+    });
+    mocks.cachedQuery.mockReturnValue(
+      Object.assign(held, { toPromise: () => pipe(held, toPromise) })
+    );
+    const soup = await import('./graphql-soup');
+    const controller = new AbortController();
+
+    const hydrated = soup.hydrateGraphqlSoup(
+      parse('query Page { user { id } }'),
+      {},
+      { signal: controller.signal }
+    );
+    const settled = expect(hydrated).rejects.toThrow('deadline');
+    controller.abort(new Error('deadline'));
+
+    await vi.waitFor(() => expect(left).toBe(true));
+    await settled;
+  });
 
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();

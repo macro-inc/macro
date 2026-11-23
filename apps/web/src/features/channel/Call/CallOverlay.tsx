@@ -107,16 +107,21 @@ export function CallOverlay(props: {
   const sharedWithTeam = () =>
     props.sharedWithTeam ?? callCtx.isSharedWithTeam();
   let panelButton: HTMLButtonElement | undefined;
+  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
+  const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
+  // Below the wide breakpoint the desktop panel covers the stage, so an
+  // automatic open would hide the participants (e.g. a call in a narrow
+  // split). Phone hosts decide for themselves whether to open it.
   const panel = createCallPanel(
     () => props.discussion?.opensByDefault() ?? false,
-    () => panelButton?.focus()
+    () => panelButton?.focus(),
+    () => isMobile() || widePanel()
   );
   const panelOpen = () => panel.state.open;
   const panelMounted = () => panel.state.mounted;
   const selectedTab = () => panel.state.tab;
   const focusChatOnOpen = () => panel.state.focusOnOpen;
   const setSelectedTab = panel.selectTab;
-  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
   const [entranceReady, setEntranceReady] = createSignal(false);
   createEffect(
     on(
@@ -133,7 +138,6 @@ export function CallOverlay(props: {
   const [panelWidth, setPanelWidth] = createSignal(DEFAULT_SIDE_PANEL_WIDTH);
   const [sidebarMount, setSidebarMount] = createSignal<HTMLDivElement>();
   const [overlayMount, setOverlayMount] = createSignal<HTMLDivElement>();
-  const widePanel = () => !isMobile() && (resizeContext()?.size() ?? 0) >= 800;
   const stageWidth = () =>
     (resizeContext()?.size() ?? 0) -
     (panelOpen() && widePanel() ? panelWidth() + 12 : 0);
@@ -888,6 +892,7 @@ export function CallOverlay(props: {
               sidebarMount={widePanel() ? sidebarMount() : undefined}
               overlayMount={overlayMount()}
               returnFocus={panelButton}
+              onInteract={panel.claim}
             >
               <Show when={canChat() && props.discussion}>
                 {(discussion) =>

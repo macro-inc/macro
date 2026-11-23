@@ -565,3 +565,135 @@ async fn undo_reverses_exactly_one_done() {
             .all(|change| matches!(change, WorkFeedChange::Upserted(_)))
     );
 }
+
+#[tokio::test]
+async fn admitting_a_new_notification_probes_home_without_snippets() {
+    let listed = entity(EntityType::Document, 1);
+    let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
+
+    assert!(
+        admits_new_notification(&source, &viewer(), listed.clone())
+            .await
+            .unwrap()
+    );
+
+    let requests = source.requests.lock().unwrap();
+    let scope = WorkFeedScope {
+        mode: WorkFeedMode::Attention,
+        types: Vec::new(),
+        include_snippets: false,
+    };
+    assert_eq!(requests[0].only, Some(vec![listed]));
+    assert!(requests[0].assume_attention);
+    assert!(!requests[0].own_work);
+    assert_eq!(requests[0].types, policy::candidate_types(&[]));
+    assert_eq!(
+        format!("{:?}", requests[0].filter),
+        format!("{:?}", policy::signal_filter(&viewer().user, &scope))
+    );
+}
+
+/// The store each candidate read went to, in order, clearing the record.
+fn take_reads(source: &FakeSource<&'static str>) -> Vec<CandidateRead> {
+    source
+        .requests
+        .lock()
+        .unwrap()
+        .drain(..)
+        .map(|request| request.read)
+        .collect()
+}
+
+#[tokio::test]
+async fn recomputes_and_writes_read_committed_state_and_pages_read_the_replica() {
+    let harness = harness(
+        vec![candidate(
+            "doc",
+            entity(EntityType::Document, DOC),
+            Some(5),
+            Some(9),
+        )],
+        vec![doc_comment(1, DOC, 0xA0, 0xA0, 5)],
+    );
+    let doc = key(entity(EntityType::Document, DOC));
+
+    harness.service.page(viewer(), query()).await.unwrap();
+    let reads = take_reads(&harness.source);
+    assert!(!reads.is_empty());
+    assert!(reads.iter().all(|read| *read == CandidateRead::Replica));
+
+    // A live recompute answers a change its client already holds from a
+    // primary-hydrated Soup patch.
+    harness
+        .service
+        .recompute(viewer(), query().scope, vec![doc.clone()])
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![WorkFeedDoneTarget {
+                key: doc,
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+    // Done acknowledges what the viewer observed, which a live recompute may
+    // have shown them before the replica had it.
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+
+    // Undo's reply is a recompute of what the viewer just wrote.
+    let receipt = DoneReceipt::decode(&outcome.receipt.encode()).unwrap();
+    harness
+        .service
+        .undo_done(viewer(), query().scope, receipt)
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+}
+
+#[tokio::test]
+async fn done_acknowledges_an_item_the_replica_has_not_caught_up_with() {
+    let harness = harness(
+        vec![candidate(
+            "doc",
+            entity(EntityType::Document, DOC),
+            Some(5),
+            None,
+        )],
+        vec![doc_comment(1, DOC, 0xA0, 0xA0, 5)],
+    );
+    // A live recompute, which reads the primary, showed the viewer this item
+    // before the replica had it.
+    harness
+        .source
+        .unreplicated
+        .lock()
+        .unwrap()
+        .push(entity(EntityType::Document, DOC));
+    let doc = key(entity(EntityType::Document, DOC));
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![WorkFeedDoneTarget {
+                key: doc,
+                revision: Some(FeedRevision {
+                    attention_through: Some(at(5)),
+                }),
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(1)]);
+    assert_eq!(
+        harness.notifications.state_of(uuid(1)),
+        NotificationState::Done
+    );
+}

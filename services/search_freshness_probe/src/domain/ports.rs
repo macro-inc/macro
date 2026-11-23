@@ -118,7 +118,7 @@ pub trait CreatedWrites: Send {
         token: &Token,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Removes the entity for good, not to a trash that search still shows.
+    /// Removes the entity for good, not to the Trash, which the index keeps.
     /// An entity already gone counts as deleted.
     fn delete(&mut self, id: EntityId) -> impl Future<Output = Result<(), Self::Err>> + Send;
 

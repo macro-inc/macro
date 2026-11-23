@@ -114,11 +114,17 @@ call carries the wake id as `X-Macro-Agent-Session-Id`.
 
 `@macro-inc/observability/server` exports OTLP when the computer sets the
 standard `OTEL_EXPORTER_OTLP_*` variables. The start is an `agent.start`
-span from the process's start to a healthy boot, with a child per step, in
-the computer's setup trace when the image passes `MACRO_SETUP_TRACEPARENT`;
-wakes stay traces of their own. A wake is an `agent.wake` span
-(event, wake id, outcome, cost, turns); each script is an
+span from the image's `start-agent` (its steps, which it times in
+`MACRO_LAUNCH_TIMINGS`, are `agent.launch.*`) to a healthy boot, with a
+child per step, in the computer's setup trace when the image passes
+`MACRO_SETUP_TRACEPARENT`; wakes stay traces of their own. A wake is an
+`agent.wake` span (event, wake id, outcome, cost, turns); each script is an
 `agent.capability_script` span whose context reaches the script's process.
+Each message the listener screens is a `chat.screen` span (verdict and each
+probability by question, never the text), and each drop of the events
+stream a `chat.events.reconnect` span from the drop until the stream reopens
+(at most a minute, `chat.events.reopened` false if it is still down), with the
+process's running count.
 The agent's account appears only as a hash.
 
 ## Defaults, for review
