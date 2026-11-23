@@ -7,6 +7,7 @@
 import type { LoosenedOperation } from './loosenedOperation';
 
 /**
- * For `would_loosen`: the operations the change would have loosened.
+ * For `would_loosen` and `follows_source`: the operations the change
+would have loosened.
  */
 export type ToolPermissionErrorOperations = LoosenedOperation[] | null;
