@@ -298,13 +298,7 @@ unified diff with **Back to conversation**; returning preserves the unsent draft
 
 The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
-draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
-Suggested models sit above Built-in and Your agents; All models opens a pushed
-page in the same sheet with Back, search, and the remaining provider catalog.
-Suggested models never repeat there. Reasoning effort and Speed appear below the list when the
-selected runtime and model support them. Tap an option to set it, or Back to
-return to the list. An agent without access offers its existing connection
-flow. Search filters models and agents without changing the current selection.
+draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent (Suggested before any picks), and More models. More models pushes a complete provider catalog in the same sheet. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection flow.
 
 The floating mobile composer appears only on **Agents**; Home and other views
 keep their New action or their own reply/comment composer.
@@ -322,9 +316,8 @@ The expanded composer shows icon-only Chat and Code tabs above the island.
 Code shows a content-width repository-and-branch pill beside the tabs. The
 repository and branch each open their own sheet; selecting a new repository
 resets the starting branch. A paired local runtime locks its branch to main.
-The composer stays expanded while repository, branch, or model sheets are open.
-The model pill shows only the selected model or agent name; reasoning effort and
-Speed live in the model sheet. Dismissing that sheet restores editor focus.
+The composer stays expanded while repository, branch, or model overlays are open.
+The model pill shows the selected name, available Thinking level, and nonstandard speed glyph. Thinking and Speed live on the card; its name opens the model sheet. Dismissing restores editor focus.
 Tapping an agent bubble selects its agent and focuses the composer during the
 tap, as required for the iOS keyboard; changing Chat or Code afterward remains possible.
 Outside taps collapse the island. The touch keyboard's Enter inserts a newline;
@@ -644,29 +637,9 @@ the shimmer.
   row. Focusing a session input on a phone also expands it. Height changes animate
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
-  Desktop model selectors always show the selected model name alongside the icon.
-  Saved and coding agents show their own icon and name plus the model name on desktop, without a
-  second model icon; phones use an icon-only picker. Routine configuration
-  keeps the saved model name visible in its picker, including unavailable models.
-- The agent dropdown includes saved agents of the selected mode regardless of
-  runtime, plus Cursor in Code mode.
-  Macro's models use the same searchable catalog as running sessions:
-  **Suggested** lists the runtime's available frontier models. The **All models**
-  submenu groups the remaining models by provider, excluding every Suggested ID
-  from both browsing and search and omitting empty provider groups. Your agents
-  follow Suggested and All models in the root menu. Choosing a model
-  does not reorder the sections. Root search includes all models and agent names. The compact borderless search
-  field receives focus when the selector opens or reopens. Its opaque header
-  meets the top of the scroll area so rows cannot show through above it.
-  All models focuses its search on hover or keyboard opening. ArrowDown/ArrowUp
-  move from search to the first/last matching model; ArrowLeft returns to the
-  parent trigger. Subsequent model navigation keeps focus on the chosen row.
-  **Built-in**, **Your agents**, and **Needs connection** groups follow when
-  they have entries. Each agent row shows its runtime and model, or its setup
-  action/availability reason. **Create agent** uses the shared rounded pill
-  button at the bottom right with a subtle background. Models have readable
-  names (for example, **Sonnet 5.5**) and provider or model icons aligned with the
-  agent icons. The in-memory catalog leads with **Auto**, where Jev sorts each
+  The unified trigger shows its provider or agent icon and name, the available Thinking level, and an accent speed glyph for Fast or Ultrafast. Routine configuration retains its model override label.
+- Tap the model trigger to open a card 6px above it. Tap the name to reach search, recent agent bubbles, Auto, Recent models, and More models. Before any model picks, Suggested shows the runtime's frontier list. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet, including Suggested models. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns one page, then dismisses the card. On desktop, picking returns to the card; on phone it closes the sheet. A custom agent keeps a name-only card and its model overrides remain available in the selection list.
+  The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
   Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
   models; Kimi, DeepSeek, Muse, GLM, Qwen, MiniMax, GPT OSS, and Nemotron
@@ -689,19 +662,15 @@ the shimmer.
   only to Cursor sessions by the create-session API.
   The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
-  Hover an agent (or use the right arrow key) to open its model submenu, with
-  the searchable Settings catalog, provider icons, and scrollable provider sections.
-  The submenu focuses the `Search models` field so you can type immediately.
-  Clicking an agent directly, or pressing Enter/Space on its focused row, uses
-  its default and clears any previous model override. Right Arrow still opens
-  the model submenu; choosing a submenu model selects both the agent and that
-  model. Escape dismisses the picker and restores focus to its trigger.
-  A checkmark identifies the selected model,
-  including when it is the agent’s configured default; there is no separate default row.
+  Tap the trigger to open the card, then its name to select an agent or model.
+  See all opens the complete grouped agent list. Selecting an agent uses its
+  default and clears a previous model override. A selected multi-model agent
+  retains a Model group in the selection list for one-shot overrides.
+  A check identifies the selected model, including a configured default.
+  Escape returns one selection page, then dismisses the card.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Machines.
-  An agent whose paired machine is away is greyed out, carries an **Offline**
-  badge, and offers **Reconnect machine** instead of a model submenu; the same
-  badge appears in the `@` menu, where offline agents cannot be mentioned at all
+  An unavailable paired machine retains its connection action and Offline badge.
+  The same badge appears in the `@` menu, where offline agents cannot be mentioned at all
   (clicking or pressing Enter leaves the menu open and inserts nothing).
   The built-in sandbox and paired macrod machines are not offered here.
 - With the `enable-agent-updates` flag, the New conversation page shows a stack
@@ -781,21 +750,20 @@ the shimmer.
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
-  a model selected from its submenu overrides that default for the next send
+  a model selected from its selection list overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
   update the saved agent; configure persistent defaults in the agent editor.
-  Inline and standalone sessions use the same unified agent/model selector as
+  Inline and standalone sessions use the same card-first agent/model selector as
   Home and new conversations. The session host applies model and effort changes;
   new-chat preferences do not overwrite existing session configuration.
-  **Suggested** models and custom agents share the root list. **All models** retains
-  the provider catalog submenu on desktop and its pushed page on phone, excluding
-  Suggested choices even during search. Universal-input AI drafts and routine agent/model targets
-  use the same selector, but omit effort and speed because those hosts store only
-  an agent/model target.
-- **Reasoning effort** and **Speed** live inside that selector, as desktop submenus
-  and phone pushed pages. Rows with fewer than two advertised choices stay hidden.
-  New conversations retain per-user, per-runtime/model effort preferences across
-  sends, mode switches, and reloads. Existing sessions retain their own setting.
+  Universal-input AI drafts and routine agent/model targets use the same selector,
+  but have no editable Thinking or Speed because those hosts store only a target.
+- **Thinking** uses an accent slider in the card. Pointer choices commit on release;
+  arrow keys, Home, and End commit immediately. Models with at most one effort
+  option retain a disabled-looking slot labeled **Not available for this model**.
+  Agent and Auto cards contain only the name row. **Speed** opens a small menu
+  above its button, not a sheet; Standard is ghost, Fast shows a bolt, and
+  Ultrafast shows a rocket only when advertised by the selected model.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.
@@ -892,13 +860,12 @@ the shimmer.
   `Background command "Run tests" completed (exit code 0)`, red when it failed,
   never a prompt bubble of `<task-notification>` XML. Claude still receives the
   full report.
-  For Codex, open the current model's submenu to select **Reasoning effort**.
-  Choices come from the installed Codex catalog; the selected effort is confirmed
-  from the native session and shown beside the model. Local Herdr changes and
-  `/effort` also update this menu. The effort submenu appears once the native
-  session starts on the first prompt, before its first reply; a startup screen
-  that temporarily hides the footer is retried during the turn. The menu does not list
-  installed native skills or session-switching commands such as `/resume`.
+  Native Codex reports effort through its installed catalog and confirms changes
+  through the session protocol. Local Herdr changes and `/effort` update that
+  reported state. Availability arrives after the first prompt; a startup screen
+  temporarily hiding the footer is retried during the turn. Agent cards remain
+  name-only; model cards expose advertised effort through Thinking. The selector
+  does not list native skills or session-switching commands such as `/resume`.
   For a paired machine's agent configured as a **Chat agent**, mentioning it posts a
   pending reply in the channel thread. Once the turn completes, that same reply
   shows the answer (or a stopped/failed result), even if the session view was
@@ -2528,18 +2495,15 @@ There is no periodic PR lookup polling.
 
 ### Agent reasoning effort
 
-The Agents composers use one model selector for models, custom agents, reasoning
-effort, and speed. The desktop pill shows the provider or agent avatar, bounded
-name, available effort, and selected speed glyph. Its shared tooltip gives the
-full choice. Search filters model labels and agent names; All models opens the
-catalog. Selecting an agent keeps the desktop menu open; selecting a model or
-option closes it. In the phone sheet, search and pinned settings remain above
-and below the scrolling list. Effort and speed open pushed views; choosing an
-option returns to the list, while model and agent choices close the sheet and
-restore editor focus. One-choice settings remain hidden.
-
-Only the selected runtime's advertised effort choices appear. A model without
-effort support remains selectable. Default keeps the model's existing behavior.
+The shared card-first selector controls models, agents, Thinking, and speed.
+Its trigger shows the selected name, available Thinking level, and nonstandard
+speed glyph. Desktop model picking returns to the card; phone model picking
+closes the sheet. Back returns to the card without changing selection.
+Thinking and Speed changes leave the card open. The slider commits on release
+or each navigation key. Models without adjustable thinking keep the no-thinking
+slot; agents and Auto have only a name row. Search covers all models and agents.
+Recent stores five model IDs per user; More models opens the complete provider
+catalog. See all retains the existing agent availability and connection groups.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available
@@ -2711,7 +2675,7 @@ choose a vision model or start a conversation without images.
 
 ## Priority tier
 
-The Agents selector's Speed submenu uses the in-memory runtime's advertised
+The Agents card's Speed menu uses the in-memory runtime's advertised
 choices. It labels `standard` Standard, `priority` or `fast` Fast (2× usage),
 and `ultrafast` Ultrafast (6× usage). It hides when only one tier is offered.
 These labels do not change the saved wire value. A model name never implies
@@ -2830,10 +2794,10 @@ presentation, and typing during a save is `bunx playwright test --config src/fea
 (from `apps/web`).
 ## Agent reasoning effort
 
-Open the unified Agents selector to choose an advertised model and its
-Reasoning effort or Speed options. Desktop uses submenus; phone uses pushed
-views in one sheet. Unsupported settings have no row. See [effort capabilities](../architecture/agent-effort.md)
-for the harness contracts.
+Open the unified Agents card to change Thinking or Speed, or press its model
+name to open the model list. The complete card, list, keyboard, and phone-sheet
+contract is described in [Agent reasoning effort](#agent-reasoning-effort).
+See [effort capabilities](../architecture/agent-effort.md) for harness contracts.
 
 In an open session, choosing a different model's effort confirms the model first,
 then validates and applies effort. Wait for the selector to become available

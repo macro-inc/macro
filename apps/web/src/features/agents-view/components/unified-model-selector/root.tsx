@@ -18,6 +18,8 @@ export type UnifiedModelSelectorState = {
   agents?: RosterAgent[];
   /** Model-only target editors show the override alongside the selected agent. */
   showModelLabel?: boolean;
+  recentModelIds?: readonly string[];
+  recentAgentIds?: readonly string[];
   loading?: boolean;
   disabled?: boolean;
   effort?: SelectSessionConfigOption;

@@ -499,6 +499,18 @@ export function NewChatPage(props: {
     if (selection) rememberEffort(selection);
   };
 
+  // A fresh model pick starts from its advertised defaults, not a remembered
+  // setting for a previous visit. Reopening the card never resets a setting.
+  const selectPickerModel = (agent: RosterAgent, model: string) => {
+    selectAgent(agent, model);
+    const harness =
+      agent.harness === 'macro-inmem' ? 'in-memory' : agent.harness;
+    if (harness === 'in-memory' || harness === 'cursor') {
+      preferredEffort.forget(JSON.stringify({ harness, model }));
+    }
+    setPreferredSpeed('standard');
+  };
+
   // An @mentioned agent becomes the active one, switching to its mode, as
   // mentioning it in a channel starts it; the mention stays in the prompt.
   // An unavailable one is selected too, so the send is blocked with its
@@ -595,13 +607,14 @@ export function NewChatPage(props: {
             : undefined,
         onModel: (model) => {
           const agent = selected();
-          if (agent) selectAgent(agent, model);
+          if (agent) selectPickerModel(agent, model);
         },
         onSuggestedModel: (model) => {
           const agent =
             options().find((option) => option.id === MACRO_PERSONA_ID) ??
             selected();
-          if (agent && !agent.unavailableReason) selectAgent(agent, model);
+          if (agent && !agent.unavailableReason)
+            selectPickerModel(agent, model);
         },
         onAgent: (agent) => selectAgent(agent),
         onConnect: connect,

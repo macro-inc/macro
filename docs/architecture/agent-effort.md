@@ -97,19 +97,18 @@ an external harness result.
 
 ## Model menu interaction
 
-The Agents new-chat and running-session composers use one model selector. Its desktop
-menu shows Reasoning effort as a submenu only when the selected runtime offers
-multiple values; its phone sheet pushes an effort view and returns to the list
-after a choice. The selected model and effort appear in the bounded trigger,
-with the full selection in a shared tooltip. Model selection remains available
-when capability discovery is pending or effort is unsupported. The separate
-effort control remains available to unrelated consumers.
+The Agents new-chat and running-session composers use one card-first selector.
+Model cards expose Thinking through the shared Slider, with pointer commits on
+release and immediate keyboard commits. Models with at most one effort option
+retain the no-thinking slot. Agent and Auto cards contain only their name row.
+The name opens in-place desktop selection pages or a phone sheet. Existing
+EffortSelector and legacy pickers remain unwired for reference.
 
-The Speed submenu uses only the in-memory runtime's advertised values. The
-presentation maps `standard` to Standard, `priority` and `fast` to Fast, and
-`ultrafast` to Ultrafast without changing the selected wire value or the shared
-preference. A single offered choice hides the submenu; no model-name inference
-creates an Ultrafast option.
+Speed uses a small Dropdown menu on both platforms, not a phone page. Only
+advertised in-memory tiers are offered: Standard, Fast (`priority` or `fast`),
+and Ultrafast. One tier hides the button; model names never imply Ultrafast.
+New explicit model picks reset controls to defaults, while merely reopening the
+card retains settings. The hosts still own all preference and session mutations.
 
 A combined running-session selection waits for the model's correlated ACP
 confirmation, validates effort against the new snapshot, then confirms effort.

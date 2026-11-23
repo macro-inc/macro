@@ -2,13 +2,14 @@ import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import Bolt from '@icon/system/fill/lightning-fill.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
+import Rocket from '@icon/system/regular/rocket.svg';
 import { Show } from 'solid-js';
 import { AgentIcon } from '../../components/AgentGlyph';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
-import { speedTier } from '../../core/model-selection';
+import { speedChoices, speedTier } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 
-export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
+export function UnifiedModelTriggerContent() {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
   const model = () =>
@@ -30,14 +31,7 @@ export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
         </span>
       </Show>
       <span class="min-w-0 truncate text-ink-muted">{label()}</span>
-      <Show
-        when={
-          !props.mobile &&
-          !custom() &&
-          state.effort &&
-          state.effort.options.length > 1
-        }
-      >
+      <Show when={!custom() && state.effort && state.effort.options.length > 1}>
         <span class="shrink-0 text-ink-extra-muted">
           {
             state.effort?.options.find(
@@ -50,16 +44,20 @@ export function UnifiedModelTriggerContent(props: { mobile?: boolean }) {
       </Show>
       <Show
         when={
-          !props.mobile &&
+          !custom() &&
           speedTier(state.speedValue) !== 'standard' &&
-          state.speeds &&
-          state.speeds.length > 1
+          speedChoices(state.speeds ?? []).some(
+            (choice) =>
+              choice.value === state.speedValue && choice.tier !== 'standard'
+          )
         }
       >
         <span class="flex shrink-0 items-center text-accent">
-          <Bolt class="size-3" />
-          <Show when={speedTier(state.speedValue) === 'ultrafast'}>
-            <Bolt class="-ml-1.5 size-3" />
+          <Show
+            when={speedTier(state.speedValue) === 'ultrafast'}
+            fallback={<Bolt class="size-3.5" />}
+          >
+            <Rocket class="size-3.5" />
           </Show>
         </span>
       </Show>

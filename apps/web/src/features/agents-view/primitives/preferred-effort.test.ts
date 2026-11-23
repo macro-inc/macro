@@ -8,6 +8,18 @@ const ULTRA = { configId: 'effort', value: 'ultra', name: 'Ultra' };
 const HIGH = { configId: 'effort', value: 'high', name: 'High' };
 
 describe('preferred effort', () => {
+  it('resets only the freshly selected model to advertised defaults', () => {
+    createRoot((dispose) => {
+      const preferred = createPreferredEffort('user-a');
+      preferred.remember('model-a', ULTRA);
+      preferred.remember('model-b', HIGH);
+      preferred.forget('model-a');
+      expect(preferred.effort('model-a')).toBeUndefined();
+      expect(preferred.effort('model-b')).toEqual(HIGH);
+      expect(createPreferredEffort('user-a').effort('model-a')).toBeUndefined();
+      dispose();
+    });
+  });
   it('remembers the last effort per target across composer mounts', () => {
     createRoot((dispose) => {
       const preferred = createPreferredEffort('user-a');

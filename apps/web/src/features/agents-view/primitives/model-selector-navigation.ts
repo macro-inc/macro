@@ -1,18 +1,19 @@
 import { createStore } from 'solid-js/store';
 
-export type ModelSelectorPage = 'list' | 'all' | 'model' | 'effort' | 'speed';
+export type ModelSelectorPage = 'card' | 'list' | 'all' | 'agents';
 
-/** Both selector presentations reset their local navigation only on dismissal. */
+/** The phone sheet and desktop popover share one navigation lifetime. */
 export function createModelSelectorNavigation(
   onOpenChange?: (open: boolean) => void
 ) {
   const [state, setState] = createStore({
     open: false,
     query: '',
-    page: 'list' as ModelSelectorPage,
+    page: 'card' as ModelSelectorPage,
   });
   const changeOpen = (open: boolean) => {
-    setState(open ? { open } : { open, query: '', page: 'list' });
+    if (open === state.open) return;
+    setState(open ? { open } : { open, query: '', page: 'card' });
     onOpenChange?.(open);
   };
   return {
@@ -20,8 +21,9 @@ export function createModelSelectorNavigation(
     query: () => state.query,
     page: () => state.page,
     setQuery: (query: string) => setState('query', query),
-    setPage: (page: ModelSelectorPage) => setState('page', page),
+    setPage: (page: ModelSelectorPage) => setState({ page, query: '' }),
     changeOpen,
-    back: () => setState({ page: 'list', query: '' }),
+    back: () =>
+      setState({ page: state.page === 'list' ? 'card' : 'list', query: '' }),
   };
 }

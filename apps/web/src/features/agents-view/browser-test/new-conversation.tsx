@@ -5,7 +5,10 @@ import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { CURSOR_BOT_PRINCIPAL_ID } from '@core/constant/cursorAgent';
 import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_PRINCIPAL_ID } from '@core/constant/macroCoder';
-import { ChannelsContextProvider } from '@core/context/channels';
+import {
+  type ChannelDirectory,
+  ChannelDirectoryProvider,
+} from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type {
@@ -67,6 +70,17 @@ const QUICK_ACCESS: QuickAccessContextValue = {
   interactionForUser: () => undefined,
 };
 
+const EMPTY_CHANNELS: ChannelDirectory = {
+  channels: () => [],
+  complete: () => true,
+  failed: () => false,
+  lookup: () => ({ status: 'missing' }),
+  readComplete: async () => [],
+  retry: () => {},
+  recordView: () => {},
+  viewsCurrent: () => true,
+};
+
 const ROSTER = buildAgentRoster({
   agents: [],
   runtimes: [],
@@ -123,7 +137,7 @@ render(
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider directory={EMPTY_CHANNELS}>
                   <QuickAccessContextProvider value={QUICK_ACCESS}>
                     <MobileSettingsProvider>
                       <MemoryRouter>
@@ -131,7 +145,7 @@ render(
                       </MemoryRouter>
                     </MobileSettingsProvider>
                   </QuickAccessContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

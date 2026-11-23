@@ -110,6 +110,7 @@ export function AgentComposer(props: {
     setConfiguring(true);
     try {
       await selectModel(model, selection);
+      if (!selection) setPreferredSpeed('standard');
     } catch (error) {
       toast.failure(
         error instanceof Error
