@@ -788,11 +788,15 @@ export class CacheWorkerCore {
         const [queued] = this.queue.splice(index, 1);
         if (!queued) break;
         ran = true;
+        const startedAt = this.now();
+        const queueDepth = this.queue.length;
         try {
           const result = await this.dispatch(queued.request);
+          this.recordSlowRequest(queued, startedAt, queueDepth);
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
           this.executingAuthority = authority;
+          this.recordSlowRequest(queued, startedAt, queueDepth, { error });
           for (const waiter of queued.waiters) waiter.reject(error);
         }
       }

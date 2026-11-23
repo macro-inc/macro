@@ -3937,6 +3937,63 @@ describe('CacheWorkerCore', () => {
       ]);
     });
 
+    it('reports a slow read that runs between the halves as that read', async () => {
+      let monotonicNow = 0;
+      const { engine, prepareStarted, release } = splitEngine([]);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          ...engine,
+          readQuery: vi.fn(async (opId: string | undefined) => {
+            monotonicNow += 1_200;
+            if (opId === 'client:fails') throw new Error('read failed');
+            return { kind: 'miss' as const };
+          }),
+        }),
+      });
+      const observations: Array<Record<string, unknown>> = [];
+      const core = new CacheWorkerCore({
+        monotonicNow: () => monotonicNow,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      const port = { postMessage: vi.fn() };
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      monotonicNow = 100;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      monotonicNow = 300;
+      release();
+      await Promise.all(sent);
+
+      expect(
+        observations.filter(
+          (observation) =>
+            observation.name === 'graphql_cache.slow_request' &&
+            observation.requestKind === 'read'
+        )
+      ).toEqual([
+        expect.objectContaining({
+          outcome: 'error',
+          queueWaitMs: 200,
+          durationMs: 1_200,
+          queueDepth: 1,
+        }),
+        expect.objectContaining({
+          outcome: 'success',
+          queueWaitMs: 1_400,
+          durationMs: 1_200,
+          queueDepth: 0,
+        }),
+      ]);
+    });
+
     it.each([
       [
         true,
