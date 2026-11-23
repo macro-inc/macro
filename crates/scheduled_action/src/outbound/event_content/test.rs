@@ -210,7 +210,9 @@ fn tasks_show_option_labels_and_skip_unset_properties() {
     let mut due = select("Due", &[], 0);
     due.data_type = DataType::Date;
     due.value = Some(PropertyValue::Date(
-        Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+        models_properties::shared::DateValue::new(
+            Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+        ),
     ));
     let properties = [
         select("Status", &["Todo", "In progress", "Done"], 1),

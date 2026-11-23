@@ -60,13 +60,7 @@ export function NewHomeNotificationsView() {
                 </>
               }
             />
-            <NewHomeTabBar
-              tab="notifications"
-              status={{
-                value: controls.status(),
-                onChange: controls.onStatusChange,
-              }}
-            />
+            <NewHomeTabBar tab="notifications" />
           </>
         ),
         idle: () => (

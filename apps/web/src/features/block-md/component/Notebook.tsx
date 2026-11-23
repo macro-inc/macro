@@ -259,25 +259,6 @@ export function Notebook(props: {
     );
   });
 
-  // The document shares its split scope with the view hosting it, and views
-  // like Drive bind Tab there to cycle their tabs, which closes the document.
-  // This override eclipses those commands while the document is mounted:
-  // Tab is left to the editors (title to body, list indent) and to native
-  // focus order.
-  createEffect(() => {
-    const currentScopeId = scopeId();
-    if (!currentScopeId) return;
-    untrack(() =>
-      registerHotkey({
-        hotkey: ['tab', 'shift+tab'],
-        scopeId: currentScopeId,
-        description: 'Move focus within document',
-        keyDownHandler: () => false,
-        hide: true,
-      })
-    );
-  });
-
   // Register markdown formatting commands on the block scope so they appear in
   // Cmd+K, but only when the editor has focus (not just the block container).
   const [editorHasFocus, setEditorHasFocus] = createSignal(false);

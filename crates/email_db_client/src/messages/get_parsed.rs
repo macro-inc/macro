@@ -83,7 +83,7 @@ pub async fn get_parsed_message_by_id(
 ) -> anyhow::Result<Option<message::ParsedMessage>> {
     let mut conn = pool.acquire().await?;
 
-    // Only fetch parsed body
+    // body_parsed is derived from the text and sanitized HTML bodies.
     let db_message = sqlx::query_as!(
         ParsedMessageRow,
         r#"
@@ -91,8 +91,8 @@ pub async fn get_parsed_message_by_id(
             m.draft_generation, m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
             m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
-            NULL::TEXT as body_text,
-            NULL::TEXT as body_html_sanitized,
+            m.body_text,
+            m.body_html_sanitized,
             NULL::TEXT as body_macro,
             m.headers_jsonb, m.created_at, m.updated_at
         FROM email_messages m

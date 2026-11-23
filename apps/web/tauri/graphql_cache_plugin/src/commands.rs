@@ -66,6 +66,37 @@ fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> 
         .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())
 }
 
+/// The handle for a read the webview may abandon: given `request_id`, the read
+/// gives the engine back without reading if `graphql_cache_abandon` names it
+/// before its turn.
+fn reading_handle(
+    state: &State<'_, CacheState>,
+    request_id: Option<String>,
+) -> Result<EngineHandle, String> {
+    Ok(engine_handle(state)?.abandonable(request_id))
+}
+
+/// The webview stopped waiting for the read sent with `request_id`: if it has
+/// not got the engine yet, it will skip reading when it does, so reads nobody
+/// waits for do not hold the engine ahead of the ones somebody does. Says
+/// whether the read was still running. Takes no engine lock. Older bundles
+/// never send it; newer ones ignore its absence on older binaries.
+#[tauri::command]
+pub async fn graphql_cache_abandon(
+    state: State<'_, CacheState>,
+    request_id: String,
+) -> Result<bool, String> {
+    // Not through a cloned handle: shutdown fails while another handle lives.
+    Ok(state
+        .0
+        .lock()
+        .map_err(|_| "graphql cache state poisoned".to_string())?
+        .as_ref()
+        .ok_or_else(|| "graphql cache not initialized (call graphql_cache_init first)".to_string())?
+        .handle
+        .abandon(&request_id))
+}
+
 /// Opens (or creates) the cache for `scope`. Idempotent for the same scope;
 /// errors on a scope mismatch (parity with the browser worker `init`). The
 /// database lives at `{app_data_dir}/graphql-cache/cache.turso`. Incompatible
@@ -176,8 +207,11 @@ pub async fn graphql_cache_current_authority(
     state: State<'_, CacheState>,
     identity: String,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<cache_core::engine::authority::CacheAuthority, String> {
-    engine_handle(&state)?.current_authority(&identity).await
+    reading_handle(&state, request_id)?
+        .current_authority(&identity)
+        .await
 }
 
 /// Apply a fresh permission proof under the cache owner's mutation lock.
@@ -223,6 +257,10 @@ pub async fn graphql_cache_transition_authority<R: Runtime>(
     fields(graphql_cache.ipc.command = "read", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
     err
 )]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command fields preserve the existing flat IPC wire contract"
+)]
 #[tauri::command]
 pub async fn graphql_cache_read(
     state: State<'_, CacheState>,
@@ -232,8 +270,9 @@ pub async fn graphql_cache_read(
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ReadResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read(
             op_id,
             query,
@@ -265,8 +304,9 @@ pub async fn graphql_cache_watch(
     entity_resolvers: Option<Vec<EntityResolver>>,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .watch(
             op_id,
             query,
@@ -285,8 +325,9 @@ pub async fn graphql_cache_read_records_by_keys(
     document: String,
     fragment_name: String,
     keys: Vec<String>,
+    request_id: Option<String>,
 ) -> Result<RecordSelectionResultWire, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .read_records_by_keys(document, fragment_name, keys)
         .await
 }
@@ -296,8 +337,9 @@ pub async fn graphql_cache_read_records_by_keys(
 pub async fn graphql_cache_search(
     state: State<'_, CacheState>,
     request: SearchRequest,
+    request_id: Option<String>,
 ) -> Result<SearchPage, String> {
-    engine_handle(&state)?.search(request).await
+    reading_handle(&state, request_id)?.search(request).await
 }
 
 /// Read local person-context publication. A distinct command makes OTA capability explicit.
@@ -307,8 +349,11 @@ pub async fn graphql_cache_people_context(
     state: State<'_, CacheState>,
     scope: HydrationScope,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<ContextState, String> {
-    engine_handle(&state)?.people_context(scope).await
+    reading_handle(&state, request_id)?
+        .people_context(scope)
+        .await
 }
 
 /// Persist one scoped local-context batch. JS publishes hydration-only hints.
@@ -334,8 +379,11 @@ pub async fn graphql_cache_people_search(
     state: State<'_, CacheState>,
     request: PeopleSearch,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<PeopleSearchResult, String> {
-    engine_handle(&state)?.people_search(request).await
+    reading_handle(&state, request_id)?
+        .people_search(request)
+        .await
 }
 
 /// Read one bounded contact membership window without exposing names.
@@ -418,8 +466,13 @@ pub async fn graphql_cache_entity_filter(
     state: State<'_, CacheState>,
     request: EntityFilterRequest,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<EntityFilterResult, String> {
-    engine_handle(&state)?.entity_filter(request).await
+    // Releasing a live view frees its slot, so it is never abandoned.
+    let releases = request.live_query.as_ref().is_some_and(|live| live.release);
+    reading_handle(&state, request_id.filter(|_| !releases))?
+        .entity_filter(request)
+        .await
 }
 
 /// Reads a registered live view without resending its selection and predicate.
@@ -436,8 +489,9 @@ pub async fn graphql_cache_entity_filter_resume(
     registration_id: cache_core::engine::live_query::LiveQueryRegistration,
     since: Option<String>,
     traceparent: Option<String>,
+    request_id: Option<String>,
 ) -> Result<Option<crate::engine::LiveQueryResult>, String> {
-    let update = engine_handle(&state)?
+    let update = reading_handle(&state, request_id)?
         .resume_entity_filter(id, registration_id, since)
         .await?;
     tracing::Span::current().record("graphql_cache.live_query.retained", update.is_some());
@@ -449,8 +503,11 @@ pub async fn graphql_cache_entity_filter_resume(
 pub async fn graphql_cache_calendar_range(
     state: State<'_, CacheState>,
     request: CalendarRangeRequest,
+    request_id: Option<String>,
 ) -> Result<CalendarRangeResultWire, String> {
-    engine_handle(&state)?.calendar_range(request).await
+    reading_handle(&state, request_id)?
+        .calendar_range(request)
+        .await
 }
 
 /// Applies fetched coverage, delta deletions, and sync state, then
@@ -866,8 +923,9 @@ pub async fn graphql_cache_inspect_query_variants(
     query: String,
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryVariant>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query_variants(
             query,
             operation_name,
@@ -884,8 +942,9 @@ pub async fn graphql_cache_inspect_query(
     operation_name: Option<String>,
     path: Vec<InspectionPathSegment>,
     variable_filters: Option<Vec<serde_json::Map<String, serde_json::Value>>>,
+    request_id: Option<String>,
 ) -> Result<Vec<CachedQueryInstance>, String> {
-    engine_handle(&state)?
+    reading_handle(&state, request_id)?
         .inspect_query(
             query,
             operation_name,

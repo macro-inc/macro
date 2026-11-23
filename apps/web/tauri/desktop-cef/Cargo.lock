@@ -1031,14 +1031,14 @@ dependencies = [
 name = "cache-core"
 version = "0.1.0"
 dependencies = [
- "apollo-compiler",
  "apollo-parser",
+ "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru",
  "macro_user_id",
  "maybe_send",
- "miniz_oxide 0.8.9",
  "postcard",
  "predicate-index",
  "serde",
@@ -1047,6 +1047,18 @@ dependencies = [
  "subsequence_match",
  "thiserror 2.0.21",
  "uuid",
+ "zlib-rs",
+]
+
+[[package]]
+name = "cache-schema"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -1054,6 +1066,7 @@ name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "item-filter-index",
  "maybe_send",
  "predicate-index",
  "thiserror 2.0.21",

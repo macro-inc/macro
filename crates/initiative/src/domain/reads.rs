@@ -34,6 +34,8 @@ pub struct InitiativePropertySnapshot {
     pub priority: Option<Uuid>,
     /// Assigned user ids, independent of sharing membership.
     pub assignees: Vec<String>,
+    /// Start timestamp, or unset.
+    pub start_date: Option<DateTime<Utc>>,
     /// Due timestamp, or unset.
     pub due_date: Option<DateTime<Utc>>,
     /// Whether the canonical task status represents completion.

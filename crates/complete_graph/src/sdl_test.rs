@@ -927,6 +927,21 @@ fn contacts_reads_have_viewer_scoped_entity_keys() {
         viewer.fields["contactsByEmails"].ty.to_string(),
         "[GraphqlContact!]!"
     );
+    let named = &viewer.fields["contactsNamedBy"];
+    assert_eq!(named.ty.to_string(), "[GraphqlContact!]!");
+    assert!(
+        named
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "search" && argument.ty.to_string() == "String!")
+    );
+    assert!(
+        named
+            .arguments
+            .iter()
+            .any(|argument| argument.name == "limit" && argument.ty.to_string() == "Int")
+    );
+    assert!(!root.fields.contains_key("contactsNamedBy"));
     assert!(
         field
             .arguments

@@ -164,6 +164,7 @@ export type TaskSnapshot = {
   markdown: string;
   status?: string;
   priority?: string;
+  start?: string;
   due?: string;
   /** Absent when empty. */
   assignees?: ContextPerson[];
@@ -1124,6 +1125,7 @@ function taskNode(task: TaskSnapshot): FxpNode {
       title: task.title,
       status: task.status,
       priority: task.priority,
+      start: task.start,
       due: task.due,
     })
   );
