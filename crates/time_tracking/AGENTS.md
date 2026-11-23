@@ -16,6 +16,9 @@ through `crates/graphql_time_tracking`.
   start stops and saves the running timer.
 - `src/outbound/pg_time_repo.rs`: `time_entry`, `time_timer`, and the total.
 - `src/inbound/axum_router.rs`: the REST routes and the typed error body.
+- `src/inbound/toolset/`: `LogTime` and `ReadTimeEntries` for chat, channel
+  bots and MCP (feature `toolset`); code mode uses the SDK's `task.logTime`
+  and `task.timeEntries` and hides them.
 
 ## Scope
 
@@ -30,10 +33,12 @@ through `crates/graphql_time_tracking`.
 
 - Depends on: `entity_access` (receipts), `activity` (models only),
   `system_properties`, `feature_flags` and `connection_gateway_client` (feature
-  `outbound`), `macro_event_broker`, `macro_event_topics`.
+  `outbound`), `ai_toolset` (feature `toolset`), `macro_event_broker`,
+  `macro_event_topics`.
 - Used by: `services/document_storage_service` (the router, and the activity
   consumer's `TimeEntryMacroEvent` arm), `crates/soup_realtime` (the events,
-  mapped to a patch on the task), `crates/graphql_time_tracking`.
+  mapped to a patch on the task), `crates/graphql_time_tracking`, `ai_tools`
+  (the tools).
 
 ## Checks
 
@@ -51,8 +56,12 @@ through `crates/graphql_time_tracking`.
 - The day of an entry is chosen by the client (a timer's: its start in the
   stopping device's zone, UTC when none). Never derive it on read.
 - Writes need `enable-time-tracking` for the caller (`outbound/rollout.rs`);
-  a failed flag load is off. `document_storage_service` picks
-  `LocalTimeTracking` (always on) for the local environment only.
+  a failed flag load is off. `document_storage_service` and `ai_tools` pick
+  `LocalTimeTracking` (always on) for the local environment only, and
+  `ai_tools` picks `TimeTrackingOff` on a host without a flag client.
+- The tools mint the requesting user's receipt, never a bot's: the domain
+  takes the author from an authenticated-user receipt, so an agent's entry
+  is the person it acts for.
 - Events carry the task's new total and never the note. Two grouped consumers
   read the topic, both at `InitialOffset::Latest`: `soup_realtime` refreshes
   the task's row on every event, and DSS's activity consumer records one
@@ -70,7 +79,8 @@ through `crates/graphql_time_tracking`.
   and sent with the person in the request body (a failed request's error
   names its URL). Replayed logs, starts and stops and refused writes send
   nothing; a discard always sends one, since the repository does not say
-  whether a timer was there.
+  whether a timer was there. The agent tools send it too: `ai_tools` gives
+  them the same gateway adapter on the host's event broker tracker.
 
 ## Related
 
