@@ -2,8 +2,10 @@ import { createEffect, createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSnapPager } from './SnapPager';
 
+const detachViewports: (() => void)[] = [];
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => {
+  for (const detach of detachViewports.splice(0)) detach();
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -31,7 +33,7 @@ function measuredPager() {
         left: element.scrollLeft,
       }),
   });
-  pager.attachViewport(element);
+  detachViewports.push(pager.attachViewport(element));
   timeline.length = 0;
   const scroll = (left: number) => {
     element.scrollLeft = left;
@@ -90,10 +92,13 @@ describe('native gesture settlement', () => {
     expect(pager.position()).toBe(0);
   });
 
-  it('releases a tap with no scroll and no native scrollend', () => {
+  it('recovers a no-scroll tap after 150ms', () => {
     const { pager, element } = measuredPager();
     element.dispatchEvent(new Event('touchstart'));
     window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(149);
+    expect(pager.phase()).toBe('scrolling');
+    vi.advanceTimersByTime(1);
     expect(pager.phase()).toBe('idle');
   });
 
@@ -109,6 +114,131 @@ describe('native gesture settlement', () => {
     expect(pager.position()).toBe(0);
     expect(pager.phase()).toBe('idle');
   });
+  it('keeps rapid commands queued through a post-release momentum pause', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    scroll(300);
+    pager.next();
+    pager.next();
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(500);
+    expect(pager.position()).toBe(0);
+    expect(element.scrollLeft).toBe(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(2);
+  });
+
+  it('does not run a queued jump before the first asynchronous scroll event', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(100);
+    expect(pager.position()).toBe(0);
+    scroll(300);
+    vi.advanceTimersByTime(500);
+    expect(pager.position()).toBe(0);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(12);
+  });
+
+  it('does not recover when scrollLeft changes without a delivered event', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    element.scrollLeft = 300;
+    vi.advanceTimersByTime(150);
+    expect(pager.position()).toBe(0);
+    scroll(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(12);
+  });
+
+  it('recovers queued navigation when no scroll event or position change arrives', () => {
+    const { pager, element } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(149);
+    expect(pager.position()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(pager.position()).toBe(12);
+    expect(pager.phase()).toBe('idle');
+  });
+
+  it('restores native ownership if scrolling arrives after no-scroll recovery', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(150);
+    expect(pager.position()).toBe(12);
+    scroll(250);
+    pager.next();
+    vi.advanceTimersByTime(500);
+    expect(pager.position()).toBe(12);
+    scroll(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(13);
+  });
+
+  it('rejects recovery when the position moves away and back during the window', () => {
+    const { pager, element } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    element.scrollLeft = 220;
+    vi.advanceTimersToNextFrame();
+    element.scrollLeft = 200;
+    vi.advanceTimersByTime(150);
+    expect(pager.position()).toBe(0);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(12);
+  });
+
+  it('restores native ownership after a recovery even if a command intervenes', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(150);
+    pager.next();
+    scroll(250);
+    pager.next();
+    pager.next();
+    vi.advanceTimersByTime(500);
+    expect(pager.position()).toBe(0);
+    scroll(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(2);
+  });
+
+  it('does not treat pre-release compositor movement as a no-op', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    pager.goTo(12);
+    element.scrollLeft = 300;
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    vi.advanceTimersByTime(150);
+    expect(pager.position()).toBe(0);
+    scroll(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(12);
+  });
+
+  it('cancels recovery on scrollend before a later command starts', () => {
+    const { pager, element, scroll } = measuredPager();
+    element.dispatchEvent(new Event('touchstart'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    element.dispatchEvent(new Event('scrollend'));
+    pager.next();
+    vi.advanceTimersByTime(150);
+    expect(pager.position()).toBe(0);
+    scroll(300);
+    element.dispatchEvent(new Event('scrollend'));
+    expect(pager.position()).toBe(1);
+  });
+
   it('remembers scrollend while held and settles on release without another scroll', () => {
     const { pager, element, scroll } = measuredPager();
     element.dispatchEvent(new Event('touchstart'));

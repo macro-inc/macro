@@ -47,7 +47,10 @@ only the final quiet target prepares data. Dragging disables CSS snap until nati
 `scrollend`; slow drags commit beyond half a page, while clear flicks can commit
 sooner. Native smooth alignment finishes before page rotation or queued data/render
 work. Trackpads follow the same path; engines without `scrollend` use a 350ms quiet
-fallback. Reduced motion skips alignment animation. Far date jumps wait for a
+fallback. A released contact with no scroll events and unchanged scrollLeft gets
+150ms bounded recovery, avoiding a stuck pager when no scrollend is emitted.
+Any late scrolling reclaims native ownership and waits for scrollend again.
+Reduced motion skips alignment animation. Far date jumps wait for a
 running gesture to settle. Buffer rendering never refuses a second swipe. Each page keeps its own
 vertical scroller, synchronized to the active one. Event drag/resize temporarily
 locks horizontal paging. The external hour gutter does not move horizontally.

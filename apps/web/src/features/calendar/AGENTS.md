@@ -127,6 +127,8 @@ host lives in `../block-calendar/`.
   require half a page; clear flicks can commit sooner. Retain native scrolling
   on old engines with a 350ms quiet fallback. Share active vertical scroll with all
   buffers, and lock horizontal paging during FullCalendar drag/resize.
+  Recover a no-scroll contact after 150ms only if neither a scroll event nor a
+  scrollLeft change occurred; late scrolling reclaims native ownership.
   Prepare only the hidden destination for an explicit date, then update the date anchor at settlement.
   Accumulate rapid period commands in SnapPager and prepare only the quiet final
   range; headers follow the requested date immediately. Calendar history captures

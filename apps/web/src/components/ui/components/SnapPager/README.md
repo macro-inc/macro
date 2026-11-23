@@ -2,7 +2,7 @@
 
 A generic, endless, native horizontal scroll ring. Import `SnapPager` and
 `createSnapPager` from `./SnapPager`. The browser owns drag and momentum: there
-are no touchmove handlers, transforms, preventDefault calls, or custom inertia.
+are no scroll-driving touch handlers, transforms, preventDefault calls, or custom inertia.
 Passive gesture listeners temporarily disable CSS snapping. Once native scrolling
 ends, the pager requests native smooth alignment before recycling any page.
 Horizontal wheel input follows the same path; vertical input is ignored.
@@ -41,7 +41,13 @@ smooth scrolling, except under reduced motion. A second press within
 Rapid presses report one aggregate `onSettle(moved)` after controls go quiet, so
 callers can prepare the final data range without loading every skipped period.
 A request during a native gesture waits until it settles instead of moving the
-track under a finger. A later gesture cancels pending commands through
+track under a finger. Rapid queued commands never enable the programmatic quiet
+timer during observed native scrolling. After release without any scroll event,
+a 150ms no-op window permits recovery only if `scrollLeft` also stays unchanged.
+Any arriving scroll cancels that timer; a scroll arriving after recovery takes
+native ownership back and waits for `scrollend`. This bounded heuristic favors
+recovery over an indefinitely stuck pager; it is not compositor-completion proof.
+A later gesture cancels pending commands through
 `onNavigationCancel`.
 
 At rest, CSS uses proximity snapping with `scroll-snap-stop: normal`. During a
@@ -51,7 +57,7 @@ within 80ms and traveling at least 10% of a page (capped at 40px), is a flick.
 Native momentum can cross multiple pages. `scrollend` starts smooth alignment;
 only its final `scrollend` recycles the ring and reports the move. Engines without
 `scrollend` use a 350ms quiet fallback. No timer substitutes for native `scrollend`
-when supported. Held gestures do not settle. `onScrollStart` lets callers pause
+when supported and scrolling was observed. Held gestures do not settle. `onScrollStart` lets callers pause
 queued render work; even a zero-move settlement releases that pause.
 Update recycled content without remounting the stable page key. `reset()` explicitly
 returns to the initial ring without calling `onSettle`. `setLocked(true)` freezes
