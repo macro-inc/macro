@@ -1,0 +1,52 @@
+import { AgentActivity } from '@app/features/agent-activity/agent-activity';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { render } from 'solid-js/web';
+import '../../../index.css';
+
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
+const root = document.getElementById('root');
+if (!root) throw new Error('Fixture root missing');
+
+// An agent's reply in a channel thread: a sealed run with a failed step and
+// one the turn ended under, between two passages of its text.
+render(
+  () => (
+    <main class="mx-auto flex max-w-2xl flex-col gap-2 p-4 text-sm">
+      <section aria-label="Agent reply" class="flex min-w-0 flex-col gap-1">
+        <p>Checking the release board before I answer.</p>
+        <AgentActivity
+          agentSessionId="session"
+          turn={1}
+          segment={0}
+          sealed
+          rows={[
+            {
+              id: 'a',
+              label: 'Searched documents',
+              detail: null,
+              status: 'completed',
+            },
+            {
+              id: 'b',
+              label: 'Read release board',
+              detail: null,
+              status: 'completed',
+            },
+            { id: 'c', label: 'Update task', detail: null, status: 'failed' },
+            {
+              id: 'd',
+              label: 'Read task',
+              detail: null,
+              status: 'interrupted',
+            },
+          ]}
+        />
+        <p>
+          The board is up to date except one task I couldn't change; I left a
+          note on it instead.
+        </p>
+      </section>
+    </main>
+  ),
+  root
+);
