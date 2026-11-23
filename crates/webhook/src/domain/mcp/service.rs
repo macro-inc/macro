@@ -218,6 +218,16 @@ where
                 .get(&key.user_id, &subscription_id)
                 .await
                 .map_err(McpSubscriptionError::internal)?;
+            // One subscription delivers in one way; ChatGPT's redacts people.
+            if existing
+                .as_ref()
+                .is_some_and(|row| row.profile != request.profile)
+            {
+                return Err(McpSubscriptionError::InvalidParams(
+                    "this subscription is held under another delivery profile; unsubscribe it first"
+                        .to_owned(),
+                ));
+            }
             let read_secret = existing.as_ref().map(|row| row.secret.ciphertext.clone());
             let live = existing.filter(|row| row.is_live(now));
             refreshed = live.is_some();

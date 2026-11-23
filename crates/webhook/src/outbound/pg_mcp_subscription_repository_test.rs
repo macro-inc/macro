@@ -114,13 +114,14 @@ async fn index_rows(pool: &PgPool) -> anyhow::Result<i64> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let first = upsert(
+    let mut first = upsert(
         ME,
         URL,
         "mentions",
         &["message.mentioned"],
         Duration::hours(1),
     );
+    first.profile = McpDeliveryProfile::Chatgpt;
     let stored = store(&repo, first.clone()).await?;
     assert_eq!(stored.id, first.id);
     assert_eq!(stored.subscription_id, first.subscription_id);
@@ -141,7 +142,6 @@ async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<(
         expires_at: Utc::now() + Duration::minutes(10),
     };
     refresh.previous_secret = Some(previous.clone());
-    refresh.profile = McpDeliveryProfile::Chatgpt;
     let refreshed = store(&repo, refresh.clone()).await?;
     assert_eq!(refreshed.id, first.id, "the row keeps its id");
     assert_eq!(refreshed.secret.ciphertext, vec![9]);
@@ -563,6 +563,45 @@ async fn a_refresh_decided_against_a_changed_row_is_not_written(
     assert_eq!(
         repo.store_within_quota(late, MAX).await?,
         McpStoreOutcome::Changed
+    );
+
+    // A write under another profile than the row's is not one.
+    let mut other_profile = first.clone();
+    other_profile.read_secret = Some(vec![7]);
+    other_profile.profile = McpDeliveryProfile::Chatgpt;
+    assert_eq!(
+        repo.store_within_quota(other_profile, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_refresh_of_a_row_deleted_since_it_was_read_is_not_written(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let first = upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    );
+    store(&repo, first.clone()).await?;
+    // Read, then unsubscribed before the refresh writes.
+    let mut refresh = first.clone();
+    refresh.secret.ciphertext = vec![8];
+    refresh.read_secret = Some(first.secret.ciphertext.clone());
+    assert!(repo.delete(&user(ME), &first.subscription_id).await?);
+    assert_eq!(
+        repo.store_within_quota(refresh, MAX).await?,
+        McpStoreOutcome::Changed
+    );
+    assert_eq!(
+        repo.get(&user(ME), &first.subscription_id).await?,
+        None,
+        "the deleted row does not come back with the old secret's overlap"
     );
     Ok(())
 }

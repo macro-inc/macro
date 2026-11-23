@@ -47,7 +47,8 @@ pub enum McpStoreOutcome {
     Stored(Box<McpEventSubscription>),
     /// The user already holds the most subscriptions allowed.
     QuotaExceeded,
-    /// The row is no longer the one read: another refresh wrote it first.
+    /// The row is no longer the one read: another refresh wrote it first,
+    /// it was deleted, or it is kept under another profile.
     Changed,
 }
 
@@ -69,8 +70,9 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<McpEventSubscription>, Self::Err>> + Send;
 
-    /// Insert, or refresh the secrets, profile, filter and expiry of the
-    /// existing row if it still holds `upsert.read_secret`,
+    /// Insert if there was no row and still is none, or refresh the secrets,
+    /// filter and expiry of the existing row if it still holds
+    /// `upsert.read_secret` and `upsert.profile`,
     /// unless the user would then hold more than `max` live subscriptions.
     /// Expired rows do not count. Serialized per user, so
     /// concurrent subscribes cannot pass the limit together.

@@ -189,7 +189,9 @@ fn chatgpt_occurrence_carries_the_delivery_id_and_no_people() {
             "requester_id": "macro|a!b@example.com",
             "requester_name": "Ada Lovelace",
             "channel_id": "0193d2a4-5b6c-7d8e-9f00-112233445566",
-            "channel_name": "general"
+            "channel_name": "general",
+            "assignee": "macro|a!@example.c",
+            "macro|b@host.123": "x-1@sub.example.c0 wrote"
         }
     });
     let occurrence = McpEventOccurrence::new(
@@ -216,10 +218,27 @@ fn chatgpt_occurrence_carries_the_delivery_id_and_no_people() {
             "requester_id": "someone",
             "requester_name": "someone",
             "channel_id": "0193d2a4-5b6c-7d8e-9f00-112233445566",
-            "channel_name": "general"
+            "channel_name": "general",
+            "assignee": "someone",
+            "someone": "someone wrote"
         }),
         "keys, values and a person's name lose people; other names stay"
     );
+}
+
+#[test]
+fn every_user_id_macro_accepts_is_hidden() {
+    // Shapes `macro_user_id` accepts at the edges of its grammar.
+    for id in [
+        "macro|a!@example.c",
+        "macro|x.y@host.123",
+        "macro|q@a-b.c-d",
+        "macro|{t}~@e.co",
+    ] {
+        MacroUserIdStr::try_from(id.to_owned()).expect("Macro accepts it");
+        let hidden = without_people(&serde_json::json!({ id: id }), &subscriber());
+        assert_eq!(hidden, serde_json::json!({ "someone": "someone" }), "{id}");
+    }
 }
 
 #[test]

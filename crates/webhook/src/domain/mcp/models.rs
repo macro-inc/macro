@@ -146,12 +146,15 @@ fn person_named_by<'a>(
     lazy_regex::regex_is_match!(r"^(macro\|)?[^@\s]+@[^@\s]+$", id).then_some(id)
 }
 
-/// `text` with each `macro|<email>` or bare email address replaced. The
-/// local part takes every character a Macro user id's email may hold
-/// (`macro_user_id`'s parser), so none is left half-hidden.
+/// `text` with each `macro|<email>` or bare email address replaced. Both
+/// parts take everything a Macro user id's email may hold (`macro_user_id`'s
+/// parser): any of its local-part characters, and a domain of two or more
+/// labels of letters, digits and `-`, with no rule on the last label's
+/// length or letters. So no user id is left whole or half-hidden; text that
+/// only looks like an address is hidden too.
 fn hide_identifiers(text: &str, subscriber_email: &str) -> String {
     lazy_regex::regex_replace_all!(
-        r"(macro\|)?([A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})",
+        r"(macro\|)?([A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+)",
         text,
         |_, _, email: &str| if email.eq_ignore_ascii_case(subscriber_email) {
             SUBSCRIBER_PLACEHOLDER

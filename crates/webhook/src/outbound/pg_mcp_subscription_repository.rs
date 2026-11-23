@@ -207,9 +207,38 @@ impl McpSubscriptionRepo for PgMcpSubscriptionRepository {
             transaction.rollback().await?;
             return Ok(McpStoreOutcome::QuotaExceeded);
         }
+        // The row as this write finds it, locked until commit, so neither a
+        // refresh nor an unsubscribe or the expiry sweep can change it before
+        // the write below. The write was decided against the row as read: if
+        // it has since been replaced, deleted or kept under another profile,
+        // nothing is written and the service reads again. A deleted row must
+        // not come back carrying the old secret's overlap.
+        let current = sqlx::query!(
+            r#"
+            SELECT secret_ciphertext, delivery_profile
+            FROM mcp_event_subscription
+            WHERE user_id = $1 AND subscription_id = $2
+            FOR UPDATE
+            "#,
+            user_id,
+            upsert.subscription_id.as_str(),
+        )
+        .fetch_optional(&mut *transaction)
+        .await?;
+        let unchanged = match (&current, &upsert.read_secret) {
+            (None, None) => true,
+            (Some(row), Some(read)) => {
+                row.secret_ciphertext == *read && row.delivery_profile == upsert.profile.as_ref()
+            }
+            (Some(_), None) | (None, Some(_)) => false,
+        };
+        if !unchanged {
+            transaction.rollback().await?;
+            return Ok(McpStoreOutcome::Changed);
+        }
         // The key parts (user, URL, event type, arguments) are what the id is
-        // derived from, so a conflict only refreshes the rest, and only the
-        // row the refresh was decided against.
+        // derived from, so a conflict only refreshes the rest. The row is
+        // locked and checked above; the condition repeats that check.
         let row = sqlx::query_as!(
             SubscriptionRow,
             r#"

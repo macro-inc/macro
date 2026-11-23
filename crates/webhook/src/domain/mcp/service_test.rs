@@ -92,7 +92,9 @@ impl McpSubscriptionRepo for FakeRepo {
                 row.previous_secret = None;
                 row.secret = racing;
             }
-            if upsert.read_secret.as_ref() != Some(&row.secret.ciphertext) {
+            if upsert.read_secret.as_ref() != Some(&row.secret.ciphertext)
+                || row.profile != upsert.profile
+            {
                 return Ok(McpStoreOutcome::Changed);
             }
             row.filter = upsert.filter;
@@ -101,6 +103,9 @@ impl McpSubscriptionRepo for FakeRepo {
             row.profile = upsert.profile;
             row.expires_at = upsert.expires_at;
             return Ok(McpStoreOutcome::Stored(Box::new(row.clone())));
+        }
+        if upsert.read_secret.is_some() {
+            return Ok(McpStoreOutcome::Changed);
         }
         let row = McpEventSubscription {
             id: upsert.id,
@@ -1175,6 +1180,27 @@ async fn a_refresh_that_lost_a_race_keeps_the_secret_that_won_it() {
         row.previous_secret.map(|previous| previous.secret),
         Some(ciphertext_of(RACING))
     );
+}
+
+#[tokio::test]
+async fn a_subscription_held_under_another_profile_is_refused() {
+    let repo = FakeRepo::default();
+    subscribed(&repo).await;
+    let error = service(&repo, &FakeEndpoint::accepting())
+        .subscribe(
+            user(ME),
+            McpSubscribeRequest {
+                profile: McpDeliveryProfile::Chatgpt,
+                ..request("mentions", mentions_of_me_in_channels())
+            },
+        )
+        .await
+        .expect_err("refused");
+    assert!(
+        matches!(error, McpSubscriptionError::InvalidParams(_)),
+        "{error:?}"
+    );
+    assert_eq!(repo.rows().remove(0).profile, McpDeliveryProfile::Mcp);
 }
 
 #[tokio::test]
