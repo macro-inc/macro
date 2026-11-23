@@ -207,8 +207,14 @@ impl Source for FakeSource {
         Ok(self.supported.get(app).copied())
     }
 
-    async fn org_setup(&self, app: &ConnectorId) -> Result<Option<OrgSetup>, rootcause::Report> {
-        Ok(self.org_setups.get(app).cloned())
+    async fn org_setups(
+        &self,
+        apps: &[ConnectorId],
+    ) -> Result<HashMap<ConnectorId, OrgSetup>, rootcause::Report> {
+        Ok(apps
+            .iter()
+            .filter_map(|app| Some((app.clone(), self.org_setups.get(app)?.clone())))
+            .collect())
     }
 
     async fn holders(

@@ -250,13 +250,13 @@ async fn supports_reads_the_catalog(pool: PgPool) {
 }
 
 /// An app's admin setup is the one its catalog entry lists, under the slugs
-/// Macro addresses it by.
+/// Macro addresses it by; one whose settings page is not `https` is left out.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn org_setup_reads_the_catalog(pool: PgPool) {
-    let setup = wire::OrgSetup {
+async fn org_setups_read_the_catalog(pool: PgPool) {
+    let setup = |settings_url: &str| wire::OrgSetup {
         summary: "An admin allows it once.".to_owned(),
         steps: vec!["Open settings.".to_owned()],
-        settings_url: "https://slack.example/admin".to_owned(),
+        settings_url: settings_url.to_owned(),
         required: true,
         allowlist_url: Some("https://connect.example/callback".to_owned()),
     };
@@ -267,27 +267,35 @@ async fn org_setup_reads_the_catalog(pool: PgPool) {
             .iter()
             .cloned()
             .map(|mut entry| {
-                if entry.id == "slack" {
-                    entry.org_setup = Some(setup.clone());
-                }
+                entry.org_setup = match entry.id.as_str() {
+                    "slack" => Some(setup("https://slack.example/admin")),
+                    "acme" => Some(setup("javascript:alert(1)")),
+                    _ => None,
+                };
                 entry
             })
             .collect(),
     );
     let connect = source(pool, Arc::new(vendor), Arc::default());
 
+    let setups = connect
+        .org_setups(&[app("slack_v2"), app("granola"), app("acme"), app("linear")])
+        .await
+        .unwrap();
+
     assert_eq!(
-        connect.org_setup(&app("slack_v2")).await.unwrap(),
-        Some(OrgSetup {
-            summary: setup.summary,
-            steps: setup.steps,
-            settings_url: setup.settings_url,
-            required: true,
-            allowlist_url: setup.allowlist_url,
-        })
+        setups,
+        HashMap::from([(
+            app("slack_v2"),
+            OrgSetup {
+                summary: "An admin allows it once.".to_owned(),
+                steps: vec!["Open settings.".to_owned()],
+                settings_url: "https://slack.example/admin".to_owned(),
+                required: true,
+                allowlist_url: Some("https://connect.example/callback".to_owned()),
+            }
+        )])
     );
-    assert_eq!(connect.org_setup(&app("granola")).await.unwrap(), None);
-    assert_eq!(connect.org_setup(&app("linear")).await.unwrap(), None);
 }
 
 /// Completing records Connect's active connection, takes the row Pipedream

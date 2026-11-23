@@ -366,35 +366,13 @@ impl Connectors {
         user: &MacroUserIdStr<'static>,
         app: &ConnectorId,
     ) -> Result<(&Arc<dyn Source>, ConnectorKey)> {
-        let (macro_connect_enabled, overlays) = self.rule_inputs(user).await?;
-        self.designated_by(macro_connect_enabled, &overlays, app)
-            .await
-    }
-
-    /// The flag and the overlay table, which decide each app's counted
-    /// source.
-    async fn rule_inputs(
-        &self,
-        user: &MacroUserIdStr<'static>,
-    ) -> Result<(MacroConnectEnabledFlag, Overlays)> {
         let (macro_connect_enabled, overlays) = futures::join!(
             self.inner.macro_connect_enabled.read(user),
             self.inner.overlays.read()
         );
+        let macro_connect_enabled = MacroConnectEnabledFlag::from_read(macro_connect_enabled);
+        let overlays = overlays?;
 
-        Ok((
-            MacroConnectEnabledFlag::from_read(macro_connect_enabled),
-            overlays?,
-        ))
-    }
-
-    /// [`designated`](Self::designated), given the flag and overlay table.
-    async fn designated_by(
-        &self,
-        macro_connect_enabled: MacroConnectEnabledFlag,
-        overlays: &Overlays,
-        app: &ConnectorId,
-    ) -> Result<(&Arc<dyn Source>, ConnectorKey)> {
         let mut connect = ConnectSupport::default();
         if let (MacroConnectEnabledFlag::On, Some(source)) =
             (macro_connect_enabled, self.source(SourceKind::Connect))
@@ -403,7 +381,7 @@ impl Connectors {
             connect = ConnectSupport::new([(app.clone(), surfaces)]);
         }
 
-        let kind = resolve::counted_source(app, macro_connect_enabled, overlays, &connect);
+        let kind = resolve::counted_source(app, macro_connect_enabled, &overlays, &connect);
         let source = self
             .source(kind)
             .ok_or_else(|| ConnectorsError::UnknownApp(app.clone()))?;
@@ -570,33 +548,23 @@ impl OrgSetups for Connectors {
         user: &MacroUserIdStr<'static>,
         apps: &[ConnectorId],
     ) -> HashMap<ConnectorId, OrgSetup> {
-        let (macro_connect_enabled, overlays) = match self.rule_inputs(user).await {
-            Ok(inputs) => inputs,
-            Err(error) => {
-                tracing::warn!(error = ?error, "could not read the overlay table; listing the catalog without admin setup");
-                return HashMap::new();
-            }
+        let Some(connect) = self.source(SourceKind::Connect) else {
+            return HashMap::new();
         };
-        let overlays = &overlays;
-        let answers = futures::future::join_all(apps.iter().map(|app| async move {
-            let (source, _) = self
-                .designated_by(macro_connect_enabled, overlays, app)
-                .await
-                .map_err(rootcause::Report::new)?;
-            let setup = source.org_setup(app).await?;
-            Ok::<_, rootcause::Report>(setup.map(|setup| (app.clone(), setup)))
-        }))
-        .await;
+        let macro_connect_enabled =
+            MacroConnectEnabledFlag::from_read(self.inner.macro_connect_enabled.read(user).await);
+        // Only Connect lists admin setup. With the rollout on, Connect counts
+        // for every app it serves (`resolve::counted_source`), so its answer
+        // is the counted source's; off, it counts for none.
+        if macro_connect_enabled != MacroConnectEnabledFlag::On {
+            return HashMap::new();
+        }
 
-        let setups: HashMap<ConnectorId, OrgSetup> = answers
-            .into_iter()
-            .filter_map(|answer| {
-                answer
-                    .inspect_err(|error| tracing::warn!(error = ?error, "could not read an app's admin setup; listing it without"))
-                    .ok()
-                    .flatten()
-            })
-            .collect();
+        let setups = connect
+            .org_setups(apps)
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "could not read Connect's admin setup; listing the catalog without it"))
+            .unwrap_or_default();
         tracing::Span::current().record("org_setups", setups.len());
 
         setups
