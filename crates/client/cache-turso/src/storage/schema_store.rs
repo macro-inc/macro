@@ -35,6 +35,7 @@ use cache_core::schema_change::{
     ProjectionInputs, ResetReason, SchemaChange, Tier, decode_stored_schema, encode_stored_schema,
     is_retired, overlay_fits, retire_overlay, unrecorded_schema,
 };
+use cache_core::value::ROOT_QUERY;
 
 pub(super) const CREATE_TABLE: &str = "CREATE TABLE cache_schema (slot INTEGER PRIMARY KEY, hash TEXT NOT NULL, incoming_hash TEXT NOT NULL, artifact BLOB NOT NULL)";
 pub(super) const TABLE: &str = "cache_schema";
@@ -344,11 +345,7 @@ fn apply(
             // projection may hold facts it fed, as the build before derived
             // them.
             let dropped = |key: &PredicateRecordKey| {
-                *every_document
-                    || key
-                        .as_str()
-                        .split_once(':')
-                        .is_some_and(|(typename, _)| changed.contains(typename))
+                *every_document || changed.contains(key_typename(key.as_str()))
             };
             let mut queue = conform_queue(
                 connection,
@@ -432,9 +429,20 @@ pub(super) fn record(
 }
 
 /// The bounds of the record keys of a type's records, `Typename:` to
-/// `Typename;`: `;` follows `:`, which no type name holds.
+/// `Typename;`: `;` follows `:`, which no type name holds. The query root's
+/// one record is keyed by its bare name, bounded alone by `ROOT_QUERY0`: a
+/// key holds `:` or a name character after a type name, never one below `0`.
 fn key_range(typename: &str) -> Vec<Value> {
+    if typename == ROOT_QUERY {
+        return vec![text(ROOT_QUERY), text(&format!("{ROOT_QUERY}0"))];
+    }
     vec![text(&format!("{typename}:")), text(&format!("{typename};"))]
+}
+
+/// The type of the records `key` names: what precedes its `:`, or all of it
+/// for the query root's record.
+fn key_typename(key: &str) -> &str {
+    key.split_once(':').map_or(key, |(typename, _)| typename)
 }
 
 /// Drops the facts of the documents of `changed` record types. When those

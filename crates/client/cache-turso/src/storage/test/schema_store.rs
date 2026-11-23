@@ -6,6 +6,7 @@ use cache_core::engine::{IDENTITY_META_KEY, IDENTITY_VALUE_FIELD};
 use cache_core::meta::Schema;
 use cache_core::queue::{OptimisticSource, decode_optimistic_source, encode_optimistic_source};
 use cache_core::schema_change::{ProjectionInputs, ResetReason, Tier, is_retired};
+use cache_core::value::ROOT_QUERY;
 use predicate_index::OptimisticProjectionMutation;
 
 const OLD: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
@@ -15,6 +16,8 @@ const ADDED: &str = "type Query { thing: Thing note: Note } type Mutation { rena
 const RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: String }";
 /// [`OLD`] with `Thing.value` and `Note.value` retyped.
 const BOTH_RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: Int }";
+/// [`OLD`] with a field of the query root retyped.
+const ROOT_RETYPED: &str = "type Query { thing: Note note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 /// [`OLD`] under another query root.
 const ROOTS: &str = "schema { query: Root mutation: Mutation } type Root { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 
@@ -700,6 +703,41 @@ fn a_shadow_moved_to_a_related_records_server_key_is_composed_there() {
         assert_eq!(adoption.change, types(&["Thing"], false));
         assert_eq!(shadows(&storage, "Note:server"), 1);
         assert_eq!(shadows(&storage, "Note:local"), 0);
+    });
+}
+
+#[test]
+fn a_changed_query_root_drops_its_document_and_shadow() {
+    block_on(async {
+        let mut storage =
+            populate(TursoStorage::open_in_memory("schema-root-document").unwrap()).await;
+        storage
+            .put_batch_with_projections(
+                vec![(key(ROOT_QUERY), record("root"))],
+                vec![ProjectionMutation::Replace(authoritative_projection(
+                    ROOT_QUERY, "owner",
+                ))],
+            )
+            .await
+            .unwrap();
+        let owner = storage.load_mutation_queue().await.unwrap()[0].id;
+        put_shadow(&mut storage, ROOT_QUERY, owner).await;
+        assert!(facts(&storage, ROOT_QUERY) > 0);
+
+        let adoption = adopt(&storage, ROOT_RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, types(&[ROOT_QUERY], false));
+        assert_eq!(
+            count(
+                &storage,
+                "SELECT count(*) FROM index_documents WHERE record_key = 'ROOT_QUERY'"
+            ),
+            0
+        );
+        assert_eq!(facts(&storage, ROOT_QUERY), 0);
+        assert_eq!(shadows(&storage, ROOT_QUERY), 0);
+        // The other types' documents stay.
+        assert!(facts(&storage, "Thing:0") > 0);
+        assert!(facts(&storage, "Note:0") > 0);
     });
 }
 
