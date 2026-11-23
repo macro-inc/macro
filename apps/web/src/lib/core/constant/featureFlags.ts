@@ -512,6 +512,16 @@ export const enableTaskSourceProperty = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Start Date on tasks and projects: the dates pill and picker, the details
+ * row, the composer, and the range in list cells and board cards.
+ */
+export const enableTaskStartDate = defineFlag({
+  key: 'enable-task-start-date',
+  env: 'ENABLE_TASK_START_DATE',
+  default: onInDev,
+});
+
 /** Task-composer template selection, authoring, and saved-draft recovery. */
 export const enableTaskTemplates = defineFlag({
   key: 'enable-task-templates',

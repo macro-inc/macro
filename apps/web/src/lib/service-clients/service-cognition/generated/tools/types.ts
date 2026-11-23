@@ -10703,7 +10703,7 @@ export interface CompanyPropertyOption {
   displayValue: string;
 }
 /**
- * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
+ * Get all properties attached to an entity (document, project, CRM company, etc.). Tasks are targeted as entity_type=document. Returns property definitions with their current values and available options for select-type properties. Select and tag values also come back resolved as human-readable labels in currentValueLabels. Tags are properties with dataType "tag"; only tags visible to the user (their own and their team's) are returned. Use ListTags to see every tag available to the user, and SetEntityProperty with the tag definition id and add_option_ids/remove_option_ids to apply or remove tags. For task documents, system properties (Assignees, Status, Priority, Due Date, etc.) are always present — you can update them directly with SetEntityProperty using well-known IDs without calling this first. Start Date and Project appear only once set. For CRM companies (entity_type=company, entity_id=the company UUID), this returns the builtin Stage / Owner / Revenue properties (with the team's stage options) plus any custom company properties.
  */
 export interface GetEntityProperties {
   /**
@@ -12500,6 +12500,10 @@ export interface ProjectPropertyValues {
    * Assigned users, independent from sharing membership.
    */
   assignees: string[];
+  /**
+   * Start timestamp, or unset.
+   */
+  startDate?: string | null;
   /**
    * Due timestamp, or unset.
    */
@@ -15626,7 +15630,7 @@ export interface SendEmail {
   attachments?: EmailAttachment[];
 }
 /**
- * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
+ * Set or update a property value on an entity. Tasks are targeted as entity_type='document'. Projects in the Tasks UI are entity_type='initiative'; entity_type='project' still means a folder. Initiatives share the Assignees, Status, Priority, Start Date and Due Date definitions below and their clearing behavior. Project Status accepts only Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), and Completed (...0004); In Review and Canceled are task-only options. Provide the property_definition_id and exactly one value field matching the property's data type.
  *
  * For multi-select properties — including tags — prefer add_option_ids / remove_option_ids over option_ids: they add or remove just those options atomically, composing with concurrent edits. option_ids replaces the entire value, so a stale read can silently drop options someone else just added; only use it when the user asks to set the value to exactly a given list. To apply a tag, pass the tag set's property_definition_id and the tag's option id (both from ListTags) in add_option_ids; to remove a tag, use remove_option_ids.
  *
@@ -15635,6 +15639,7 @@ export interface SendEmail {
  * - Status (00000001-0000-0000-0000-000000000002): select_string, single. Options: Not Started (00000001-0000-0000-0002-000000000001), In Progress (...0002), In Review (...0003), Completed (...0004), Canceled (...0005).
  * - Priority (00000001-0000-0000-0000-000000000003): select_string, single. Options: Low (...0001), Medium (...0002), High (...0003), Urgent (...0004). Option IDs: 00000001-0000-0000-0003-0000000000XX.
  * - Due Date (00000001-0000-0000-0000-000000000004): date, single. Use date_value with ISO 8601.
+ * - Start Date (00000001-0000-0000-0000-000000000015): date, single, optional (absent until set). When work on the task begins; Due Date ends the range. Use date_value with ISO 8601. The start never lands after the due date: a start set after it is saved as the due date, and a Due Date set before the start moves the start to it. When changing both dates, set the Due Date first.
  * - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
  * - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
  * - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.

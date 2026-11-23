@@ -16791,15 +16791,21 @@ export const getCrmPipelineRowsResponse = zod
                       ),
                     zod
                       .object({
+                        has_time: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                          ),
                         type: zod.enum(['Date']),
                         value: zod.iso
                           .datetime({})
                           .describe(
-                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                           ),
                       })
                       .describe(
-                        'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                        'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                       ),
                     zod
                       .object({
@@ -17200,15 +17206,21 @@ export const queryCrmPipelineRowsResponse = zod
                       ),
                     zod
                       .object({
+                        has_time: zod
+                          .boolean()
+                          .optional()
+                          .describe(
+                            "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                          ),
                         type: zod.enum(['Date']),
                         value: zod.iso
                           .datetime({})
                           .describe(
-                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                           ),
                       })
                       .describe(
-                        'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                        'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                       ),
                     zod
                       .object({
@@ -26109,10 +26121,13 @@ export const createTaskHandlerBody = zod
                   .describe('Boolean true\/false value'),
                 zod
                   .object({
+                    has_time: zod.boolean().optional(),
                     type: zod.enum(['date']),
                     value: zod.iso.datetime({}),
                   })
-                  .describe('Date and time value'),
+                  .describe(
+                    "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                  ),
                 zod
                   .object({
                     type: zod.enum(['date_range']),
@@ -50266,10 +50281,13 @@ export const createInitiativeBody = zod
                   .describe('Boolean true\/false value'),
                 zod
                   .object({
+                    has_time: zod.boolean().optional(),
                     type: zod.enum(['date']),
                     value: zod.iso.datetime({}),
                   })
-                  .describe('Date and time value'),
+                  .describe(
+                    "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                  ),
                 zod
                   .object({
                     type: zod.enum(['date_range']),
@@ -50714,6 +50732,10 @@ export const pageInitiativesResponse = zod
                     .uuid()
                     .nullish()
                     .describe('Priority option id, or unset.'),
+                  startDate: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe('Start timestamp, or unset.'),
                   status: zod
                     .uuid()
                     .nullish()
@@ -51543,15 +51565,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -51988,15 +52016,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -52290,15 +52324,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -52583,15 +52623,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -53005,15 +53051,21 @@ export const getItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -53797,15 +53849,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -54187,15 +54245,21 @@ export const getItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -54525,15 +54589,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -54867,15 +54937,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -55227,15 +55303,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -55613,15 +55695,21 @@ export const getItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -56780,15 +56868,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -57225,15 +57319,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -57527,15 +57627,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -57820,15 +57926,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -58242,15 +58354,21 @@ export const postItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -59034,15 +59152,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -59424,15 +59548,21 @@ export const postItemsSoupResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -59762,15 +59892,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -60104,15 +60240,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -60464,15 +60606,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -60850,15 +60998,21 @@ export const postItemsSoupResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -61428,15 +61582,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -61873,15 +62033,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -62175,15 +62341,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -62468,15 +62640,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -62890,15 +63068,21 @@ export const postItemsSoupAstResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -63684,15 +63868,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -64074,15 +64264,21 @@ export const postItemsSoupAstResponse = zod
                                         ),
                                       zod
                                         .object({
+                                          has_time: zod
+                                            .boolean()
+                                            .optional()
+                                            .describe(
+                                              "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                            ),
                                           type: zod.enum(['Date']),
                                           value: zod.iso
                                             .datetime({})
                                             .describe(
-                                              'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                              'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                             ),
                                         })
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                       zod
                                         .object({
@@ -64412,15 +64608,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -64754,15 +64956,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -65114,15 +65322,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -65500,15 +65714,21 @@ export const postItemsSoupAstResponse = zod
                                     ),
                                   zod
                                     .object({
+                                      has_time: zod
+                                        .boolean()
+                                        .optional()
+                                        .describe(
+                                          "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                        ),
                                       type: zod.enum(['Date']),
                                       value: zod.iso
                                         .datetime({})
                                         .describe(
-                                          'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                          'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                         ),
                                     })
                                     .describe(
-                                      'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                      'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                     ),
                                   zod
                                     .object({
@@ -66532,15 +66752,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -66983,15 +67209,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -67287,15 +67519,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -67584,15 +67822,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -68021,15 +68265,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
                                                   .describe(
-                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                    'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                                   ),
                                               })
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                             zod
                                               .object({
@@ -68874,15 +69124,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -69276,15 +69532,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
                                                   .describe(
-                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                    'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                                   ),
                                               })
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                             zod
                                               .object({
@@ -69626,15 +69888,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -69970,15 +70238,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -70348,15 +70622,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -70738,15 +71018,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -71160,15 +71446,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -71611,15 +71903,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -71915,15 +72213,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -72212,15 +72516,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -72649,15 +72959,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
                                                   .describe(
-                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                    'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                                   ),
                                               })
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                             zod
                                               .object({
@@ -73502,15 +73818,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -73904,15 +74226,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                               ),
                                             zod
                                               .object({
+                                                has_time: zod
+                                                  .boolean()
+                                                  .optional()
+                                                  .describe(
+                                                    "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                                  ),
                                                 type: zod.enum(['Date']),
                                                 value: zod.iso
                                                   .datetime({})
                                                   .describe(
-                                                    'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                    'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                                   ),
                                               })
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                             zod
                                               .object({
@@ -74254,15 +74582,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -74598,15 +74932,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -74976,15 +75316,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -75366,15 +75712,21 @@ export const postItemsSoupAstGroupedResponse = zod
                                           ),
                                         zod
                                           .object({
+                                            has_time: zod
+                                              .boolean()
+                                              .optional()
+                                              .describe(
+                                                "True when the date is an exact instant, its time of day set. False or absent, the value is a whole day, shown as the day its instant falls on in the viewer's time zone."
+                                              ),
                                             type: zod.enum(['Date']),
                                             value: zod.iso
                                               .datetime({})
                                               .describe(
-                                                'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                                'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                               ),
                                           })
                                           .describe(
-                                            'Date\/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}'
+                                            'Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set'
                                           ),
                                         zod
                                           .object({
@@ -88105,10 +88457,13 @@ export const listTaskTemplatesResponseItem = zod
                       .describe('Boolean true\/false value'),
                     zod
                       .object({
+                        has_time: zod.boolean().optional(),
                         type: zod.enum(['date']),
                         value: zod.iso.datetime({}),
                       })
-                      .describe('Date and time value'),
+                      .describe(
+                        "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                      ),
                     zod
                       .object({
                         type: zod.enum(['date_range']),
@@ -88333,10 +88688,13 @@ export const createTaskTemplateBody = zod
                       .describe('Boolean true\/false value'),
                     zod
                       .object({
+                        has_time: zod.boolean().optional(),
                         type: zod.enum(['date']),
                         value: zod.iso.datetime({}),
                       })
-                      .describe('Date and time value'),
+                      .describe(
+                        "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                      ),
                     zod
                       .object({
                         type: zod.enum(['date_range']),
@@ -88557,10 +88915,13 @@ export const getTaskTemplateResponse = zod
                       .describe('Boolean true\/false value'),
                     zod
                       .object({
+                        has_time: zod.boolean().optional(),
                         type: zod.enum(['date']),
                         value: zod.iso.datetime({}),
                       })
-                      .describe('Date and time value'),
+                      .describe(
+                        "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                      ),
                     zod
                       .object({
                         type: zod.enum(['date_range']),
@@ -88786,10 +89147,13 @@ export const updateTaskTemplateBody = zod
                       .describe('Boolean true\/false value'),
                     zod
                       .object({
+                        has_time: zod.boolean().optional(),
                         type: zod.enum(['date']),
                         value: zod.iso.datetime({}),
                       })
-                      .describe('Date and time value'),
+                      .describe(
+                        "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                      ),
                     zod
                       .object({
                         type: zod.enum(['date_range']),
@@ -88997,10 +89361,13 @@ export const updateTaskTemplateResponse = zod
                       .describe('Boolean true\/false value'),
                     zod
                       .object({
+                        has_time: zod.boolean().optional(),
                         type: zod.enum(['date']),
                         value: zod.iso.datetime({}),
                       })
-                      .describe('Date and time value'),
+                      .describe(
+                        "Date value. `has_time: true` makes it an exact instant; `false` or no\nflag makes it a whole day, shown as the day its instant falls on in the\nviewer's time zone."
+                      ),
                     zod
                       .object({
                         type: zod.enum(['date_range']),
