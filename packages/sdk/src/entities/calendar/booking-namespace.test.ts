@@ -78,6 +78,7 @@ describe('calendar.booking', () => {
               profileId: 'profile-1',
               revision: 3,
               schedules: [],
+              accounts: [],
               links: [saved],
             },
           };

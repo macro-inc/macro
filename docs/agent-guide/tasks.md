@@ -519,8 +519,10 @@ Verify layout-only, grouping-only, and sort-only save/reset, duplicate and reloa
 
 Choose **Gantt** in the **Task layout** group to see task timelines.
 The same option is available in a project's Tasks section. The timeline uses
-Created at as the start and Due date as the end; it does not read a task's
-Start Date yet. Bars without a due date fade to transparent at the right edge.
+Created at as the start and Due date as the end. With `enable-task-start-date`,
+a bar starts at the task's Start Date, or at Created at for a task without one,
+and a task whose dates have times draws at those times, with the hours zoom
+available. Bars without a due date fade to transparent at the right edge.
 The fade affects only the bar fill; labels remain visible.
 Their displayed tail is a visual placeholder, not a saved deadline. Invalid or
 missing start dates and due dates before creation are identified rather than
@@ -605,8 +607,16 @@ Left-edge rebasing preserves the current visible date immediately; right-edge
 extension does not write the scroll position. Click a task label or bar to open
 the task; right-click either for the same actions as its list item.
 
-Timeline dates are read-only: bars have no resize handles or end-date editing.
-Created at stays fixed, and moving a bar between groups does not shift its dates.
+Timeline dates are read-only with the start-date flag off: bars have no resize
+handles or end-date editing, Created at stays fixed, and moving a bar between
+groups does not shift its dates. With the flag on, a bar with a due date can be
+dragged across to move both dates, or by either edge to move one; a drag that
+starts mostly up or down still moves it to another group. Only the ends that
+moved are saved, the due date first when the new start passes the saved one. A
+task without a Start Date gains one only when its start edge moves. Whole days
+move by days; a bar with times moves by the zoom's step (days at week and month
+zoom), keeping each end's time of day, and an end saved without a time stays a
+whole day.
 
 When grouped by Status, Priority, Assignee, or Project, drag a task's list item or
 bar into another visible group to change that property. Projects support Status,
@@ -1264,7 +1274,8 @@ On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
 filters, sort, grouping, and pagination as the project list. Click a project
 label or bar to open its overview. Right-click either for its project list menu.
-The same timeline settings and read-only dates apply as in task Gantt.
+The same timeline settings apply as in task Gantt, and with the start-date flag
+on, project bars start at the Start Date and drag the same way.
 **Load more projects** continues the chart.
 The selection persists in `projects.layout` and restores with the navigation
 entry. Projects without a due date have explicitly open-ended bars. Mobile
