@@ -35,6 +35,7 @@ import { type Accessor, createMemo, createSignal, indexArray } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
+import type { EmailSearchScope } from '../search/email-search-scope';
 import type { EmailTab, EmailViewState } from '../types';
 import {
   advanceEmptyPages,
@@ -46,7 +47,11 @@ import {
   type EmailSavedViewScope,
 } from './email-query';
 import { buildEmailDateRows } from './email-results';
-import { buildEmailSearchRequest, facetsLeftToClient } from './email-search';
+import {
+  buildEmailSearchRequest,
+  type EmailSearchContext,
+  facetsLeftToClient,
+} from './email-search';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
@@ -76,8 +81,13 @@ type ShownEmailRows = {
 
 export type EmailDataSourceInput = Pick<
   EmailViewState,
-  'tab' | 'search' | 'inboxIds' | 'facets' | 'focusSort' | 'aliasFilter'
->;
+  'tab' | 'inboxIds' | 'facets' | 'focusSort' | 'aliasFilter'
+> & {
+  /** The words searched for, without the `in:` filter. */
+  search: string;
+  /** The mail a search reaches: all of it unless an `in:` filter names a view. */
+  searchScope: EmailSearchScope;
+};
 
 export type UseEmailDataSourceOptions = {
   /**
@@ -102,26 +112,21 @@ export type UseEmailDataSourceOptions = {
 /**
  * The server owns importance, calendar, sent and inbox scoping, so — as with
  * the legacy presets' client filters — only the shapes a cached entity can
- * contradict are re-checked here. A search hit's draft flag describes the
- * thread's latest message, not whether it holds a draft, so Drafts trusts the
- * service's Drafts scoping for hits.
+ * contradict are re-checked here.
  */
 function emailMatchesTab(
   entity: EmailEntity,
   tab: EmailTab,
-  userId: string | undefined,
-  /** A search hit, which the service matched across archived mail too. */
-  searchHit: boolean
+  userId: string | undefined
 ): boolean {
   return (
     match(tab)
-      .with('drafts', () => searchHit || entity.isDraft)
+      .with('drafts', () => entity.isDraft)
       .with('archived', () => entity.done === true)
       .with('shared', () => userId !== undefined && entity.ownerId !== userId)
       // The inbox views list only threads still in the inbox; a cached page can
       // carry a row whose record was archived after the page was fetched.
-      // Searching them still finds archived mail, as it always has.
-      .with('important', 'noise', () => searchHit || entity.done !== true)
+      .with('important', 'noise', () => entity.done !== true)
       .with(
         'favorites',
         'sent',
@@ -136,6 +141,24 @@ function emailMatchesTab(
       )
       .exhaustive(() => true)
   );
+}
+
+/**
+ * The same re-check for a search hit, by the view the search names. A hit's
+ * draft flag describes the thread's latest message, not whether it holds a
+ * draft, so Drafts trusts the service's Drafts scoping.
+ */
+function emailMatchesSearchScope(
+  entity: EmailEntity,
+  scope: EmailSearchScope,
+  userId: string | undefined
+): boolean {
+  return match(scope)
+    .with('archived', () => entity.done === true)
+    .with('shared', () => userId !== undefined && entity.ownerId !== userId)
+    .with('inbox', 'focus', 'signal', 'noise', () => entity.done !== true)
+    .with('favorites', 'sent', 'drafts', 'calendar', 'all', () => true)
+    .exhaustive();
 }
 
 // Provider-neutral folder membership needs a server lookup; arbitrary realtime
@@ -168,10 +191,15 @@ export function useEmailDataSource(
   const scheduled = useScheduledEmailSource(state);
   const reminders = useReminderEmailSource(state, options);
   const focus = useFocusEmailSource(state, options);
-  const showsReminders = () => state.tab === 'reminders';
-  const showsFocus = () => state.tab === 'focus';
-  const showsScheduled = () => state.tab === 'scheduled';
+  // A search lists the mail it reaches, whichever tab it starts from.
+  const showsReminders = () =>
+    state.tab === 'reminders' && !search.isSearching();
+  const showsFocus = () => state.tab === 'focus' && !search.isSearching();
+  const showsScheduled = () =>
+    state.tab === 'scheduled' && !search.isSearching();
   const showsFavorites = () => state.tab === 'favorites';
+  const searchesFavorites = () => state.searchScope === 'favorites';
+  const searchesFocus = () => state.searchScope === 'focus';
   // Guard the data read so a pending favorites request cannot suspend the view.
   const favorites = useFavoritesQuery({ entityType: ['email_thread'] });
   const favoriteThreadIds = createMemo(() =>
@@ -216,23 +244,37 @@ export function useEmailDataSource(
   // pages of read mail to find an unread thread.
   const queryArgs = createMemo(() => buildEmailQuery(queryContext()));
   const tagsReady = () => tagFacetReady(state.facets, options.tagSetsReady());
-  // Soup owns favorite filtering; only the separate search service needs IDs.
-  const searchFavoritesReady = () =>
-    !showsFavorites() || favoriteThreadIds() !== undefined;
+  // Soup owns favorite filtering; only the separate search service needs the
+  // IDs a Favorites or Focus search is held to.
+  const scopeThreadIds = () => {
+    if (searchesFavorites()) return favoriteThreadIds();
+    if (searchesFocus()) return focus.threadIds();
+    return [];
+  };
+  const searchScopeReady = () => scopeThreadIds() !== undefined;
   const filtersReady = () =>
-    tagsReady() && (!state.search.trim() || searchFavoritesReady());
-  const sourceEnabled = () =>
-    (options.enabled?.() ?? true) &&
-    tagsReady() &&
+    tagsReady() && (!state.search.trim() || searchScopeReady());
+  const enabled = () => (options.enabled?.() ?? true) && tagsReady();
+  const listEnabled = () =>
+    enabled() &&
     state.tab !== 'scheduled' &&
     state.tab !== 'reminders' &&
     state.tab !== 'focus';
-  const searchContext = (): EmailQueryContext => ({
+  const sourceEnabled = () =>
+    search.isSearching() ? enabled() : listEnabled();
+  // A search keeps the list's filters but reaches the mail its scope names,
+  // not the tab's own slice of it.
+  const searchQueryContext = (): EmailQueryContext => ({
     ...queryContext(),
-    ...(showsFavorites() ? { favoriteThreadIds: favoriteThreadIds() } : {}),
+    tab: 'all',
+  });
+  const searchContext = (): EmailSearchContext => ({
+    ...searchQueryContext(),
+    scope: state.searchScope,
+    scopeThreadIds: scopeThreadIds(),
   });
   const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: sourceEnabled(),
+    enabled: listEnabled(),
     // Folder previews must not overwrite the same thread's All Mail preview.
     ...folderQueryOptions(state.tab),
   }));
@@ -243,17 +285,20 @@ export function useEmailDataSource(
     !filtersReady() || query.isPending || query.isPlaceholderData;
 
   const selectEmails = (entities: EntityData[]): EmailEntity[] => {
-    const context = queryContext();
     // Rows and their lookups come from search hits while searching.
-    const searchHits = search.isSearching();
+    const searching = search.isSearching();
+    const tab = queryContext().tab;
     const selected: EmailEntity[] = [];
     for (const entity of entities) {
       if (!isEmailEntity(entity)) continue;
-      if (!emailMatchesTab(entity, context.tab, userId(), searchHits)) continue;
-      if (showsFavorites()) {
-        if (entity.isFavorited === false) continue;
+      if (searching) {
+        if (!emailMatchesSearchScope(entity, state.searchScope, userId()))
+          continue;
         // Search results have no Soup favorite field and use search's ID scope.
-        if (search.isSearching() && !favoriteIds().has(entity.id)) continue;
+        if (searchesFavorites() && !favoriteIds().has(entity.id)) continue;
+      } else {
+        if (!emailMatchesTab(entity, tab, userId())) continue;
+        if (showsFavorites() && entity.isFavorited === false) continue;
       }
 
       selected.push(entity);
@@ -265,7 +310,7 @@ export function useEmailDataSource(
   const search = createSearchState({
     surface: () => 'email',
     text: () => (canSearchEmailTab(state.tab) ? state.search : ''),
-    enabled: () => sourceEnabled() && searchFavoritesReady(),
+    enabled: () => enabled() && searchScopeReady(),
     disableLocalSearch: () => true,
     buildRequest: (request) =>
       buildEmailSearchRequest(searchContext(), request),
@@ -284,7 +329,7 @@ export function useEmailDataSource(
   );
   const aliasSearchQueries = indexArray(aliasSearchBatches, (ids) =>
     useSoupAstItemsQuery(
-      () => buildEmailQuery(queryContext(), ids()),
+      () => buildEmailQuery(searchQueryContext(), ids()),
       () => ({
         enabled: searchNeedsMembership() && search.usesServiceSearch(),
         keepPreviousData: false,
@@ -339,6 +384,7 @@ export function useEmailDataSource(
       queryArgs().body,
       state.facets,
       state.search.trim(),
+      state.searchScope,
     ])
   );
   const matchesOtherFacets = (email: EmailEntity) =>
@@ -390,7 +436,11 @@ export function useEmailDataSource(
   );
   const retainedQueries = indexArray(admissionBatches, (ids) => {
     const list = useSoupAstItemsQuery(
-      () => buildEmailQuery(queryContext(), ids()),
+      () =>
+        buildEmailQuery(
+          search.isSearching() ? searchQueryContext() : queryContext(),
+          ids()
+        ),
       () => ({
         enabled:
           filtersReady() && (!search.isSearching() || searchNeedsMembership()),
@@ -491,9 +541,13 @@ export function useEmailDataSource(
   // Working copies can exist before sender metadata allows a GraphQL save.
   // Keep them discoverable without waiting for the remote list/search.
   // A saved view's conditions can't be checked against a local working copy.
+  const listsLocalDrafts = () => {
+    if (options.savedView?.()) return false;
+    if (!search.isSearching()) return state.tab === 'drafts';
+    return state.searchScope === 'all' || state.searchScope === 'drafts';
+  };
   const recoverable = () =>
-    !options.savedView?.() &&
-    (state.tab === 'drafts' || (state.tab === 'all' && !!state.search.trim()))
+    listsLocalDrafts()
       ? localDraftEntities(localDrafts.drafts()).filter(
           (email) => email.ownerId === userId()
         )
@@ -582,7 +636,9 @@ export function useEmailDataSource(
   // keeping one. Page on, a bounded run per load, until a row shows.
   // Favorites search sends the favorite ids, so a new set is a new search.
   const searchScope = createMemo(() =>
-    showsFavorites() ? JSON.stringify([scope(), favoriteThreadIds()]) : scope()
+    searchesFavorites() || searchesFocus()
+      ? JSON.stringify([scope(), scopeThreadIds()])
+      : scope()
   );
   const emptyPages = advanceEmptyPages({
     scope: searchScope,
@@ -644,7 +700,7 @@ export function useEmailDataSource(
   });
   const awaitsRows = () => {
     if (localRows().length > 0) return false;
-    if (search.isSearching() && showsFavorites() && favorites.isError)
+    if (search.isSearching() && searchesFavorites() && favorites.isError)
       return false;
     if (!filtersReady()) return true;
     if (!search.isSearching()) {
@@ -764,9 +820,10 @@ export function useEmailDataSource(
       if (showsScheduled()) return scheduled.error();
       if (showsFocus()) return focus.error();
       return (
-        (search.isSearching() && showsFavorites()
+        (search.isSearching() && searchesFavorites()
           ? favorites.error
           : undefined) ??
+        (search.isSearching() && searchesFocus() ? focus.error() : undefined) ??
         (usesServiceSearch() ? search.error() : query.error) ??
         aliasSearchError() ??
         emptyPages.error() ??
@@ -814,7 +871,9 @@ export function useEmailDataSource(
       setRefreshing(true);
       emptyPages.resetError();
       try {
-        if (showsFavorites() && search.isSearching()) await favorites.refetch();
+        if (search.isSearching() && searchesFavorites())
+          await favorites.refetch();
+        if (search.isSearching() && searchesFocus()) await focus.refresh();
         await (usesServiceSearch() ? search.refetch() : query.refresh());
         if (scope() !== requestScope) return;
         // Refresh admission after search publishes its candidates: a refetch

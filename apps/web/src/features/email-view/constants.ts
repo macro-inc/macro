@@ -90,6 +90,9 @@ export const EMAIL_FOCUS_SORT_OPTIONS: {
 export const isExcludedEmailFolder = (tab: EmailTab): tab is 'spam' | 'trash' =>
   tab === 'spam' || tab === 'trash';
 
-/** Full-text search does not yet expose provider spam/trash folder scopes. */
+/**
+ * Search covers all mail from every tab but Spam and Trash, whose mail the
+ * search index leaves out.
+ */
 export const canSearchEmailTab = (tab: EmailTab): boolean =>
-  tab !== 'scheduled' && tab !== 'reminders' && !isExcludedEmailFolder(tab);
+  !isExcludedEmailFolder(tab);

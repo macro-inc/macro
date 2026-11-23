@@ -104,6 +104,10 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from './queries/use-email-query';
+import {
+  type ParsedEmailSearch,
+  parseEmailSearch,
+} from './search/email-search-scope';
 import { useEmailTabAvailability } from './tab-availability';
 import type {
   EmailFocusSort,
@@ -160,6 +164,8 @@ export type EmailViewContext = {
   /** The selected tags' names on All, where they alone scope the list. */
   tagViewTitle: Accessor<string | undefined>;
   source: EmailDataSource;
+  /** The searched words and the view an `in:` filter narrows them to. */
+  parsedSearch: Accessor<ParsedEmailSearch>;
   list: EmailListController;
   registerListActivationHandler: (
     handler: (
@@ -423,6 +429,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       scope: conditions && resolveEmailSavedViewScope(conditions, new Date()),
     };
   });
+  // A search covers all mail from any tab; only an `in:` filter narrows it.
+  const parsedSearch = createMemo(() => parseEmailSearch(state.search));
   const listInput: EmailDataSourceInput = {
     get tab() {
       return listFilters().tab;
@@ -431,7 +439,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       return listFilters().facets;
     },
     get search() {
-      return state.search;
+      return parsedSearch().query;
+    },
+    get searchScope() {
+      return parsedSearch().scope ?? 'all';
     },
     get inboxIds() {
       return state.inboxIds;
@@ -842,6 +853,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     filterByTag,
     tagViewTitle,
     source,
+    parsedSearch,
     list,
     registerListActivationHandler,
     selectedThread,

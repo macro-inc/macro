@@ -7,7 +7,8 @@ import { makeGraphqlSoupInput } from '@queries/soup/graphql/ast';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { describe, expect, it, vi } from 'vitest';
 import { EMAIL_TAB_IDS } from '../constants';
-import type { EmailTab, EmailViewConditions } from '../types';
+import type { EmailSearchScope } from '../search/email-search-scope';
+import type { EmailViewConditions } from '../types';
 import {
   buildEmailQuery,
   type EmailQueryContext,
@@ -15,7 +16,10 @@ import {
   emailViewForTab,
 } from './email-query';
 import { groupEmailEntitiesByDate } from './email-results';
-import { buildEmailSearchRequest } from './email-search';
+import {
+  buildEmailSearchRequest,
+  type EmailSearchContext,
+} from './email-search';
 
 vi.mock('@app/features/soup', async () => ({
   ...(await import('@app/features/soup/filters')),
@@ -97,7 +101,6 @@ describe('buildEmailQuery', () => {
     const args = buildEmailQuery(
       contextFor({
         tab: 'favorites',
-        favoriteThreadIds: ['starred-a', 'starred-b'],
         inboxIds: ['inbox-a'],
         facets: { read: ['unread'] },
       })
@@ -115,13 +118,8 @@ describe('buildEmailQuery', () => {
     expect(filter).not.toContain('inboxVisible');
   });
 
-  it('keeps the Soup query identical as favorite membership changes', () => {
+  it('leaves favorite membership to the server', () => {
     const args = buildEmailQuery(contextFor({ tab: 'favorites' }));
-    for (const favoriteThreadIds of [[], ['a'], ['a', 'b']]) {
-      expect(
-        buildEmailQuery(contextFor({ tab: 'favorites', favoriteThreadIds }))
-      ).toEqual(args);
-    }
     expect(args.body.favorites_only).toBe(true);
     const admitted = buildEmailQuery(
       contextFor({ tab: 'favorites', facets: { read: ['unread'] } }),
@@ -443,25 +441,27 @@ describe('buildEmailQuery', () => {
 describe('buildEmailSearchRequest', () => {
   const search = { query: 'invoice', matchType: 'partial' as const };
 
-  it.each(['spam', 'trash'] as const)(
-    'fails closed for %s even with retained IDs',
-    (tab) => {
-      expect(
-        buildEmailSearchRequest(contextFor({ tab }), search, [
-          'retained-thread',
-        ]).body.filters?.email_filters?.email_thread_ids
-      ).toEqual([NIL]);
-    }
-  );
+  const searchContextFor = (
+    overrides: Partial<EmailSearchContext> = {}
+  ): EmailSearchContext => ({
+    scope: 'all',
+    inboxIds: undefined,
+    facets: {},
+    facetContext: EMPTY_TAG_FACET_CONTEXT,
+    ...overrides,
+  });
 
-  const requestFor = (overrides: Partial<EmailQueryContext> = {}) => {
-    const { body } = buildEmailSearchRequest(contextFor(overrides), search);
+  const requestFor = (overrides: Partial<EmailSearchContext> = {}) => {
+    const { body } = buildEmailSearchRequest(
+      searchContextFor(overrides),
+      search
+    );
     if (!body.filters) throw new Error('search request has no filters');
 
     return { ...body, filters: body.filters };
   };
 
-  it('searches only email threads', () => {
+  it('searches only email threads, across all mail by default', () => {
     const body = requestFor();
 
     expect(body.query).toBe('invoice');
@@ -471,10 +471,10 @@ describe('buildEmailSearchRequest', () => {
     expect(body.filters.email_filters).toEqual({});
   });
 
-  it('restricts search and retained results to current favorites before pagination', () => {
-    const context = contextFor({
-      tab: 'favorites',
-      favoriteThreadIds: ['starred-a', 'starred-b'],
+  it('restricts in:favorites search and retained results to current favorites before pagination', () => {
+    const context = searchContextFor({
+      scope: 'favorites',
+      scopeThreadIds: ['starred-a', 'starred-b'],
       inboxIds: ['inbox-a'],
     });
     expect(
@@ -488,53 +488,58 @@ describe('buildEmailSearchRequest', () => {
         .filters?.email_filters?.email_thread_ids
     ).toEqual(['starred-b']);
     expect(
-      requestFor({ tab: 'favorites', favoriteThreadIds: [] }).filters
+      requestFor({ scope: 'favorites', scopeThreadIds: [] }).filters
         .email_filters?.email_thread_ids
     ).toEqual([NIL]);
   });
 
-  it('mirrors the tab scoping the list applies', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
+  it('holds in:focus to the threads Focus lists that are still in the inbox', () => {
+    expect(
+      requestFor({ scope: 'focus', scopeThreadIds: ['focus-a'] }).filters
+        .email_filters
+    ).toEqual({ done: false, email_thread_ids: ['focus-a'] });
+    expect(
+      requestFor({ scope: 'focus', scopeThreadIds: [] }).filters.email_filters
+        ?.email_thread_ids
+    ).toEqual([NIL]);
+  });
 
-    expect(filtersFor('important')).toEqual({
+  it('narrows to what the named view lists, its inbox views to mail still in the inbox', () => {
+    const filtersFor = (scope: EmailSearchScope) =>
+      requestFor({ scope }).filters.email_filters;
+
+    expect(filtersFor('inbox')).toEqual({ done: false });
+    expect(filtersFor('signal')).toEqual({
       importance: true,
       shared: 'exclude',
+      done: false,
     });
     expect(filtersFor('noise')).toEqual({
       importance: false,
       shared: 'exclude',
+      done: false,
     });
     expect(filtersFor('calendar')).toEqual({
       calendar_only: true,
       shared: 'exclude',
     });
     expect(filtersFor('shared')).toEqual({ shared: 'only' });
-    expect(filtersFor('all')).toEqual({});
-  });
-
-  it('scopes Drafts and Sent search to their views, like the list', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
-
     expect(filtersFor('drafts')).toEqual({ view: 'drafts' });
     expect(filtersFor('sent')).toEqual({ view: 'sent' });
-  });
-
-  it('searches archived mail as done and unshared, like the list', () => {
-    const filtersFor = (tab: EmailTab) =>
-      requestFor({ tab }).filters.email_filters;
-
     expect(filtersFor('archived')).toEqual({ shared: 'exclude', done: true });
   });
 
-  it('matches nothing when Archived is narrowed to mail not done', () => {
+  it('matches nothing when a view and the Done filter disagree', () => {
     expect(
-      requestFor({ tab: 'archived', facets: { done: ['not-done'] } }).filters
+      requestFor({ scope: 'archived', facets: { done: ['not-done'] } }).filters
         .email_filters?.email_thread_ids
     ).toEqual([NIL]);
     expect(
-      requestFor({ tab: 'archived', facets: { done: ['done'] } }).filters
+      requestFor({ scope: 'inbox', facets: { done: ['done'] } }).filters
+        .email_filters?.email_thread_ids
+    ).toEqual([NIL]);
+    expect(
+      requestFor({ scope: 'archived', facets: { done: ['done'] } }).filters
         .email_filters
     ).toEqual({ shared: 'exclude', done: true });
   });
