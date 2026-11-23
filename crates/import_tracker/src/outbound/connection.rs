@@ -204,7 +204,10 @@ impl<S: ApiConnectionsService> Session<S> {
                 response.status,
                 StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN
             ) {
-                return Err(TrackerError::Forbidden(response.status.as_u16()));
+                return Err(TrackerError::Forbidden {
+                    status: response.status.as_u16(),
+                    message: response.body.chars().take(500).collect(),
+                });
             }
             return Err(TrackerError::Upstream {
                 status: response.status.as_u16(),

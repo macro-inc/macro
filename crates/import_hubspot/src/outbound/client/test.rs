@@ -319,7 +319,7 @@ async fn reads_a_whole_portal() {
     assert!(
         urls[8].starts_with(
             "https://api.hubapi.com/crm/v4/objects/contacts/7001/associations/companies"
-        ) && urls[8].contains("after=MjA%3D"),
+        ) && !urls[8].contains("after="),
         "{}",
         urls[8]
     );
@@ -350,6 +350,22 @@ async fn a_denied_required_read_names_its_scope() {
     let result = connections(service).inventory(&user(), &|_| {}).await;
     assert!(
         matches!(result, Err(HubspotError::MissingScope(Scope::Deals))),
+        "{result:?}"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refusal_without_missing_scopes_is_not_called_a_scope() {
+    let mut responses = full_portal();
+    responses.truncate(10);
+    responses[9] = answer(
+        StatusCode::FORBIDDEN,
+        r#"{"status":"error","category":"FORBIDDEN","message":"Portal locked"}"#,
+    );
+    let (_, service) = connected(responses);
+    let result = connections(service).inventory(&user(), &|_| {}).await;
+    assert!(
+        matches!(result, Err(HubspotError::Upstream { status: 403, .. })),
         "{result:?}"
     );
 }

@@ -147,8 +147,18 @@ impl HubspotRead {
 /// Map the shared transport's failure for one read.
 fn map_error(read: HubspotRead, error: TrackerError) -> HubspotError {
     match error {
-        TrackerError::NotConnected | TrackerError::Forbidden(401) => HubspotError::NotConnected,
-        TrackerError::Forbidden(_) => HubspotError::MissingScope(read.scope()),
+        TrackerError::NotConnected | TrackerError::Forbidden { status: 401, .. } => {
+            HubspotError::NotConnected
+        }
+        // HubSpot names a missing scope with this category; any other 403 is
+        // a refusal the scope list cannot explain.
+        TrackerError::Forbidden { message, .. } if message.contains("MISSING_SCOPES") => {
+            HubspotError::MissingScope(read.scope())
+        }
+        TrackerError::Forbidden { status, message } => HubspotError::Upstream {
+            status,
+            message: message.chars().take(MESSAGE_CHARS).collect(),
+        },
         TrackerError::Upstream { status, .. }
             if status == StatusCode::TOO_MANY_REQUESTS.as_u16() || status >= 500 =>
         {
@@ -465,8 +475,15 @@ impl<S: ApiConnectionsService> Client<S> {
                             add_link(&mut links, company, link.kind == primary);
                         }
                     }
-                    if let Some(next) = inline.paging.as_ref().and_then(|p| p.next.as_ref()) {
-                        more.push((records.len(), next.after.clone()));
+                    // The inline page's cursor belongs to the v3 list, not to
+                    // v4's association endpoint: read v4 from its start.
+                    if inline
+                        .paging
+                        .as_ref()
+                        .and_then(|p| p.next.as_ref())
+                        .is_some()
+                    {
+                        more.push(records.len());
                     }
                 }
                 let properties = wire
@@ -479,7 +496,7 @@ impl<S: ApiConnectionsService> Client<S> {
             progress(records.len());
         })
         .await?;
-        for (index, after) in more {
+        for index in more {
             let Some((record, links)) = records.get_mut(index) else {
                 continue;
             };
@@ -487,15 +504,10 @@ impl<S: ApiConnectionsService> Client<S> {
                 from: object,
                 id: record.id.clone(),
             };
-            let mut after = Some(after);
+            let mut after: Option<String> = None;
             let mut seen = HashSet::new();
-            while let Some(cursor) = after.take() {
-                if !seen.insert(cursor.clone()) {
-                    return Err(HubspotError::Decode(
-                        "HubSpot paging cursor repeated".into(),
-                    ));
-                }
-                let page: Page<WireLink> = self.get(&read, Some(&cursor)).await?;
+            loop {
+                let page: Page<WireLink> = self.get(&read, after.as_deref()).await?;
                 for link in page.results {
                     let primary = link.association_types.iter().any(|kind| {
                         kind.category == "HUBSPOT_DEFINED"
@@ -505,7 +517,15 @@ impl<S: ApiConnectionsService> Client<S> {
                         add_link(links, company, primary);
                     }
                 }
-                after = page.paging.and_then(|p| p.next).map(|next| next.after);
+                let Some(next) = page.paging.and_then(|p| p.next) else {
+                    break;
+                };
+                if next.after.is_empty() || !seen.insert(next.after.clone()) {
+                    return Err(HubspotError::Decode(
+                        "HubSpot paging cursor repeated".into(),
+                    ));
+                }
+                after = Some(next.after);
             }
         }
         Ok(records)
@@ -553,7 +573,7 @@ impl<S: ApiConnectionsService> Client<S> {
                 .await
             {
                 Ok(page) => page,
-                Err(HubspotError::MissingScope(_)) => {
+                Err(HubspotError::MissingScope(_) | HubspotError::Upstream { status: 403, .. }) => {
                     self.warn(format!(
                             "HubSpot did not allow reading {} property definitions, so custom properties are not listed.",
                             object.plural()

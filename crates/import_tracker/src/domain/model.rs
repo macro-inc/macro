@@ -167,8 +167,13 @@ pub enum TrackerError {
     #[error("The issue tracker is not connected")]
     NotConnected,
     /// The source denied access.
-    #[error("The issue tracker denied access ({0})")]
-    Forbidden(u16),
+    #[error("The issue tracker denied access ({status})")]
+    Forbidden {
+        /// HTTP status: 401 or 403.
+        status: u16,
+        /// Bounded provider explanation, so a caller can tell why.
+        message: String,
+    },
     /// A malformed response or stalled cursor.
     #[error("Invalid issue tracker response: {0}")]
     Decode(String),

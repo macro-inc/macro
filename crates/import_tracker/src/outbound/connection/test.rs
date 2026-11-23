@@ -77,7 +77,7 @@ async fn forbidden_answers_are_not_retried() {
         session
             .read(Method::POST, "https://api.linear.app/graphql", None)
             .await,
-        Err(TrackerError::Forbidden(403))
+        Err(TrackerError::Forbidden { status: 403, .. })
     ));
     assert_eq!(fake.api_calls().len(), 1);
 }
