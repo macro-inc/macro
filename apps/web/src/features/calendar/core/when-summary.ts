@@ -22,7 +22,8 @@ export function whenSummary(
   end: string,
   allDay: boolean,
   format: ClockFormat,
-  locale?: string
+  locale?: string,
+  joiner = ' @ '
 ) {
   const first = whenDateLabel(start, locale);
   const sameDay = start.slice(0, 10) === end.slice(0, 10);
@@ -31,6 +32,6 @@ export function whenSummary(
   const range = timeRangeFromValue({ start, end, allDay });
   if (!range) return first;
   const { start: from, end: to } = range;
-  if (sameDay) return `${first} @ ${formatClockRange(from, to, format)}`;
-  return `${first} @ ${formatClockTime(from, format, true)} – ${whenDateLabel(end, locale)} @ ${formatClockTime(to, format, true)}`;
+  if (sameDay) return `${first}${joiner}${formatClockRange(from, to, format)}`;
+  return `${first}${joiner}${formatClockTime(from, format, true)} – ${whenDateLabel(end, locale)}${joiner}${formatClockTime(to, format, true)}`;
 }

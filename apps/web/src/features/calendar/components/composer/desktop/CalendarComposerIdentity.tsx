@@ -7,6 +7,7 @@ export function CalendarComposerIdentity() {
   return (
     <Show when={model.isEdit()}>
       <CalendarSwatch
+        class="size-4 rounded-sm"
         color={
           model.controller.selectedCalendarOption()?.color ??
           DEFAULT_CALENDAR_SOURCE.color

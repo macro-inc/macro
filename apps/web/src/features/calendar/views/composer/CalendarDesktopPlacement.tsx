@@ -1,61 +1,54 @@
 import { type ParentProps, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import { CalendarComposerIdentity } from '../../components/composer/desktop/CalendarComposerIdentity';
-import { ComposerAdditionalFields } from '../../components/composer/desktop/ComposerAdditionalFields';
-import { ComposerOptionsToggle } from '../../components/composer/desktop/ComposerOptionsToggle';
+import { ComposerClose } from '../../components/composer/actions/ComposerClose';
+import { ComposerPin } from '../../components/composer/actions/ComposerPin';
+import { ComposerHeaderKind } from '../../components/composer/desktop/ComposerHeaderKind';
+import { DesktopComposerFields } from '../../components/composer/desktop/DesktopComposerFields';
+import { DesktopComposerFooter } from '../../components/composer/desktop/DesktopComposerFooter';
+import { ComposerHeader } from '../../components/composer/header/ComposerHeader';
 import { ComposerWhenRoot } from '../../components/composer/when/ComposerWhenRoot';
-import { createComposerPresentation } from '../../primitives/create-composer-presentation';
-import {
-  AnchoredComposer,
-  type DesktopPlacementProps,
-} from './AnchoredComposer';
-import { DesktopComposer, type DesktopComposerProps } from './DesktopComposer';
-import { PinnedComposer } from './PinnedComposer';
+import { useCalendarComposer } from '../../context/calendar-composer-context';
+import type { DesktopPlacementProps } from './AnchoredComposer';
+import type { DesktopComposerProps } from './DesktopComposer';
 
 type CalendarDesktopPlacementProps = ParentProps<
   DesktopComposerProps & DesktopPlacementProps & { pinned?: boolean }
 >;
-function CalendarDesktopContent(props: CalendarDesktopPlacementProps) {
-  const presentation = createComposerPresentation();
-  // Create the field tree outside the placement switch: pinning moves its DOM, not its owner.
-  const fields = (
-    <DesktopComposer
-      macroCallsEnabled={props.macroCallsEnabled}
-      saveError={props.saveError}
-      resolveAppLink={props.resolveAppLink}
-      titleIcon={<CalendarComposerIdentity />}
-      options={
-        <Show when={props.pinned || presentation.expanded()}>
-          <ComposerAdditionalFields resolveAppLink={props.resolveAppLink} />
-        </Show>
-      }
-    >
-      {props.children}
-    </DesktopComposer>
-  );
-  return (
-    <Dynamic
-      component={props.pinned ? PinnedComposer : AnchoredComposer}
-      onClose={props.onClose}
-      onTogglePin={props.onTogglePin}
-      onHeaderPointerDown={props.onHeaderPointerDown}
-      optionsToggle={
-        <Show when={!props.pinned}>
-          <ComposerOptionsToggle
-            expanded={presentation.expanded()}
-            onToggle={presentation.toggle}
-          />
-        </Show>
-      }
-    >
-      {fields}
-    </Dynamic>
-  );
-}
+
+/** Placement changes only the chrome; the mounted field tree retains its owner and inputs. */
 export function CalendarDesktopPlacement(props: CalendarDesktopPlacementProps) {
+  const model = useCalendarComposer();
   return (
     <ComposerWhenRoot>
-      <CalendarDesktopContent {...props} />
+      <div
+        class="flex min-h-0 flex-1 flex-col gap-4"
+        data-composer-placement={props.pinned ? 'pinned' : 'anchored'}
+      >
+        <ComposerHeader f3 onPointerDown={props.onHeaderPointerDown}>
+          <Show when={model.isEdit()}>
+            <ComposerHeaderKind />
+          </Show>
+          <div class="flex-1" />
+          <Show when={props.onTogglePin}>
+            {(toggle) => (
+              <ComposerPin
+                pinned={props.pinned ?? false}
+                onToggle={toggle()}
+                disabled={model.formIsDisabled()}
+              />
+            )}
+          </Show>
+          <ComposerClose f3 onClose={props.onClose} />
+        </ComposerHeader>
+        <DesktopComposerFields
+          macroCallsEnabled={props.macroCallsEnabled}
+          pinned={props.pinned}
+          saveError={props.saveError}
+          resolveAppLink={props.resolveAppLink}
+        >
+          {props.children}
+        </DesktopComposerFields>
+        <DesktopComposerFooter f3 onCancel={props.onClose} />
+      </div>
     </ComposerWhenRoot>
   );
 }
