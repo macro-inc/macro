@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useUnfurl } from '@core/signal/unfurl';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
@@ -27,7 +28,6 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
   const [isAdding, setIsAdding] = createSignal(false);
   const [inputValue, setInputValue] = createSignal('');
   const [error, setError] = createSignal<string | null>(null);
-  const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
   let addButton: HTMLButtonElement | undefined;
@@ -151,9 +151,6 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
             url={url}
             canEdit={!isReadOnly()}
             isRemoving={isSaving()}
-            hovered={hoveredLink() === url}
-            onMouseEnter={() => setHoveredLink(url)}
-            onMouseLeave={() => setHoveredLink(null)}
             onRemove={() => handleRemove(url)}
             badLinks={badLinks}
             markBad={(k) => setBadLinks(k, true)}
@@ -221,9 +218,6 @@ type LinkChipProps = {
   url: string;
   canEdit: boolean;
   isRemoving: boolean;
-  hovered: boolean;
-  onMouseEnter: () => void;
-  onMouseLeave: () => void;
   onRemove: () => void;
   badLinks: Record<string, true>;
   markBad: (key: string) => void;
@@ -249,21 +243,16 @@ const LinkChip: Component<LinkChipProps> = (props) => {
   };
 
   const handleLinkClick = (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.remove-button')) return;
     e.preventDefault();
     openExternalUrl(props.url);
   };
 
   return (
-    <div
-      class="relative inline-flex max-w-50 shrink-0 rounded-sm hover:bg-hover"
-      onMouseEnter={props.onMouseEnter}
-      onMouseLeave={props.onMouseLeave}
-    >
+    <div class="group/link-chip inline-flex max-w-50 shrink-0 items-center rounded-sm hover:bg-hover">
       <button
         type="button"
         onClick={handleLinkClick}
-        class="text-left px-2 py-0.5 bg-transparent text-ink inline-flex items-center gap-2 w-full cursor-default"
+        class="text-left px-2 py-0.5 bg-transparent text-ink inline-flex items-center gap-2 min-w-0 flex-1 cursor-default"
         title={props.url}
         disabled={props.isRemoving}
       >
@@ -289,17 +278,18 @@ const LinkChip: Component<LinkChipProps> = (props) => {
         </div>
         <span class="truncate flex-1 text-ink">{title()}</span>
       </button>
-      <Show when={props.canEdit && props.hovered && !props.isRemoving}>
-        <div class="absolute right-0 inset-y-0 flex items-center pr-1 pl-2 bg-linear-to-r from-transparent to-hover to-40% rounded-r-sm">
-          <button
-            type="button"
-            class="remove-button size-4 p-0.5 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm"
-            onClick={props.onRemove}
-            disabled={props.isRemoving}
-          >
-            <DeleteIcon class="size-3" />
-          </button>
-        </div>
+      {/* The remove button takes its own space so the title truncates before
+          it; desktop shows it on hover or focus, touch always. */}
+      <Show when={props.canEdit}>
+        <button
+          type="button"
+          aria-label={t('entityActions.removeLink')}
+          class="mr-1 size-4 touch:size-6 p-0.5 shrink-0 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm opacity-0 pointer-events-none not-touch:group-hover/link-chip:opacity-100 not-touch:group-hover/link-chip:pointer-events-auto group-focus-within/link-chip:opacity-100 group-focus-within/link-chip:pointer-events-auto touch:opacity-100 touch:pointer-events-auto"
+          onClick={props.onRemove}
+          disabled={props.isRemoving}
+        >
+          <DeleteIcon class="size-3 touch:size-4" />
+        </button>
       </Show>
     </div>
   );

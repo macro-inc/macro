@@ -144,7 +144,11 @@ test.describe('link value', () => {
     await waitForSave(page);
     await finishSave(page);
 
-    await expect(page.getByTestId('link').locator('button')).toBeFocused();
+    await expect(
+      page
+        .getByTestId('link')
+        .getByRole('button', { name: 'example.com', exact: true })
+    ).toBeFocused();
   });
 
   test('Escape hands focus back to the add button', async ({ page }) => {
@@ -165,6 +169,43 @@ test.describe('link value', () => {
 
     await expect(field(page, 'links')).toBeFocused();
     await expect(field(page, 'links')).toBeEditable();
+  });
+});
+
+test.describe('link remove button', () => {
+  test.beforeEach(({ page }) => open(page));
+
+  const title = (page: Page) =>
+    page
+      .getByTestId('long-link')
+      .getByRole('button', { name: /a-long-subdomain/ })
+      .locator('span');
+  const remove = (page: Page) =>
+    page.getByTestId('long-link').getByRole('button', { name: /^Remove / });
+
+  async function expectTitleEndsBeforeRemove(page: Page) {
+    await expect(remove(page)).toHaveCSS('opacity', '1');
+    const titleBox = await title(page).boundingBox();
+    const removeBox = await remove(page).boundingBox();
+    if (!titleBox || !removeBox)
+      throw new Error('The link chip is not laid out');
+    expect(titleBox.x + titleBox.width).toBeLessThanOrEqual(removeBox.x);
+  }
+
+  test('hovering a long link shows the remove button beside its title', async ({
+    page,
+  }) => {
+    await title(page).hover();
+    await expectTitleEndsBeforeRemove(page);
+  });
+
+  test('touch always shows the remove button beside the title', async ({
+    page,
+  }) => {
+    await page.evaluate(() => {
+      document.documentElement.dataset.touchDevice = 'true';
+    });
+    await expectTitleEndsBeforeRemove(page);
   });
 });
 
