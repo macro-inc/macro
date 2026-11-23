@@ -193,6 +193,8 @@ struct Crm {
     crash_after_create: Mutex<HashSet<String>>,
     /// Every address contacts were looked up by.
     email_lookups: Mutex<Vec<String>>,
+    /// Reads of a company's pipeline entries.
+    entry_reads: std::sync::atomic::AtomicUsize,
 }
 
 impl Crm {
@@ -285,20 +287,22 @@ impl CrmImportWriter for Crm {
             .push((id, name.into(), stages.to_vec()));
         Ok(id)
     }
-    async fn deal_entry(
+    async fn deal_entries(
         &self,
         _: &MacroUserIdStr<'static>,
         pipeline: Uuid,
         company: Uuid,
-        link: &str,
-    ) -> anyhow::Result<Option<Uuid>> {
+    ) -> anyhow::Result<std::collections::HashMap<String, Uuid>> {
+        self.entry_reads
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(self
             .entries
             .lock()
             .unwrap()
             .iter()
-            .find(|(_, p, e)| *p == pipeline && e.company == company && e.link == link)
-            .map(|(id, _, _)| *id))
+            .filter(|(_, p, e)| *p == pipeline && e.company == company)
+            .map(|(id, _, e)| (e.link.clone(), *id))
+            .collect())
     }
     async fn add_deal_entry(
         &self,
@@ -842,4 +846,27 @@ async fn a_record_a_stopped_write_recorded_is_reused(pool: PgPool) {
     let entries = crm.entries.lock().unwrap().clone();
     assert_eq!(entries.len(), 2);
     assert!(entries.iter().all(|(_, p, _)| *p == pipeline));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_companys_entries_are_read_once_per_write(pool: PgPool) {
+    let team = Uuid::now_v7();
+    let owner = teammate(&pool, "hubspot-entry-reads", team).await;
+    let crm = crm_for(team, &[&owner]);
+    let mut inventory = portal("hubspot-entry-reads@example.com");
+    // Four deals on Acme in one pipeline, one on the gmail company.
+    let acme = inventory.deals[0].clone();
+    for record in ["33", "34", "35"] {
+        inventory.deals.push(Deal {
+            id: id(record),
+            name: Some(format!("Deal {record}")),
+            ..acme.clone()
+        });
+    }
+
+    let report = import(&pool, inventory, crm.clone(), &owner).await;
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    assert_eq!(crm.entries.lock().unwrap().len(), 5);
+    // One read per company and pipeline, not one per deal.
+    assert_eq!(crm.entry_reads.load(std::sync::atomic::Ordering::SeqCst), 2);
 }

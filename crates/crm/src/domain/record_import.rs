@@ -4,6 +4,7 @@
 //! viewer's own receipts, so an import keeps the access, validation and
 //! field rules of the single-record tools.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use databases::domain::models::Viewer;
@@ -104,22 +105,25 @@ pub struct ImportedDeal {
     pub link: String,
 }
 
-/// The entry of `pipeline` among `entries` whose source link is `link`.
-pub fn entry_with_link<'a>(
+/// The entries of `pipeline` among `entries`, by each source link they carry.
+pub fn entries_by_link<'a>(
     entries: impl IntoIterator<Item = (Uuid, Uuid, &'a [(String, FieldValue)])>,
     pipeline: Uuid,
-    link: &str,
-) -> Option<Uuid> {
+) -> HashMap<String, Uuid> {
     entries
         .into_iter()
         .filter(|(holder, _, _)| *holder == pipeline)
-        .find(|(_, _, fields)| {
-            fields.iter().any(|(name, value)| {
-                name == SOURCE_LINK_FIELD
-                    && matches!(value, FieldValue::Links(links) if links.iter().any(|l| l == link))
-            })
+        .flat_map(|(_, entry, fields)| {
+            fields
+                .iter()
+                .filter(|(name, _)| name == SOURCE_LINK_FIELD)
+                .flat_map(move |(_, value)| match value {
+                    FieldValue::Links(links) => links.clone(),
+                    _ => Vec::new(),
+                })
+                .map(move |link| (link, entry))
         })
-        .map(|(_, entry, _)| entry)
+        .collect()
 }
 
 /// Imported records through the CRM services, as the viewer.
@@ -371,19 +375,18 @@ where
         Ok(created.pipeline.pipeline.id)
     }
 
-    /// The entry of `pipeline` tracking `company` with this source link, if
-    /// a write already added it. Read from the company's own entries, so its
-    /// cost follows the company, never the pipeline's size.
-    #[tracing::instrument(skip_all, fields(%pipeline, found), err)]
-    pub async fn deal_entry(
+    /// The entries of `pipeline` tracking `company`, by source link. Read
+    /// from the company's own entries, so its cost follows the company, never
+    /// the pipeline's size.
+    #[tracing::instrument(skip_all, fields(%pipeline, entries), err)]
+    pub async fn deal_entries(
         &self,
         viewer: &Viewer,
         pipeline: Uuid,
         company: Uuid,
-        link: &str,
-    ) -> Result<Option<Uuid>, TransferError> {
+    ) -> Result<HashMap<String, Uuid>, TransferError> {
         let entries = self.workflows.record_entries(viewer, &[company]).await?;
-        let found = entry_with_link(
+        let found = entries_by_link(
             entries.iter().flat_map(|group| {
                 group.entries.iter().map(|entry| {
                     (
@@ -394,9 +397,8 @@ where
                 })
             }),
             pipeline,
-            link,
         );
-        tracing::Span::current().record("found", found.is_some());
+        tracing::Span::current().record("entries", found.len());
         Ok(found)
     }
 

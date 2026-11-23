@@ -66,13 +66,12 @@ impl CrmImportWriter for Rules {
     ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
-    async fn deal_entry(
+    async fn deal_entries(
         &self,
         _: &MacroUserIdStr<'static>,
         _: Uuid,
         _: Uuid,
-        _: &str,
-    ) -> anyhow::Result<Option<Uuid>> {
+    ) -> anyhow::Result<HashMap<String, Uuid>> {
         unimplemented!()
     }
     async fn add_deal_entry(

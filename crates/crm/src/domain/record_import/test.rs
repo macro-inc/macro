@@ -20,7 +20,7 @@ fn currencies_are_the_pipelines_own() {
 }
 
 #[test]
-fn a_deal_entry_is_found_by_its_pipeline_and_source_link() {
+fn deal_entries_are_keyed_by_source_link_within_their_pipeline() {
     let (pipeline, other) = (Uuid::now_v7(), Uuid::now_v7());
     let (ours, theirs) = (Uuid::now_v7(), Uuid::now_v7());
     let link = "https://app.hubspot.com/contacts/1/record/0-3/30";
@@ -32,13 +32,8 @@ fn a_deal_entry_is_found_by_its_pipeline_and_source_link() {
         (other, theirs, fields.as_slice()),
         (pipeline, ours, fields.as_slice()),
     ];
-    assert_eq!(entry_with_link(entries, pipeline, link), Some(ours));
     assert_eq!(
-        entry_with_link(
-            entries,
-            pipeline,
-            "https://app.hubspot.com/contacts/1/record/0-3/31"
-        ),
-        None
+        entries_by_link(entries, pipeline),
+        HashMap::from([(link.to_owned(), ours)])
     );
 }

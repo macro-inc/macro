@@ -1321,15 +1321,15 @@ pub trait CrmImportWriter: Send + Sync + 'static {
         name: &str,
         stages: &[String],
     ) -> anyhow::Result<Uuid>;
-    /// The entry of `pipeline` tracking `company` that carries the deal
-    /// `link`, when a stopped write already added it.
-    async fn deal_entry(
+    /// The entries of `pipeline` tracking `company`, by the deal link each
+    /// carries: deals a stopped write already added. Read once per company
+    /// and pipeline per write.
+    async fn deal_entries(
         &self,
         user: &MacroUserIdStr<'static>,
         pipeline: Uuid,
         company: Uuid,
-        link: &str,
-    ) -> anyhow::Result<Option<Uuid>>;
+    ) -> anyhow::Result<HashMap<String, Uuid>>;
     /// Add a deal as a pipeline entry.
     async fn add_deal_entry(
         &self,

@@ -120,6 +120,8 @@ struct Known {
     targets: HashMap<String, Uuid>,
     /// Records a stopped write made, by ledger row.
     earlier: HashMap<Uuid, Uuid>,
+    /// Each company's entries per pipeline, by deal link, read once per write.
+    deal_entries: HashMap<(Uuid, Uuid), HashMap<String, Uuid>>,
     /// Plan keys of objects the owner left out of this review.
     left_out: std::collections::HashSet<String>,
 }
@@ -274,6 +276,7 @@ where
                 })
                 .collect(),
             earlier,
+            deal_entries: HashMap::new(),
             left_out: rows
                 .iter()
                 .filter(|row| {
@@ -432,7 +435,10 @@ where
         writer: &dyn CrmImportWriter,
     ) -> Result<(Uuid, bool)> {
         let Known {
-            targets, left_out, ..
+            targets,
+            left_out,
+            deal_entries,
+            ..
         } = known;
         match &meta.object {
             HubspotObject::Pipeline { stages } => Ok((
@@ -498,8 +504,14 @@ where
                         .ok_or(ImportError::NotReady(
                             "Its company has not been imported. Plan again to retry this deal.",
                         ))?;
-                if let Some(existing) = writer.deal_entry(user, pipeline, company, link).await? {
-                    return Ok((existing, false));
+                let entries = match deal_entries.entry((pipeline, company)) {
+                    std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
+                    std::collections::hash_map::Entry::Vacant(slot) => {
+                        slot.insert(writer.deal_entries(user, pipeline, company).await?)
+                    }
+                };
+                if let Some(existing) = entries.get(link) {
+                    return Ok((*existing, false));
                 }
                 let entry = NewDealEntry {
                     company,
@@ -512,7 +524,9 @@ where
                     owner: deal.owner.clone(),
                     link: link.to_owned(),
                 };
-                Ok((writer.add_deal_entry(user, pipeline, &entry).await?, true))
+                let added = writer.add_deal_entry(user, pipeline, &entry).await?;
+                entries.insert(link.to_owned(), added);
+                Ok((added, true))
             }
         }
     }
