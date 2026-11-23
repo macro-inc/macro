@@ -31,6 +31,7 @@ function outcomeAttributes(outcome: Outcome): Attributes {
     }))
     .with({ kind: 'download_failed' }, (failed) => ({
       native_update_target_version: failed.target_version,
+      native_update_download_ms: failed.download_ms,
       ...failureAttributes(failed.failure),
       native_update_consecutive_failures: failed.consecutive_failures,
     }))
@@ -60,12 +61,26 @@ export function nativeUpdateAttributes(report: Report): Attributes {
   };
 }
 
-/** Which span a report becomes; checks keep their measured duration. */
-function spanName(outcome: Outcome): string {
+/**
+ * Which span a report becomes; checks keep their measured duration. A found
+ * update has none: the same check reports again when its download ends, and
+ * that span covers the whole check.
+ */
+function spanName(outcome: Outcome): string | undefined {
   return match(outcome.kind)
     .with('installed', 'install_failed', () => 'native.update.install')
-    .with('update_found', () => 'native.update.found')
+    .with('update_found', () => undefined)
     .otherwise(() => 'native.update.check');
+}
+
+function downloadMs(outcome: Outcome): number | undefined {
+  return match(outcome)
+    .with(
+      { kind: 'downloaded' },
+      { kind: 'download_failed' },
+      (value) => value.download_ms
+    )
+    .otherwise(() => undefined);
 }
 
 function failed(outcome: Outcome): string | undefined {
@@ -87,20 +102,24 @@ function failed(outcome: Outcome): string | undefined {
 export function reportNativeUpdate(report: Report) {
   const attributes = nativeUpdateAttributes(report);
   analytics.track(NATIVE_UPDATE_EVENT, attributes);
+  const name = spanName(report.outcome);
+  if (!name) return;
   // Unclassed: an update failure must reach us for every user, not a sample.
-  const span = Telemetry.span(spanName(report.outcome), {
+  const span = Telemetry.span(name, {
     startTime: report.startedAtMs,
     attributes,
   });
   const end = report.startedAtMs + report.durationMs;
-  const outcome = report.outcome;
-  if (outcome.kind === 'downloaded') {
-    const startTime = end - outcome.download_ms;
-    span
-      .run(() => Telemetry.span('native.update.download', { startTime }))
-      .end(end);
+  const download = downloadMs(report.outcome);
+  const failure = failed(report.outcome);
+  if (download !== undefined) {
+    const child = span.run(() =>
+      Telemetry.span('native.update.download', { startTime: end - download })
+    );
+    if (report.outcome.kind === 'download_failed' && failure)
+      child.error(failure);
+    child.end(end);
   }
-  const failure = failed(outcome);
   if (failure) span.error(failure);
   span.end(end);
 }

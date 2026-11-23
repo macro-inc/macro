@@ -62,8 +62,11 @@ export type Outcome =
 /**  Reading the feed failed. Counts every failure since the last success. */
 { kind: "check_failed"; failure: Failure; consecutive_failures: number } |
 /**  Downloading or verifying the offered update failed. */
-{ kind: "download_failed"; target_version: string; failure: Failure; consecutive_failures: number } |
-/**  The previous launch installed the update this launch runs. */
+{ kind: "download_failed"; target_version: string; download_ms: number; failure: Failure; consecutive_failures: number } |
+/**
+ *  The previous launch installed an update: this launch no longer runs
+ *  the version it replaced. `current_version` says which one it runs.
+ */
 { kind: "installed"; from_version: string; target_version: string; trigger: Trigger } |
 /**
  *  The previous launch tried to install an update and this launch still

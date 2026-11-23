@@ -90,6 +90,7 @@ it('marks failed checks with the failure kind, IO kind and HTTP status', () => {
     report({
       kind: 'download_failed',
       target_version: '2026.1119.1',
+      download_ms: 400,
       failure: { kind: 'request', io_kind: null, http_status: 404 },
       consecutive_failures: 2,
     })
@@ -104,9 +105,26 @@ it('marks failed checks with the failure kind, IO kind and HTTP status', () => {
       native_update_consecutive_failures: 2,
     })
   );
-  expect(telemetry.spans[0]?.error).toHaveBeenCalledWith(
+  const [check, download] = telemetry.spans;
+  expect(check?.error).toHaveBeenCalledWith(
     'native update download_failed: request'
   );
+  expect(download).toMatchObject({
+    name: 'native.update.download',
+    options: { startTime: 1_100 },
+  });
+  expect(download?.error).toHaveBeenCalledOnce();
+});
+
+it('sends a found update to PostHog only; its check span comes later', () => {
+  reportNativeUpdate(
+    report({ kind: 'update_found', target_version: '2026.1119.1' })
+  );
+  expect(telemetry.track).toHaveBeenCalledWith(
+    NATIVE_UPDATE_EVENT,
+    expect.objectContaining({ native_update_outcome: 'update_found' })
+  );
+  expect(telemetry.spans).toHaveLength(0);
 });
 
 it('reports an install from the launch after it', () => {

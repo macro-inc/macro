@@ -53,10 +53,12 @@ pub enum Outcome {
     /// Downloading or verifying the offered update failed.
     DownloadFailed {
         target_version: String,
+        download_ms: u32,
         failure: Failure,
         consecutive_failures: u32,
     },
-    /// The previous launch installed the update this launch runs.
+    /// The previous launch installed an update: this launch no longer runs
+    /// the version it replaced. `current_version` says which one it runs.
     Installed {
         from_version: String,
         target_version: String,
@@ -277,11 +279,15 @@ pub struct PendingInstall {
 }
 
 impl PendingInstall {
+    /// Replaces the record whole, so an app killed mid-write leaves the
+    /// previous record rather than a truncated one.
     pub fn write(&self, path: &Path) -> std::io::Result<()> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        std::fs::write(path, serde_json::to_vec(self)?)
+        let partial = path.with_extension("json.partial");
+        std::fs::write(&partial, serde_json::to_vec(self)?)?;
+        std::fs::rename(&partial, path)
     }
 
     /// Reads and removes the record a previous launch left, and reports the
@@ -313,7 +319,7 @@ impl PendingInstall {
     }
 
     fn report(self, current_version: &str, bundle_location: Option<BundleLocation>) -> Report {
-        let outcome = if current_version == self.target_version {
+        let outcome = if current_version != self.from_version {
             Outcome::Installed {
                 from_version: self.from_version,
                 target_version: self.target_version,

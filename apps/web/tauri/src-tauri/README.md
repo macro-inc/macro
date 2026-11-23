@@ -670,19 +670,22 @@ The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 when it mounts and after each emit, so each report goes out once. A check
 reports `up_to_date`, `update_found` then `downloaded`, `check_failed` or
 `download_failed` (span `native.update.check`, timed by the host, with a
-`native.update.download` child; `native.update.found` for the find). Failures
+`native.update.download` child; `update_found` is a PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next
-launch reads and deletes it. It reports `installed` when it runs the target
-version, otherwise `install_failed` with the recorded failure or `interrupted`
+launch reads and deletes it. It reports `installed` when it no longer runs
+the version it replaced, otherwise `install_failed` with the recorded failure or `interrupted`
 (span `native.update.install`). Reports carry `current_version`,
 `target_version`/`from_version`, `trigger` (`quit` or `restart`), and on macOS
 `bundle_location` (`applications`, `translocated`, `mounted_volume`,
 `elsewhere`): a translocated or mounted app can't be replaced. A failure has a
 closed `kind` and, where they apply, `io_kind` (a `std::io::ErrorKind` name)
 and `http_status`. The schema never copies error text, because updater and IO
-errors can name paths in the user's home directory. To find one user's update
+errors can name paths in the user's home directory. Delivery is best effort,
+like recovered diagnostics: a report is taken from the host before PostHog or
+the span exporter sends it, so a reload or quit in between loses it (an install
+is still reported by the next launch). To find one user's update
 history in PostHog, filter `native_update_outcome` by person and read
 `native_update_outcome`, `native_update_failure_kind` and
 `native_update_io_kind`. The wire types are generated with the diagnostics

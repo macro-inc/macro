@@ -4,6 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { hasAutomaticReloadHolds } from '@core/util/reloadForNewerBuild';
+import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { createSignal, onCleanup, onMount } from 'solid-js';
@@ -124,7 +125,14 @@ export function createNativeUpdates(flush: () => Promise<void>) {
       // Older binaries do not report update outcomes.
       return;
     }
-    for (const report of reports) reportNativeUpdate(report);
+    // The host has already let go of these; one bad report must not drop the rest.
+    for (const report of reports) {
+      try {
+        reportNativeUpdate(report);
+      } catch (error) {
+        Telemetry.error(error, { surface: 'native-updates' });
+      }
+    }
   }
 
   async function initializeReports() {

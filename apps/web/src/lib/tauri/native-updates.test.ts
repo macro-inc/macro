@@ -6,6 +6,10 @@ const native = vi.hoisted(() => ({
   reports: [] as unknown[][],
   invoke: vi.fn(),
   report: vi.fn(),
+  telemetryError: vi.fn(),
+}));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: { error: native.telemetryError },
 }));
 vi.mock('@tauri-apps/api/core', () => ({ invoke: native.invoke }));
 vi.mock('@tauri-apps/api/event', () => ({
@@ -30,9 +34,16 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+/** Makes the next take fail the way a binary without the command does. */
+const missingCommand: unknown[] = [];
+
 native.invoke.mockImplementation(async (command: string) => {
-  if (command === 'take_native_update_reports')
-    return native.reports.shift() ?? [];
+  if (command === 'take_native_update_reports') {
+    const next = native.reports.shift() ?? [];
+    if (next === missingCommand)
+      throw new Error('command take_native_update_reports not found');
+    return next;
+  }
   if (command === 'get_native_update_status') return { status: 'Idle' };
   throw new Error(`unexpected ${command}`);
 });
@@ -53,9 +64,7 @@ it('sends reports waiting at mount and each batch the host announces', async () 
 });
 
 it('stays quiet on binaries without update reports', async () => {
-  native.invoke.mockImplementationOnce(async () => {
-    throw new Error('command take_native_update_reports not found');
-  });
+  native.reports.push(missingCommand);
   const dispose = createRoot((dispose) => {
     createNativeUpdates(async () => {});
     return dispose;
@@ -63,6 +72,25 @@ it('stays quiet on binaries without update reports', async () => {
   await vi.waitFor(() =>
     expect(native.invoke).toHaveBeenCalledWith('take_native_update_reports')
   );
+  await Promise.resolve();
+  // Caught in the drain: fireAndForget would report an escaped rejection.
+  expect(native.telemetryError).not.toHaveBeenCalled();
   expect(native.report).not.toHaveBeenCalled();
+  dispose();
+});
+
+it('keeps sending a batch after one report fails', async () => {
+  native.reports.push([{ id: 'bad' }, { id: 'good' }]);
+  native.report.mockImplementationOnce(() => {
+    throw new Error('unknown outcome');
+  });
+  const dispose = createRoot((dispose) => {
+    createNativeUpdates(async () => {});
+    return dispose;
+  });
+  await vi.waitFor(() =>
+    expect(native.report).toHaveBeenCalledWith({ id: 'good' })
+  );
+  expect(native.telemetryError).toHaveBeenCalledOnce();
   dispose();
 });

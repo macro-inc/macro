@@ -5,7 +5,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 async fn check_fixture(
     version: &str,
     corrupt: bool,
-) -> (Result<(), CheckError>, Status, Vec<Outcome>) {
+) -> (Result<bool, CheckError>, Status, Vec<Outcome>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let manifest = serde_json::json!({
@@ -69,7 +69,7 @@ async fn check_fixture(
 #[tokio::test]
 async fn a_verified_download_becomes_ready() {
     let (result, status, outcomes) = check_fixture("99.0.0", false).await;
-    result.unwrap();
+    assert!(result.unwrap());
     assert_eq!(
         status,
         Status::Ready {
@@ -110,20 +110,24 @@ async fn tampered_download_never_becomes_ready() {
             target_version: "99.0.0".into()
         }]
     );
-    assert_eq!(
-        result.unwrap_err().outcome(3),
-        Outcome::DownloadFailed {
-            target_version: "99.0.0".into(),
-            failure: Failure::new(FailureKind::Signature),
-            consecutive_failures: 3,
-        }
-    );
+    let Outcome::DownloadFailed {
+        target_version,
+        failure,
+        consecutive_failures,
+        ..
+    } = result.unwrap_err().outcome(3)
+    else {
+        panic!("expected a download failure");
+    };
+    assert_eq!(target_version, "99.0.0");
+    assert_eq!(failure, Failure::new(FailureKind::Signature));
+    assert_eq!(consecutive_failures, 3);
 }
 
 #[tokio::test]
 async fn older_releases_are_not_downloaded() {
     let (result, status, outcomes) = check_fixture("0.0.0", false).await;
-    result.unwrap();
+    assert!(result.unwrap());
     assert_eq!(status, Status::Idle);
     assert_eq!(outcomes, [Outcome::UpToDate]);
 }

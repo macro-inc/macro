@@ -62,6 +62,7 @@ enum CheckError {
     Check(tauri_plugin_updater::Error),
     Download {
         version: String,
+        download_ms: u32,
         error: tauri_plugin_updater::Error,
     },
 }
@@ -73,8 +74,13 @@ impl CheckError {
                 failure: error.into(),
                 consecutive_failures,
             },
-            Self::Download { version, error } => Outcome::DownloadFailed {
+            Self::Download {
+                version,
+                download_ms,
+                error,
+            } => Outcome::DownloadFailed {
                 target_version: version.clone(),
+                download_ms: *download_ms,
                 failure: error.into(),
                 consecutive_failures,
             },
@@ -180,9 +186,12 @@ pub fn setup<R: Runtime>(
             let timing = Timing::start();
             let result = check(&handle, &coordinator, &timing).await;
             let delay = match result {
-                Ok(()) => {
+                Ok(checked) => {
                     retry = RETRY_INTERVAL;
-                    failures = 0;
+                    // A refused check proves nothing about the feed.
+                    if checked {
+                        failures = 0;
+                    }
                     CHECK_INTERVAL
                 }
                 Err(error) => {
@@ -279,18 +288,20 @@ fn report_outcome<R: Runtime>(app: &AppHandle<R>, coordinator: &Coordinator, rep
         .ok();
 }
 
+/// Checks the feed and downloads a newer version. `Ok(false)` when the state
+/// refused to start a check, so no request was made.
 async fn check<R: Runtime>(
     app: &AppHandle<R>,
     coordinator: &Coordinator,
     timing: &Timing,
-) -> Result<(), CheckError> {
+) -> Result<bool, CheckError> {
     if !coordinator
         .state
         .lock()
         .expect("native update state poisoned")
         .begin_check()
     {
-        return Ok(());
+        return Ok(false);
     }
     publish(app, coordinator, Status::Checking);
     let Some(mut update) = app
@@ -304,7 +315,7 @@ async fn check<R: Runtime>(
     else {
         report(app, coordinator, timing, Outcome::UpToDate);
         publish(app, coordinator, Status::Idle);
-        return Ok(());
+        return Ok(true);
     };
     let version = update.version.clone();
     report(
@@ -331,6 +342,7 @@ async fn check<R: Runtime>(
         .await
         .map_err(|error| CheckError::Download {
             version: version.clone(),
+            download_ms: duration_ms(download_started.elapsed()),
             error,
         })?;
     report(
@@ -351,7 +363,7 @@ async fn check<R: Runtime>(
     app.emit(EVENT, Status::Ready { version })
         .inspect_err(|error| tracing::warn!(error=?error, "failed to emit native update ready"))
         .ok();
-    Ok(())
+    Ok(true)
 }
 
 pub fn restart<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {

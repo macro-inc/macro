@@ -132,6 +132,29 @@ fn a_launch_on_the_target_version_reports_the_install() {
 }
 
 #[test]
+fn a_launch_on_any_newer_version_counts_as_installed() {
+    let path = record_path();
+    pending(None).write(&path).unwrap();
+    let report = PendingInstall::take(&path, "2026.1120.1", None).unwrap();
+    assert_eq!(report.current_version, "2026.1120.1");
+    assert!(matches!(report.outcome, Outcome::Installed { .. }));
+}
+
+#[test]
+fn rewriting_the_record_leaves_no_partial_file() {
+    let path = record_path();
+    pending(None).write(&path).unwrap();
+    pending(Some(Failure::new(FailureKind::Install)))
+        .write(&path)
+        .unwrap();
+    let files: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(files, ["pending-install.json"]);
+}
+
+#[test]
 fn a_launch_on_the_old_version_reports_the_recorded_failure() {
     let path = record_path();
     let failure = Failure::io(&std::io::Error::from(
@@ -185,6 +208,7 @@ fn reports_serialize_to_the_frontend_contract() {
         bundle_location: Some(BundleLocation::Translocated),
         outcome: Outcome::DownloadFailed {
             target_version: "2026.1119.1".into(),
+            download_ms: 900,
             failure: Failure {
                 kind: FailureKind::Request,
                 io_kind: None,
@@ -203,6 +227,7 @@ fn reports_serialize_to_the_frontend_contract() {
             "outcome": {
                 "kind": "download_failed",
                 "target_version": "2026.1119.1",
+                "download_ms": 900,
                 "failure": { "kind": "request", "io_kind": null, "http_status": 404 },
                 "consecutive_failures": 2,
             },
