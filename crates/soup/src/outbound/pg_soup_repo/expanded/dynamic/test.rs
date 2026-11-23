@@ -867,3 +867,55 @@ fn scan_bound_limits_source_scans_only() {
         "an unmaintained or unbackfilled table is never read"
     );
 }
+
+/// A begin dropped while its `BEGIN` is still in flight (a request or a live
+/// subscription that ends while it waits) must not hand the connection back
+/// to the pool inside a transaction. If it does, the snapshot `BEGIN` below
+/// fails on that connection ("SET TRANSACTION ISOLATION LEVEL must be called
+/// before any query") and leaves it aborted, so every later read on it fails.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_begin_dropped_mid_flight_leaves_the_connection_clean(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // One connection, so the snapshot read gets the one the dropped begin used.
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await?;
+    // The server is still running this BEGIN when the timeout drops the future.
+    let dropped = tokio::time::timeout(
+        std::time::Duration::from_millis(200),
+        single.begin_with("BEGIN; SELECT pg_sleep(1)"),
+    )
+    .await;
+    assert!(
+        dropped.is_err(),
+        "the begin finished before it could be dropped"
+    );
+
+    let mut snapshot = begin_dynamic_query(&single).await?;
+    let one: i32 = sqlx::query_scalar!(r#"SELECT 1 AS "one!""#)
+        .fetch_one(&mut *snapshot)
+        .await?;
+    assert_eq!(one, 1);
+    snapshot.commit().await?;
+    assert_eq!(idle_state(&pool, &single).await?, "idle");
+    Ok(())
+}
+
+/// The server's own view of `single`'s one connection, taken from another
+/// connection while it sits idle: `idle`, or `idle in transaction` when a
+/// transaction was left open on it.
+async fn idle_state(pool: &PgPool, single: &PgPool) -> anyhow::Result<String> {
+    // Holding it waits for the pool to finish taking it back, and keeps it idle.
+    let mut held = single.acquire().await?;
+    let pid: i32 = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *held)
+        .await?;
+    let state: Option<String> =
+        sqlx::query_scalar!("SELECT state FROM pg_stat_activity WHERE pid = $1", pid)
+            .fetch_one(pool)
+            .await?;
+    drop(held);
+    Ok(state.unwrap_or_default())
+}

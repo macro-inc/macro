@@ -614,6 +614,9 @@ tungstenite = { git = "https://github.com/signalapp/tungstenite-rs", rev = "a183
 utoipa-swagger-ui = { path = "vendor/utoipa-swagger-ui" }
 # Bundles a newer IANA tzdata release than crates.io; see vendor/chrono-tz/README-MACRO.md.
 chrono-tz = { path = "vendor/chrono-tz" }
+# A begin dropped mid-flight no longer strands its connection inside a
+# transaction; see vendor/sqlx-postgres/README-MACRO.md.
+sqlx-postgres = { path = "vendor/sqlx-postgres" }
 
 # cache-turso's storage tests load thousands of rows into the embedded SQL engine
 # to assert VM step budgets. Unoptimized, the engine made them the slowest tests

@@ -1451,3 +1451,61 @@ async fn a_thread_whose_root_names_its_channel_in_capitals_stays_hidden(
     assert_eq!(keys(&page), vec![]);
     Ok(())
 }
+
+/// A read of known items runs inside live subscriptions, which end whenever
+/// a page closes, so its future is often dropped mid-flight. A drop at any
+/// point must leave the pooled connection outside a transaction: a stranded
+/// one runs every later borrower's statements inside it, and soup's snapshot
+/// `BEGIN` then aborts it for good.
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("work_feed")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_dropped_read_of_known_items_leaves_no_transaction_open(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    copy_entities_onto_recipient_rows(&pool).await?;
+    // One connection, so every read and every check gets the same one.
+    let single = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with((*pool.connect_options()).clone())
+        .await?;
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let only = vec![EntityType::Document.with_entity_string(DOC_A.to_string())];
+
+    // Drop the read after 0 µs, 1 µs, … so some drops land while its
+    // transaction's BEGIN is on the wire.
+    for micros in 0..2_000u64 {
+        let mut recompute = req(WORK, &link_ids, &sources);
+        recompute.only = Some(&only);
+        let _ = tokio::time::timeout(
+            std::time::Duration::from_micros(micros),
+            attention_soup_page(&single, recompute),
+        )
+        .await;
+        let state = idle_state(&pool, &single).await?;
+        assert_eq!(
+            state, "idle",
+            "a read dropped after {micros} µs left its connection {state}"
+        );
+    }
+    Ok(())
+}
+
+/// The server's own view of `single`'s one connection, taken from another
+/// connection while it sits idle: `idle`, or `idle in transaction` when a
+/// transaction was left open on it.
+async fn idle_state(pool: &Pool<Postgres>, single: &Pool<Postgres>) -> anyhow::Result<String> {
+    // Holding it waits for the pool to finish taking it back, and keeps it idle.
+    let mut held = single.acquire().await?;
+    let pid: i32 = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *held)
+        .await?;
+    let state: Option<String> =
+        sqlx::query_scalar!("SELECT state FROM pg_stat_activity WHERE pid = $1", pid)
+            .fetch_one(pool)
+            .await?;
+    drop(held);
+    Ok(state.unwrap_or_default())
+}
