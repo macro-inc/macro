@@ -805,7 +805,6 @@ export default {
       'Nessuna impostazione trovata. Prova «firma», «tema» o «calendario».',
     backToSettings: 'Torna alle impostazioni',
     closeSettings: 'Chiudi impostazioni',
-    goToTab: 'Vai alla scheda impostazioni {{number}}',
     editProfile: 'Modifica profilo',
     logOut: 'Esci',
     yourAccount: 'Il tuo account',
