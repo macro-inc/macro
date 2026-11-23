@@ -1,6 +1,6 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import { toast } from '@core/component/Toast/Toast';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import RobotIcon from '@icon/system/regular/robot.svg';
 import {
@@ -34,7 +34,7 @@ import { createBotAvatarUpload } from './createBotAvatarUpload';
 type Stage = 'form' | 'creating' | 'ready';
 
 export function BotCreate(props: { channelId?: string; onBack: () => void }) {
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentTeamQuery = useCurrentTeamQuery();
   const isTeamAdmin = useIsTeamAdmin();
   const createBotMutation = useCreateBotMutation();
@@ -58,7 +58,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
   );
 
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeam = createMemo(() => currentTeamQuery.data?.team);
   const canCreateTeamBot = createMemo(

@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{ImportStatus, RunStatus, SlackConversation};
 use crate::domain::ports::ImportError;
-use crate::domain::service::test::admission::{Creator, NoConnector, Repo, user};
+use crate::domain::service::test::admission::{Creator, NoConnector, Repo, no_connections, user};
 use crate::domain::service::{ImportService, ImportStager, SLACK_DISCOVERY_TIMEOUT};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -181,7 +181,7 @@ fn workspace(channels: Vec<SlackConversation>) -> Workspace {
 fn service(repo: Repo, workspace: Workspace) -> Service {
     ImportServiceImpl::new(
         repo,
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Creator::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )

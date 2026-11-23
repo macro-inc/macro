@@ -1,123 +1,116 @@
-import type { PipedreamConnectionResponse } from '@service-cognition/client';
+import type { Connector, ConnectorStatus } from '@queries/connectors';
 import { describe, expect, it } from 'vitest';
-import { capabilitiesFor, toConnectionsModel } from './model';
+import { capabilityFor, toConnectionsModel } from './model';
 
-function connection(
-  appSlug: string,
-  enabled = true
-): PipedreamConnectionResponse {
-  return { app_slug: appSlug, server_name: 'Connected account', enabled };
+function app(
+  slug: string,
+  status: ConnectorStatus = 'connected',
+  overrides: Partial<Connector> = {}
+): Connector {
+  return {
+    key: `app/${slug}`,
+    target: { type: 'app', slug },
+    name: `${slug} account`,
+    status,
+    connectable: true,
+    mcp: true,
+    api: false,
+    importAvailable: false,
+    ...overrides,
+  };
 }
 
-describe('Pipedream connections model', () => {
-  it.each(['slack', 'slack_v2'])(
-    'presents %s as Slack and preserves its stored slug',
-    (appSlug) => {
-      const model = toConnectionsModel({
-        pipedream: [connection(appSlug)],
-        nativeMcp: [],
-      });
+function server(
+  url: string,
+  status: ConnectorStatus = 'connected',
+  name = 'My server'
+): Connector {
+  return {
+    key: `server/${btoa(url).replace(/=+$/, '')}`,
+    target: { type: 'server', url },
+    name,
+    status,
+    connectable: true,
+    mcp: true,
+    api: false,
+    importAvailable: false,
+  };
+}
 
-      expect(capabilitiesFor(model, 'slack')).toEqual([
-        expect.objectContaining({
-          id: 'slack-ai',
-          provider: 'slack',
-          title: 'Slack',
-          account: 'Connected account',
-          status: 'connected',
-          mechanism: 'pipedream',
-          appSlug,
-        }),
-      ]);
-      expect(model.providers).toEqual([
-        expect.objectContaining({ id: 'slack', name: 'Slack', ready: 1 }),
-      ]);
-      expect(model.leftovers).toEqual([]);
-    }
-  );
-
-  it('carries the backend holding the grant', () => {
-    const model = toConnectionsModel({
-      pipedream: [{ ...connection('linear'), provider: 'connect' }],
-      nativeMcp: [],
-    });
-    expect(capabilitiesFor(model, 'linear')[0]).toMatchObject({
-      mechanism: 'pipedream',
-      grantProvider: 'connect',
-    });
+describe('toConnectionsModel', () => {
+  it.each([
+    ['connected', 'connected'],
+    ['disabled', 'off'],
+    ['needsReauth', 'action-required'],
+    ['notConnected', 'not-connected'],
+  ] as const)('shows the server status %s as %s', (status, shown) => {
+    const model = toConnectionsModel([
+      app('linear', status),
+      app('posthog', status),
+      server('https://mcp.example.com/mcp', status),
+    ]);
+    expect(capabilityFor(model, 'linear')?.status).toBe(shown);
+    expect(model.leftovers.map((row) => row.status)).toEqual([shown, shown]);
   });
 
-  it('preserves disabled Slack connections', () => {
-    const model = toConnectionsModel({
-      pipedream: [connection('slack_v2', false)],
-      nativeMcp: [],
-    });
-    expect(capabilitiesFor(model, 'slack')[0]).toMatchObject({
-      status: 'off',
-      appSlug: 'slack_v2',
-    });
-    expect(model.providers[0].ready).toBe(0);
+  it('makes Slack one row with the status the server gave it', () => {
+    // The server folds `slack` and `slack_v2` into one app; a disabled
+    // `slack` never hides a usable `slack_v2` here (section 2, rule 4).
+    const model = toConnectionsModel([app('slack', 'connected')]);
+    expect(model.capabilities).toEqual([
+      expect.objectContaining({
+        provider: 'slack',
+        key: 'app/slack',
+        account: 'slack account',
+        status: 'connected',
+      }),
+    ]);
+    expect(model.leftovers).toEqual([]);
   });
 
-  describe.each([
-    ['slack', 'slack_v2'],
-    ['slack_v2', 'slack'],
-  ])('alias input order: %s, %s', (first, second) => {
-    it.each([
-      [true, true],
-      [false, true],
-      [true, false],
-      [false, false],
-    ])(
-      'prefers slack (enabled=%s) and keeps slack_v2 (enabled=%s) manageable',
-      (slackEnabled, slackV2Enabled) => {
-        const connections = [first, second].map((slug) => ({
-          ...connection(slug, slug === 'slack' ? slackEnabled : slackV2Enabled),
-          server_name: `${slug} account`,
-        }));
-        const model = toConnectionsModel({
-          pipedream: connections,
-          nativeMcp: [],
-        });
-        expect(capabilitiesFor(model, 'slack')).toEqual([
-          expect.objectContaining({
-            appSlug: 'slack',
-            account: 'slack account',
-            status: slackEnabled ? 'connected' : 'off',
-          }),
-        ]);
-        expect(model.providers[0].ready).toBe(slackEnabled ? 1 : 0);
-        expect(model.leftovers).toEqual([
-          {
-            kind: 'pipedream',
-            id: 'pipedream:slack_v2',
-            title: 'slack_v2 account',
-            appSlug: 'slack_v2',
-            enabled: slackV2Enabled,
-          },
-        ]);
-      }
-    );
-  });
-
-  it('preserves other curated and non-curated Pipedream apps', () => {
-    const model = toConnectionsModel({
-      pipedream: [connection('github'), connection('posthog', false)],
-      nativeMcp: [],
-    });
-    expect(capabilitiesFor(model, 'github')[0]).toMatchObject({
-      provider: 'github',
-      appSlug: 'github',
-      status: 'connected',
-    });
+  it('lists featured apps as capabilities and everything else as leftovers', () => {
+    const model = toConnectionsModel([
+      app('github'),
+      app('notion', 'connected', { importAvailable: true }),
+      app('stripe', 'disabled'),
+      server('https://mcp.example.com/mcp/', 'notConnected', 'Example'),
+    ]);
+    expect(model.capabilities.map((row) => row.provider)).toEqual([
+      'github',
+      'notion',
+    ]);
+    expect(capabilityFor(model, 'notion')?.importAvailable).toBe(true);
+    expect(capabilityFor(model, 'linear')).toBeUndefined();
     expect(model.leftovers).toEqual([
       {
-        kind: 'pipedream',
-        id: 'pipedream:posthog',
-        title: 'Connected account',
-        appSlug: 'posthog',
-        enabled: false,
+        kind: 'app',
+        id: 'app/stripe',
+        key: 'app/stripe',
+        title: 'stripe account',
+        appSlug: 'stripe',
+        status: 'off',
+        importAvailable: false,
       },
+      {
+        kind: 'server',
+        id: server('https://mcp.example.com/mcp/').key,
+        key: server('https://mcp.example.com/mcp/').key,
+        title: 'Example',
+        subtitle: 'mcp.example.com/mcp',
+        status: 'not-connected',
+      },
+    ]);
+  });
+
+  it('shows a native Linear server as a server added by URL', () => {
+    // A native row counts as an app only at the app's overlay address; the
+    // server lists any other as a server, whatever it points at (rule 5).
+    const model = toConnectionsModel([
+      server('https://mcp.linear.app/mcp', 'connected', 'Linear'),
+    ]);
+    expect(capabilityFor(model, 'linear')).toBeUndefined();
+    expect(model.leftovers).toEqual([
+      expect.objectContaining({ kind: 'server', title: 'Linear' }),
     ]);
   });
 });
