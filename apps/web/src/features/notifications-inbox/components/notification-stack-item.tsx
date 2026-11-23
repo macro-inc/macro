@@ -119,8 +119,10 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
                 : 'text-ink-muted mobile:text-ink-extra-muted'
             )}
           >
-            {/* An agent's message can run to many paragraphs and lists. */}
+            {/* An agent's message can run to many paragraphs and lists. Its
+                links and mentions are inert: pressing them presses the item. */}
             <StaticMarkdown
+              inert
               markdown={props.text}
               singleLine
               theme={twoLineClampMarkdownTheme}

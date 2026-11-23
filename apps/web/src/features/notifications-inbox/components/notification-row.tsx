@@ -112,8 +112,10 @@ export function NotificationRow(props: NotificationRowProps) {
                   : 'text-ink-muted mobile:text-ink-extra-muted'
               )}
             >
-              {/* Message and comment text carries mention and link markup. */}
+              {/* Message and comment text carries mention and link markup;
+                  inert, so pressing it presses the row. */}
               <StaticMarkdown
+                inert
                 markdown={props.who}
                 singleLine
                 theme={unifiedListMarkdownTheme}
@@ -186,6 +188,7 @@ export function NotificationRow(props: NotificationRowProps) {
                 )}
               >
                 <StaticMarkdown
+                  inert
                   markdown={what()}
                   singleLine
                   theme={unifiedListMarkdownTheme}
@@ -206,6 +209,7 @@ export function NotificationRow(props: NotificationRowProps) {
               >
                 {/* An agent's message can run to many paragraphs and lists. */}
                 <StaticMarkdown
+                  inert
                   markdown={body()}
                   singleLine
                   theme={twoLineClampMarkdownTheme}

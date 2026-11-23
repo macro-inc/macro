@@ -52,9 +52,15 @@ declare global {
   interface Window {
     /** Each done the feed took, in order, with when it took it. */
     __inboxDone: { id: string; at: number }[];
+    /** Each row the view opened in place of a preview, in order. */
+    __inboxOpened: string[];
+    /** Each row and notification the view previewed, in order. */
+    __inboxShown: InboxShownRow[];
   }
 }
 window.__inboxDone = [];
+window.__inboxOpened = [];
+window.__inboxShown = [];
 
 queryClient.setQueryData(authKeys.userInfo.queryKey, {
   id: 'macro|viewer@example.test',
@@ -126,6 +132,9 @@ const dmRow = (
   };
 };
 
+// `?links`: the list ends with a stack whose messages hold links.
+const LINKS = new URLSearchParams(location.search).has('links');
+
 // A two-notification stack first, then one row per person.
 const ROWS: NotificationInboxRow[] = [
   dmRow('dm-stack', 'Ana', NOW, ['First of two', 'Second of two']),
@@ -134,6 +143,14 @@ const ROWS: NotificationInboxRow[] = [
       `Hello from ${sender}`,
     ])
   ),
+  ...(LINKS
+    ? [
+        dmRow('dm-links', 'Ana', NOW - (PEOPLE.length + 1) * 1_000, [
+          'Read [the spec](https://example.test/spec) first',
+          'Older: https://example.test/older',
+        ]),
+      ]
+    : []),
 ];
 
 /** A feed over `ROWS` that hides done rows at once, as the real one does. */
@@ -241,11 +258,14 @@ function Fixture() {
           <SplitPanelContext.Provider value={panel}>
             <NotificationsInboxProvider value={inboxContext}>
               <NotificationsView
-                onOpen={() => {}}
+                onOpen={(row) => window.__inboxOpened.push(row.id)}
                 onOpenSettings={() => {}}
                 shownRow={{
                   shown,
-                  show: (next) => setShown(next),
+                  show: (next) => {
+                    window.__inboxShown.push(next);
+                    setShown(next);
+                  },
                 }}
                 calendarPreview={{
                   open: () => false,
