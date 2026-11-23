@@ -3,9 +3,14 @@
 ; Macro runs the bundled macrod.exe from the install directory, and Windows
 ; cannot replace or delete an executable while it runs. The template stops
 ; Macro.exe itself; macrod exits soon after its parent, but not always before
-; the installer reaches its file. Stop whatever runs that exact file first, the
-; way the template stops Macro (Restart Manager). A separately installed macrod
-; elsewhere on the machine is a different file and keeps running.
+; the installer reaches its file. Stop whatever runs that exact file first,
+; through Restart Manager. A separately installed macrod elsewhere on the
+; machine is a different file and keeps running.
+;
+; Not every bundler template includes the Restart Manager header (the
+; tauri-cli release CI builds with stops Macro by process name instead), so
+; include it here; its include guard makes a second include a no-op.
+!include "Win\RestartManager.nsh"
 
 !macro MacroStopBundledMacrod
   !insertmacro RestartManager_StartSession $R0

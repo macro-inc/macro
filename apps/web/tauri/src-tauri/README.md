@@ -728,6 +728,15 @@ It needs `clang-cl`, `lld-link` and `llvm-lib` on `PATH` (`nix shell
 nixpkgs#clang nixpkgs#lld nixpkgs#llvm`), an `apps/web/dist/index.html`, and
 `development` in `.macro-tauri-env`.
 
+The same setup builds an unsigned debug installer, which checks the NSIS
+template and `windows/installer-hooks.nsh` (CI's tauri-cli release, plus
+`nixpkgs#nsis` for `makensis`), from `apps/web/tauri/src-tauri`:
+
+```sh
+cargo-tauri build --debug --runner cargo-xwin --target x86_64-pc-windows-msvc \
+  --bundles nsis --config '{"build":{"beforeBuildCommand":""}}'
+```
+
 ## Desktop window state
 
 The desktop window reopens at its last size, position, maximized, and
