@@ -264,8 +264,9 @@ struct PersistPlan {
     viewer_fields: ViewerFields,
     /// Changed records, for storage and then the hot tier.
     to_persist: Vec<(EntityKey<'static>, Record)>,
-    /// Unchanged records, for the hot tier only.
-    unchanged: Vec<(EntityKey<'static>, Record)>,
+    /// Unchanged records, for the hot tier only, each noting whether it was
+    /// taken from there.
+    unchanged: Vec<(EntityKey<'static>, Record, bool)>,
     /// For each update in order, whether its record is in `to_persist`.
     persisted: Vec<bool>,
     revision_advanced: bool,
@@ -1978,23 +1979,24 @@ impl<S: Storage> Engine<S> {
         // changes. Merges are staged in a plain map, NOT the LRU: a batch
         // larger than the hot capacity would otherwise evict its own
         // records mid-merge and overwrite storage with partial updates.
-        let mut staging: HashMap<EntityKey<'static>, Record> =
+        // Each staged record notes whether it came from the hot tier.
+        let mut staging: HashMap<EntityKey<'static>, (Record, bool)> =
             HashMap::with_capacity(updates.len());
         let mut missing: Vec<EntityKey<'static>> = Vec::new();
         let mut kept = self.take_kept_reads();
         let mut from_kept: Vec<EntityKey<'static>> = Vec::new();
+        let mut from_hot: Vec<EntityKey<'static>> = Vec::new();
         for key in updates.keys() {
-            match self.hot.peek(key) {
+            if self.hot.contains(key) {
+                from_hot.push(key.clone());
+                continue;
+            }
+            match kept.as_mut().and_then(|kept| kept.record(key)) {
                 Some(record) => {
-                    staging.insert(key.clone(), record.clone());
+                    staging.extend(record.map(|record| (key.clone(), (record, false))));
+                    from_kept.push(key.clone());
                 }
-                None => match kept.as_mut().and_then(|kept| kept.record(key)) {
-                    Some(record) => {
-                        staging.extend(record.map(|record| (key.clone(), record)));
-                        from_kept.push(key.clone());
-                    }
-                    None => missing.push(key.clone()),
-                },
+                None => missing.push(key.clone()),
             }
         }
         if !missing.is_empty() {
@@ -2005,7 +2007,7 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             for (key, record) in missing.iter().zip(fetched) {
                 if let Some(r) = record {
-                    staging.insert(key.clone(), r);
+                    staging.insert(key.clone(), (r, false));
                 }
             }
         }
@@ -2023,9 +2025,18 @@ impl<S: Storage> Engine<S> {
                 .map_err(EngineError::Storage)?;
             for (key, record) in from_kept.into_iter().zip(fetched) {
                 match record {
-                    Some(record) => staging.insert(key, record),
+                    Some(record) => staging.insert(key, (record, false)),
                     None => staging.remove(&key),
                 };
+            }
+        }
+        // Hot records are taken out rather than cloned, once the reads above
+        // have succeeded. The plan holds them until it is applied: reads in
+        // between find them in storage, which still has them. A plan that is
+        // dropped leaves them out, since storage may have moved on by then.
+        for key in from_hot {
+            if let Some(record) = self.hot.pop(&key) {
+                staging.insert(key, (record, true));
             }
         }
 
@@ -2034,11 +2045,11 @@ impl<S: Storage> Engine<S> {
         let mut search_changed_buckets = BTreeSet::new();
         let mut viewer_fields = ViewerFields::new();
         let mut to_persist: Vec<(EntityKey<'static>, Record)> = Vec::new();
-        let mut unchanged: Vec<(EntityKey<'static>, Record)> = Vec::new();
+        let mut unchanged: Vec<(EntityKey<'static>, Record, bool)> = Vec::new();
         let mut persisted = Vec::with_capacity(updates.len());
         for (key, update) in updates {
-            let (merged, did_change) = match staging.remove(&key) {
-                Some(mut existing) => {
+            let (merged, did_change, was_hot) = match staging.remove(&key) {
+                Some((mut existing, was_hot)) => {
                     // Compare only fields supplied by this partial response,
                     // overlaid onto the existing row, without cloning its body.
                     let before = snapshot_search_fields(&key, &existing);
@@ -2058,21 +2069,21 @@ impl<S: Storage> Engine<S> {
                             &mut search_changed_buckets,
                         );
                     }
-                    (existing, did_change)
+                    (existing, did_change, was_hot)
                 }
                 None => {
                     field_changes.push(crate::field_changes::RecordFieldChange::Invalidate {
                         key: key.clone(),
                     });
                     collect_search_changes(&key, None, Some(&update), &mut search_changed_buckets);
-                    (update, true)
+                    (update, true, false)
                 }
             };
             if did_change {
                 changed.insert(key.clone());
                 to_persist.push((key, merged));
             } else {
-                unchanged.push((key, merged));
+                unchanged.push((key, merged, was_hot));
             }
             persisted.push(did_change);
         }
@@ -2081,8 +2092,13 @@ impl<S: Storage> Engine<S> {
         // hot-tier eviction. Still apply every projection mutation: a partial
         // response can change projection authority without changing records.
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(projections, kept.as_ref())
-                .await?
+            match self
+                .projection_mutations_change(projections, kept.as_ref())
+                .await
+            {
+                Ok(advanced) => advanced,
+                Err(error) => return Err(self.restore_unchanged(unchanged, error)),
+            }
         } else {
             true
         };
@@ -2121,11 +2137,13 @@ impl<S: Storage> Engine<S> {
         // A refetch that changes no record and no projection authority has
         // nothing to store. Pending layers still get their shadows rebased in
         // the storage write, as before.
-        if revision_advanced || !self.optimistic.is_empty() {
-            self.storage
+        if (revision_advanced || !self.optimistic.is_empty())
+            && let Err(error) = self
+                .storage
                 .put_records_with_projections(&to_persist, projections)
                 .await
-                .map_err(EngineError::Storage)?;
+        {
+            return Err(self.restore_unchanged(unchanged, EngineError::Storage(error)));
         }
         let revision = if revision_advanced {
             self.advance_revision()?
@@ -2151,7 +2169,7 @@ impl<S: Storage> Engine<S> {
             let next = if persisted {
                 to_persist.next()
             } else {
-                unchanged.next()
+                unchanged.next().map(|(key, record, _)| (key, record))
             };
             if let Some((key, record)) = next {
                 self.hot.put(key, record);
@@ -2165,6 +2183,23 @@ impl<S: Storage> Engine<S> {
             search_changed_buckets,
             viewer_fields,
         })
+    }
+
+    /// Puts back the hot records a failed plan or write left unchanged, and
+    /// returns its error. A record already back in the hot tier, because a
+    /// read put it there since the plan took it, stays as it is. Records read
+    /// from storage stay out, so the failed write evicts nothing.
+    fn restore_unchanged(
+        &mut self,
+        unchanged: Vec<(EntityKey<'static>, Record, bool)>,
+        error: EngineError<S::Error>,
+    ) -> EngineError<S::Error> {
+        for (key, record, was_hot) in unchanged {
+            if was_hot && !self.hot.contains(&key) {
+                self.hot.put(key, record);
+            }
+        }
+        error
     }
 
     async fn projection_mutations_change(
