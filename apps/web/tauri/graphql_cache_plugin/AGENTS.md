@@ -9,6 +9,7 @@ one locked engine across webviews; cache policy belongs in `cache-core`.
 
 - `src/commands.rs`: IPC parsing and change notifications.
 - `src/engine.rs`: engine locking, schema installation, and shared-core calls.
+- `src/engine/idle.rs`: the idle WAL checkpoint. After the engine has been quiet for 100 ms (`access.rs` counts guard releases) it calls `TursoStorage::checkpoint_if_due` under a try-lock that also yields to a waiting hydrate, so a held or queued command always goes first. The task holds only a weak reference while it waits and counts every strong one it takes (`IdleHolds`); `shutdown` stops idle work and waits out a counted hold before it closes Turso, while any other handle still fails it at once.
 - `src/engine/people.rs`: scoped context, bounded person search, label-reference reads and local SQL (`graphql_cache_people_read_sql`); distinct `graphql_cache_people_*` commands make native capability explicit. Missing SQL or reference commands do not disable existing context/search commands. SQL returns only final storage-side results and never emits hydration hints or invokes a server query. JS emits only hydration hints after committed context writes; it never substitutes an unscoped write. Person search replies include `nextCursor`; rebuild native code when updating that contract, and do not interpret an older missing cursor as exhaustion.
 - `src/engine/soup.rs`: composition of Soup-specific projection adapters.
 - `src/engine/authority.rs`: durable CRM retirement and one blanket response-generation comparison under the owner lock. Reads do not require permission proof. Register `graphql_cache_current_authority` and `graphql_cache_transition_authority` with every native binary that receives this web bundle. Missing transition capability requires an app update. Queue inspection exposes authored command metadata without copied response snapshots. Claim, defer, rollback and inspection do not take a response generation; they act only on authored queue state.
@@ -30,8 +31,8 @@ From the repository root:
 ## Gotchas
 
 - `graphql_cache_contact_snapshot` and `graphql_cache_contact_reconcile` reuse the existing engine and exact-lookup backfill lane; return only bounded IDs/scalar progress and publish committed invalidations after removals. Older binaries must explicitly refuse this capability without disabling context/search.
-- Hold the engine lock across scoped hydration's generation/identity/contact-fence check and
-  write. A stale background response must not clear or rebind the current account.
+- Hold the engine lock, or the turn, across scoped hydration's generation/identity/contact-fence check and
+  write. A stale background response must not clear or rebind the current account. `hydrate_query` gives the engine to reads only (`yield_to_reads` keeps its turn; `access.rs`) after computing its projections and again after staging its write, and writes the staged result only when the WAL position and `staged_hydrate_current` are unchanged; otherwise it rechecks the session and runs whole. Every non-read command takes the turn, and a read that arrives after a command still waiting for its turn follows it. Warming hydrates and idle work wait by notification, not in the locks' queues: whatever gives back the turn or a lock Tokio handed it, cancelled or not, wakes them (`Wake`, `wake_if_dropped`), and a warming hydrate never holds the turn while it waits for the engine.
 - OTA JS cannot add native policy: scoped hydration requires projection 5 and
   the distinct `graphql_cache_hydrate_scoped` command. Never fall back to the
   deployed unscoped command after a guarded-write failure. Register new commands

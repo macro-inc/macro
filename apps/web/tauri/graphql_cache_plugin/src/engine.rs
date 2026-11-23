@@ -14,8 +14,8 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
-    RollbackOptimisticWriteResult, WriteResult,
+    HydrationScope, HydrationWriteResult, InitialClaimOutcome, NetworkWrite, QueryRegistration,
+    ReadResult, RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
@@ -33,8 +33,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
 mod access;
-use access::EngineAccess;
+use access::{AccessGuard, EngineAccess};
 mod authority;
+mod idle;
 pub use authority::AuthorityTransitionWire;
 
 mod calendar;
@@ -416,6 +417,27 @@ pub struct EngineHandle {
     mail_generation: String,
 }
 
+#[cfg(test)]
+mod test_hooks {
+    thread_local! {
+        /// Off, hydrates run whole, for tests to compare with.
+        pub(super) static STAGING: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
+        pub(super) static STAGED_COMMITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        /// Set, the next staging read fails once.
+        pub(super) static FAIL_STAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+        pub(super) static YIELDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+}
+
+/// Whether hydrates compute their write before taking the engine back to
+/// write it. Tests switch it off to compare with whole hydrates.
+fn staging() -> bool {
+    #[cfg(test)]
+    return test_hooks::STAGING.with(std::cell::Cell::get);
+    #[cfg(not(test))]
+    true
+}
+
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
         unchanged_views: None,
@@ -435,6 +457,9 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
         mutation_uuid: result.mutation_uuid,
     }
 }
+
+/// How long shutdown waits for an idle checkpoint that is copying.
+const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
 
 fn parse_u64(value: &str, label: &str) -> Result<u64, String> {
     value
@@ -467,23 +492,29 @@ impl EngineHandle {
             schema,
         )
         .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        let inner = Arc::new(EngineAccess::new(EngineState {
+            engine,
+            ops: OpInterner::default(),
+            selections: RecordSelectionCache::default(),
+        }));
+        idle::install(&inner);
         EngineHandle {
             generation: None,
             authority_listener: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
-            inner: Arc::new(EngineAccess::new(EngineState {
-                engine,
-                ops: OpInterner::default(),
-                selections: RecordSelectionCache::default(),
-            })),
+            inner,
         }
     }
 
     /// Consumes the sole handle and explicitly closes native Turso storage.
+    /// An idle checkpoint holding the engine is waited for, up to
+    /// [`SHUTDOWN_IDLE_WAIT`]; none starts after this.
     pub fn shutdown(self) -> Result<(), String> {
-        let mutex = Arc::try_unwrap(self.inner)
-            .map_err(|_| "graphql cache still has active command handles".to_string())?;
-        let state = mutex.into_inner();
+        let deadline = std::time::Instant::now() + SHUTDOWN_IDLE_WAIT;
+        let Ok(access) = access::unwrap_after_idle(self.inner, deadline) else {
+            return Err("graphql cache still has active command handles".to_string());
+        };
+        let state = access.into_inner();
         let outcome = state
             .engine
             .into_storage()
@@ -769,31 +800,89 @@ impl EngineHandle {
         identity: Option<String>,
         hydration_scope: Option<HydrationScope>,
     ) -> Result<HydrationWriteResultWire, String> {
+        let write = NetworkWrite {
+            query: &query,
+            operation_name: operation_name.as_deref(),
+            variables: &variables,
+            data: &data,
+            identity: identity.as_deref(),
+        };
         let mut state = self.snapshot_hydration().await?;
+        // Compute the write in two read-only steps, letting reads that queued
+        // meanwhile run after each. Only reads can: this hydrate keeps its
+        // turn. If storage moved anyway, the hydrate runs whole after
+        // rechecking the session.
+        let mut reuse = None;
+        if staging()
+            && let Ok(wal) = state.engine.storage().wal_position()
+        {
+            // A failed read is the hydrate's error, as it is for a whole
+            // one: retrying it whole could succeed where that failed.
+            let projections = soup::write_projections(
+                &mut state.engine,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                identity.as_deref(),
+            )
+            .await?;
+            state = self.let_reads_run(state).await;
+            let unmoved =
+                |engine: &Engine<TursoStorage>| engine.storage().wal_position().ok() == Some(wal);
+            if unmoved(&state.engine) {
+                let staged = state
+                    .engine
+                    .stage_hydrate(write, hydration_scope.as_ref(), &projections)
+                    .await
+                    .map_err(|error| error.to_string());
+                #[cfg(test)]
+                let staged = match test_hooks::FAIL_STAGE.with(|fail| fail.replace(false)) {
+                    true => Err("injected staging failure".to_string()),
+                    false => staged,
+                };
+                let staged = staged?;
+                match staged {
+                    Some(staged) => {
+                        state = self.let_reads_run(state).await;
+                        let EngineState { engine, ops, .. } = &mut *state;
+                        if unmoved(engine) && engine.staged_hydrate_current(&staged) {
+                            let result = engine
+                                .commit_staged_hydrate(staged, projections)
+                                .await
+                                .map_err(|error| error.to_string())?;
+                            #[cfg(test)]
+                            test_hooks::STAGED_COMMITS
+                                .with(|commits| commits.set(commits.get() + 1));
+                            return Ok(self.hydration_wire(engine, ops, result).await);
+                        }
+                    }
+                    // Not staged (it binds the account, meets optimistic
+                    // layers, or fails admission): the projections still hold.
+                    None => reuse = Some(projections),
+                }
+            }
+            self.recheck_hydration(&mut state).await?;
+        }
         let EngineState { engine, ops, .. } = &mut *state;
-        let projections = soup::write_projections(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-            identity.as_deref(),
-        )
-        .await?;
+        let projections = match reuse {
+            Some(projections) => projections,
+            None => {
+                soup::write_projections(
+                    engine,
+                    &query,
+                    operation_name.as_deref(),
+                    &variables,
+                    &data,
+                    identity.as_deref(),
+                )
+                .await?
+            }
+        };
         let result = match hydration_scope {
             Some(scope) => {
                 engine
-                    .hydrate_query_in_scope(
-                        NetworkWrite {
-                            query: &query,
-                            operation_name: operation_name.as_deref(),
-                            variables: &variables,
-                            data: &data,
-                            identity: identity.as_deref(),
-                        },
-                        &scope,
-                        projections,
-                    )
+                    .hydrate_query_in_scope(write, &scope, projections)
                     .await
             }
             None => {
@@ -810,19 +899,41 @@ impl EngineHandle {
             }
         }
         .map_err(|error| error.to_string())?;
+        Ok(self.hydration_wire(engine, ops, result).await)
+    }
 
+    /// Gives the engine to reads that queued for it, keeping this hydrate's
+    /// turn, and takes it back after them.
+    async fn let_reads_run<'a>(
+        &'a self,
+        state: AccessGuard<'a, EngineState>,
+    ) -> AccessGuard<'a, EngineState> {
+        #[cfg(test)]
+        test_hooks::YIELDS.with(|yields| yields.set(yields.get() + 1));
+        match state.yield_to_reads(&self.inner) {
+            Ok(turn) => turn.resume().await,
+            Err(state) => state,
+        }
+    }
+
+    async fn hydration_wire(
+        &self,
+        engine: &mut Engine<TursoStorage>,
+        ops: &OpInterner,
+        result: HydrationWriteResult,
+    ) -> HydrationWriteResultWire {
         // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
         let unchanged_views = engine
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
         self.publish_bound_generation(engine);
-        Ok(HydrationWriteResultWire {
+        HydrationWriteResultWire {
             unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
             write_result: wire_write_result(ops, result.write_result),
             data: result.data,
-        })
+        }
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to

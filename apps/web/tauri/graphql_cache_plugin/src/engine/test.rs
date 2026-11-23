@@ -729,6 +729,46 @@ fn sole_engine_handle_shuts_turso_down_explicitly() {
     spawn_handle().shutdown().unwrap();
 }
 
+/// Writes until the WAL is due, then leaves the engine quiet: the idle task has
+/// copied it by the time the next command looks, so a copy there finds
+/// nothing to do. Without the idle caller that copy still runs.
+#[test]
+fn quiet_engine_checkpoints_the_wal_off_the_command_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let mut due = None;
+    for batch in 0..200 {
+        let items: Vec<_> = (0..200)
+            .map(|n| serde_json::json!({"__typename": "GraphqlSoupDocument", "id": format!("{batch:04}-{n:04}-{}", "x".repeat(200))}))
+            .collect();
+        write(
+            &handle,
+            None,
+            serde_json::json!({"user": {"id": "user-1", "soup": {"nextCursor": null, "items": items}}}),
+            None,
+        );
+        // The write armed the idle task; wait until it has run.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !handle.inner.idle_settled() {
+            assert!(std::time::Instant::now() < deadline, "idle task never ran");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let state = block_on(handle.inner.lock());
+        let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
+        if checkpoint.wal_frames >= 500 {
+            due = Some(checkpoint);
+            break;
+        }
+    }
+    let checkpoint = due.expect("the WAL reached 500 frames");
+    assert!(
+        !checkpoint.ran,
+        "the idle task already copied it: {checkpoint:?}"
+    );
+    handle.shutdown().unwrap();
+}
+
 #[test]
 fn bad_transaction_id_is_an_error() {
     let handle = spawn_handle();
@@ -794,4 +834,101 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
         );
         reopened.shutdown().unwrap();
     });
+}
+
+#[test]
+fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
+    let run = |staging: bool| {
+        super::test_hooks::STAGING.with(|on| on.set(staging));
+        super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+        super::test_hooks::YIELDS.with(|yields| yields.set(0));
+        let handle = spawn_handle();
+        let scope = HydrationScope {
+            contact_fence: None,
+            storage_generation: block_on(handle.current_storage_generation())
+                .unwrap()
+                .parse()
+                .unwrap(),
+            identity: "user-1".into(),
+        };
+        let bound = || Some("user-1".to_string());
+        let mut results = Vec::new();
+        // The first bound hydrate binds the account, so it runs whole.
+        for (data, identity, scope) in [
+            (soup_data(true), None, None),
+            (soup_data(true), None, None),
+            (soup_data(false), None, None),
+            (soup_data(true), bound(), Some(scope.clone())),
+            (soup_data(true), bound(), Some(scope)),
+            (soup_data(false), bound(), None),
+        ] {
+            let result = block_on(handle.hydrate_query(
+                HYDRATION_QUERY.to_string(),
+                Some("Soup".to_string()),
+                variables(),
+                data,
+                identity,
+                scope,
+            ))
+            .unwrap();
+            results.push(serde_json::json!({
+                "unchangedViews": result.unchanged_views,
+                "searchChangedBuckets": result.search_changed_buckets,
+                "writeResult": result.write_result,
+                "data": result.data,
+            }));
+            let ReadResultWire::Hit { data } = block_on(handle.read(
+                None,
+                "query Viewer { user { id } }".to_string(),
+                Some("Viewer".to_string()),
+                Variables::new(),
+                Vec::new(),
+            ))
+            .unwrap() else {
+                panic!("expected hydrated viewer");
+            };
+            results.push(data);
+        }
+        let staged = super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get);
+        let yields = super::test_hooks::YIELDS.with(std::cell::Cell::get);
+        super::test_hooks::STAGING.with(|on| on.set(true));
+        (results, staged, yields)
+    };
+    let (whole, none_staged, no_yields) = run(false);
+    let (staged, staged_commits, yields) = run(true);
+    assert_eq!((none_staged, no_yields), (0, 0));
+    // Reads may run after the projections and after staging; the binding
+    // hydrate yields once, after its projections, and then runs whole.
+    assert_eq!((staged_commits, yields), (5, 11));
+    assert_eq!(staged, whole);
+}
+
+#[test]
+fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole() {
+    let handle = spawn_handle();
+    super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+    super::test_hooks::FAIL_STAGE.with(|fail| fail.set(true));
+    let result = block_on(handle.hydrate_query(
+        HYDRATION_QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        None,
+        None,
+    ));
+    assert_eq!(result.err().as_deref(), Some("injected staging failure"));
+    assert_eq!(
+        super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get),
+        0
+    );
+    let ReadResultWire::Miss = block_on(handle.read(
+        None,
+        "query Viewer { user { id } }".to_string(),
+        Some("Viewer".to_string()),
+        Variables::new(),
+        Vec::new(),
+    ))
+    .unwrap() else {
+        panic!("a failed hydrate writes nothing");
+    };
 }
