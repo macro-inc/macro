@@ -479,7 +479,7 @@ Left nav (feature and platform gates still apply):
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
   sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
+- **Personal**: Account, Appearance, Dock (desktop only; see [the sidebar](navigation.md#sidebar-a11y-names-are-load-bearing)), Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 

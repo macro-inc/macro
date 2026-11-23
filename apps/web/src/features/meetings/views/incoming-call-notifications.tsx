@@ -13,7 +13,7 @@ export function IncomingCallNotifications() {
         <div
           role="region"
           aria-label="Incoming calls"
-          class="pointer-events-none fixed bottom-[max(1rem,var(--safe-bottom,0px))] left-[max(1rem,env(safe-area-inset-left,0px))] z-toast-region flex max-h-[calc(100dvh-2rem)] w-88 max-w-[calc(100vw-2rem)] flex-col gap-3 overflow-y-auto touch:bottom-[calc(var(--mobile-content-inset-bottom,var(--safe-bottom,0px))+12px)]"
+          class="pointer-events-none fixed bottom-[calc(max(1rem,var(--safe-bottom,0px))+var(--dock-inset-bottom,0px))] left-[calc(max(1rem,env(safe-area-inset-left,0px))+var(--dock-inset-left,0px))] z-toast-region flex max-h-[calc(100dvh-2rem-var(--dock-inset-bottom,0px))] w-88 max-w-[calc(100vw-2rem-var(--dock-inset-left,0px)-var(--dock-inset-right,0px))] flex-col gap-3 overflow-y-auto touch:bottom-[calc(var(--mobile-content-inset-bottom,var(--safe-bottom,0px))+12px)]"
         >
           <For each={incoming.invitations().map((item) => item.meetingId)}>
             {(meetingId) => {

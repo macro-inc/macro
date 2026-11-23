@@ -172,6 +172,30 @@ const SETTINGS: Setting[] = [
     keywords: 'hover hints help',
   },
   {
+    tab: 'Dock',
+    title: 'Dock position',
+    target: 'Position',
+    keywords: 'sidebar rail taskbar toolbar move left right top bottom edge',
+  },
+  {
+    tab: 'Dock',
+    title: 'Dock size',
+    target: 'Size',
+    keywords: 'sidebar rail taskbar toolbar small large icons compact',
+  },
+  {
+    tab: 'Dock',
+    title: 'Center dock apps',
+    target: 'Size',
+    keywords: 'dock alignment center middle start taskbar',
+  },
+  {
+    tab: 'Dock',
+    title: 'Dock apps',
+    target: 'Apps',
+    keywords: 'customize sidebar hide show reorder apps more menu',
+  },
+  {
     tab: 'Notifications',
     title: 'Notification delivery',
     target: 'Delivery',

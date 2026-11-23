@@ -36,6 +36,7 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsDock from './en/settings-dock';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
 import settingsMobileApp from './en/settings-mobile-app';
@@ -92,6 +93,7 @@ export default {
   routineMenu,
   routineSuggestions,
   settingsBilling,
+  settingsDock,
   settingsEmail,
   runtimeSharing,
   settingsLanguage,

@@ -6,6 +6,7 @@ import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button } from '@ui';
+import { dockPopoverPlacement } from '../dock-prefs';
 import { useSplitLayout } from '../split-layout/layout';
 
 /** Opens Search from the compact rail; Shift+click opens it in a new split. */
@@ -51,14 +52,14 @@ export const SearchRailButton = () => {
       variant="ghost"
       tooltip={{
         content: t('nav.search'),
-        placement: 'right',
+        placement: dockPopoverPlacement(),
         hotkey: TOKENS.sidebar.goTo.search,
       }}
       data-sidebar-next-search=""
-      class="size-10 shrink-0 rounded-xl"
+      class="size-(--rail-button-size) shrink-0 rounded-xl"
       onClick={(event: MouseEvent) => openSearch(event.shiftKey)}
     >
-      <MagnifyingGlassIcon class="size-5" />
+      <MagnifyingGlassIcon class="size-(--rail-icon-size)" />
     </Button>
   );
 };

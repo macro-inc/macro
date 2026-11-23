@@ -3,6 +3,7 @@ import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { createSignal } from 'solid-js';
+import { dockPopoverPlacement } from '../dock-prefs';
 import type { AppUpdate } from './app-update';
 
 const DISMISSED_KEY = 'macro:app-update-dismissed';
@@ -51,16 +52,19 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
     <Popover
       open={open()}
       onOpenChange={onOpenChange}
-      placement="right-end"
+      placement={dockPopoverPlacement('end')}
       gutter={8}
     >
       <Popover.Trigger
         aria-label={t('nav.updateAvailable')}
-        tooltip={t('nav.updateAvailable')}
+        tooltip={{
+          content: t('nav.updateAvailable'),
+          placement: dockPopoverPlacement(),
+        }}
         as={Button}
         variant="ghost"
         size="icon-md"
-        class="size-10 cursor-default rounded-xl"
+        class="size-(--rail-button-size) cursor-default rounded-xl"
         draggable={false}
         data-sidebar-next-item="app-update"
       >

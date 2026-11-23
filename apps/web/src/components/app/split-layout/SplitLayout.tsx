@@ -20,6 +20,7 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { dockPosition } from '../dock-prefs';
 import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitPanel } from './components/SplitPanel';
 import { SplitLayoutContext } from './context';
@@ -205,7 +206,14 @@ export function SplitLayout() {
         fallback={
           <div
             class="size-full"
-            classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}
+            classList={{
+              // The card is inset on every side but the rail's, which
+              // already sets it off from the window edge.
+              'py-1.5 pr-1.5': useBentoLayout() && dockPosition() === 'left',
+              'py-1.5 pl-1.5': useBentoLayout() && dockPosition() === 'right',
+              'px-1.5 pb-1.5': useBentoLayout() && dockPosition() === 'top',
+              'px-1.5 pt-1.5': useBentoLayout() && dockPosition() === 'bottom',
+            }}
           >
             <div class="relative size-full">
               <For each={layerIds()}>
