@@ -387,3 +387,55 @@ fn the_description_lists_every_group() {
     assert!(limit("groups").contains("maxItems: 20"), "{schema}");
     assert!(limit("tools").contains("maxItems: 50"), "{schema}");
 }
+
+#[test]
+fn the_follows_line_says_whether_a_source_was_lost_or_frozen() {
+    use crate::domain::model::{PolicySource, SourceAgent, SourceStatus};
+    let source = |status, agent: Option<SourceAgent>| PolicySource {
+        policy_id: None,
+        kind: None,
+        agent,
+        team: None,
+        scope: None,
+        status,
+        in_scope: false,
+        can_edit: false,
+        via: Vec::new(),
+    };
+    let scout = || SourceAgent {
+        id: BotId::TEST_B,
+        name: "Scout".to_owned(),
+        handle: Some("scout".to_owned()),
+        avatar_url: None,
+        deleted: false,
+    };
+    let mut view = resolve::view(
+        &crate::outbound::registry::registry_catalog(),
+        BotId::TEST_A,
+        PolicyKind::Agent,
+        ViewAccess {
+            can_edit: false,
+            can_tighten: false,
+        },
+        &PolicyChain::own(
+            PolicyId::from_uuid(macro_uuid::Uuid::nil()),
+            PolicyOwner::Agent(BotId::TEST_A),
+            Vec::new(),
+        ),
+        None,
+    );
+    assert_eq!(follows_line(&view), None);
+    view.source = Some(source(SourceStatus::Live, Some(scout())));
+    assert_eq!(
+        follows_line(&view).as_deref(),
+        Some("Follows Scout (@scout)")
+    );
+    view.source = Some(source(SourceStatus::Deleted, None));
+    let frozen = follows_line(&view).unwrap();
+    assert!(
+        frozen.contains("frozen") && !frozen.contains("asks"),
+        "{frozen}"
+    );
+    view.source = Some(source(SourceStatus::Lost, None));
+    assert!(follows_line(&view).unwrap().contains("everything asks"));
+}

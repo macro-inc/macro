@@ -22,8 +22,8 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crate::domain::model::{
-    Caller, Credential, Origin, PermissionError, PermissionState, PermissionsView, Target,
-    ToolPermissionDefault,
+    Caller, Credential, Origin, PermissionError, PermissionState, PermissionsView, SourceStatus,
+    Target, ToolPermissionDefault,
 };
 use crate::domain::service::AgentPermissions;
 
@@ -173,13 +173,25 @@ pub struct ShowPermissionsResult {
 /// The line naming what a following view follows.
 fn follows_line(view: &PermissionsView) -> Option<String> {
     let source = view.source.as_ref()?;
+    if source.status == SourceStatus::Lost {
+        return Some(
+            "Followed permissions that were deleted for good: everything asks until someone \
+             picks a source or gives it its own"
+                .to_owned(),
+        );
+    }
+    let frozen = if source.status == SourceStatus::Deleted {
+        ", frozen as they were when it was deleted"
+    } else {
+        ""
+    };
     Some(match (&source.agent, &source.team) {
         (Some(agent), _) => match &agent.handle {
-            Some(handle) => format!("Follows {} (@{handle})", agent.name),
-            None => format!("Follows {}", agent.name),
+            Some(handle) => format!("Follows {} (@{handle}){frozen}", agent.name),
+            None => format!("Follows {}{frozen}", agent.name),
         },
         (None, Some(team)) => format!("Follows the {} team's default permissions", team.name),
-        (None, None) => "Follows a deleted agent's permissions: everything asks".to_owned(),
+        (None, None) => format!("Follows a deleted agent's permissions{frozen}"),
     })
 }
 
