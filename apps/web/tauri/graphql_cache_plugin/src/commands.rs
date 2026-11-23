@@ -52,6 +52,13 @@ fn people_trace_correlation(value: Option<&str>) -> Option<&str> {
     })
 }
 
+/// The trace id of a well-formed `traceparent`, for a receive span's
+/// `upstream.trace_id`; `None` for anything else, since the iOS subscriber
+/// panics on a NUL in a span field.
+fn upstream_trace_id(traceparent: Option<&str>) -> Option<&str> {
+    people_trace_correlation(traceparent)?.split('-').nth(1)
+}
+
 fn engine_handle(state: &State<'_, CacheState>) -> Result<EngineHandle, String> {
     state
         .0
@@ -108,11 +115,18 @@ pub async fn graphql_cache_init<R: Runtime>(
     // persisted definitions needed by queued work instead of reverting to only
     // the metadata embedded in the binary.
     let schema_sdl = cache_core::meta::BUNDLED_SCHEMA_SDL.to_owned();
-    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl).await
+    graphql_cache_init_with_schema(app, state, scope, hot_capacity, schema_sdl, None).await
 }
 
 /// Parses bundle SDL while retaining native cache execution and native Turso storage.
 /// The dedicated command prevents old binaries from silently ignoring the schema payload.
+/// The span logs no error: one can quote the bundle's SDL. The webview records
+/// the returned error, and the storage open logs its own.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "init", upstream.trace_id = upstream_trace_id(traceparent.as_deref()))
+)]
 #[tauri::command]
 pub async fn graphql_cache_init_with_schema<R: Runtime>(
     app: AppHandle<R>,
@@ -120,6 +134,7 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     scope: String,
     hot_capacity: Option<u32>,
     schema_sdl: String,
+    traceparent: Option<String>,
 ) -> Result<(), String> {
     let incoming = cache_core::meta::Schema::from_sdl(&schema_sdl).map_err(|e| e.to_string())?;
     let dir = app
@@ -175,7 +190,9 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
 
 /// Opens the cache file for `scope`, replacing it when it is incompatible or
 /// uncertain. A file an older build wrote at an earlier storage version is
-/// upgraded in place first; the span records the version it came from.
+/// upgraded in place first; the span records the version it came from, and an
+/// event reports it with the open's duration, since the native subscriber
+/// prints events, not span fields recorded late.
 #[tracing::instrument(
     name = "graphql_cache.native.open",
     skip_all,
@@ -183,11 +200,18 @@ pub async fn graphql_cache_init_with_schema<R: Runtime>(
     err
 )]
 fn open_storage(path: &std::path::Path, scope: &str) -> Result<cache_turso::TursoStorage, String> {
+    let started = std::time::Instant::now();
     let storage = TursoFileDatabase::new(path)
         .and_then(|database| database.open_or_reset(scope))
         .map_err(|e| e.to_string())?;
     if let Some(version) = storage.upgraded_from_storage_version() {
         tracing::Span::current().record("graphql_cache.storage.upgraded_from", version);
+        tracing::info!(
+            graphql_cache.storage.upgraded_from = version,
+            graphql_cache.storage.open_ms =
+                u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            "graphql cache storage upgraded in place"
+        );
     }
     Ok(storage)
 }

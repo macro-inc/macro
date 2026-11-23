@@ -201,7 +201,7 @@ fn upgrade_reports_the_previous_version_once() {
         )
         .unwrap();
         let connection = Db::uncached(raw.connect().unwrap());
-        let initialized = initialize(&connection, "scope", false).unwrap();
+        let initialized = initialize(&connection, "scope", false, OlderStorage::Upgrade).unwrap();
         connection.close().unwrap();
         initialized
     };
@@ -213,6 +213,35 @@ fn upgrade_reports_the_previous_version_once() {
         }
     );
     assert_eq!(open(), Initialized::default(), "nothing is left to upgrade");
+}
+
+/// A browser open never runs a step: an older version found under the
+/// current database name resets, as it did before steps existed.
+#[test]
+fn a_browser_open_resets_an_older_version() {
+    let database = TursoMemoryDatabase::new("browser-older.db");
+    let mut storage = database.open("scope").unwrap();
+    downgrade_to_storage_11(&mut storage);
+    storage.try_close().unwrap();
+    let state = database.state.lock().unwrap();
+    let raw = Database::open(
+        state.io.clone(),
+        &database.path,
+        OpenOptions::new(Arc::new(SqliteDialect)),
+    )
+    .unwrap();
+    let connection = Db::uncached(raw.connect().unwrap());
+    let error = initialize(&connection, "scope", false, OlderStorage::Reset).unwrap_err();
+    assert!(
+        error.physical_reset_reason().is_some(),
+        "an older version resets: {error:?}"
+    );
+    assert_eq!(
+        stored_storage_version(&connection),
+        11,
+        "the file is left as written"
+    );
+    connection.close().unwrap();
 }
 
 #[test]
