@@ -6,6 +6,7 @@ import {
   staticFileSizedEndpoint,
 } from '@core/constant/servers';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import WaveformIcon from '@icon/system/regular/waveform.svg';
 import { Match, Show, Switch } from 'solid-js';
 import type { InputAttachmentData } from './types';
 
@@ -46,6 +47,11 @@ function AttachmentThumbnail(props: { attachment: InputAttachmentData }) {
           src={staticFileIdEndpoint(props.attachment.id)}
           class="size-full object-cover"
         />
+      </Match>
+      <Match when={props.attachment.kind === 'audio' && !isPending()}>
+        <div class="flex size-full items-center justify-center text-ink-muted">
+          <WaveformIcon class="size-4" />
+        </div>
       </Match>
       <Match when={props.attachment.kind === 'document' && !isPending()}>
         <div class="flex size-full items-center justify-center">

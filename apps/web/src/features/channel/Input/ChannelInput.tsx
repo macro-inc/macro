@@ -88,6 +88,7 @@ import { createCollapsedInputState } from './create-collapsed-input-state';
 import { DefaultActions } from './DefaultActions';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
+import { MicrophoneAction } from './MicrophoneAction';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -939,6 +940,17 @@ export function ChannelInput(props: ChannelInputProps) {
           disabled={!hasSendableInputContent(inputState.view())}
           getFocusTarget={() => lexicalEditor().getRootElement()}
           leadingAction={addMenu(true)}
+          // The microphone stays one tap away while the composer rests.
+          trailingAction={
+            <Show when={showVoiceMemo()}>
+              <MicrophoneAction
+                dictation={dictation}
+                memo={voiceMemo}
+                showDictation={features().dictation}
+                showMemo
+              />
+            </Show>
+          }
           onOpen={collapsedInput.expand}
           onSend={() => fireAndForget(commands.send(), 'channel-input')}
         />

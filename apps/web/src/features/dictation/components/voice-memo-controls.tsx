@@ -105,7 +105,9 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
               size="icon-md"
               class="text-composer-ink"
               ref={focusWhenConnected}
-              disabled={phase() !== 'recording'}
+              // Not `disabled`: the button takes focus while the microphone
+              // starts, so Space and Escape work from the first moment.
+              aria-disabled={phase() !== 'recording'}
               onClick={() => fireAndForget(props.memo.stop(), 'voice-memo')}
             >
               <StopIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
