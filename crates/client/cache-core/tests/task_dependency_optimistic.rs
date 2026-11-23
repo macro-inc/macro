@@ -813,3 +813,6 @@ fn one_hop_repair_updates_the_same_canonical_states_as_direct_reads() {
         assert_eq!(data["user"]["soupEntity"]["dependentTasks"][0]["id"], "b");
     });
 }
+
+#[path = "task_dependency_optimistic/settlement.rs"]
+mod settlement;
