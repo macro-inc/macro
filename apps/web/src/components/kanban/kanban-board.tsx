@@ -314,8 +314,8 @@ function Columns(props: {
   function setColumnWidth(width: number) {
     if (width <= 0 || width === columnWidth) return;
     // Every lane moves but the viewport keeps its pixel offset. Keep the lane
-    // at the left edge there, or the end in view when scrolled to it, and a
-    // lane holding focus in view. Read items before `measure()`, which
+    // at the left edge there, or the end in view when scrolled to it, and the
+    // control holding focus in view. Read items before `measure()`, which
     // rewrites them in place.
     const offset = virtualizer.scrollOffset ?? 0;
     const visible = viewport?.clientWidth ?? 0;
@@ -331,21 +331,25 @@ function Columns(props: {
     );
     let target = offset <= 16 ? offset : 16 + lane * (width + 16);
     if (atEnd) target = end;
-    const focusedKey = viewport?.contains(document.activeElement)
-      ? document.activeElement
-          ?.closest<HTMLElement>('[data-kanban-board-column]')
-          ?.getAttribute('data-kanban-board-column')
-      : undefined;
+    // The lanes have their new width but not yet their new place, so the
+    // focused control's offset inside its lane is already the new one. Keep
+    // it in view, from its left edge when it is wider than the viewport.
+    const active = document.activeElement;
+    const slot = viewport?.contains(active)
+      ? active?.closest<HTMLElement>('[data-kanban-board-column]')
+      : null;
+    const slotKey = slot?.getAttribute('data-kanban-board-column');
     const focused = virtualizer
       .getVirtualItems()
-      .find((candidate) => String(candidate.key) === focusedKey);
-    if (focused) {
-      // Show all of it, or fill the viewport with it when it is wider.
-      const start = 16 + focused.index * (width + 16);
-      const wider = width > visible;
-      const first = wider ? start : start + width - visible;
-      const last = wider ? start + width + 16 - visible : start;
-      target = Math.min(last, Math.max(first, target));
+      .find((candidate) => String(candidate.key) === slotKey);
+    if (active && slot && focused) {
+      const box = active.getBoundingClientRect();
+      const left =
+        16 +
+        focused.index * (width + 16) +
+        box.left -
+        slot.getBoundingClientRect().left;
+      target = Math.min(left, Math.max(left + box.width - visible, target));
     }
     target = Math.max(0, Math.min(end, target));
     // Lanes render from the new offset, so the ones in view stay mounted and

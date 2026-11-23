@@ -209,11 +209,11 @@ test('keeps a card being edited in view when the text size grows', async ({
     .toBe('32px');
   await expect(editor).toBeFocused();
   await expect(editor).toHaveValue('Unsaved next step');
-  await expect(lane).toBeInViewport({ ratio: 1 });
+  await expect(editor).toBeInViewport({ ratio: 1 });
   await cdp.detach();
 });
 
-test('keeps the end in view on a phone when the text grows past the screen', async ({
+test('keeps a focused control in view on a phone when the text grows past the screen', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -238,15 +238,37 @@ test('keeps the end in view on a phone when the text grows past the screen', asy
     .toBe('32px');
   await expect(name).toBeFocused();
   await expect(name).toHaveValue('Renewals');
-  await expect(name).toBeInViewport();
+  // Wider than the screen now, so its start is what must show.
+  const startsInView = async () => {
+    const [field, box] = await Promise.all([
+      name.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    return field && box ? Math.round(field.x - box.x) : null;
+  };
+  await expect.poll(startsInView).toBeGreaterThanOrEqual(0);
+  await expect.poll(startsInView).toBeLessThan(390 / 2);
+  // A focused control in the first lane stays in view too.
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 16 } });
   await expect
     .poll(() =>
-      viewport.evaluate(
-        (element) =>
-          element.scrollWidth - element.clientWidth - element.scrollLeft
-      )
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
     )
-    .toBeLessThanOrEqual(1);
+    .toBe('16px');
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 0;
+  });
+  const card = page.locator('[data-kanban-card]').first();
+  const move = card.getByRole('button', { name: /^Move / });
+  await move.focus();
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 32 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('32px');
+  await expect(move).toBeFocused();
+  await expect(move).toBeInViewport({ ratio: 1 });
   await cdp.detach();
 });
 
