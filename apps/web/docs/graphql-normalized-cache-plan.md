@@ -105,7 +105,9 @@ entire cache in browser memory. With 10s of thousands of cached objects
     compatibility epoch only for cache semantics the schema cannot show.
     Discard records on compatibility-epoch/format mismatch (cache is
     disposable, rebuild from network). Every schema change keeps queued
-    mutations, and so does a native epoch or format change; a browser
+    mutations, and so does a native epoch change or a native move from a
+    format in `MIGRATABLE_CACHE_FORMAT_VERSIONS`; any other format change
+    resets the file, queue included. A browser
     database's name holds the epoch, format and storage schema, so a bump of
     any of them opens a new, empty file without the old one's queued writes.
 

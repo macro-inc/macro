@@ -84,13 +84,15 @@ Only the immediately prior cache format version is migratable
 (`MIGRATABLE_CACHE_FORMAT_VERSIONS`). A native file at an older storage schema
 version is first upgraded when a chain of steps from its version is registered
 ([storage upgrades](#storage-upgrades)), and resets otherwise. Opening a
-migratable format drops records, search
-projections, index facts, and calendar ranges — all refetchable — and keeps
+migratable format drops records and every table derived from them — all
+refetchable — by recreating the tables, as a schema Reset does, and keeps
 queued mutations, optimistic layers, and their projections, then rewrites the
 namespace in the same transaction. An interrupted migration therefore retries on
 the next open. Native owners then try to `VACUUM INTO` a fresh file and swap it
 in, so an upgrade usually releases the space the dropped records occupied
-instead of leaving free pages in the old file. The browser's physical database
+instead of leaving free pages in the old file. The swap moves the migrated file
+aside first; an open that finds only that copy, after a crash in between, moves
+it back. The browser's physical database
 name embeds the format version, so a browser upgrade starts a new file instead
 of migrating; the previous file is left for any tab still running the older
 bundle.
@@ -159,8 +161,10 @@ projections go with it. Queued projections of the records that went go too,
 and every queued projection when every document is marked incomplete, so no
 optimistic list entry outlives its record or the facts it was derived from.
 A queued write whose server response no longer normalizes, because the schema
-dropped a field it selects, settles as failed: its overlay rolls back and the
-host revalidates, instead of retrying it at the head of the queue forever.
+dropped a field it selects, settles without that content, as a stale outcome
+does, instead of retrying at the head of the queue forever: the IDs the server
+gave keep their aliases for the writes queued after it, the host reports why,
+and the queries the write names for revalidation refetch.
 Settling a create moves the shadows of the writes queued after it to the key
 the server gave the record while their sources keep the local key, so a tier
 follows the alias settlement stored from one to the other, and keeps the

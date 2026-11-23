@@ -245,7 +245,8 @@ new fields needs the regenerated SDL in the same change.
   drops that type's cached records on each client's next open, and they
   refetch, at a cost that grows with the records dropped (seconds for a large
   type); a renamed operation root drops every record. A queued write whose
-  response no longer fits settles as failed and is refetched. Native apps built
+  response no longer fits settles without the response's content, keeping the
+  ID the server gave it, and the queries it names for revalidation refetch. Native apps built
   before clients stored their schema refuse such a change and run without the
   cache until they update, and a native build older than the cache file it
   opens, after a rollback, replaces the file, queued writes included. Bump `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
