@@ -5,6 +5,7 @@ import { COMPANY_SECTIONS, type CompanySection } from './core/record';
 import { createAppCrmContext } from './crm-adapter';
 import { Company as View } from './views/company-detail';
 import { CompanyVisibilityButton as VisibilityButton } from './views/company-visibility-button';
+import { useRecordTabKeys } from './views/record-tab-keys';
 
 export type { CompanySection } from './core/record';
 
@@ -22,7 +23,14 @@ export function CompanyTabs(props: {
   onChange: (section: CompanySection) => void;
   compact?: boolean;
 }) {
-  return <RecordTabs sections={COMPANY_SECTIONS} {...props} />;
+  const tabsRef = useRecordTabKeys({
+    sections: () => COMPANY_SECTIONS,
+    value: () => props.value,
+    onChange: (section) => props.onChange(section),
+  });
+  return (
+    <RecordTabs sections={COMPANY_SECTIONS} tabsRef={tabsRef} {...props} />
+  );
 }
 
 /** Company archive action for a host's top bar. */
