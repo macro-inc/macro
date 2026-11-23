@@ -35,6 +35,7 @@ use uuid::Uuid;
 mod access;
 use access::EngineAccess;
 mod authority;
+mod idle;
 pub use authority::AuthorityTransitionWire;
 
 mod calendar;
@@ -436,6 +437,9 @@ fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     }
 }
 
+/// How long shutdown waits for an idle checkpoint that is copying.
+const SHUTDOWN_IDLE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn parse_u64(value: &str, label: &str) -> Result<u64, String> {
     value
         .parse::<u64>()
@@ -467,23 +471,29 @@ impl EngineHandle {
             schema,
         )
         .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
+        let inner = Arc::new(EngineAccess::new(EngineState {
+            engine,
+            ops: OpInterner::default(),
+            selections: RecordSelectionCache::default(),
+        }));
+        idle::install(&inner);
         EngineHandle {
             generation: None,
             authority_listener: None,
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
-            inner: Arc::new(EngineAccess::new(EngineState {
-                engine,
-                ops: OpInterner::default(),
-                selections: RecordSelectionCache::default(),
-            })),
+            inner,
         }
     }
 
     /// Consumes the sole handle and explicitly closes native Turso storage.
+    /// An idle checkpoint holding the engine is waited for, up to
+    /// [`SHUTDOWN_IDLE_WAIT`]; none starts after this.
     pub fn shutdown(self) -> Result<(), String> {
-        let mutex = Arc::try_unwrap(self.inner)
-            .map_err(|_| "graphql cache still has active command handles".to_string())?;
-        let state = mutex.into_inner();
+        let deadline = std::time::Instant::now() + SHUTDOWN_IDLE_WAIT;
+        let Ok(access) = access::unwrap_after_idle(self.inner, deadline) else {
+            return Err("graphql cache still has active command handles".to_string());
+        };
+        let state = access.into_inner();
         let outcome = state
             .engine
             .into_storage()
