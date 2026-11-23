@@ -22,11 +22,16 @@ TanStack path in `../` runs untouched.
   timelines and threads to reread (`onChanged`).
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement; a retired host
-  (`graphql-soup.ts` cleanup) fails the writes still waiting.
+  (`graphql-soup.ts` cleanup) fails the writes still waiting. A write whose
+  transaction left the queue while the page was suspended (the back/forward
+  cache) is read back from the device when the engine returns. The queue
+  replays a channel write the server answered `SERVICE_UNAVAILABLE`
+  (`graphql-mutation-retry.ts`): the server dedupes by message id.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days. A pushed frame
   for a channel the device does not hold gives it an empty sync row once, so
-  eviction finds the records the frame stored.
+  eviction finds the records the frame stored; eviction makes the runtime
+  forget the channels it removed (`forget`), so a later frame adds the row again.
 
 ## Start here
 
@@ -35,7 +40,12 @@ TanStack path in `../` runs untouched.
   choice between device and REST; `../thread-replies.ts` uses the same choice.
   A flag PostHog has not answered yet reads as off: REST never waits for it.
 - `channel-resets.ts`: counts deletes and evictions per host, so a page
-  fetched across one commits no coverage.
+  fetched across one commits no coverage. Tabs share the device, so a fill
+  also holds the `macro.channel-timeline.deletes` Web Lock shared from before
+  its fetch until its coverage is sent (`holdAgainstDeletes`), and eviction and
+  resets take it exclusive (`whileNoFills`): eviction gives up after 5 s and
+  tries next round, a reset runs anyway after 30 s. A fill that finds a delete
+  waiting commits no coverage.
 
 ## Checks
 
@@ -52,8 +62,12 @@ TanStack path in `../` runs untouched.
 - A read touches a channel at most every 6 hours (`CHANNEL_TOUCH_INTERVAL_MS`),
   and a prewarm counts as a touch: `touched_at_ms` defaults to 0, which the
   30-day eviction would take at once.
-- `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts` and
-  `channel-prewarm.ts` (FE-46).
+- `effect` is allowed only in `channel-sync-runtime.ts`, `channel-writes.ts`,
+  `channel-prewarm.ts` and the tests that run their effects (FE-46).
+- Channel queries abort through `firstOrAborted`: urql replaces
+  `fetchOptions.signal` with its own, so a signal passed there aborts nothing.
+- Start a request that follows an await inside its span with `span.run`, and
+  capture a write's trace (`Telemetry.captureContext`) before any await.
 - A page's `stored` and a thread's store acknowledgements never reject: a
   loader that moved on leaves them unawaited. The store runs in a
   `channel.page.store` child span of the page.
