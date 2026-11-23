@@ -127,8 +127,13 @@ export interface AgentInputProps {
   registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
-/** Enter with no modifier, and not the Enter that confirms an IME composition. */
+/**
+ * A fresh Enter with no modifier: not the Enter that confirms an IME
+ * composition, and not a held key's auto-repeat (which would steer one
+ * queued row after another).
+ */
 const isPlainEnter = (event: KeyboardEvent) =>
+  !event.repeat &&
   !event.altKey &&
   !event.ctrlKey &&
   !event.metaKey &&

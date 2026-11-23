@@ -371,7 +371,8 @@ describe('Enter on an empty draft', () => {
     { altKey: true },
     { isComposing: true },
     { keyCode: 229 },
-  ])('ignores a modified or composing Enter (%o)', (init) => {
+    { repeat: true },
+  ])('ignores a modified, composing, or held Enter (%o)', (init) => {
     const onEnterEmpty = vi.fn();
     render(() => (
       <AgentInput busy onSend={vi.fn()} onEnterEmpty={onEnterEmpty} />
