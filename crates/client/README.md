@@ -13,6 +13,7 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
 | `cache-bench` | Production-size datasets and the native and browser replays that measure the engine; see its `AGENTS.md` |
+| `cache-diff-fuzz` | Differential fuzzer: runs the same seeded operations on two builds of the native host engine and compares responses and durable state (see its `AGENTS.md`) |
 
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
