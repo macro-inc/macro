@@ -667,7 +667,9 @@ screenshot, soak, crash report, clean quit, app log). A launch that shows no
 window or screenshot is retried once; a crash, crash report, panic or a second
 failed launch fails the job, so `desktop-stable` keeps the previous version and
 `Alert native build failures` says so in its post. The versioned release still
-gets its installers. The release app embeds the production PostHog key, so the
+gets the installers `publish-installers` attaches, but not the update signatures
+`publish-release` makes, so `Desktop Release Watch` reports those missing 4 hours
+later unless a re-run has promoted the release. The release app embeds the production PostHog key, so the
 job blocks the analytics proxy host (read from `src/lib/analytics/analytics.ts`)
 in `/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
 `summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
