@@ -37,9 +37,9 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
-import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
@@ -47,6 +47,7 @@ import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import teamMembers from './en/team-members';
+import timeTracking from './en/time-tracking';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -97,13 +98,14 @@ export default {
   settingsEmail,
   runtimeSharing,
   settingsLanguage,
-  settingsMobileApp,
+  settingsDownloads,
   settingsNav,
   splitMenu,
   subRoutines,
   tabs,
   teamAgents,
   teamMembers,
+  timeTracking,
   tutorials,
   viewMenus,
 };

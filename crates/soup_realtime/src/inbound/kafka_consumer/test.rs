@@ -38,6 +38,8 @@ use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
 };
+use time_tracking::domain::events::TimeEntryChange;
+use time_tracking::domain::models::TimeEntrySource;
 use uuid::Uuid;
 
 use super::*;
@@ -140,8 +142,57 @@ fn subscribes_to_all_existing_soup_source_topics() {
             "macro.properties",
             "macro.initiatives",
             "macro.calls",
+            "macro.time_entries",
         ]
     );
+}
+
+fn time_entry_change() -> TimeEntryChange {
+    TimeEntryChange {
+        entry_id: Uuid::now_v7(),
+        task_id: DOCUMENT_ID.to_string(),
+        user_id: user(),
+        minutes: 45,
+        entry_date: chrono::NaiveDate::from_ymd_opt(2026, 11, 20).expect("valid date"),
+        source: TimeEntrySource::Manual,
+        total_minutes: 120,
+    }
+}
+
+#[test]
+fn every_time_entry_event_refreshes_its_task() {
+    for event in [
+        TimeEntryTopicEvent::Logged(time_entry_change()),
+        TimeEntryTopicEvent::Updated(time_entry_change()),
+        TimeEntryTopicEvent::Deleted(time_entry_change()),
+    ] {
+        let patches = patches_from_time_entry_event(&event);
+        assert_eq!(patches.len(), 1, "{event:?}");
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
+        assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+        assert_eq!(access_source(&patches[0]), patch_entity(&patches[0]));
+    }
+}
+
+#[tokio::test]
+async fn logged_time_reaches_the_task_viewers_and_commits() {
+    let event =
+        DeclaredMacroEvent::TimeEntryMacroEvent(TimeEntryMacroEvent::logged(time_entry_change()));
+    let service = flaky_service(0);
+    let commits = AtomicUsize::new(0);
+
+    assert!(matches!(
+        process_event(&service, &NoPullRequestSessions, &event, || {
+            commits.fetch_add(1, Ordering::SeqCst);
+        })
+        .await,
+        EventOutcome::Notified
+    ));
+    assert_eq!(commits.load(Ordering::SeqCst), 1);
+    let patches = service.patches.lock().expect("patches lock");
+    assert_eq!(patches.len(), 1);
+    assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
 }
 
 #[test]
@@ -390,6 +441,34 @@ fn task_property_updates_map_to_document_updates() {
     assert!(matches!(patches[0].patch, Patch::Updated(_)));
     assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+}
+
+#[test]
+fn crm_contact_property_updates_map_to_contact_updates() {
+    let contact_id = Uuid::now_v7().to_string();
+    let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
+        inherited_from_project: None,
+        entity_property_id: Uuid::now_v7(),
+        entity_id: contact_id.clone(),
+        entity_type: PropertyEntityType::Contact,
+        property_definition_id: Uuid::now_v7(),
+        actor_user_id: Some(user()),
+        actor: None,
+        on_behalf_of: None,
+        source: None,
+        value: None,
+        previous_value: None,
+        updated_at: Utc::now(),
+    });
+
+    let patches = patches_from_property_event(&event);
+    assert_eq!(patches.len(), 1);
+    assert!(matches!(patches[0].patch, Patch::Updated(_)));
+    assert_eq!(
+        patch_entity(&patches[0]).entity_type,
+        EntityType::CrmContact
+    );
+    assert_eq!(patch_entity(&patches[0]).entity_id, contact_id);
 }
 
 #[test]

@@ -7,10 +7,9 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useSettingsTabAvailable } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import DeviceMobileDownloadIcon from '@icon/device-mobile-download.svg';
 import GearFillIcon from '@icon/system/fill/gear-fill.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Button, cn, pressHandlers } from '@ui';
@@ -38,50 +37,51 @@ const isSettingsActive = () => {
 };
 
 /**
- * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store and Google Play links. Hidden inside the native app, where that
- * page shows the installed app's version instead, and wherever the page is
- * unavailable.
+ * Opens the Downloads settings page (desktop installers and the phone app's
+ * QR codes). Drawn like the update button's glyph, without its comet, and
+ * hidden wherever the page is unavailable.
  */
-const MobileAppButton = () => {
+const DownloadsButton = () => {
   const analytics = useAnalytics();
   const { openSettings, openSettingsInSplit, activeTabId } = useSettingsState();
   const isTabAvailable = useSettingsTabAvailable();
 
-  const isActive = () => isSettingsActive() && activeTabId() === 'Mobile App';
+  const isActive = () => isSettingsActive() && activeTabId() === 'Downloads';
 
   const open = (event: MouseEvent) => {
     event.preventDefault();
-    analytics.track('sidebar_click', { view: 'mobile-app' });
-    if (event.shiftKey) openSettingsInSplit('Mobile App');
-    else openSettings('Mobile App');
+    analytics.track('sidebar_click', { view: 'downloads' });
+    if (event.shiftKey) openSettingsInSplit('Downloads');
+    else openSettings('Downloads');
   };
 
   return (
-    <Show when={!isNativeMobilePlatform() && isTabAvailable('Mobile App')}>
+    <Show when={isTabAvailable('Downloads')}>
       <Button
-        aria-label={t('nav.getMobileApp')}
+        aria-label={t('nav.downloads')}
         variant="ghost"
         size="icon-md"
         class={cn(
           'size-10 cursor-default rounded-xl',
           isActive() && 'bg-hover text-ink'
         )}
-        tooltip={{ content: t('nav.getMobileApp'), placement: 'right' }}
+        tooltip={{ content: t('nav.downloads'), placement: 'right' }}
         draggable={false}
         aria-current={isActive() ? 'page' : undefined}
         data-active={isActive() ? '' : undefined}
-        data-sidebar-next-item="mobile-app"
+        data-sidebar-next-item="downloads"
         {...pressHandlers(open)}
       >
-        <NavGlyph icon={DeviceMobileDownloadIcon} class="size-5" />
+        <span class="pointer-events-none flex size-7 items-center justify-center rounded-full bg-accent-bg text-accent">
+          <DownloadIcon class="size-4" aria-hidden="true" />
+        </span>
       </Button>
     </Show>
   );
 };
 
 /**
- * The rail's bottom actions: a ready app update, the mobile app link, help,
+ * The rail's bottom actions: a ready app update, Downloads, help,
  * then Settings, opened like any other rail view. The gear carries the account
  * photo as a badge, so people with several accounts can tell which one they
  * are in.
@@ -126,7 +126,7 @@ export const FooterActions = (props: {
           </Show>
         )}
       </Show>
-      <MobileAppButton />
+      <DownloadsButton />
       <HelpMenu />
       <SidebarOpenInSplitMenu
         content={() => SETTINGS_CONTENT}

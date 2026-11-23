@@ -34,11 +34,7 @@ const step = (
   status: ActivityLineStep['status'] = 'completed'
 ): ActivityLineStep => ({ id, label, status });
 
-function mount(overrides?: {
-  live?: boolean;
-  defaultOpen?: boolean;
-  failed?: number;
-}) {
+function mount(overrides?: { live?: boolean; defaultOpen?: boolean }) {
   const [live, setLive] = createSignal(overrides?.live ?? false);
   const [calls, setCalls] = createSignal(['Read', 'Edit', 'Shell']);
   const [steps, setSteps] = createSignal<ActivityLineStep[]>([
@@ -50,7 +46,6 @@ function mount(overrides?: {
   const view = render(() => (
     <ToolGroup
       count={calls().length}
-      failed={overrides?.failed}
       live={live()}
       steps={steps()}
       summary={summary()}
@@ -74,13 +69,6 @@ describe('ToolGroup', () => {
     expect(view.queryAllByTestId('call')).toHaveLength(0);
     vi.advanceTimersByTime(2000);
     expect(view.queryAllByTestId('call')).toHaveLength(0);
-  });
-
-  it('counts failures on the finished row', () => {
-    const view = mount({ failed: 2 });
-    expect(view.getByRole('button').textContent).toBe(
-      'Used 3 tools · 2 failed'
-    );
   });
 
   it('is one live line naming the running step, and stays closed', () => {

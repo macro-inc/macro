@@ -395,7 +395,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'failures',
     title: 'Some steps failed',
-    note: 'Failures are counted on the summary and marked on their rows.',
+    note: 'Failed steps count and read like any other; the reply explains them.',
     parts: [
       SEARCH_DOCS,
       LIST_FAILED,
@@ -411,7 +411,7 @@ const SCENARIOS: Scenario[] = [
   {
     id: 'stopped',
     title: 'Stopped mid-run',
-    note: 'Calls still running when the turn ended read as interrupted.',
+    note: 'Calls still running when the turn ended keep that status only in the data.',
     parts: [SEARCH_DOCS, running(READ_DOC), running(SHELL)],
     inFlight: false,
     stop: { kind: 'cancelled' },

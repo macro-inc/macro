@@ -251,6 +251,8 @@ pub enum GraphqlPropertyTargetEntityType {
     Chat,
     /// CRM company target.
     Company,
+    /// CRM contact target.
+    Contact,
     /// Row of a Macro database table.
     DatabaseRow,
     /// Document target, including tasks and snippets.
@@ -273,6 +275,7 @@ impl GraphqlPropertyTargetEntityType {
             Self::Channel => model_entity::EntityType::Channel,
             Self::Chat => model_entity::EntityType::Chat,
             Self::Company => model_entity::EntityType::CrmCompany,
+            Self::Contact => model_entity::EntityType::CrmContact,
             Self::DatabaseRow => model_entity::EntityType::DatabaseRow,
             Self::Document => model_entity::EntityType::Document,
             Self::Initiative => model_entity::EntityType::Initiative,

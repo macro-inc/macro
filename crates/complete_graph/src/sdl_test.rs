@@ -1023,6 +1023,63 @@ fn sdl_matches_committed_schema_graphql() {
     );
 }
 
+#[test]
+fn time_tracking_hangs_off_documents_and_the_authenticated_user() {
+    use apollo_compiler::schema::ExtendedType;
+
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "timeTracking: GraphqlTimeTracking!",
+        "runningTimer: GraphqlRunningTimer",
+        "timeEntries(limit: Int, after: String): GraphqlTimeEntryPage!",
+        "logTime(input: LogTimeInput!): LogTimePayload!",
+        "updateTimeEntry(input: UpdateTimeEntryInput!): UpdateTimeEntryPayload!",
+        "deleteTimeEntry(input: DeleteTimeEntryInput!): DeleteTimeEntryPayload!",
+        "startTimer(input: StartTimerInput!): StartTimerPayload!",
+        "stopTimer(input: StopTimerInput!): StopTimerPayload!",
+        "discardTimer(timerId: ID!): DiscardTimerPayload!",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
+
+    let schema = apollo_compiler::Schema::parse_and_validate(sdl.as_str(), "schema.graphql")
+        .expect("generated SDL is valid");
+    let object = |name: &str| match schema.types.get(name) {
+        Some(ExtendedType::Object(object)) => object.clone(),
+        _ => panic!("{name} must be an object"),
+    };
+    for entity in [
+        "GraphqlTimeEntry",
+        "GraphqlRunningTimer",
+        "GraphqlTimeTracking",
+    ] {
+        assert_eq!(
+            object(entity).fields["id"].ty.to_string(),
+            "ID!",
+            "{entity}"
+        );
+    }
+    // A page is embedded in its task, per its arguments; it has no identity.
+    assert!(!object("GraphqlTimeEntryPage").fields.contains_key("id"));
+    // Entries belong to documents, not to every Soup entity.
+    assert!(
+        object("GraphqlSoupDocument")
+            .fields
+            .contains_key("timeEntries")
+    );
+    assert!(
+        !object("GraphqlSoupChannel")
+            .fields
+            .contains_key("timeEntries")
+    );
+    let ExtendedType::Interface(entity) = schema.types.get("GraphqlSoupEntity").expect("entity")
+    else {
+        panic!("GraphqlSoupEntity must be an interface");
+    };
+    assert!(!entity.fields.contains_key("timeEntries"));
+    assert!(!object("SoupQueryRoot").fields.contains_key("timeTracking"));
+}
+
 fn assert_sdl_line(sdl: &str, expected: &str) {
     assert!(
         sdl.lines().any(|line| line.trim() == expected),

@@ -38,7 +38,11 @@ const property: Property = {
   createdAt: '2026-01-01',
   updatedAt: '2026-01-01',
 };
-function setup(canEdit = true, value: Property['value'] = 'Keep this value') {
+function setup(
+  canEdit = true,
+  value: Property['value'] = 'Keep this value',
+  unlink?: { available: () => boolean; clear: () => Promise<unknown> }
+) {
   const remove = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const save = vi
     .fn<(...args: unknown[]) => Promise<void>>()
@@ -59,7 +63,12 @@ function setup(canEdit = true, value: Property['value'] = 'Keep this value') {
       removeProperty={remove}
       saveHandler={{ saveProperty: save, saveDate: vi.fn() }}
     >
-      <InlinePropertyValue property={shown} entityId="doc" canManage />
+      <InlinePropertyValue
+        property={shown}
+        entityId="doc"
+        canManage
+        unlink={unlink}
+      />
     </PropertiesProvider>
   ));
   return { remove, save, unpin, refresh };
@@ -90,4 +99,22 @@ it('never offers deleting the property from the item', () => {
 it('hides management actions for read-only documents', () => {
   setup(false);
   expect(screen.queryByRole('button')).toBeNull();
+});
+
+it("uses a pill's own Unlink, offered when it has something to clear", async () => {
+  const clear = vi.fn(async () => {});
+  const { save } = setup(true, null, { available: () => true, clear });
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Unlink' }));
+
+  expect(clear).toHaveBeenCalledOnce();
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("hides a pill's own Unlink when it has nothing to clear", () => {
+  setup(true, 'Keep this value', {
+    available: () => false,
+    clear: vi.fn(async () => {}),
+  });
+  expect(screen.queryByRole('button', { name: 'Unlink' })).toBeNull();
 });
