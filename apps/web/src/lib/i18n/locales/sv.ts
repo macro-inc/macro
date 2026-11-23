@@ -689,7 +689,7 @@ export default {
     more: 'Mer',
     moreOptions: 'Fler alternativ',
     create: 'Skapa',
-    getMobileApp: 'Hämta mobilappen',
+    downloads: 'Nedladdningar',
     signedInAs: 'Inloggad som {{name}}',
     customizeSidebar: 'Anpassa sidofältet',
     customizeSidebarDescription:
@@ -754,8 +754,7 @@ export default {
     tabShortcuts: 'Kortkommandon',
     tabUsage: 'Användning',
     tabBilling: 'Fakturering',
-    tabDesktopApp: 'Skrivbordsapp',
-    tabMobileApp: 'Mobilapp',
+    tabDownloads: 'Nedladdningar',
     tabTags: 'Taggar',
     tabIntegrations: 'Integrationer',
     tabRuntimes: 'Maskiner',

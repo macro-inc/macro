@@ -2043,6 +2043,7 @@ export const CreateBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -2129,6 +2130,7 @@ export const BookingLinkResult = z.object({
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           mode: z.any().superRefine((x, ctx) => {
             const schemas = [
@@ -6073,6 +6075,7 @@ export const EditBookingLink = z
             location: z.string(),
             macroCall: z.boolean().optional(),
             googleMeet: z.boolean(),
+            emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
             enabled: z.boolean(),
             mode: z.any().superRefine((x, ctx) => {
               const schemas = [
@@ -11970,6 +11973,15 @@ export const ListBookingLinksResult = z.object({
       ),
     })
   ),
+  accounts: z.array(
+    z
+      .object({
+        emailLinkId: z.string().uuid(),
+        emailAddress: z.string(),
+        videoMeetings: z.boolean(),
+      })
+      .strict()
+  ),
   links: z.array(
     z.object({
       profileId: z.string().uuid(),
@@ -11986,6 +11998,7 @@ export const ListBookingLinksResult = z.object({
               location: z.string(),
               macroCall: z.boolean().optional(),
               googleMeet: z.boolean(),
+              emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
               enabled: z.boolean(),
               mode: z.any().superRefine((x, ctx) => {
                 const schemas = [
@@ -14569,6 +14582,7 @@ export const BookingSettingsResult = z.object({
         location: z.string(),
         macroCall: z.boolean().optional(),
         googleMeet: z.boolean(),
+        emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
         enabled: z.boolean(),
         scheduleId: z.string().uuid(),
         mode: z.any().superRefine((x, ctx) => {
@@ -19878,6 +19892,7 @@ export const UpdateBookingSettings = z
           location: z.string(),
           macroCall: z.boolean().optional(),
           googleMeet: z.boolean(),
+          emailLinkId: z.union([z.string().uuid(), z.null()]).optional(),
           enabled: z.boolean(),
           scheduleId: z.string().uuid(),
           mode: z.any().superRefine((x, ctx) => {

@@ -745,7 +745,7 @@ export default {
     more: 'Ещё',
     moreOptions: 'Другие параметры',
     create: 'Создать',
-    getMobileApp: 'Скачать мобильное приложение',
+    downloads: 'Загрузки',
     signedInAs: 'Вы вошли как {{name}}',
     customizeSidebar: 'Настроить боковую панель',
     customizeSidebarDescription:
@@ -810,8 +810,7 @@ export default {
     tabShortcuts: 'Сочетания клавиш',
     tabUsage: 'Использование',
     tabBilling: 'Оплата',
-    tabDesktopApp: 'Приложение для ПК',
-    tabMobileApp: 'Мобильное приложение',
+    tabDownloads: 'Загрузки',
     tabTags: 'Теги',
     tabIntegrations: 'Интеграции',
     tabRuntimes: 'Компьютеры',
