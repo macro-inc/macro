@@ -56,9 +56,11 @@ and each task's Time logged total. Served over REST by
   read the topic, both at `InitialOffset::Latest`: `soup_realtime` refreshes
   the task's row on every event, and DSS's activity consumer records one
   `time_logged` activity per `time_entry.logged` (edits and deletes record
-  none). A consumer subscribed before the topic exists in an environment gets
-  a receive error for it and keeps reading its other topics; it picks the
-  topic up when it appears.
+  none). Both deploy pipelines apply the `kafka-cluster` stack, which creates
+  the topic. A consumer that starts before the topic exists logs one receive
+  error for it and keeps reading its other topics; it takes the topic at its
+  next metadata refresh (5 minutes at most), starting at the latest offset,
+  so events published before then get no live patch or activity row.
 - Every committed write also sends `time_tracking_changed`
   (`{ timer, taskId }`) to all of the person's open sessions through the
   gateway: `timer` when their timer started, stopped or was discarded,
