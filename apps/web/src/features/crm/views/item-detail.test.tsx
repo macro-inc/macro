@@ -13,11 +13,7 @@ import type { CrmItemParams } from '../crm-route';
 const fixture = vi.hoisted(() => ({
   allowed: (): boolean => true,
   touch: false,
-  item: {
-    itemType: 'email',
-    itemId: 'thread-1',
-    name: 'Individually shared item',
-  } as CrmItemParams & { name: string },
+  item: undefined as (CrmItemParams & { name: string }) | undefined,
   record: undefined as (() => CrmTaskRecord | undefined) | undefined,
   records: [
     { type: 'company', id: 'company-1', name: 'Private company' },
@@ -83,7 +79,10 @@ vi.mock(
       <>
         {props.previewHeaderLeading}
         <p>{props.target.fallbackName}</p>
-        <p>File viewer for {props.target.id}</p>
+        <p>
+          File viewer for {props.target.id} with{' '}
+          {useSplitHeaderScope() ? 'its header in the pane' : 'the CRM bar'}
+        </p>
       </>
     ),
   })
@@ -117,12 +116,18 @@ import { CrmItemDetail } from './item-detail';
 
 afterEach(() => {
   cleanup();
+  fixture.allowed = () => true;
   fixture.touch = false;
 });
 
 it('retires CRM breadcrumbs and task presets while an independently shared item stays open', () => {
   const [allowed, setAllowed] = createSignal(true);
   fixture.allowed = allowed;
+  fixture.item = {
+    itemType: 'email',
+    itemId: 'thread-1',
+    name: 'Individually shared item',
+  };
   render(() => <CrmItemDetail sourceName="Shared pipeline" />);
   expect(screen.getByText('Private company')).toBeTruthy();
   expect(screen.getByText('Private contact')).toBeTruthy();
@@ -143,33 +148,54 @@ it('retires CRM breadcrumbs and task presets while an independently shared item 
   });
 });
 
-const renderItem = (item: CrmItemParams & { name: string }) => {
-  fixture.allowed = () => true;
-  fixture.item = item;
+it.each([
+  { itemFileType: 'pdf', name: 'contract.pdf' },
+  { itemFileType: 'image', name: 'site-photo.jpg' },
+])('opens a $itemFileType file from a record in its file viewer', (file) => {
+  fixture.item = { itemType: 'document', itemId: 'file-1', ...file };
   render(() => (
     <SplitPanelContext.Provider value={{} as SplitPanelContextType}>
       <CrmItemDetail sourceName="People" />
     </SplitPanelContext.Provider>
   ));
-};
-
-it.each([
-  { itemFileType: 'pdf', name: 'contract.pdf' },
-  { itemFileType: 'image', name: 'site-photo.jpg' },
-])('opens a $itemFileType file from a record in its file viewer', (file) => {
-  renderItem({ itemType: 'document', itemId: 'file-1', ...file });
-  expect(screen.getByText('File viewer for file-1')).toBeTruthy();
+  expect(
+    screen.getByText('File viewer for file-1 with the CRM bar')
+  ).toBeTruthy();
   expect(screen.queryByText(/Markdown viewer/)).toBeNull();
 });
 
-it('opens a note in the Markdown viewer, with its own header on touch', () => {
+it('opens a file in its file viewer with its own header on touch', () => {
   fixture.touch = true;
-  renderItem({
+  fixture.item = {
+    itemType: 'document',
+    itemId: 'file-1',
+    itemFileType: 'pdf',
+    name: 'contract.pdf',
+  };
+  render(() => (
+    <SplitPanelContext.Provider value={{} as SplitPanelContextType}>
+      <CrmItemDetail sourceName="People" />
+    </SplitPanelContext.Provider>
+  ));
+  expect(
+    screen.getByText('File viewer for file-1 with its header in the pane')
+  ).toBeTruthy();
+  expect(screen.queryByText(/Markdown viewer/)).toBeNull();
+});
+
+it('opens a note in the Markdown viewer with its own header on touch', () => {
+  fixture.touch = true;
+  fixture.item = {
     itemType: 'document',
     itemId: 'note-1',
     itemFileType: 'md',
     name: 'Call notes',
-  });
+  };
+  render(() => (
+    <SplitPanelContext.Provider value={{} as SplitPanelContextType}>
+      <CrmItemDetail sourceName="People" />
+    </SplitPanelContext.Provider>
+  ));
   expect(
     screen.getByText('Markdown viewer for note-1 with its header in the pane')
   ).toBeTruthy();

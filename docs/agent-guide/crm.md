@@ -426,7 +426,7 @@ contact also reference its company. The side panel contains References, with no
 empty Sharing section.
 
 In workspace activity and a company or contact's embedded sections, clicking a
-Task, Email, Note, or Call opens its authorized detail inside Customers.
+Task, Email, Note, Call, or file opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
@@ -443,6 +443,10 @@ Reload keeps the selected item's URL. Shift-click uses the existing separate
 split behavior; modified row clicks keep the existing split behavior. On touch,
 the existing header and breadcrumb conventions apply without a new navigation UI.
 Verify that tasks display their status and properties, not the Drive editor.
+A file in Files (an upload or an imported email attachment) opens in its own
+viewer, as in Drive; notes, tasks, snippets and skills open in the Markdown
+editor. Verify a PDF, a Word file and an image render, never "This document
+couldn't be displayed."
 
 Links to the retired Databases views still resolve: a record's `/databases`
 section opens the record, `/databases/<id>` and `/app/companies/database/<id>`
