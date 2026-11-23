@@ -14,7 +14,6 @@ export function SearchToolCall(props: {
       title={props.common.label}
       subtitle={pathsSubtitle(props.detail.paths)}
       status={props.common.status}
-      muted={props.common.muted}
       trailing={props.common.trailing}
       hasContent={Boolean(props.detail.output)}
     >

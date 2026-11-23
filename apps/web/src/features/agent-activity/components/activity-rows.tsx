@@ -1,6 +1,5 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
 import { Key } from '@solid-primitives/keyed';
-import { Match, Switch } from 'solid-js';
 
 /**
  * One step of an agent's work, as the session's fold worded it. A
@@ -16,8 +15,8 @@ export type ActivityRowView = {
 
 /**
  * The steps an agent took between two passages of its reply, one quiet line
- * each like the session's tool rows: what it did, and how it went only when
- * it did not simply finish.
+ * each like the session's tool rows: what it did. How a step ended stays in
+ * `data-status`; a failure is the agent's to explain in its reply.
  */
 export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
   return (
@@ -36,14 +35,6 @@ export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
                 active={row().status === 'running'}
               />
             </span>
-            <Switch>
-              <Match when={row().status === 'failed'}>
-                <span class="shrink-0 text-failure">Failed</span>
-              </Match>
-              <Match when={row().status === 'interrupted'}>
-                <span class="shrink-0 text-ink-disabled">Interrupted</span>
-              </Match>
-            </Switch>
           </li>
         )}
       </Key>

@@ -25,10 +25,10 @@ export interface ToolCardProps {
   fixedTitle?: boolean;
   /** Compact `key=value` details after the subtitle. */
   args?: Record<string, string>;
-  /** Status text or counts after the detail; a failed call says so by default. */
+  /** Status text or counts after the detail. A failure is never named here. */
   trailing?: JSX.Element;
   status: ToolStatus;
-  /** Fade the whole card, the chat block's failed-tool treatment. */
+  /** Fade the whole card, for an outcome the row can't vouch for. */
   muted?: boolean;
   /** Controlled open state; omit to let the card manage its own. */
   open?: boolean;
@@ -53,8 +53,6 @@ export function ToolCard(props: ToolCardProps) {
   // Reading children to inspect them mounts expensive bodies even while closed.
   // Conditional callers supply presence separately; Kobalte mounts the body.
   const hasChildren = () => props.hasContent ?? 'children' in props;
-  const summary = () =>
-    props.trailing ?? (props.status === 'failed' ? 'Failed' : undefined);
 
   const row = (expandable: boolean) => (
     <>
@@ -96,15 +94,9 @@ export function ToolCard(props: ToolCardProps) {
           </span>
         )}
       </For>
-      <Show when={summary()}>
-        <span
-          class="shrink-0 whitespace-nowrap tabular-nums"
-          classList={{
-            'text-failure': props.status === 'failed',
-            'text-ink-disabled': props.status !== 'failed',
-          }}
-        >
-          {summary()}
+      <Show when={props.trailing}>
+        <span class="shrink-0 whitespace-nowrap tabular-nums text-ink-disabled">
+          {props.trailing}
         </span>
       </Show>
       <Show when={expandable}>

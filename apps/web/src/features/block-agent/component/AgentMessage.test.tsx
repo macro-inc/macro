@@ -124,6 +124,7 @@ vi.mock('../ui', () => ({
   }) => (
     <div
       data-count={props.count}
+      data-failure-tally={String('failed' in props)}
       data-live-line={String(props.live ?? false)}
       data-steps={props.steps
         ?.map((step) => `${step.label}:${step.status}`)
@@ -522,6 +523,23 @@ describe('Message tool grouping', () => {
     expect(view.queryByTestId('working')).toBeNull();
   });
 
+  it('counts failed calls like any other, with no failure tally', () => {
+    const view = render(() => (
+      <Message
+        message={message([
+          tool('a'),
+          tool('b', { status: 'failed' }),
+          tool('c', { status: 'failed' }),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('3');
+    expect(group.dataset.failureTally).toBe('false');
+  });
+
   it('keeps delegated agents visible between tool bursts', () => {
     const view = render(() => (
       <Message
@@ -727,6 +745,7 @@ describe('Message tool runs', () => {
     expect(view.getAllByTestId('group')).toHaveLength(1);
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('4');
+    expect(group.dataset.failureTally).toBe('false');
     expect(
       view.getAllByTestId('thought').every((row) => group.contains(row))
     ).toBe(true);
@@ -758,6 +777,25 @@ describe('Message tool runs', () => {
     expect(view.getByTestId('group').dataset.steps).toBe(
       'Read a.rs:completed|Searched documents:completed|Reading a document:running'
     );
+  });
+
+  it("counts a program's steps with the run's calls, failed or not", () => {
+    programs.steps.timedOut = 1;
+    programs.steps.partly = 3;
+    const view = render(() => (
+      <Message
+        message={message([
+          program('timedOut'),
+          tool('a', { status: 'failed' }),
+          program('partly'),
+          text('Done.'),
+        ])}
+        inFlight={false}
+      />
+    ));
+    const group = view.getByTestId('group');
+    expect(group.dataset.count).toBe('5');
+    expect(group.dataset.failureTally).toBe('false');
   });
 
   it('opens a live run before its first call names itself', () => {
