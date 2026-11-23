@@ -28,8 +28,7 @@ const MAX_SQS_DELAY: Duration = Duration::from_secs(900);
 
 /// The wait a refused operation was told to observe, when the failure is a
 /// refusal: a Gmail rate limit (the request gate's or Gmail's Retry-After, if
-/// either gave one), no free backfill write slot, or no free CRM population
-/// slot for its team (the refusal's own delay).
+/// either gave one) or no free backfill write slot.
 pub fn rate_limit(error: &DetailedError) -> Option<Option<Duration>> {
     match error.reason {
         FailureReason::GmailApiRateLimited => {
@@ -38,12 +37,7 @@ pub fn rate_limit(error: &DetailedError) -> Option<Option<Duration>> {
                 _ => None,
             })
         }
-        FailureReason::BackfillWritesBusy => Some(
-            error
-                .source
-                .downcast_ref::<super::write_slot::CrmTeamSlotsBusy>()
-                .map(|busy| busy.retry_after),
-        ),
+        FailureReason::BackfillWritesBusy => Some(None),
         _ => None,
     }
 }

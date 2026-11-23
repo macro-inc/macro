@@ -3,6 +3,7 @@ pub mod trace_context;
 use crate::SQS;
 use models_email::email::service::backfill::BackfillPubsubMessage;
 use models_email::email::service::crm_cleanup::CrmCleanupPubsubMessage;
+use models_email::email::service::crm_population::CrmPopulationMessage;
 pub use models_email::email::service::pubsub::LinkManagerMessage;
 use models_email::email::service::pubsub::{LinkManagerLane, LinkManagerSender};
 #[cfg(feature = "sfs_uploader")]
@@ -114,6 +115,11 @@ impl SQS {
         self
     }
 
+    pub fn email_crm_population_queue(mut self, email_crm_population_queue: &str) -> Self {
+        self.email_crm_population_queue = Some(email_crm_population_queue.to_string());
+        self
+    }
+
     #[cfg(feature = "sfs_uploader")]
     pub fn sfs_uploader_queue(mut self, email_sfs_uploader_queue: &str) -> Self {
         self.email_sfs_uploader_queue = Some(email_sfs_uploader_queue.to_string());
@@ -199,6 +205,51 @@ impl SQS {
                 .await;
         }
         anyhow::bail!("email_crm_cleanup_queue is not configured")
+    }
+
+    /// Sends CRM population work to its FIFO queue, ten entries per request.
+    /// Each message's group is its mailbox; SQS drops a second message with
+    /// the same deduplication id within five minutes. On an error some
+    /// entries may have been accepted.
+    #[tracing::instrument(skip_all, err, fields(messages = messages.len()))]
+    pub async fn enqueue_crm_population_messages(
+        &self,
+        messages: &[(Uuid, CrmPopulationMessage)],
+    ) -> anyhow::Result<()> {
+        let Some(queue) = &self.email_crm_population_queue else {
+            anyhow::bail!("email_crm_population_queue is not configured");
+        };
+        let context = trace_context::attribute();
+        for chunk in messages.chunks(10) {
+            let mut entries = Vec::with_capacity(chunk.len());
+            for (index, (deduplication_id, message)) in chunk.iter().enumerate() {
+                let mut entry = aws_sdk_sqs::types::SendMessageBatchRequestEntry::builder()
+                    .id(index.to_string())
+                    .message_body(serde_json::to_string(message)?)
+                    .message_group_id(message.link_id().to_string())
+                    .message_deduplication_id(deduplication_id.to_string());
+                if let Some(context) = &context {
+                    entry = entry.message_attributes(trace_context::ATTRIBUTE, context.clone());
+                }
+                entries.push(entry.build()?);
+            }
+            let output = self
+                .inner
+                .send_message_batch()
+                .queue_url(queue)
+                .set_entries(Some(entries))
+                .send()
+                .await?;
+            if let Some(failure) = output.failed().first() {
+                anyhow::bail!(
+                    "{} of {} CRM population messages were refused: {}",
+                    output.failed().len(),
+                    chunk.len(),
+                    failure.code()
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Sends a message to the email scheduled queue

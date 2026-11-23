@@ -22,7 +22,7 @@ pub use pending_labels::{
 };
 pub use ports::*;
 pub use upsert_message::contacts::build_contact_connections;
-pub use upsert_message::contacts::{CrmContactRecipient, enqueue_crm_contacts};
+pub use upsert_message::contacts::{CrmContactRecipient, crm_contact_requests};
 pub use upsert_message::notifications::build_notification_recipients;
 pub use upsert_message::{process_and_insert_message, resync_around, upload_claimed_attachments};
 

@@ -1,7 +1,5 @@
 use super::*;
-use models_email::service::backfill::{
-    BackfillOperation, BackfillPubsubMessage, LinkScopedPayload, PopulateCrmContactPayload,
-};
+use models_email::service::backfill::PopulateCrmContactPayload;
 pub type CrmContactRecipient = (
     String,
     Option<String>,
@@ -72,7 +70,7 @@ pub fn build_contact_connections<'a>(
         .collect()
 }
 
-pub(super) async fn enqueue_populate_crm_contacts<L, R, G, Q, E>(
+pub(super) async fn request_crm_populations<L, R, G, Q, E>(
     ctx: &InboxSyncService<L, R, G, Q, E>,
     link_id: Uuid,
     self_email: &str,
@@ -86,28 +84,34 @@ where
     Q: InboxSyncQueue,
     E: MacroEventBroker + InboxSyncRefresher + InboxSyncImportEffects,
 {
-    enqueue_crm_contacts(link_id, self_email, contacts, is_sent, |message| async {
-        ctx.queue
-            .enqueue_backfill(message)
-            .await
-            .map_err(ConnectionSourceError::into_original)
-    })
-    .await
+    let requests = crm_contact_requests(self_email, contacts, is_sent, true);
+    if requests.is_empty() {
+        return Ok(());
+    }
+    ctx.queue
+        .request_crm_population(link_id, requests)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to request CRM contact populations"),
+            })
+        })
 }
 
-/// Normalize and publish distinct, non-self CRM contacts in input order.
-pub async fn enqueue_crm_contacts<F, Fut>(
-    link_id: Uuid,
+/// Normalized, distinct, non-self CRM population requests, in input order.
+/// `live_mail` is false only for the legacy history seed, which must not adopt
+/// consent initialized after it was queued.
+pub fn crm_contact_requests(
     self_email: &str,
     contacts: impl IntoIterator<Item = CrmContactRecipient>,
     is_sent: bool,
-    mut enqueue: F,
-) -> Result<(), ProcessingError>
-where
-    F: FnMut(BackfillPubsubMessage) -> Fut,
-    Fut: Future<Output = anyhow::Result<()>>,
-{
+    live_mail: bool,
+) -> Vec<PopulateCrmContactPayload> {
     let mut seen: HashSet<String> = HashSet::new();
+    let mut requests = Vec::new();
     for (raw_email, contact_name, first_at, last_at) in contacts {
         let contact_email = raw_email.trim().to_ascii_lowercase();
         let Some((local, domain)) = contact_email.split_once('@') else {
@@ -120,27 +124,14 @@ where
             continue;
         }
 
-        let ps_message = BackfillPubsubMessage {
-            backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
-                link_id,
-                payload: PopulateCrmContactPayload {
-                    live_mail: true,
-                    contact_email,
-                    contact_name,
-                    first_at,
-                    last_at,
-                    is_sent,
-                },
-            }),
-        };
-
-        enqueue(ps_message).await.map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::SqsEnqueueFailed,
-                source: e.context("Failed to enqueue PopulateCrmContact message"),
-            })
-        })?;
+        requests.push(PopulateCrmContactPayload {
+            live_mail,
+            contact_email,
+            contact_name,
+            first_at,
+            last_at,
+            is_sent,
+        });
     }
-
-    Ok(())
+    requests
 }

@@ -14,7 +14,7 @@ pub fn run(
 #[tracing::instrument(name = "run", skip(db, sqs))]
 async fn run_outbox(db: PgPool, sqs: SQS, cancellation_token: tokio_util::sync::CancellationToken) {
     let db = crate::outbound::backfill_jobs::outbox::PgBackfillOutbox(db);
-    let sqs = crate::outbound::backfill_jobs::worker::BackfillSqs(sqs);
+    let sqs = crate::outbound::backfill_jobs::outbox::BackfillOutboxSqs(sqs);
     loop {
         if cancellation_token.is_cancelled() {
             return;

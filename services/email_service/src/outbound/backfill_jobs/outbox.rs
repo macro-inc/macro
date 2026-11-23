@@ -1,5 +1,4 @@
 //! Existing outbox transactions; publication order is owned by the domain.
-use super::worker::BackfillSqs;
 use email::domain::backfill_jobs::outbox::*;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
@@ -185,12 +184,22 @@ impl CrmOutboxTransaction for PgOutboxTransaction {
         Ok(())
     }
 }
-impl BackfillOutboxPublisher for BackfillSqs {
+/// The backfill outbox's publications.
+pub(crate) struct BackfillOutboxSqs(pub sqs_client::SQS);
+
+impl BackfillOutboxPublisher for BackfillOutboxSqs {
     async fn publish(
         &self,
         message: models_email::service::backfill::BackfillPubsubMessage,
     ) -> anyhow::Result<()> {
         self.0.enqueue_email_backfill_message(message).await
+    }
+    async fn publish_crm_policy_page(
+        &self,
+        page: models_email::service::backfill::PopulateCrmPolicyPayload,
+    ) -> anyhow::Result<()> {
+        let queue = crate::outbound::crm_population::SqsPopulationQueue(self.0.clone());
+        email::domain::crm_population::queue_policy_page(&queue, page).await
     }
     fn adopt(&self, span: &tracing::Span, traceparent: Option<&str>) {
         sqs_client::email::trace_context::adopt(span, traceparent);

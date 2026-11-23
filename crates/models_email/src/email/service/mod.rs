@@ -5,6 +5,7 @@ mod body_parsing;
 pub mod cache;
 pub mod contact;
 pub mod crm_cleanup;
+pub mod crm_population;
 pub mod label;
 pub mod link;
 pub mod message;

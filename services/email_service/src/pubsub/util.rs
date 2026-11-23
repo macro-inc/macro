@@ -3,6 +3,7 @@ use email::domain::events::EmailMacroEvent;
 use macro_event_broker::MacroEventBroker;
 /// shared utils across different pubsub workers
 use models_email::api::refresh::RefreshEmailEvent;
+use std::time::Duration;
 
 #[cfg(test)]
 mod test;
@@ -85,4 +86,71 @@ pub(crate) fn sqlstate(error: &anyhow::Error) -> Option<String> {
             _ => None,
         }
     })
+}
+
+/// How often a running operation pushes its message's visibility out again.
+const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(20);
+/// The backfill and CRM population queues' visibility timeout, restored by
+/// every heartbeat.
+const VISIBILITY_TIMEOUT_SECONDS: i32 = 60;
+/// Longest wait for one heartbeat's answer. The SQS client sets no timeout of
+/// its own, and a heartbeat that never answers must not hold the next one.
+const HEARTBEAT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Runs `work` while keeping its message hidden from other workers.
+///
+/// A whole thread, or any operation slowed by a struggling database, can
+/// outlast the queue's visibility timeout. Delivered again while the first
+/// copy still runs, the second copy would find the thread written and count
+/// it, and the first would count it again through its metadata step,
+/// completing the job early. A CRM population's message also holds its
+/// mailbox's turn on the population queue. A failed heartbeat only logs: the
+/// message then reappears as it would have without one.
+pub(crate) async fn keep_invisible<F: Future>(
+    message: &aws_sdk_sqs::types::Message,
+    sqs_worker: &sqs_worker::SQSWorker,
+    work: F,
+) -> F::Output {
+    let Some(receipt_handle) = message.receipt_handle() else {
+        return work.await;
+    };
+    run_hidden(work, || {
+        sqs_worker.change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
+    })
+    .await
+}
+
+/// Runs `work` beside a heartbeat that hides its message again through
+/// `extend`, so a slow heartbeat never holds the work up.
+async fn run_hidden<F, E, R>(work: F, extend: E) -> F::Output
+where
+    F: Future,
+    E: FnMut() -> R,
+    R: Future<Output = anyhow::Result<()>>,
+{
+    tokio::select! {
+        output = work => output,
+        never = heartbeats(extend) => match never {},
+    }
+}
+
+async fn heartbeats<E, R>(mut extend: E) -> std::convert::Infallible
+where
+    E: FnMut() -> R,
+    R: Future<Output = anyhow::Result<()>>,
+{
+    let mut ticks = tokio::time::interval_at(
+        tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
+        VISIBILITY_HEARTBEAT,
+    );
+    loop {
+        ticks.tick().await;
+        match tokio::time::timeout(HEARTBEAT_REQUEST_TIMEOUT, extend()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(error = ?error, "failed to keep a running queue operation hidden");
+            }
+            Err(_) => tracing::warn!("timed out keeping a running queue operation hidden"),
+        }
+    }
 }

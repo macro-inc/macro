@@ -1148,11 +1148,13 @@ also = ["http GET /internal/recent_messages/{user_id}"]
 
 [F-176]  # Enrich CRM contacts from mail and clean up after removal
 by = [
-  "queue backfill:PopulateCrmContact",
+  "queue crm-population.fifo:Contact",
   "queue backfill:PopulateCrmForUser",
   "queue crm-cleanup:StartJob",
 ]
 also = [
+  "queue backfill:PopulateCrmContact",
+  "queue crm-population.fifo:PolicyPage",
   "queue backfill:DepopulateCrmContact",
   "queue backfill:DepopulateCrmForUser",
   "queue crm-cleanup:ListCandidates",

@@ -91,6 +91,13 @@ fn effects_with_contacts<
             ),
         }),
         contacts,
+        crm_population: crate::outbound::crm_population::requests(
+            crate::util::redis::RedisClient::new(
+                redis::Client::open("redis://127.0.0.1:9/").unwrap(),
+                60,
+            ),
+            sqs_client::SQS::new(sqs.clone()),
+        ),
         queue: sqs_client::SQS::new(sqs),
         gateway: connection_gateway_client::client::ConnectionGatewayClient::new(
             "test".to_string(),

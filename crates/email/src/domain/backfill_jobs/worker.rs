@@ -6,7 +6,6 @@ mod counters;
 mod crm;
 mod crm_contact;
 mod crm_contact_delete;
-mod crm_policy;
 mod crm_user;
 mod crm_user_delete;
 mod deferral;
@@ -35,7 +34,7 @@ pub use import_ports::*;
 pub use lifecycle_ports::*;
 pub use metadata::{is_unstorable_sqlstate, map_db_error};
 pub use ports::*;
-pub use write_slot::{admit_crm_slot, admit_write_slot};
+pub use write_slot::admit_write_slot;
 
 use models_email::service::backfill::BackfillPubsubMessage;
 use models_email::service::pubsub::{DetailedError, ProcessingError};

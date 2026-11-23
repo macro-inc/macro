@@ -33,7 +33,7 @@ async fn missing_link_emits_one_debug_event_with_the_link_in_the_processing_span
     let (svc, f) = setup();
     f.0.lock().unwrap().link = None;
     let output = Output::default();
-    svc.process(&crm_population())
+    svc.process(&crm_depopulation())
         .with_subscriber(subscriber(&output))
         .await;
     assert_eq!(

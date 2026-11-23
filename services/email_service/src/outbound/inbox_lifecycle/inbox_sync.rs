@@ -31,7 +31,11 @@ pub(crate) struct PgInboxSync(pub PgPool);
 #[derive(Clone)]
 pub(crate) struct GmailInboxSync(pub GmailApi);
 #[derive(Clone)]
-pub(crate) struct InboxSyncSqs(pub sqs_client::SQS);
+/// Inbox sync's queues, and the CRM population requests its stored mail makes.
+pub(crate) struct InboxSyncSqs(
+    pub sqs_client::SQS,
+    pub crate::outbound::crm_population::CrmPopulation,
+);
 #[derive(Clone)]
 pub(crate) struct InboxSyncEffects {
     pub gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService<
@@ -89,6 +93,14 @@ impl InboxSyncQueue for InboxSyncSqs {
             .enqueue_gmail_retry_inbox_sync_notification(message)
             .await
             .map_err(Into::into)
+    }
+
+    async fn request_crm_population(
+        &self,
+        link_id: Uuid,
+        contacts: Vec<models_email::service::backfill::PopulateCrmContactPayload>,
+    ) -> Result<(), Self::Err> {
+        self.1.request(link_id, contacts).await.map_err(Into::into)
     }
 }
 

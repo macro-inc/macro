@@ -596,19 +596,19 @@ The scan also returns the two messages and matched contacts that supply its
 dates and direction. After taking the authority guards, population validates
 those facts with primary-key probes: mailbox/thread, dates, direction, draft and
 provider-missing state, and sender/recipient address. Changed or deleted evidence
-returns `Contended`, which the worker defers as `BackfillWritesBusy`; the retry
+returns `Contended`, which the population worker retries later; the retry
 rescans without a mailbox lock. `crm.email_history_witnesses` measures this bounded
 check. It does not rescan a thread or freeze all mailbox history: messages added
 or changed outside these witnesses retain the existing asynchronous population
 and cleanup behavior.
 
-A deferred job goes back to the queue as a new message, after a jittered delay
-that doubles from one second up to a minute, and keeps its delivery budget. A
-job refused one of its team's four population slots is never held waiting for
-one: it goes back after 10 to 15 minutes, since the team is paused or busy. A
-policy history page (up to 100 contacts) is deferred whole: its cursor has not
-moved, so the retry scans every contact of the page again, and its writes are
-idempotent. Lock-wait contention already takes this path. Changed evidence adds
+A failed population (`Contended` included) is hidden on the CRM population
+queue for 30 seconds doubling to 15 minutes, and given up after six attempts.
+One refused its team's four population slots never waits for one: it is
+hidden for 5 seconds doubling to an hour (`email::domain::crm_population`). A
+policy history page (up to 100 contacts) is retried whole, up to 30
+deliveries: its cursor has not moved, so the retry scans every contact of the
+page again, and its writes are idempotent. Lock-wait contention already takes this path. Changed evidence adds
 to it only when one of a contact's two witness messages changes between that
 contact's scan and its guards, so a page is not expected to repeat for the same
 contact.

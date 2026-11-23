@@ -38,6 +38,14 @@ tools — hexagonal, heavily feature-gated.
   delivery disposition.
 - `src/domain/crm_cleanup.rs` (feature `mailbox`): nightly cleanup job lifecycle,
   candidate pruning and dispatch, teardown guards, and delivery disposition.
+- `src/domain/crm_population.rs` (feature `mailbox`): CRM contact population on
+  its own queue. Producers record requests through `CrmPopulationRequests`,
+  which merges hints per mailbox, address and `live_mail` and sends one queued
+  message per correspondent; `CrmPopulationService` admits a population
+  through its team's slots without waiting, runs it or a policy history page,
+  and chooses the message's disposition (done, hidden for a back-off, or left
+  for redelivery). Backfill and inbox sync ask through their queue ports'
+  `request_crm_population`; they never populate.
 - `src/domain/mailbox/gmail_push.rs` (feature `mailbox`): key-cache fallback,
   push-token rotation retry and notification intake; lifecycle also owns ordered
   deletion requests for a deleted user's inboxes.
@@ -50,8 +58,8 @@ tools — hexagonal, heavily feature-gated.
   import, initialization, completion accounting and leases, metadata, attachments,
   sent contact seeding and CRM operations. Its `outbox` module owns durable
   initialization, completion and consent publication through transaction ports.
-  `worker/crm_policy.rs` retains the original consent incarnation/version and
-  durable job ID through every page and effect. Legacy CRM history cannot adopt
+  `PopulateCrmPolicy` pages (run by `crm_population`) retain the original
+  consent incarnation/version and durable job ID through every page and effect. Legacy CRM history cannot adopt
   initialized consent. Mark new per-message hints `live_mail=true`; the legacy
   history fan-out explicitly uses false. Modern publication retains a recovery
   signal until exact-generation progress/completion; legacy publication deletes.
