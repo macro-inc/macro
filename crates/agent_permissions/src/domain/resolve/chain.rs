@@ -7,6 +7,11 @@
 //! levels after it give and its own rows covering the target (the action's
 //! default, the group's action, the operation). The session overlay comes
 //! last and also only restricts.
+//!
+//! An agent's restrictions on itself (`via_agent` rows) stay its own: they
+//! apply to the policy that holds them and to no follower of it, as a
+//! follower's own restrictions stay local to the follower
+//! ([`Layer::as_source`]).
 
 #[cfg(test)]
 mod test;
@@ -88,7 +93,12 @@ impl<'a> Resolver<'a> {
     /// `rules` instead: how the chain resolves once a write lands.
     pub fn with_rules(chain: &'a PolicyChain, rules: &'a [Rule], overlay: &'a [Rule]) -> Self {
         let levels = std::iter::once(Layer::new(rules))
-            .chain(chain.sources().iter().map(|level| Layer::new(&level.rules)))
+            .chain(
+                chain
+                    .sources()
+                    .iter()
+                    .map(|level| Layer::as_source(&level.rules)),
+            )
             .collect();
         Self {
             levels,
@@ -206,6 +216,30 @@ impl<'a> Resolver<'a> {
         )
     }
 
+    /// `group`'s `action` as it would be without the policy's own exception
+    /// there: the action's default for a policy that owns its settings, what
+    /// its source gives (with its other own rows) for a follower. The
+    /// overlay's default applies, as it does to the default.
+    pub fn pair_without_own_exception(
+        &self,
+        group: &str,
+        action: Action,
+    ) -> (PermissionState, Origin) {
+        let mut levels = self.levels.clone();
+        if let Some(own) = levels.first_mut() {
+            own.remove_exception(group, action);
+        }
+        let without = Resolver {
+            levels,
+            lost: self.lost,
+            overlay: Layer::default(),
+        };
+        with_overlay(
+            Self::origin(without.saved_pair(group, action)),
+            self.overlay.action(action),
+        )
+    }
+
     /// Whether the policy itself holds an exception for `group`'s `action`.
     pub fn has_own_exception(&self, group: &str, action: Action) -> bool {
         self.levels
@@ -254,7 +288,8 @@ fn snapshot_row(
 /// (the registry's groups and any a level's rows name, pairs no operation
 /// maps to included) and every catalog operation. Session overlays are not
 /// part of a chain, so nothing in them is copied; nor are one-time and
-/// session approvals, which are not permission rows at all.
+/// session approvals, which are not permission rows at all, nor a source's
+/// restrictions on itself, which never applied to the follower.
 ///
 /// - A default is kept when it is not always.
 /// - A group's action is kept wherever any level has an exception (an
@@ -328,8 +363,11 @@ pub fn materialize(catalog: &Catalog, chain: &PolicyChain) -> Vec<Rule> {
         if state.found.state == pair && !persons && local.is_none() {
             continue;
         }
+        // Labelled the agent's only when the agent's row gives the state: a
+        // follower's own Ask under its source's Never is not the agent's
+        // Never, but its own Never under the source's Never is.
         let via_agent = state.found.row.is_some_and(|setting| setting.via_agent)
-            || local.is_some_and(|setting| setting.via_agent);
+            || local.is_some_and(|setting| setting.via_agent && setting.state == state.found.state);
         rules.push(snapshot_row(
             Target::Tool {
                 service: entry.service.clone(),

@@ -153,7 +153,12 @@ fn nested_chains_resolve_to_the_root_with_each_levels_restrictions() {
         row(default_target(Action::Destroy), Ask, false),
         row(pair_target("email", Action::Send), Ask, false),
     ];
-    let scout = vec![row(tool_target("storage", "delete_project"), Never, true)];
+    // A person's restriction while Scout follows Macro (not Scout's own on
+    // itself, which would stay Scout's).
+    let scout = vec![Rule {
+        via_agent: false,
+        ..row(tool_target("storage", "delete_project"), Never, true)
+    }];
     let analyst = vec![row(default_target(Action::Create), Ask, true)];
     let chain = chain_of(
         vec![analyst.clone(), scout.clone(), macro_rules.clone()],
@@ -508,6 +513,38 @@ fn detach_snapshot_keeps_every_state() {
             );
         }
         let through = Resolver::new(&chain, &[]);
+        // A source's restrictions on itself reach no follower: the chain
+        // resolves as it would without them.
+        let without_self_restrictions = PolicyChain::new(
+            chain
+                .levels()
+                .enumerate()
+                .map(|(index, level)| PolicyLevel {
+                    rules: level
+                        .rules
+                        .iter()
+                        .filter(|rule| index == 0 || !rule.via_agent)
+                        .cloned()
+                        .collect(),
+                    ..level.clone()
+                })
+                .collect(),
+        )
+        .unwrap();
+        let without = Resolver::new(&without_self_restrictions, &[]);
+        for entry in &catalog.entries {
+            assert_eq!(through.entry(entry), without.entry(entry), "{entry:?}");
+        }
+        assert_eq!(
+            materialize(&catalog, &chain)
+                .iter()
+                .map(|rule| (rule.target.key(), rule.state))
+                .collect::<Vec<_>>(),
+            materialize(&catalog, &without_self_restrictions)
+                .iter()
+                .map(|rule| (rule.target.key(), rule.state))
+                .collect::<Vec<_>>()
+        );
         let own = Resolver::own(&snapshot, &[]);
         for action in Action::ALL {
             assert_eq!(
@@ -572,4 +609,41 @@ fn the_view_and_the_gate_agree_through_a_chain() {
             assert_eq!(shown, gate.entry(entry).0, "{entry:?} under {chain:?}");
         }
     }
+}
+
+#[test]
+fn a_sources_restrictions_on_itself_reach_no_follower() {
+    let source = vec![
+        Rule {
+            via_agent: true,
+            ..row(pair_target("email", Action::Send), Never, true)
+        },
+        row(pair_target("documents", Action::Destroy), Ask, false),
+    ];
+    let chain = chain_of(vec![Vec::new(), source.clone()], false);
+    let follower = Resolver::new(&chain, &[]);
+    assert_eq!(
+        entry_state(&follower, "email", "send_email"),
+        (Always, Origin::Source)
+    );
+    assert_eq!(
+        entry_state(&follower, "storage", "delete_document"),
+        (Ask, Origin::Source)
+    );
+    // The source itself is restricted by them.
+    let own = Resolver::own(&source, &[]);
+    assert_eq!(entry_state(&own, "email", "send_email").0, Never);
+    // A follower's own restriction stays its own, labelled the agent's only
+    // when it gives the state.
+    let local = vec![Rule {
+        via_agent: true,
+        ..row(tool_target("storage", "delete_document"), Ask, true)
+    }];
+    let stricter_source = vec![row(pair_target("documents", Action::Destroy), Never, false)];
+    let snapshot = materialize(&catalog(), &chain_of(vec![local, stricter_source], false));
+    let kept = snapshot
+        .iter()
+        .find(|rule| rule.target == tool_target("storage", "delete_document"))
+        .unwrap();
+    assert_eq!((kept.state, kept.via_agent), (Never, false));
 }

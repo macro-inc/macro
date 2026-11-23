@@ -38,7 +38,7 @@ use super::model::{
 };
 
 /// One layer of settings (saved, or a session's overlay), indexed for lookup.
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Layer<'a> {
     actions: HashMap<Action, Setting>,
     group_actions: HashMap<(&'a str, Action), Setting>,
@@ -57,6 +57,17 @@ struct Setting {
 impl<'a> Layer<'a> {
     /// Index `rules`.
     pub fn new(rules: &'a [Rule]) -> Self {
+        Self::of(rules.iter())
+    }
+
+    /// Index `rules` as a source a follower resolves through: an agent's
+    /// restrictions on itself (`via_agent`) stay its own, as a follower's
+    /// stay local to the follower, so they are left out.
+    pub fn as_source(rules: &'a [Rule]) -> Self {
+        Self::of(rules.iter().filter(|rule| !rule.via_agent))
+    }
+
+    fn of(rules: impl Iterator<Item = &'a Rule>) -> Self {
         let mut layer = Layer::default();
         for rule in rules {
             let setting = Setting {
@@ -93,6 +104,12 @@ impl<'a> Layer<'a> {
 
     fn group_action(&self, group: &str, action: Action) -> Option<Setting> {
         self.group_actions.get(&(group, action)).copied()
+    }
+
+    /// The layer without its exception for `group`'s `action`.
+    fn remove_exception(&mut self, group: &str, action: Action) {
+        self.group_actions
+            .retain(|(held, held_action), _| !(*held == group && *held_action == action));
     }
 
     /// Whether the layer holds an exception for `group`'s `action`.
@@ -551,7 +568,12 @@ pub fn asks_looser(
                 }
             }
             Target::GroupAction { group, action } => {
-                let to = change.state.unwrap_or_else(|| now.default(*action).0);
+                // Removing the policy's own exception leaves what the pair
+                // falls back to: the default for a policy that owns its
+                // settings, its source's pair for a follower.
+                let to = change
+                    .state
+                    .unwrap_or_else(|| now.pair_without_own_exception(group, *action).0);
                 let (from, _) = now.pair(group, *action);
                 if to < from {
                     refused = true;
