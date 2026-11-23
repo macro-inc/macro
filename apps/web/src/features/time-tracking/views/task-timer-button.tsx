@@ -18,7 +18,7 @@ export function TaskTimerButton(props: { taskId: string }): JSX.Element {
   const actions = createTimerActions(capabilities);
   const timingThis = () => timer.timer()?.taskId === props.taskId;
   const disabled = () => timer.busy() || timer.offline();
-  const tooltip = () =>
+  const offlineTooltip = () =>
     timer.offline() ? { content: t('timeTracking.timerOffline') } : undefined;
 
   return (
@@ -28,12 +28,19 @@ export function TaskTimerButton(props: { taskId: string }): JSX.Element {
         <Button
           variant="secondary"
           size="sm"
+          class="@max-[48rem]/split-header:gap-0"
           disabled={disabled()}
-          tooltip={tooltip()}
+          aria-label={t('timeTracking.startTimer')}
+          tooltip={
+            offlineTooltip() ?? { content: t('timeTracking.startTimer') }
+          }
           onClick={() => actions.start(props.taskId)}
         >
           <PlayIcon class="size-3 shrink-0" />
-          {t('timeTracking.startTimer')}
+          {/* A narrow split keeps room for the task's name in the header. */}
+          <span class="@max-[48rem]/split-header:hidden">
+            {t('timeTracking.startTimer')}
+          </span>
         </Button>
       }
     >
@@ -41,14 +48,14 @@ export function TaskTimerButton(props: { taskId: string }): JSX.Element {
         variant="secondary"
         size="sm"
         disabled={disabled()}
-        tooltip={tooltip()}
+        tooltip={offlineTooltip()}
         aria-label={t('timeTracking.stopTimerCount', {
           count: formatClock(timer.seconds()),
         })}
         onClick={actions.stop}
       >
         <StopIcon class="size-3 shrink-0" />
-        <TimerCount seconds={timer.seconds()} />
+        <TimerCount compact seconds={timer.seconds()} />
       </Button>
     </Show>
   );
