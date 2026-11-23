@@ -120,7 +120,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const composerId = crypto.randomUUID();
   const mentionsTracker = createMentionsTracker();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-  const { sendToChannel, sendToUsers } = useSendMessageToPeople();
+  const { sendToChannel, resolvePeopleChannel } = useSendMessageToPeople();
   let clearComposer = () => {};
 
   // The new-message composer's To field: people, or one existing channel.
@@ -185,37 +185,31 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
         snapshot,
       });
 
-      // The share stays on the current view: the sheet closes once it's sent.
-      if (destination.type === 'channel') {
-        try {
-          await postToExistingChannel(sendToChannel, {
-            span: 'channels.share_sheet_send_to_channel',
-            channelId: destination.id,
-            content,
-            mentions,
-            attachments,
-          });
-        } catch (error) {
-          toast.failure('Failed to send message');
-          throw error;
-        }
-        return;
-      }
-
-      if (destination.users.length === 0) {
+      if (destination.type === 'users' && destination.users.length === 0) {
         toast.failure('Select a valid recipient');
         throw new Error('No valid recipients selected for native share sheet');
       }
-      const sent = await sendToUsers({
-        users: destination.users,
-        content,
-        mentions,
-        attachments,
-        navigate: { navigate: false },
-      });
-      if (!sent) {
+      // Finding or creating the people's conversation shows its own failure.
+      const channelId =
+        destination.type === 'channel'
+          ? destination.id
+          : await resolvePeopleChannel(destination.users);
+      if (!channelId) {
+        throw new Error('Could not open the conversation for this share');
+      }
+
+      // The share stays on the current view: the sheet closes once it's sent.
+      try {
+        await postToExistingChannel(sendToChannel, {
+          span: 'channels.share_sheet_send',
+          channelId,
+          content,
+          mentions,
+          attachments,
+        });
+      } catch (error) {
         toast.failure('Failed to send message');
-        throw new Error('Native share sheet send failed');
+        throw error;
       }
     },
   });

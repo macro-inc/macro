@@ -61,6 +61,12 @@ describe('message recipients', () => {
 
       expect(source.items().map((item) => item.kind)).toEqual(['user']);
       expect(recipients.isFull()).toBe(false);
+
+      recipients.select([]);
+      expect(source.items().map((item) => item.kind)).toEqual([
+        'user',
+        'channel',
+      ]);
     });
   });
 
