@@ -653,6 +653,22 @@ exist. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
+Promotion waits for the `QA macOS release app` job: it mounts the notarized DMG
+the release built, checks the DMG's stapled ticket and Gatekeeper verdict, and
+launches the app from it on the macOS runner's GUI session with the smoke suite
+of `apps/web/tests/macos/qa.mjs` (window, screenshot, soak, crash report, clean
+quit, app log). A failed launch is retried once with a fresh launch; a second
+failure fails the job, so `desktop-stable` keeps the previous version and
+`Alert native build failures` posts to Macro Alerts. The versioned release still
+gets its installers. The release app embeds the production PostHog key, so the
+job blocks the analytics proxy host (read from `src/lib/analytics/analytics.ts`)
+in `/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
+`summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
+`qa-macos` reruns, then `publish-release` promotes. `Desktop QA macOS` (workflow
+dispatch, any ref) runs the same harness on an unsigned build; its `full` suite
+adds the src-tauri `cargo test`, linked with the DMG build's Apple linker
+(`.#tauri-desktop-apple-linker`) because Nix's cctools `ld` crashes on it.
+
 Bootstrap requires one manual native upgrade: older binaries cannot acquire the
 Rust updater through a frontend OTA. Before promoting the first release, test two
 consecutive signed builds on installed macOS and Linux apps, including offline

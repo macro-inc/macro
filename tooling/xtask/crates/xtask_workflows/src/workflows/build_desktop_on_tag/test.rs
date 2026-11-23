@@ -286,3 +286,89 @@ fn older_release_cannot_replace_update_feed_or_latest_release() {
         "{calls}"
     );
 }
+
+/// The text of one job, from its key to the next job's key.
+fn job_yaml<'a>(yaml: &'a str, key: &str) -> &'a str {
+    let header = format!("\n  {key}:\n");
+    let start = yaml
+        .find(&header)
+        .unwrap_or_else(|| panic!("job {key} in:\n{yaml}"))
+        + 1;
+    let body = start + header.len() - 1;
+    let mut end = body;
+    for line in yaml[body..].split_inclusive('\n') {
+        // A job key is the only line indented by exactly two spaces.
+        let next_job = line.starts_with("  ")
+            && line
+                .as_bytes()
+                .get(2)
+                .is_some_and(|byte| !byte.is_ascii_whitespace());
+        if next_job {
+            break;
+        }
+        end += line.len();
+    }
+    &yaml[start..end]
+}
+
+#[test]
+fn promotion_waits_for_macos_release_qa() {
+    let yaml = rendered_yaml();
+    let updates = job_yaml(&yaml, "publish-release");
+    assert!(updates.contains("- qa-macos"), "{updates}");
+
+    // QA gates the update feed only: the versioned release still gets installers.
+    let installers = job_yaml(&yaml, "publish-installers");
+    assert!(!installers.contains("qa-macos"), "{installers}");
+}
+
+#[test]
+fn macos_release_qa_tests_the_signed_dmg() {
+    let yaml = rendered_yaml();
+    let qa = job_yaml(&yaml, "qa-macos");
+    assert!(qa.contains("name: QA macOS release app"), "{qa}");
+    assert!(qa.contains("- build-dmg"), "{qa}");
+    assert!(
+        qa.contains("name: macro-dmg-${{ steps.metadata.outputs.safe_tag }}"),
+        "{qa}"
+    );
+    assert!(qa.contains("echo \"QA_DMG="), "{qa}");
+    assert!(qa.contains("QA_ATTEMPTS: '2'"), "{qa}");
+    assert!(qa.contains("QA_SUITE: smoke"), "{qa}");
+    // The release app embeds the production PostHog key.
+    assert!(qa.contains("Block analytics for the QA launch"), "{qa}");
+    let block = qa.find("Block analytics").expect("analytics block step");
+    let launch = qa
+        .find("Launch the app and run the QA checks")
+        .expect("harness step");
+    assert!(
+        block < launch,
+        "analytics must be blocked before the launch:\n{qa}"
+    );
+    // Not `macro-*`, which the publish jobs attach to the release.
+    assert!(
+        qa.contains("name: macos-qa-release-${{ github.run_id }}"),
+        "{qa}"
+    );
+}
+
+#[test]
+fn publish_jobs_download_only_build_artifacts() {
+    let yaml = rendered_yaml();
+    for key in ["publish-installers", "publish-release"] {
+        let job = job_yaml(&yaml, key);
+        assert!(job.contains("pattern: macro-*"), "{job}");
+    }
+}
+
+#[test]
+fn failed_release_qa_alerts() {
+    let script = include_str!("../scripts/alert_native_build_failures.sh");
+    assert!(
+        script.contains(&format!(
+            "\"{}\"",
+            crate::workflows::desktop_qa_macos::QA_RELEASE_JOB_NAME
+        )),
+        "{script}"
+    );
+}

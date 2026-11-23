@@ -7,6 +7,7 @@ failed_jobs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/jobs?
       | select(
           if $workflow == "Build Desktop on Tag" then
             .name == "Build AppImage" or .name == "Build macOS DMG"
+              or .name == "QA macOS release app"
           elif $workflow == "iOS Preview" then
             .name == "Build iOS simulator app and publish to Appetize"
           elif $workflow == "Release Android App Bundle" then
@@ -26,7 +27,11 @@ if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
   exit 1
 fi
 run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID"
-message="🚨 $SOURCE_WORKFLOW build failed on $SOURCE_REF. Failed jobs: $failed_jobs. $run_url"
+message="🚨 $SOURCE_WORKFLOW build failed on $SOURCE_REF. Failed jobs: $failed_jobs."
+if [[ "$failed_jobs" == *"QA macOS release app"* ]]; then
+  message="$message The macOS release app failed QA, so this version was not promoted to desktop-stable."
+fi
+message="$message $run_url"
 jq -n --arg content "$message" '{content: $content}' |
   curl --fail-with-body --silent --show-error --retry 3 \
     --header 'Content-Type: application/json' \
