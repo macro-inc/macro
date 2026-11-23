@@ -1,5 +1,6 @@
 //! Durable bindings between optimistic entity handles and server identities.
 
+use crate::document::Selection;
 use crate::normalize::RecordUpdates;
 use crate::value::{CacheValue, EntityKey, Record};
 use serde::{Deserialize, Serialize};
@@ -73,8 +74,14 @@ pub fn validate(bindings: &[IdentityBinding]) -> Result<(), String> {
     Ok(())
 }
 
-/// Extract bindings only from explicitly declared response objects of the same type.
-pub fn resolve(bindings: &[IdentityBinding], data: &Value) -> Result<IdentityMap, String> {
+/// Extract bindings only from explicitly declared response objects of the same
+/// type. `selections` are the operation's, which say each key an object's
+/// `__typename` is selected under.
+pub fn resolve(
+    bindings: &[IdentityBinding],
+    selections: &[Selection],
+    data: &Value,
+) -> Result<IdentityMap, String> {
     let mut result = IdentityMap::new();
     for binding in bindings {
         if binding.response_path.is_empty() {
@@ -90,10 +97,8 @@ pub fn resolve(bindings: &[IdentityBinding], data: &Value) -> Result<IdentityMap
             .local_key
             .typename()
             .ok_or("invalid local identity")?;
-        let typename = object
-            .get("__typename")
-            .and_then(Value::as_str)
-            .unwrap_or(local_type);
+        let typename =
+            response_typename(selections, &binding.response_path, object).unwrap_or(local_type);
         let id = object
             .get("id")
             .and_then(Value::as_str)
@@ -112,6 +117,35 @@ pub fn resolve(bindings: &[IdentityBinding], data: &Value) -> Result<IdentityMap
     }
     expand_reference_identities(bindings, &mut result);
     Ok(result)
+}
+
+/// The `__typename` of the response object at `path`, under any key
+/// `selections` select it by, an alias included.
+fn response_typename<'a>(
+    selections: &[Selection],
+    path: &[String],
+    object: &'a Value,
+) -> Option<&'a str> {
+    let mut keys = vec!["__typename"];
+    typename_keys(selections, path, &mut keys);
+    keys.into_iter().find_map(|key| object.get(key)?.as_str())
+}
+
+/// The response keys `selections` select `__typename` under on the object at
+/// `path`, through fragments.
+fn typename_keys<'s>(selections: &'s [Selection], path: &[String], keys: &mut Vec<&'s str>) {
+    for selection in selections {
+        match selection {
+            Selection::Fragment { selection_set, .. } => typename_keys(selection_set, path, keys),
+            Selection::Field(field) => match path.split_first() {
+                None if field.name == "__typename" => keys.push(&field.response_key),
+                Some((step, rest)) if field.response_key == *step => {
+                    typename_keys(&field.selection_set, rest, keys);
+                }
+                _ => {}
+            },
+        }
+    }
 }
 
 /// Some normalized read models share the identity of the entity they preview.
@@ -406,7 +440,7 @@ mod tests {
         let mut bindings = vec![binding("Draft:local", &["save", "draft"])];
         bindings[0].reference_fields = vec!["Preview.id".into(), "Message.draftId".into()];
         let data = json!({ "save": { "draft": { "__typename": "Draft", "id": "server" } } });
-        let identities = resolve(&bindings, &data).unwrap();
+        let identities = resolve(&bindings, &[], &data).unwrap();
         assert_eq!(
             identities,
             IdentityMap::from([
@@ -421,9 +455,9 @@ mod tests {
             ])
         );
         let unchanged = json!({ "save": { "draft": { "id": "local" } } });
-        assert!(resolve(&bindings, &unchanged).unwrap().is_empty());
+        assert!(resolve(&bindings, &[], &unchanged).unwrap().is_empty());
         assert!(
-            resolve(&[binding("Draft:local", &[])], &data)
+            resolve(&[binding("Draft:local", &[])], &[], &data)
                 .unwrap()
                 .is_empty()
         );
@@ -433,21 +467,30 @@ mod tests {
     fn resolve_rejects_responses_that_cannot_identify_the_entity() {
         let bindings = [binding("Draft:local", &["save", "draft"])];
         assert_eq!(
-            resolve(&bindings, &json!({ "save": {} })),
+            resolve(&bindings, &[], &json!({ "save": {} })),
             Err("missing identity response object".into())
         );
         assert_eq!(
-            resolve(&bindings, &json!({ "save": { "draft": { "id": "" } } })),
+            resolve(
+                &bindings,
+                &[],
+                &json!({ "save": { "draft": { "id": "" } } })
+            ),
             Err("missing identity response id".into())
         );
         assert_eq!(
-            resolve(&bindings, &json!({ "save": { "draft": { "id": null } } })),
+            resolve(
+                &bindings,
+                &[],
+                &json!({ "save": { "draft": { "id": null } } })
+            ),
             Err("missing identity response id".into())
         );
         let long_id = "x".repeat(MAX_IDENTITY_BYTES + 1);
         assert_eq!(
             resolve(
                 &bindings,
+                &[],
                 &json!({ "save": { "draft": { "id": long_id } } })
             ),
             Err("identity response id too long".into())
@@ -455,6 +498,7 @@ mod tests {
         assert_eq!(
             resolve(
                 &bindings,
+                &[],
                 &json!({ "save": { "draft": { "__typename": "Message", "id": "server" } } })
             ),
             Err("identity response changed entity type".into())
@@ -462,9 +506,33 @@ mod tests {
         assert_eq!(
             resolve(
                 &[binding("local", &["save"])],
+                &[],
                 &json!({ "save": { "id": "server" } })
             ),
             Err("invalid local identity".into())
+        );
+    }
+
+    #[test]
+    fn resolve_reads_a_type_selected_under_an_alias() {
+        let bindings = [binding("Draft:local", &["save", "draft"])];
+        let document = crate::document::Document::parse(
+            "mutation Save { save { draft { ... on Draft { kind: __typename } id } } }",
+        )
+        .unwrap();
+        let selections = &document.operation(None).unwrap().selection_set;
+        let response =
+            |kind: &str| json!({ "save": { "draft": { "kind": kind, "id": "server" } } });
+        assert_eq!(
+            resolve(&bindings, selections, &response("Message")),
+            Err("identity response changed entity type".into())
+        );
+        assert_eq!(
+            resolve(&bindings, selections, &response("Draft")),
+            Ok(IdentityMap::from([(
+                EntityKey::entity("Draft", &["local"]),
+                EntityKey::entity("Draft", &["server"])
+            )]))
         );
     }
 }

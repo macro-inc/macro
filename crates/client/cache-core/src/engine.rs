@@ -3083,14 +3083,17 @@ impl<S: Storage> Engine<S> {
             .ok_or(EngineError::UnknownTransaction(transaction))?;
         let mutation_uuid = Some(self.optimistic[index].uuid.to_string());
         let mut bindings = self.optimistic[index].identity_bindings.clone();
+        let doc = Self::document(&mut self.docs, query)?;
+        let op = doc.operation(operation_name)?;
         let mut identity_errors = Vec::new();
-        let identities = match identity::resolve(&bindings, data) {
+        let identities = match identity::resolve(&bindings, &op.selection_set, data) {
             Ok(identities) => identities,
             Err(_) => {
                 // Salvage valid bindings without guessing targets for failed ones.
                 let mut identities = IdentityMap::new();
                 bindings.retain(|binding| {
-                    match identity::resolve(std::slice::from_ref(binding), data) {
+                    match identity::resolve(std::slice::from_ref(binding), &op.selection_set, data)
+                    {
                         Ok(resolved) => {
                             identities.extend(resolved);
                             true
@@ -3104,8 +3107,6 @@ impl<S: Storage> Engine<S> {
                 identities
             }
         };
-        let doc = Self::document(&mut self.docs, query)?;
-        let op = doc.operation(operation_name)?;
         let mut unwritable = None;
         let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
