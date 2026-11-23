@@ -469,11 +469,26 @@ where
             input.provider_id = None;
             input.provider_thread_id = None;
         }
+        let adopted_from = self
+            .keep_stored_reply_target(&mut input, &accessible_link_ids)
+            .await?;
         // Authorize the reply target before validate_existing_message can move
         // the draft to another inbox, so a refused target leaves it in place.
-        let reply_target = self
+        let reply_target = match self
             .authorized_reply_target(&input, &accessible_link_ids)
-            .await?;
+            .await
+        {
+            // A draft save that named no target and stays in its inbox drops a
+            // stored target the user can no longer reach (a shared thread's
+            // grant revoked) instead of refusing the content. A send, or a save
+            // that moves the draft to another inbox, is still refused: the
+            // draft stays where it is and never goes out as a new email.
+            Err(EmailErr::MessageNotFound(_)) if is_draft && adopted_from == Some(link_id) => {
+                input.replying_to_id = None;
+                None
+            }
+            result => result?,
+        };
         let source_inbox = self
             .validate_existing_message(link_id, accessible_inboxes, &mut input, defer_inbox_move)
             .await?;
@@ -695,6 +710,33 @@ where
         input.provider_thread_id = msg.provider_thread_id;
 
         Ok(None)
+    }
+
+    /// A save of a stored draft that names no reply target keeps the one the
+    /// draft has: clients that edit only the content (the SDK, REST) omit it,
+    /// and saving it as null would drop the draft from its reply thread. The
+    /// adopted target is then authorized like one the client sent. Returns
+    /// the stored draft's inbox when it adopted one.
+    async fn keep_stored_reply_target(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, EmailErr> {
+        let Some(db_id) = input.db_id.filter(|_| input.replying_to_id.is_none()) else {
+            return Ok(None);
+        };
+        let Some((target, stored_inbox)) = self
+            .email_repo
+            .get_simple_message(db_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .filter(|stored| stored.is_draft && !stored.is_sent)
+            .and_then(|stored| Some((stored.replying_to_id?, stored.link_id)))
+        else {
+            return Ok(None);
+        };
+        input.replying_to_id = Some(target);
+        Ok(Some(stored_inbox))
     }
 
     /// The reply target, authorized on every save, before an existing reply

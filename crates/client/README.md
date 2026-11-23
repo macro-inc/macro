@@ -8,9 +8,11 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | Crate | Purpose |
 |---|---|
 | `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
+| `cache-schema` | Schema metadata derived from the GraphQL SDL (`cache_core::meta`); kept apart so `cache-wasm`'s build script can build the tables without the engine |
 | `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
+| `cache-bench` | Production-size datasets and the native and browser replays that measure the engine; see its `AGENTS.md` |
 
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
@@ -22,11 +24,16 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 Desktop and mobile keep the cache engine and Turso storage in the native binary.
 The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
-text. Native startup and browser workers pass it to the same Rust
-`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
-the cache's internal lookup tables. There is no TypeScript schema generator or
-intermediate JSON asset. Browser workers configure SDL through
-`configureCacheSchema` before opening storage.
+text, and native startup passes it to the Rust `Schema::from_sdl` parser, which
+validates it with `apollo-compiler` and derives the cache's internal lookup
+tables. There is no TypeScript schema generator or intermediate JSON asset.
+
+The browser engine is built together with the web bundle, so `cache-wasm`'s
+`build.rs` runs the same parser when the engine is compiled and embeds the
+resulting tables (postcard). A browser worker decodes them in under a
+millisecond instead of parsing about 270 KB of SDL each time it starts.
+`configureCacheSchema` still installs a different SDL before storage opens, but
+the app's worker does not call it.
 
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
@@ -248,11 +255,13 @@ entity-only optimism and retain that recovery query for eventual commit/replay.
 
 ## Streaming text search
 
-Text search binds normalized subsequence patterns to Turso queries scoped by
-`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
-match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
-the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
-stops at NUL; Rust verifies them without truncation. Searching documents does not
+Text search streams each `(profile, bucket)` through
+`search_documents_browse_idx`, and the adapter drops rows in which some query
+token is not an ordered byte subsequence of `search_text` before decoding the
+rest. A token whose characters occur in order also has its UTF-8 bytes in order,
+so this keeps every row the core accepts. It replaces a SQL `LIKE '%a%b%c%'`
+prefilter that Turso evaluated several times slower per token; contact search,
+which must avoid decoding records, keeps its bound LIKE. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
 The index includes `search_text` and `source_hash` after its existing browse keys,
 so filtering and result reads use an index-only scan without table lookups.
@@ -511,6 +520,48 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
+
+## Idle WAL checkpoint
+
+Turso copies the WAL into the database file inside the COMMIT that takes it to
+1,000 frames, so one write pays for the others. After a request that can
+write, the browser engine worker calls `checkpointIfDue` once nothing has run
+for 100 ms, and cache-turso copies from 500 frames there instead. Each request
+that runs re-arms the wait, so the reads a page sends after an open or a
+write run first. A request that arrives during a copy waits for it, as it
+waited for the write that used to carry it; a drain cancels a copy not yet
+started and waits for one under way.
+
+A copy that ran is reported as `graphql_cache.wal_checkpoint` with
+`cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
+in the WAL when it ran; a count below it is a partial copy). A failed copy is
+reported with its error class and retried once the next request has run; it
+leaves the WAL whole and resets the cache only when the error means corruption.
+
+## Slow request telemetry
+
+The engine worker reports each request that answers **1 s or more** after it
+arrived as `graphql_cache.slow_request`, unsampled. A page gives up on a
+request after 10 s; these spans say what held the engine meanwhile. Search
+Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
+
+- `cache.request_kind`: the protocol request kind (`read`, `hydrate`, `init`...).
+- `cache.queue_wait_ms`: time queued in the engine worker before it ran.
+- `cache.duration_ms`: time it ran, from start to its answer.
+- `cache.queue_depth`: requests still queued when it started.
+- `cache.outcome`, `cache.error_code`: `success`/`none`, or the error class.
+
+A stall shows as one request with a long `duration_ms` and the requests behind
+it with long `queue_wait_ms`.
+
+Only requests that reach the engine worker's queue are covered. Two waits are
+not in `queue_wait_ms`:
+
+- A message that arrives while the engine is inside a wasm call is stamped only
+  when that call returns; the wait shows in the running request's
+  `duration_ms`.
+- Time the coordinator holds a request before any engine has it (owner
+  handoff, a parked or draining engine) is not reported here.
 
 ## Key policy
 

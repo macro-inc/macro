@@ -73,7 +73,7 @@
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
-      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `static_assets/schema.graphql` that `cache-schema`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
       # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
       # `crates/rate_limit` embeds;

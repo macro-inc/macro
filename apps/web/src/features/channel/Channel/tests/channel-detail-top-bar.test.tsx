@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: { TopBar: mocks.pass },
+  useViewTabHotkeys: () => {},
 }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentButton: (props: {
@@ -103,6 +104,7 @@ vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
+  useSplitPanel: () => undefined,
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
 vi.mock('@core/constant/allBlocks', () => ({

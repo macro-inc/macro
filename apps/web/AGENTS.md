@@ -231,7 +231,12 @@ its icon, its caret when it opens a menu, its name and its tooltip, as header
 actions do. `list-split.browser.e2e.ts` resizes a list view (`asideList`) opened
 as a second split across 720px: the list docks beside the empty preview above it
 and fills the split below it, never leaving an empty preview behind Show
-navigation.
+navigation. `view-tabs.browser.e2e.ts` holds the Tab rule over the real hotkey engine,
+header, `Tabs` and list controller, in a wide and a 700px split (stand-in
+panes, no `ViewShell`): Tab, Shift+Tab and the number keys move along a
+header's tabs from its list, are focus order on a header button, leave an
+open item that replaced the list open, and leave a thread beside the list
+open after a click on its text.
 
 A project's Tasks header keeps search, filters and Add existing tasks on screen at
 320–430px phone widths, with search closed and open, by collapsing Add existing
@@ -297,6 +302,12 @@ Resolve collection-provider ownership from the committed router entry before
 mounting its outlet; the layout's mount metadata can still describe the previous
 view. `split-layout/tests/SplitPanel-collection-navigation.test.tsx` covers CRM
 to Calls, history, and split reuse while that mirror is stale.
+
+A database's table tabs take Tab and the number keys only from the database
+pane: Tab on a selected cell still moves to the next cell and leaves the table
+open, and a dragged range of cells keeps its table (the real table tabs and
+records grid over the real hotkey engine):
+`bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts table-tabs.browser.e2e.ts`.
 
 Links in database text and URL cells open without editing the cell, on desktop
 and touch, while the rest of the cell still edits:
@@ -1121,8 +1132,20 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   lazily in every new worker, which cost more than reopening the database on
   each tab return. The exchange has its own port, so a failure only costs the
   shortcut; never put the module in the activation message.
-  A reused engine records `graphql_cache.wasm_download` with 0 bytes and no
-  `wasm_compile`. The dev server never reuses: its asset URL outlives a rebuild.
+  Before any engine worker exists, the page compiles the engine itself, from
+  before its liveness lock, and offers that compile to the first worker for up
+  to 10 s; it drops the compile when the coordinator acknowledges it while
+  another visible tab owns the cache (`ownerElsewhere`). The page records
+  `graphql_cache.wasm_prefetch_download` and `wasm_prefetch_compile`.
+  A reused engine records `graphql_cache.wasm_download` with 0 bytes, timed as
+  the wait for the offer, and no `wasm_compile`. The dev server never reuses or
+  compiles ahead: its asset URL outlives a rebuild.
+  A fresh engine compiles a response served as exactly `application/wasm` with
+  `WebAssembly.compileStreaming` (`worker/wasm-compile.ts`): only then does
+  Chromium cache the optimized code for the next page load. Streamed,
+  `wasm_download` has no `bytes` and `wasm_compile` includes the body; a
+  streamed compile that fails other than on an invalid binary is reported as a
+  failed download and retried once from bytes.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
@@ -1170,7 +1193,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Contact backfill shares Soup's authenticated tab leadership and account/session ownership. Capture contact admission before each fetch, hydrate with `contactFence`, then verify cached IDs in 500-record keyset windows through the existing exact lookup. Checkpoint v2 completes only after verification; with `enable-contact-lists` the backfill and exact lookup select `GraphqlContact.lists` (the `…WithLists` operations, never the fetch-only pages) and scan under checkpoint v3, so only clients the flag turns on rehydrate; persist cursors after acknowledged writes and generation checks. Never delete from scan omissions or failed/foreign evidence, and never downgrade unsupported fencing. Keep the 15-minute coalescing floor and hourly name refresh. An invalidation naming `changed` contacts also tops up just those ids through the exact lookup (`contacts/top-up.ts`), taking turns on the contact fence with scan pages (`write-turn.ts`); top-ups never delete. Deploy canonical-ID lookup fixes before client removal checks; see `../../docs/design/disk-backed-contacts.md`.
 - A surface orders its personal people window by contact list through `ContactPeoplePolicy.listPriority` (`QuickAccessListOptions.peopleListPriority`); with `enable-contact-lists` only @mention windows pass one (`useMentionListPriority` in `queries/contacts/lists.ts`, the order itself in `list-priority.ts`). `readContactDirectory` sends list fields only to a host that has answered a search with people policy 7 (5 and 6 refuse them); the first search on a host goes without and is resent once it answers 7. Keep orders within the host's bounds (16 groups, 64 keys, 128-byte keys). The real-engine regression is `people-list-order.browser.e2e.ts` in `bunx playwright test --config src/lib/graphql-cache/worker/browser-test/playwright.config.ts`.
 - Use bounded contact windows and separate exact selection lookup; copy primitive inputs/cursors out of reactive query data and keep history at `gcTime: 0`. Pass resolved `UserIcon.name` to avoid redundant shared-name lookups. `/app/debug/data`, Calendar search, Drive creators and CRM Notes creators exercise this on desktop/phone: `bunx playwright test --config src/lib/core/internal/browser-test/playwright.config.ts`. DM-ranked pickers still need before-limit ranking/exclusions.
-- A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's exact matches (its scan stops after 2,000 contacts), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
+- A tab without a usable local cache lists server contact pages, which the server does not rank. On the first page of a typed search `readServerWindow` (`queries/contacts/directory.ts`) also reads who the text names: the server's named people (`readServerNames`: with `enable-named-contact-search` the whole directory's exact and word-start matches, ranked by list group then exact names, from `GraphqlUser.contactsNamedBy`; without it the exact matches of a scan that stops after 2,000 contacts, which a server older than the field still answers), plus the team roster or a whole typed address looked up by ID, and it classifies them and the page's own rows with the local ranking's exact and word-prefix rules (`namedBy`). One of those extra reads failing never fails the page, and one still unanswered two seconds in never holds it once its own rows have landed (`NAMED_READ_BUDGET_MS`): it lists without the people that read would have added, and still ranks everyone it has. `createContactDirectoryList` orders that page: direct-message partners, then teammates, then everyone else, exact before word-start matches, with the looser matches after them in the same groups; later pages are never reordered. Give every people list `teammates` (`useTeammateIds` in `queries/team/roster`, which observes the roster the app shell keeps loaded and never fetches it), and `directMessages` where the surface has them.
 - Cmd+K and mobile name search show **Searching…** under the listed rows (`isSearchingEntities`, through `createSteadyFlag`) while the cache has not answered the typed query, since contacts, sessions and commands list first; only a slow search says so. A replay of an answered window is not a pending search, and `isLoadingEntities` still means an empty list is loading. A search refused while the cache changes owner (`owner-handoff-blocked`) stays pending and `createProjectedList` replays it when `onCacheGenerationChanged` reports the replacement engine; nothing else would until the next cache write.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the channel directory's joined channels (`useChannelDirectory`) into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.

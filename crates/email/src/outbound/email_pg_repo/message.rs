@@ -335,6 +335,7 @@ pub(crate) async fn get_simple_message(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
@@ -367,6 +368,7 @@ pub(crate) async fn get_draft_replying_to(
             m.link_id,
             m.thread_id,
             m.provider_thread_id,
+            m.replying_to_id,
             m.headers_jsonb,
             m.is_sent,
             m.is_draft
