@@ -27,7 +27,8 @@ export function DesktopModelSelector() {
     <Popover.Root
       open={nav.open()}
       onOpenChange={nav.changeOpen}
-      placement="top-end"
+      placement="bottom-end"
+      flip="top-end"
       gutter={6}
     >
       <UnifiedModelTrigger menuOpen={nav.open()}>
