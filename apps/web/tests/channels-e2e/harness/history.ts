@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { GetAllUserNotificationsResponse } from '../../../src/lib/service-clients/service-notification/generated/schemas/getAllUserNotificationsResponse';
 import { Api, type SentMessage } from './api';
 import { apiFor, cast, PERSON_KEYS, readPeople } from './people';
 import { runDirectory, stackUrl } from './stack';
@@ -153,25 +154,25 @@ export async function clearNotifications(ofCast: number): Promise<void> {
     PERSON_KEYS.map(async (key) => {
       const http = await apiFor(key, ofCast);
       try {
-        let last = '';
-        for (;;) {
-          const listed = await http.get(
-            '/notification/v1/user_notifications?states=&limit=500'
-          );
+        // Every page is listed before anything is removed: a page can come
+        // back empty with more behind it, when its rows could not be read.
+        const ids: string[] = [];
+        let cursor: string | null | undefined;
+        do {
+          const listed = await http.get('/notification/v1/user_notifications', {
+            params: { states: '', limit: 500, ...(cursor ? { cursor } : {}) },
+          });
           if (!listed.ok()) {
             throw new Error(`list notifications failed (${listed.status()})`);
           }
-          const { items } = (await listed.json()) as {
-            items: { id: string }[];
-          };
-          if (items.length === 0) return;
-          if (items[0].id === last) {
-            throw new Error('removed notifications are still listed');
-          }
-          last = items[0].id;
+          const page = (await listed.json()) as GetAllUserNotificationsResponse;
+          ids.push(...page.items.map((item) => item.id));
+          cursor = page.next_cursor;
+        } while (cursor);
+        for (let start = 0; start < ids.length; start += 500) {
           const removed = await http.delete(
             '/notification/v1/user_notifications/bulk',
-            { data: { notificationIds: items.map((item) => item.id) } }
+            { data: { notificationIds: ids.slice(start, start + 500) } }
           );
           if (!removed.ok()) {
             throw new Error(

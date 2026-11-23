@@ -14,11 +14,12 @@ export default async function globalSetup(): Promise<void> {
   );
   await checkBrowserSeesConnection();
   await signEveryoneIn(casts);
-  await Promise.all(casts.map((ofCast) => clearNotifications(ofCast)));
   await Promise.all(
     casts.flatMap((ofCast) => [
       prepareHistory(ofCast),
       clearFavoriteChannels(ofCast),
     ])
   );
+  // After the history, whose messages notify too.
+  await Promise.all(casts.map((ofCast) => clearNotifications(ofCast)));
 }

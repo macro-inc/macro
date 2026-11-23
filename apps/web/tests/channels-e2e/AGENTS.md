@@ -109,8 +109,9 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   some builds a page read the person's whole feed of them again on every
   mark-seen and every push: at 20,000 a page spent its time on that and its
   writes were minutes late. Global setup removes the casts' notifications
-  (`clearNotifications`), so a run starts with none; a finding that shows only
-  late in a long run may still be that load.
+  (`clearNotifications`), so a run starts with few (one still on its way from
+  an earlier run can arrive after); a finding that shows only late in a long
+  run may still be that load.
 - The Invite dialog's one row reads "Invite <address>" until the device's own
   list of people answers, then becomes that person's row, sometimes under the
   click: find the row by the address (`inviteByEmail`), not by that name.
