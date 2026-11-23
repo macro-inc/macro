@@ -4,6 +4,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const CONFIG = 'apps/web/tauri/desktop-release.json';
+const CEF_CONFIG = 'apps/web/tauri/desktop-cef/tauri.conf.json';
 const TARGETS = {
   'darwin-aarch64': { suffix: '-aarch64-darwin.app.tar.gz', required: true },
   'linux-x86_64': { suffix: '-x86_64-linux.AppImage', required: true },
@@ -49,9 +50,15 @@ export function isNewer(candidate, current) {
   return false;
 }
 
-export function createManifest(directory, tag, repository) {
+/**
+ * `macosMinimum` is the app's `LSMinimumSystemVersion`. The feed carries it so
+ * installed apps on an older macOS skip a release they couldn't open
+ * (`desktop_update/desktop.rs`).
+ */
+export function createManifest(directory, tag, repository, macosMinimum) {
   const identity = releaseIdentity(tag);
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error('Invalid release repository');
+  if (!/^\d+\.\d+(\.\d+)?$/.test(macosMinimum ?? '')) throw new Error(`Invalid minimum macOS version: ${macosMinimum}`);
   const files = readdirSync(directory);
   const platforms = {};
   for (const [target, { suffix, required }] of Object.entries(TARGETS)) {
@@ -69,6 +76,7 @@ export function createManifest(directory, tag, repository) {
     platforms[target] = {
       url: `https://github.com/${repository}/releases/download/${identity.tag}/${name}`,
       signature,
+      ...(target.startsWith('darwin-') && { minimumSystemVersion: macosMinimum }),
     };
   }
   return { version: identity.version, notes: `Macro ${identity.tag}`, platforms };
@@ -109,7 +117,9 @@ function main([command, ...args]) {
     writeFileSync(CONFIG, `${JSON.stringify(config, null, 2)}\n`);
   } else if (command === 'manifest') {
     const [directory, tag, repository] = args;
-    writeFileSync(join(directory, 'latest.json'), `${JSON.stringify(createManifest(directory, tag, repository), null, 2)}\n`);
+    const macosMinimum = JSON.parse(readFileSync(CEF_CONFIG, 'utf8')).bundle.macOS.minimumSystemVersion;
+    const manifest = createManifest(directory, tag, repository, macosMinimum);
+    writeFileSync(join(directory, 'latest.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   } else if (command === 'tauri-config') {
     const [output] = args;
     if (!output) throw new Error('Missing output path');

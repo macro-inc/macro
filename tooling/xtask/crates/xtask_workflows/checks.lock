@@ -107,6 +107,7 @@ check	deploy_sync_service.yml	deploy	Deploy to Cloudflare
 check	deploy_web_app.yml	build/build	Build / Build
 check	deploy_web_app.yml	deploy	Deploy
 check	deploy_website.yml	build-deploy	Build and Deploy Website
+check	desktop-release-watch.yml	watch	Alert when a release's desktop installers are missing
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
 check	desktop_windows.yml	build-windows-frontend	Build Windows frontend
 check	desktop_windows.yml	build-windows	Build Windows installer

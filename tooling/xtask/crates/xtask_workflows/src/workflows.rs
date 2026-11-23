@@ -63,6 +63,7 @@ mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
 mod desktop_qa_macos;
+mod desktop_release_watch;
 mod desktop_windows;
 mod email_e2e;
 mod email_e2e_alert;
@@ -202,6 +203,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "desktop_windows",
         file_name: "desktop_windows.yml",
         render_yaml: || render_gh_workflow(desktop_windows::desktop_windows_smoke)(),
+    },
+    WorkflowFile {
+        slug: "desktop_release_watch",
+        file_name: "desktop-release-watch.yml",
+        render_yaml: || render_gh_workflow(desktop_release_watch::desktop_release_watch)(),
     },
     WorkflowFile {
         slug: "build_desktop_on_tag",
