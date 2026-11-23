@@ -2048,14 +2048,18 @@ async fn run_server() -> anyhow::Result<()> {
     // Directory refreshes follow contacts_invalidation immediately after writes.
     // Keep membership, lists and names on the primary, matching the legacy
     // contacts read. Lists come from the list-aware tables whichever store
-    // chose the contacts.
-    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(Arc::new(
-        contacts::domain::service::directory::ContactsDirectoryService::new(
-            contact_reads,
-            contact_lists,
-            contacts::outbound::names::DbContactNames::new(db.clone()),
+    // chose the contacts. The people typed text names (`contactsNamedBy`) are
+    // read through the same per-viewer reads.
+    let graphql_contacts_context = graphql_contacts::ContactsGraphqlContext::new(
+        Arc::new(
+            contacts::domain::service::directory::ContactsDirectoryService::new(
+                contact_reads.clone(),
+                contact_lists,
+                contacts::outbound::names::DbContactNames::new(db.clone()),
+            ),
         ),
-    ));
+        contact_reads,
+    );
 
     let favorites_service = Arc::new(FavoritesServiceImpl::new(PgFavoritesRepo::new(db.clone())));
 
