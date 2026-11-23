@@ -32,9 +32,13 @@ export async function checkpoints(browser: Browser) {
   return browser.execute(
     (userId) =>
       Object.keys(localStorage)
+        // A lane that gave up also stores `<checkpoint key>:failed`, a
+        // storage generation rather than a checkpoint.
         .filter(
           (key) =>
-            key.startsWith('graphql-soup-backfill:') && key.includes(userId)
+            key.startsWith('graphql-soup-backfill:') &&
+            key.includes(userId) &&
+            !key.endsWith(':failed')
         )
         .map((key) => ({
           key,
