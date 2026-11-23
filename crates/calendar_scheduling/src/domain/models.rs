@@ -104,6 +104,12 @@ pub struct EventType {
     pub macro_call: bool,
     /// Generate a Google Meet conference. Mutually exclusive with a Macro call.
     pub google_meet: bool,
+    /// Connected inbox whose primary calendar takes this link's bookings, so
+    /// the event lands there and its invitation comes from that address.
+    /// Absent books on the host's primary inbox. Personal links only: team
+    /// links book on each host's primary inbox.
+    #[serde(default)]
+    pub email_link_id: Option<Uuid>,
     /// Whether new bookings are accepted.
     pub enabled: bool,
     /// Referenced availability schedule.
@@ -218,7 +224,8 @@ pub struct Booking {
     #[cfg_attr(feature = "ai_tools", schemars(with = "String"))]
     #[cfg_attr(feature = "schema", schema(value_type = String))]
     pub time_zone: chrono_tz::Tz,
-    /// Assigned hosts.
+    /// Assigned hosts. Empty in responses to the booker, since a Macro user
+    /// identity carries the host's sign-in address.
     pub hosts: Vec<String>,
     /// Current lifecycle state.
     pub status: BookingStatus,

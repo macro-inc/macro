@@ -1305,7 +1305,20 @@ schedule picker without an extra Availability schedule heading. The selected sch
 weekly hours and timezone appear directly beneath the picker. This summary does not show
 live calendar free/busy or date overrides. First-time links use the default draft schedule
 until saved. Calendar busy-time exclusions appear in the help popover beside
-Availability. Team links group Scheduling type and Team hosts under Team scheduling
+Availability. A personal link whose owner has more than one connected account
+shows a Calendar account select below Availability, listing each inbox whose
+primary calendar they can write by its address (the primary first). Bookings
+land on that account's calendar and their invitations come from its address;
+choosing the primary account stores none, so the link follows the primary
+inbox ("Primary account" when that inbox lists no calendar to book on). In the
+editor, a link whose account is no longer connected shows "Disconnected account"
+and asks for another before that link is saved, as it does for former team
+hosts; saving the profile's other links is not blocked. Google Meet on an
+account that cannot add video meetings (an Outlook inbox without Teams) blocks
+saving too.
+A chosen account that needs reconnecting shows a note that the link offers no
+times until it is reconnected. Review and the link's details list the account.
+Team links group Scheduling type and Team hosts under Team scheduling
 in Location & availability. Collective and Round robin use pill selectors above
 Team hosts. The header's icon-only Reset team
 settings action restores the default mode and hosts, and is disabled at those defaults.

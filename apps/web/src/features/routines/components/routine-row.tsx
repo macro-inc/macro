@@ -85,6 +85,7 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
+      data-press-surface
       class={cn(
         // Highlighted while its context menu is open, as when focused.
         'soup-list-entity @container/entity mx-1 min-w-[760px] rounded-xl hover:bg-list-hover focus-within:bg-list-highlighted group-data-expanded/routine-menu:bg-list-highlighted @max-[760px]/routines:min-w-0',

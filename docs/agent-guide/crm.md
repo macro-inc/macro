@@ -286,9 +286,13 @@ company requires an explicit confirmation: every person is restored, including t
 archived individually, while email syncing stays off. Re-enable **Sync Emails** under
 **Email sharing** separately. A person whose company is archived offers **Open company**
 so that restoration happens there first. Unfiled people restore directly. Company row
-**Archive / Restore** actions also confirm the cascade. Record details and References
-appear first in both information panels, then Properties; company Lists and Email
-sharing follow. Neither panel has a duplicate visibility control. A contact's
+**Archive / Restore** actions also confirm the cascade. Both information panels, on
+desktop and in the phone **Show details** sheet, list **Record details**, then
+**Properties**, then the company-only **Lists** and **Email sharing**, with
+**References** last; as in a task's or document's panel, Properties come before
+References. Record details rows use the same text size and small muted labels as the
+Properties rows. Neither panel has a
+duplicate visibility control. A contact's
 Properties hold the team's custom properties only: Stage, Owner and Revenue are
 company-only, so its **Add property** list leaves them out (a company's leaves
 out task-only properties). **Add property** attaches one, such as a Phone text

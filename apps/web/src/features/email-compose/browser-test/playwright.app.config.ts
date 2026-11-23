@@ -31,7 +31,7 @@ export default defineConfig({
   projects: [
     {
       name: 'phone',
-      testMatch: 'recipient-directory.app.e2e.ts',
+      testMatch: /recipient-(directory|already-added)\.app\.e2e\.ts$/,
       use: {
         ...devices['iPhone 13'],
         browserName: 'chromium',

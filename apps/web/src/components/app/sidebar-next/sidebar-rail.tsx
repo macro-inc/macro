@@ -4,7 +4,10 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import {
+  appNavigationAttribute,
+  hotkeyScopeNeutralAttribute,
+} from '@core/dom-selectors';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createMemo,
@@ -102,7 +105,11 @@ export const SidebarRail = () => {
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav ref={nav} class="min-h-0 overflow-y-auto pt-4">
+      <nav
+        ref={nav}
+        {...appNavigationAttribute}
+        class="min-h-0 overflow-y-auto pt-4"
+      >
         <ul class="flex flex-col items-center gap-1">
           <For each={railItems()}>
             {(item) => (
@@ -113,7 +120,6 @@ export const SidebarRail = () => {
                       item={item}
                       unread={unread.has(item.id)}
                       unreadCount={unread.count(item.id)}
-                      homeMode={gates().homeMode}
                     />
                   }
                 >

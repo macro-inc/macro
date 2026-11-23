@@ -6027,7 +6027,8 @@ export interface Booking {
    */
   timeZone: string;
   /**
-   * Assigned hosts.
+   * Assigned hosts. Empty in responses to the booker, since a Macro user
+   * identity carries the host's sign-in address.
    */
   hosts: string[];
   status: BookingStatus;
@@ -7064,7 +7065,7 @@ export interface DispatchedCodingAgent {
   agent_name: string;
 }
 /**
- * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location, Macro call, or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. After execution, share the saved URL with an <m-booking-link-mention> chip (profileId/slug/url from the result), not a bare URL. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar. For video, set macroCall (preferred) or googleMeet, never both. Booking a macroCall link creates the call and attaches its join link to the invitation.
+ * Create a reusable booking page, not a calendar meeting. First use ListBookingLinks to discover a suitable existing link or reuse availability. Supply a full draft with all seven weekdays (Sunday=0), IANA time zone, and real host IDs; personal links use the authenticated user and individual mode. For a team use a real team ID and collective or roundRobin mode. Set enabled only when the user wants to accept bookings. No invitations are sent by creating a link. Repeating an identical draft with the same slug reuses the saved link; a different draft at that slug conflicts. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location, Macro call, or Google Meet, the calendar account bookings land on (when not the primary one), time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. After execution, share the saved URL with an <m-booking-link-mention> chip (profileId/slug/url from the result), not a bare URL. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar. For video, set macroCall (preferred) or googleMeet, never both. Booking a macroCall link creates the call and attaches its join link to the invitation.
  */
 export interface CreateBookingLink {
   /**
@@ -7121,6 +7122,14 @@ export interface BookingLinkEvent {
    * Generate a Google Meet conference. Mutually exclusive with `macroCall`.
    */
   googleMeet: boolean;
+  /**
+   * The connected account, an `emailLinkId` from the listing's `accounts`,
+   * whose primary calendar takes this link's bookings and sends their
+   * invitations from its address. Omit to book on the host's primary
+   * account. Personal links only; team links book on each host's primary
+   * account. `googleMeet` needs an account whose `videoMeetings` is true.
+   */
+  emailLinkId?: string | null;
   /**
    * Whether new bookings are accepted.
    */
@@ -9157,7 +9166,7 @@ export interface DuplicateItemResponse {
   message: string;
 }
 /**
- * Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and confirm the updated proposal in conversation instead of overwriting concurrent edits. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location, Macro call, or Google Meet, time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. After execution, share the saved URL with an <m-booking-link-mention> chip (profileId/slug/url from the result), not a bare URL. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar. For video, set macroCall (preferred) or googleMeet, never both. Booking a macroCall link creates the call and attaches its join link to the invitation.
+ * Edit exactly one existing booking link. First read it with ListBookingLinks, preserve all settings the user did not request changing, and pass its revision and full edited draft. Changed availability applies only to this link; other links and personal default hours remain unchanged. A stale revision fails: read again and confirm the updated proposal in conversation instead of overwriting concurrent edits. Create or edit booking links only after conversational confirmation, with no review card or interactive form. First explain all proposed details clearly in your reply: personal or team ownership, named hosts and who attends, meeting name, description, duration, location, Macro call, or Google Meet, the calendar account bookings land on (when not the primary one), time zone, weekly hours and date exceptions, link name, buffers, minimum notice, booking window, slot interval, daily limit, guest questions and whether bookings are enabled. Ask whether to proceed and stop. Only in a later turn after the user approves that specific proposal, call this tool with their approving reply quoted verbatim in userConfirmation. The original request is not confirmation; never invent or paraphrase approval. Never ask the user for teamId, host IDs, schedule IDs, revisions or JSON: discover IDs with ListBookingLinks and ListTeamMembers. Default to personal ownership unless a team is requested, and clarify ambiguous choices by name. After execution, share the saved URL with an <m-booking-link-mention> chip (profileId/slug/url from the result), not a bare URL. Returns actual saved IDs, revision, full draft and shareable URL. Manual approval must be false; guest booking requires a connected, synced writable calendar. For video, set macroCall (preferred) or googleMeet, never both. Booking a macroCall link creates the call and attaches its join link to the invitation.
  */
 export interface EditBookingLink {
   /**
@@ -11624,6 +11633,12 @@ export interface ListBookingLinksResult {
    */
   schedules: Schedule[];
   /**
+   * Connected accounts a personal link can book on: set one's
+   * `emailLinkId` on the draft to have bookings land on that account's
+   * calendar with invitations from its address. Empty for a team.
+   */
+  accounts: BookingAccount[];
+  /**
    * Matching links including their complete drafts.
    */
   links: BookingLinkResult[];
@@ -11652,6 +11667,25 @@ export interface Schedule {
    * Date-specific replacements.
    */
   overrides: DateOverride[];
+}
+/**
+ * A connected account whose primary calendar the host can write, so a
+ * personal link can book on it.
+ */
+export interface BookingAccount {
+  /**
+   * Connected inbox identity, set as a link's `emailLinkId`.
+   */
+  emailLinkId: string;
+  /**
+   * The account's address, which invitations for its bookings come from.
+   */
+  emailAddress: string;
+  /**
+   * Whether its calendar adds a video meeting to a booking that asks for
+   * one (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook.
+   */
+  videoMeetings: boolean;
 }
 /**
  * Read every booking starting in a half-open timestamp range for personal or team Booking Links. Returns IDs, status, hosts, guest details, answers, attendance and reschedule history; use these IDs to manage meetings. Both timestamps are required, with an explicit UTC offset. Maximum range 733 days. Oversized result sets fail rather than silently truncating: narrow the range. Use GetBookingInsights for aggregate statistics.
@@ -13656,6 +13690,13 @@ export interface EventType {
    * Generate a Google Meet conference. Mutually exclusive with a Macro call.
    */
   googleMeet: boolean;
+  /**
+   * Connected inbox whose primary calendar takes this link's bookings, so
+   * the event lands there and its invitation comes from that address.
+   * Absent books on the host's primary inbox. Personal links only: team
+   * links book on each host's primary inbox.
+   */
+  emailLinkId?: string | null;
   /**
    * Whether new bookings are accepted.
    */

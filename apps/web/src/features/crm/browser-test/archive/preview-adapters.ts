@@ -4,7 +4,10 @@ import type { CrmContactResponse } from '@service-storage/generated/schemas/crmC
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createSignal } from 'solid-js';
-import type { CompanyContactsFilter } from '../../context/crm-sources';
+import type {
+  CompanyContactsFilter,
+  ItemListSource,
+} from '../../context/crm-sources';
 import {
   useCompanyQuery,
   useSetCompanyHiddenMutation,
@@ -347,6 +350,18 @@ export const useCrmContext = () => ({
   editContactEmail: () => useSetContactEmailMutation(deps),
   editContactCompany: () => useSetContactCompanyMutation(deps),
   setEmailSync: () => useSetEmailSyncMutation(deps),
+  createRecordReferences: (): ItemListSource => ({
+    isPending: false,
+    isEnabled: true,
+    isLoading: false,
+    data: { entities: [] },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    isError: false,
+    isFetchNextPageError: false,
+    fetchNextPage: async () => undefined,
+    refetch: async () => undefined,
+  }),
   createNavigation: () => ({
     openWithSplit(target: { id: string }) {
       location.search = `?kind=company&companyArchived&opened=${target.id}`;

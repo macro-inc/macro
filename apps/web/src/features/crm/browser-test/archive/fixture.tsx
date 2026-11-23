@@ -20,6 +20,7 @@ import {
   COMPANY_SECTIONS,
   CONTACT_SECTIONS,
   type CrmRecordSection,
+  RECORD_PANEL_ORDER,
 } from '../../core/record';
 import { useCompanyQuery } from '../../queries/companies';
 import { useContactQuery } from '../../queries/contacts';
@@ -27,6 +28,7 @@ import { CompanyContactsSection } from '../../views/company-contacts-section';
 import { CompanyHeader } from '../../views/company-header';
 import { CompanySharingSection } from '../../views/company-sharing-section';
 import { ContactHeader } from '../../views/contact-header';
+import { RecordReferencesSection } from '../../views/record-associations';
 import { RecordDetailsSection } from '../../views/record-details-section';
 import { RecordHeaderActions } from '../../views/record-header-actions';
 import {
@@ -112,14 +114,34 @@ function Fixture() {
                 company={kind === 'company' ? source.company() : undefined}
                 contact={kind === 'contact' ? contact.data : undefined}
               />
-              <SidePanel.Section id="references" title="References" order={20}>
-                <p>No references</p>
+              <SidePanel.Section
+                id="properties"
+                title="Properties"
+                order={RECORD_PANEL_ORDER.properties}
+                defaultOpen
+              >
+                <SidePanel.Grid class="auto-rows-[minmax(1.75rem,auto)] gap-y-1">
+                  <SidePanel.Row label="Phone">+1 555 0100</SidePanel.Row>
+                </SidePanel.Grid>
+              </SidePanel.Section>
+              <SidePanel.Section
+                id="references"
+                title="References"
+                order={RECORD_PANEL_ORDER.references}
+              >
+                <RecordReferencesSection
+                  scope={
+                    kind === 'company'
+                      ? { type: 'company', id: record.id, domains: [] }
+                      : { type: 'contact', id: record.id, emails: [] }
+                  }
+                />
               </SidePanel.Section>
               <Show when={kind === 'company'}>
                 <SidePanel.Section
                   id="sharing"
                   title="Email sharing"
-                  order={50}
+                  order={RECORD_PANEL_ORDER.sharing}
                 >
                   <CompanySharingSection company={source.company()} />
                 </SidePanel.Section>
