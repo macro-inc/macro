@@ -18,6 +18,11 @@ nearly every Rust service's `main.rs` calls.
   for prod/develop trace-log correlation.
 - `src/grafana.rs`: a second, best-effort span exporter that mirrors spans to
   Grafana in `develop` without affecting the primary (Datadog) exporter.
+- `src/trace_context.rs`: the global W3C propagator. It reads a version-00
+  `traceparent` with Trace Context Level 2's random flag (`-03`, what
+  `otel-cf-workers` sends from Cloudflare Workers) for its sampled bit;
+  `opentelemetry_sdk`'s own propagator refuses it, so each Worker request
+  started a trace of its own.
 - `src/shutdown.rs`: `shutdown_signal` — the standard graceful-shutdown
   future every service awaits on.
 

@@ -5,6 +5,7 @@
 mod datadog_fmt;
 mod grafana;
 mod shutdown;
+mod trace_context;
 
 #[cfg(test)]
 mod test;
@@ -453,11 +454,9 @@ fn init_opentelemetry(
     grafana_endpoint: Option<&str>,
 ) -> SdkTracerProvider {
     // W3C trace-context propagation: lets macro_tower_layers parent request
-    // spans under an incoming `traceparent` (e.g. from the web app), and
-    // service clients propagate context onward.
-    opentelemetry::global::set_text_map_propagator(
-        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
-    );
+    // spans under an incoming `traceparent` (e.g. from the web app or a
+    // Cloudflare Worker), and service clients propagate context onward.
+    opentelemetry::global::set_text_map_propagator(trace_context::TraceContextLevel2::default());
 
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
