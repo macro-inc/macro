@@ -534,6 +534,15 @@ export function createSoupLiveQuery(
           return;
         }
         if (!result.data) return;
+        // A later answer from the server reopens a failed chain rebuild's
+        // wait. The client without the cache tags none of its results.
+        if (
+          firstInput?.initial.sortMethod === 'NOTIFIED_AT' &&
+          !result.stale &&
+          !result.error &&
+          (metadata === undefined || metadata.source === 'live-network')
+        )
+          setNetworkAnswers((count) => count + 1);
         if (metadata?.source !== 'live-network') {
           // An affected/cache result already reflects local state. Its pending
           // network acknowledgement may no longer claim authority over it.
@@ -542,7 +551,6 @@ export function createSoupLiveQuery(
         }
         if (firstInput?.initial.sortMethod === 'NOTIFIED_AT') {
           recordNetworkEmailTimes(firstInputKey, page.pageParam, result.data);
-          if (!result.stale) setNetworkAnswers((count) => count + 1);
         }
         if (metadata.persistence) {
           if (
@@ -688,7 +696,13 @@ export function createSoupLiveQuery(
     } finally {
       repair = undefined;
     }
-    if (disposed || !chainBroken()) return;
+    if (disposed) return;
+    if (!chainBroken()) {
+      // A rebuild that read the chain whole has done its work, though
+      // another page read may still be running.
+      if (!failed) repairs = 0;
+      return;
+    }
     if (failed) {
       failedAt = networkAnswers();
       return;

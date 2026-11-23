@@ -91,7 +91,7 @@ type FakeExecution = {
       source: 'live-network' | 'normalized-cache-hit' | 'affected-cache-reread';
       revision?: string;
       persistence?: Promise<string | undefined>;
-    },
+    } | null,
     error?: CombinedError,
     stale?: boolean
   ): void;
@@ -154,7 +154,9 @@ function makeFakeClient(): {
           operation,
           data,
           error,
-          extensions: { __macroNormalizedCache: metadata },
+          extensions: metadata
+            ? { __macroNormalizedCache: metadata }
+            : undefined,
           stale,
           hasNext: false,
         } as OperationResult<unknown, Record<string, unknown>>),
@@ -3342,6 +3344,64 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         fake.executions[3].next(page('a', 'after-a'));
         await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
         expect(cursorOf(fake.executions[5])).toBeNull();
+      } finally {
+        dispose();
+      }
+    });
+
+    it('rebuilds again on a later answer of the client without the cache', async () => {
+      const { fake, dispose } = await breakChain();
+      try {
+        await failRebuild(fake, 3);
+        await settle();
+        expect(fake.executions).toHaveLength(5);
+        // That client tags none of its results.
+        fake.executions[3].next(page('a', 'after-a'), null);
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+        expect(cursorOf(fake.executions[5])).toBeNull();
+      } finally {
+        dispose();
+      }
+    });
+
+    it('restores its bound after a rebuild that read the chain whole while a page was read again', async () => {
+      const { fake, dispose } = await breakChain();
+      // The list as the server holds it; a page read from `after-x` starts
+      // at the first row still listed after x.
+      const all = ['removed', ...'abcdefghijklmnop'];
+      const gone = new Set(['removed']);
+      const answer = (execution: FakeExecution, stale = false) => {
+        const cursor = cursorOf(execution);
+        const from = cursor === null ? 0 : all.indexOf(cursor.slice(6)) + 1;
+        const id = all.slice(from).find((row) => !gone.has(row));
+        if (!id) throw new Error('the test list ran out');
+        execution.next(page(id, `after-${id}`), undefined, undefined, stale);
+      };
+      const next = async (index: number) => {
+        await vi.waitFor(() =>
+          expect(fake.executions.length).toBeGreaterThan(index)
+        );
+        return fake.executions[index];
+      };
+      try {
+        let at = 3;
+        // Each rebuild reads the chain whole, but the first page is read
+        // again meanwhile (its last answer comes back stale while it runs),
+        // and that read's answer breaks the chain again after the rebuild.
+        for (let round = 0; round < 4; round += 1) {
+          const first = await next(at);
+          expect(cursorOf(first)).toBeNull();
+          answer(first);
+          answer(first, true);
+          answer(await next(at + 1));
+          answer(await next(at + 2));
+          await settle();
+          gone.add(all[round + 1]);
+          answer(first);
+          at += 3;
+        }
+        await next(at);
+        expect(cursorOf(fake.executions[at])).toBeNull();
       } finally {
         dispose();
       }
