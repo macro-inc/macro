@@ -149,6 +149,26 @@ pub fn alias_target(record: &Record) -> Option<&EntityKey<'static>> {
     }
 }
 
+/// The fields of a record that later settlement and replay of queued writes
+/// read: an alias, a coalescing UUID and a deletion tombstone.
+const IDENTITY_METADATA_FIELDS: [&str; 3] = [ALIAS_FIELD, MUTATION_UUID_FIELD, DELETED_FIELD];
+
+/// `record` with only its identity metadata, its `id` and its `__typename`,
+/// or `None` when it holds no identity metadata: what a record whose copied
+/// content is retired keeps.
+pub fn identity_metadata(mut record: Record) -> Option<Record> {
+    if !IDENTITY_METADATA_FIELDS
+        .iter()
+        .any(|field| record.fields.contains_key(*field))
+    {
+        return None;
+    }
+    record.fields.retain(|field, _| {
+        IDENTITY_METADATA_FIELDS.contains(&field.as_str()) || field == "id" || field == "__typename"
+    });
+    Some(record)
+}
+
 /// Rebase normalized records and their links; arbitrary text is never rewritten.
 pub fn remap_updates(
     updates: RecordUpdates,
