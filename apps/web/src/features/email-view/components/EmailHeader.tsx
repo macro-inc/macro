@@ -126,10 +126,24 @@ export function EmailViewBreadcrumbItem() {
 export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
-  const { state, setState, setTab, tagViewTitle, savedViewActive, savedViews } =
-    useEmailView();
+  const {
+    state,
+    setState,
+    setTab,
+    shownTab,
+    tagViewTitle,
+    savedViewActive,
+    savedViews,
+  } = useEmailView();
   const savedViewTitle = useEmailSavedViewTitle();
   const [filterOpen, setFilterOpen] = createSignal(false);
+  // A search of all mail, or of the whole Inbox, selects none of its tabs.
+  const shownInboxTab = () => {
+    const tab = shownTab();
+    return tab !== undefined && tab !== 'inbox' && isEmailInboxTab(tab)
+      ? tab
+      : undefined;
+  };
   let releaseSearch: (() => void) | undefined;
   const searchTarget = tourTarget(EMAIL_TOUR.search);
   const isVisible = useVisibleEmailTab();
@@ -246,7 +260,7 @@ export function EmailHeader(props: EmailHeaderProps) {
               size="md"
               class="shrink-0"
               options={inboxTabs()}
-              value={state.tab}
+              value={shownInboxTab()}
               onChange={setTab}
             />
           </Show>

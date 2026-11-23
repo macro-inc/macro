@@ -203,14 +203,47 @@ describe('email view inbox reconciliation', () => {
   });
 });
 
-it('clears persisted text search when entering and leaving Email Reminders', () => {
+it('narrows a running search to the tab picked, keeping its words', () => {
   const { view } = mount();
-  view.setState('search', 'prior inbox search');
+  view.setState('search', 'invoice');
+  expect(view.shownTab()).toBeUndefined();
+
+  view.setTab('sent');
+  expect(view.state.tab).toBe('sent');
+  expect(view.state.search).toBe('in:sent invoice');
+  expect(view.shownTab()).toBe('sent');
+
+  view.setTab('important');
+  expect(view.state.search).toBe('in:signal invoice');
+  expect(view.shownTab()).toBe('important');
+
+  view.selectInbox();
+  expect(view.state.tab).toBe('important');
+  expect(view.state.search).toBe('in:inbox invoice');
+  expect(view.shownTab()).toBe('inbox');
+
+  view.setTab('all');
+  expect(view.state.search).toBe('invoice');
+  expect(view.shownTab()).toBeUndefined();
+});
+
+it('ends a search on a tab the search index has no view of', () => {
+  const { view } = mount();
+  view.setState('search', 'invoice');
   view.setTab('reminders');
   expect(view.state.search).toBe('');
-  view.setState('search', 'stale restored search');
-  view.setTab('all');
+  expect(view.shownTab()).toBe('reminders');
+
+  view.setState('search', 'invoice');
+  view.setTab('scheduled');
   expect(view.state.search).toBe('');
+});
+
+it('opens a tab as usual when no search runs', () => {
+  const { view } = mount();
+  view.setTab('sent');
+  expect(view.state.search).toBe('');
+  expect(view.shownTab()).toBe('sent');
 });
 
 describe('tag view title', () => {

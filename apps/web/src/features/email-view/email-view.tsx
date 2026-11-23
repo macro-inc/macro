@@ -323,7 +323,7 @@ function EmailLayout(props: {
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();
-  const { state, setState, setTab, tagViewTitle, savedViewActive } =
+  const { state, setState, setTab, shownTab, tagViewTitle, savedViewActive } =
     useEmailView();
   const userId = useUserId();
   const wideSearchFlag = useFeatureFlag(enableEmailWideSearch);
@@ -360,6 +360,11 @@ function EmailMobileLayout(props: ParentProps) {
   const listsRecent = () => searching() && suggestions.listed().length > 0;
 
   const inboxSelected = () => isEmailInboxTab(state.tab);
+  // A search of all mail selects no tab.
+  const shownPill = () => {
+    const tab = shownTab();
+    return tab === 'inbox' ? undefined : tab;
+  };
   const tabs = () =>
     inboxSelected()
       ? EMAIL_INBOX_TAB_IDS.filter(isVisible).map((id) => ({
@@ -392,7 +397,7 @@ function EmailMobileLayout(props: ParentProps) {
                     </HeaderIsland>
                   </Show>
                 }
-                value={savedViewActive() ? undefined : state.tab}
+                value={savedViewActive() ? undefined : shownPill()}
                 onChange={setTab}
               />
               <Show

@@ -137,6 +137,20 @@ const SCOPE_TABS = {
   archived: 'archived',
 } as const satisfies Record<Exclude<EmailSearchScopeId, 'inbox'>, EmailTab>;
 
+/**
+ * The view a tab narrows a search to: All is all mail, and Scheduled,
+ * Reminders, Spam and Trash are none, since the search index has none of them.
+ */
+export const emailSearchScopeForTab = (
+  tab: EmailTab
+): EmailSearchScope | undefined => {
+  if (tab === 'all') return 'all';
+
+  return EMAIL_SEARCH_SCOPE_IDS.find(
+    (scope) => emailSearchScopeTab(scope) === tab
+  );
+};
+
 export const emailSearchScopeTab = (
   scope: EmailSearchScopeId
 ): EmailTab | undefined => (scope === 'inbox' ? undefined : SCOPE_TABS[scope]);
