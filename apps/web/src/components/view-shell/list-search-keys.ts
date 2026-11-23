@@ -31,6 +31,11 @@ export type ListSearchSuggestions = {
 
 export type ListSearchKeysOptions = {
   value: () => string;
+  /**
+   * Whether the field holds a query: its text, or a filter beside it. Without
+   * it, a field with blank text holds none.
+   */
+  hasQuery?: () => boolean;
   /** Empties the query and collapses the field. */
   clear: () => void;
   /** Moves keyboard focus into the view's result list. */
@@ -61,6 +66,8 @@ export type ListSearchKeysOptions = {
  */
 export function useListSearchKeys(options: ListSearchKeysOptions) {
   const panel = useSplitPanel();
+  const hasQuery = () =>
+    options.hasQuery?.() ?? options.value().trim().length > 0;
 
   // Escape leaves the list where it was; ArrowDown and Enter start at the top.
   // A picked suggestion has started a new search, so its rows are still on
@@ -68,7 +75,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
   const leave = (row: 'first' | 'current', rowsPending = false) => {
     const input = options.input();
     // An empty field has no search to keep on screen.
-    const collapses = !options.value().trim();
+    const collapses = !hasQuery();
     // Without a list to move to, a collapsed field hands focus to its button.
     const collapseToButton = () => {
       options.clear();
@@ -145,8 +152,7 @@ export function useListSearchKeys(options: ListSearchKeysOptions) {
     // same registration, so the step exists whichever handler runs.
     onCleanup(
       registerListSearch(scopeId, {
-        isActive: () =>
-          options.value().trim().length > 0 && (options.ownsEscape?.() ?? true),
+        isActive: () => hasQuery() && (options.ownsEscape?.() ?? true),
         clear: options.clear,
       })
     );

@@ -66,9 +66,9 @@ describe('splitEmailSearchField', () => {
 });
 
 describe('editEmailSearchField', () => {
-  it('turns a finished in: filter into the chip and keeps the rest', () => {
-    expect(editEmailSearchField(undefined, 'in:sent ')).toBe('in:sent ');
-    expect(editEmailSearchField(undefined, 'invoice in:sent ')).toBe(
+  it('turns a view named in full into the chip at once and keeps the rest', () => {
+    expect(editEmailSearchField(undefined, 'in:sent')).toBe('in:sent ');
+    expect(editEmailSearchField(undefined, 'invoice in:sent')).toBe(
       'in:sent invoice '
     );
     expect(editEmailSearchField(undefined, 'invoice in:sent march')).toBe(
@@ -76,9 +76,9 @@ describe('editEmailSearchField', () => {
     );
   });
 
-  it('replaces the chip when another view is finished', () => {
-    expect(editEmailSearchField('sent', 'invoice in:noise ')).toBe(
-      'in:noise invoice '
+  it('replaces the chip when another view is named, so they never disagree', () => {
+    expect(editEmailSearchField('sent', 'invoice in:drafts')).toBe(
+      'in:drafts invoice '
     );
   });
 

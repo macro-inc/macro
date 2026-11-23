@@ -92,6 +92,7 @@ import { createEmailRowActionState } from '../primitives/row-action-state';
 import { createScrollAnchor } from '../primitives/scroll-anchor';
 import type { EmailDataSourceItem } from '../queries/use-email-query';
 import type { EmailListPane } from '../reader-pane';
+import { formatEmailSearch } from '../search/email-search-scope';
 import { EMAIL_TOUR } from '../tour';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
@@ -611,7 +612,7 @@ export function EmailList(props: EmailListProps) {
   // The tutorial introduces the inbox; search results are not the inbox.
   const showsTutorial = () =>
     state.tab === 'important' &&
-    !(canSearchEmailTab(state.tab) && state.search.trim());
+    !(canSearchEmailTab(state.tab) && parsedSearch().query);
 
   function showsEmptyViewport() {
     return (
@@ -676,7 +677,11 @@ export function EmailList(props: EmailListProps) {
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
   createSearchScrollReset({
-    query: () => state.search,
+    // A filter with no words, or an `in:` still being typed, runs no search.
+    query: () => {
+      const search = parsedSearch();
+      return search.query ? formatEmailSearch(search.scope, search.query) : '';
+    },
     showsPreviousRows,
     reset: () =>
       setPersistedListState((current) => ({ ...current, scrollOffset: 0 })),

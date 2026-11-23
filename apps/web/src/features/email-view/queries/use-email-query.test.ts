@@ -478,6 +478,17 @@ describe('Email list query transitions', () => {
     expect(activeReader.refresh).toHaveBeenCalledOnce();
   });
 
+  it('checks alias hits against the list of the view the search names', () => {
+    const root = mount('invoice');
+    root.setState('searchScope', 'sent');
+    root.setState('aliasFilter', alias);
+    const membership = vi.mocked(useSoupAstItemsQuery).mock.calls.at(-1)![0];
+    expect(membership().body.emailView).toBe('sent');
+
+    root.setState('searchScope', 'all');
+    expect(membership().body.emailView).toBe('all');
+  });
+
   it('retains rows and exposes a failed retained alias read until an explicit retry', async () => {
     const root = mount('invoice');
     root.setSearchHasMore(false);

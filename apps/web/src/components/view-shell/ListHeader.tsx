@@ -103,6 +103,7 @@ export function ListHeaderSearch(props: {
   };
   const keys = useListSearchKeys({
     value: () => props.value,
+    hasQuery: hasContent,
     clear,
     focusResults: () => props.focusResults,
     input: () => input,
@@ -125,9 +126,9 @@ export function ListHeaderSearch(props: {
   // typing in it.
   createEffect(
     on(
-      () => props.value,
-      (value) => {
-        if (!props.wide || value.trim() || leading()) return;
+      hasContent,
+      (content) => {
+        if (!props.wide || content) return;
         if (document.activeElement !== input) setExpanded(false);
       },
       { defer: true }

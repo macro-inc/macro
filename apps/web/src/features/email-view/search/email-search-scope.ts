@@ -100,8 +100,10 @@ export function splitEmailSearchField(text: string): {
 }
 
 /**
- * What typing `typed` after the chip makes of the search. A complete
- * `in:<view>` followed by a space becomes the chip, replacing the one there.
+ * What typing `typed` after the chip makes of the search. A view's whole
+ * name typed as `in:<view>` becomes the chip at once, replacing the one there,
+ * so the field never holds a filter the chip does not show. No view's name
+ * starts another's, so a whole name is never one still being typed.
  */
 export function editEmailSearchField(
   scope: EmailSearchScopeId | undefined,
@@ -110,7 +112,7 @@ export function editEmailSearchField(
   let chip = scope;
   let moved = false;
   const text = typed.replace(
-    /(?<=^|\s)in:(\S+)\s/gi,
+    /(?<=^|\s)in:(\S+)(?:\s|$)/gi,
     (whole, value: string) => {
       const id = value.toLowerCase();
       if (!isEmailSearchScopeId(id)) return whole;

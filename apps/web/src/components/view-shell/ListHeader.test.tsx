@@ -513,6 +513,46 @@ it('closes a wide field when the view clears its search from outside', () => {
   expect(view.queryByRole('searchbox')).toBeNull();
 });
 
+it('keeps a wide field holding only a filter open, and closes it once the filter is gone', () => {
+  const [text, setText] = createSignal('');
+  const [filter, setFilter] = createSignal<string>('Sent');
+  const [open, setOpen] = createSignal(false);
+  let list!: HTMLDivElement;
+  const view = render(() => (
+    <div>
+      <ListHeaderSearch
+        label="Search email"
+        value={text()}
+        onValueChange={setText}
+        onClear={() => {
+          setText('');
+          setFilter('');
+        }}
+        focusResults={() => list.focus()}
+        registerFocus={() => {}}
+        wide
+        onOpenChange={setOpen}
+        leading={<Show when={filter()}>{(name) => <span>{name()}</span>}</Show>}
+      />
+      <div ref={list} tabIndex={0} />
+    </div>
+  ));
+  const field = view.getByRole('searchbox', { name: 'Search email' });
+  expect(open()).toBe(true);
+
+  // Enter with only the filter moves on without emptying the field.
+  field.focus();
+  type(field, 'Enter');
+  expect(filter()).toBe('Sent');
+  fireEvent.blur(field);
+  expect(open()).toBe(true);
+
+  // The filter removed while the field is not focused closes it.
+  setFilter('');
+  expect(open()).toBe(false);
+  expect(view.queryByRole('searchbox')).toBeNull();
+});
+
 it('reports closed and unfocused when it unmounts while open', () => {
   const [shown, setShown] = createSignal(true);
   const [open, setOpen] = createSignal(false);

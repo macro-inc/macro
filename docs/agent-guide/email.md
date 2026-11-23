@@ -126,8 +126,7 @@ result. A search is remembered when the field is left with words in it, with
 its `in:` filter, at most eight per person, in this browser only and not per
 inbox. Typing `in:` lists the views instead (only those the person has, so
 Focus only with its flag), narrowed as the name is typed; `Enter`, a click, or
-a space after a whole view name turns it into a chip at the start of the
-field, `In | Sent | x`, framed like global Search's filter chips, and the
+typing the whole view name turns it into a chip at the start of the field, `In | Sent | x`, framed like global Search's filter chips, and the
 keyboard stays in the field. The chip's name switches the view, and its x or
 `Backspace` at the start of the text goes back to all mail. Recent searches
 show their filter as the same chip. Rows of a search that can reach archived

@@ -35,7 +35,10 @@ import { type Accessor, createMemo, createSignal, indexArray } from 'solid-js';
 import { match } from 'ts-pattern';
 import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import { EMAIL_FACETS, type EmailFacetContext } from '../filters/email-facets';
-import type { EmailSearchScope } from '../search/email-search-scope';
+import {
+  type EmailSearchScope,
+  emailSearchScopeTab,
+} from '../search/email-search-scope';
 import type { EmailTab, EmailViewState } from '../types';
 import {
   advanceEmptyPages,
@@ -263,10 +266,14 @@ export function useEmailDataSource(
   const sourceEnabled = () =>
     search.isSearching() ? enabled() : listEnabled();
   // A search keeps the list's filters but reaches the mail its scope names,
-  // not the tab's own slice of it.
+  // not the tab's own slice of it. An alias or saved view checks its hits
+  // against the list of the view the search names (Inbox's against All).
   const searchQueryContext = (): EmailQueryContext => ({
     ...queryContext(),
-    tab: 'all',
+    tab:
+      state.searchScope === 'all'
+        ? 'all'
+        : (emailSearchScopeTab(state.searchScope) ?? 'all'),
   });
   const searchContext = (): EmailSearchContext => ({
     ...searchQueryContext(),
