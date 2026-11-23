@@ -74,8 +74,11 @@ function parseView(raw: string | null): ConversationListViewState | undefined {
 }
 
 /** The Agents sidebar's filters and sort, remembered per user. */
-export function createConversationListView(userId: string | undefined) {
-  const storage = createUserScopedStorage('agents-conversation-list-view-v1');
+export function createConversationListView(
+  userId: string | undefined,
+  storageKey = 'agents-conversation-list-view-v1'
+) {
+  const storage = createUserScopedStorage(storageKey);
   const [view, setView] = makePersistedState(
     createSignal<ConversationListViewState>(DEFAULT_VIEW),
     {
