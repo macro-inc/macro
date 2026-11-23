@@ -74,9 +74,13 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         .ok_or(CrmError::CompanyNotFoundForTeam)?;
+        // Fenced by company so stale statistics cannot read the team's
+        // domains to find this company's few.
         let domains = sqlx::query_scalar!(
-            r#"SELECT LOWER(domain) AS "domain!" FROM crm_domains
-               WHERE company_id = $1 AND team_id = $2
+            r#"SELECT LOWER(domain) AS "domain!"
+               FROM (SELECT domain, team_id, created_at, id FROM crm_domains
+                     WHERE company_id = $1 OFFSET 0) company_domains
+               WHERE team_id = $2
                ORDER BY created_at, id"#,
             company_id,
             team_id,
