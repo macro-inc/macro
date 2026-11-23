@@ -5500,6 +5500,7 @@ dependencies = [
  "macro_tower_layers",
  "macro_user_id",
  "model-entity",
+ "models_pagination",
  "non_empty",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -19956,6 +19957,7 @@ dependencies = [
  "serde",
  "serde_json",
  "system_properties",
+ "time_tracking",
  "tokio",
  "tokio-retry",
  "tracing",
@@ -21452,11 +21454,13 @@ dependencies = [
 name = "time_tracking"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "async-trait",
  "axum",
  "chrono",
  "chrono-tz",
+ "connection_gateway_client",
  "entity_access",
  "feature_flags",
  "http-body-util",
@@ -21465,6 +21469,7 @@ dependencies = [
  "macro_event_broker",
  "macro_event_topics",
  "macro_user_id",
+ "model-entity",
  "model-error-response",
  "model_user",
  "rootcause",
@@ -21475,10 +21480,12 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tracing",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 

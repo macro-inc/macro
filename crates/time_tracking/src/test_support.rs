@@ -26,7 +26,8 @@ use crate::domain::{
     models::{EntryValues, LoggedTime, NewEntryRow, RunningTimer, TimeEntry, TimeEntryCursor},
     ports::{
         Clock, DeleteEntryOutcome, InsertEntryOutcome, StartTimerOutcome, StopTimerOutcome,
-        TimeTrackingRepository, TimeTrackingRollout, UpdateEntryOutcome,
+        TimeTrackingChange, TimeTrackingRepository, TimeTrackingRollout, TimeTrackingUpdates,
+        UpdateEntryOutcome,
     },
 };
 
@@ -480,6 +481,25 @@ impl TimeEntryEventPublisher for RecordingPublisher {
             .lock()
             .unwrap()
             .push((event.key().to_string(), event.event().event.clone()));
+    }
+}
+
+/// Every session update sent, in order, with the person it went to.
+#[derive(Clone, Default)]
+pub(crate) struct RecordingUpdates(Arc<Mutex<Vec<(String, TimeTrackingChange)>>>);
+
+impl RecordingUpdates {
+    pub(crate) fn sent(&self) -> Vec<(String, TimeTrackingChange)> {
+        self.0.lock().unwrap().clone()
+    }
+}
+
+impl TimeTrackingUpdates for RecordingUpdates {
+    fn changed(&self, user_id: &MacroUserIdStr<'static>, change: TimeTrackingChange) {
+        self.0
+            .lock()
+            .unwrap()
+            .push((user_id.as_ref().to_string(), change));
     }
 }
 

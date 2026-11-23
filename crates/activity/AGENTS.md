@@ -54,7 +54,8 @@ distribution.
   `EntityAccessService::get_users_by_entity`; change both together.
 - Used by: most domain crates with activity surfaces (`documents`, `forms`,
   `databases`, `initiative`, `messages`, `channels`, `soup`, `call`, `chat`,
-  `attention_feed`, `projects`, `github`, `email`, `properties`) and `ai_tools`.
+  `attention_feed`, `projects`, `github`, `email`, `properties`,
+  `time_tracking`) and `ai_tools`.
   `ai_tools` reads `SubjectActivityPresence` so memory skips days without
   activity. `connection_gateway` writes seen times through `SeenLog`;
   `email_focus_worker` asks `UserActivity` over 7 days before working an
