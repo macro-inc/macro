@@ -14,9 +14,11 @@ export function useBookingAccounts(): Accessor<BookingAccount[]> {
   const linksQuery = useEmailLinksQuery();
   const primaryLinkId = usePrimaryEmailLinkId();
   return createMemo(() => {
-    // Reading a pending query would suspend the editor around it.
-    if (!queryReadyGate(calendarsQuery)) return [];
-    const links = queryReadyGate(linksQuery) ? linksQuery.data.links : [];
+    // Reading a pending query would suspend the editor around it, and until
+    // the inbox links load no account is known to be the primary one.
+    if (!queryReadyGate(calendarsQuery) || !queryReadyGate(linksQuery))
+      return [];
+    const links = linksQuery.data.links;
     const accounts: BookingAccount[] = [];
     for (const calendar of calendarsQuery.data) {
       if (

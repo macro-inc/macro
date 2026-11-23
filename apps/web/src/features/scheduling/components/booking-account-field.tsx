@@ -27,6 +27,10 @@ export function BookingAccountField(props: {
       items.push({ value: props.emailLinkId, label: 'Disconnected account' });
     return items;
   });
+  // Only a chosen account is named here: a link left on the primary account
+  // keeps the primary inbox's existing behavior, which this note can't describe.
+  const staleAccount = () =>
+    props.emailLinkId && account()?.needsReconnect ? account() : undefined;
   const choose = (emailLinkId: string) => {
     if (emailLinkId === (account()?.emailLinkId ?? props.emailLinkId)) return;
     const chosen = props.accounts.find(
@@ -54,7 +58,7 @@ export function BookingAccountField(props: {
         options={options()}
         onChange={choose}
       />
-      <Show when={account()?.needsReconnect && account()}>
+      <Show when={staleAccount()}>
         {(stale) => (
           <p class="text-xs text-ink-muted">
             Reconnect {stale().emailAddress} in Settings → Calendar. Until then
