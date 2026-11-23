@@ -25,9 +25,9 @@ use crate::domain::{
     models::{
         DEFAULT_PAGE_LIMIT, EntrySpan, EntryValues, LoggedTime, MAX_PAGE_LIMIT, NewEntryRow,
         NewTimeEntry, RunningTimer, StartTimer, StartedTimer, StopTimer, StoppedTimer,
-        TaskTimeTotal, TimeEntry, TimeEntryChanges, TimeEntryCursor, TimeEntryPage,
-        TimeEntryPageRequest, TimeEntrySource, TimeTrackingError, TimerEnding, TimerState,
-        finish_timer, may_change_entry, timer_start,
+        TIME_TRACKING_OFF, TaskTimeTotal, TimeEntry, TimeEntryChanges, TimeEntryCursor,
+        TimeEntryPage, TimeEntryPageRequest, TimeEntrySource, TimeTrackingError, TimerEnding,
+        TimerState, finish_timer, may_change_entry, timer_start,
     },
     ports::{
         Clock, DeleteEntryOutcome, InsertEntryOutcome, RepositoryError, StartTimerOutcome,
@@ -173,7 +173,7 @@ where
         if self.rollout.enabled_for(user_id).await {
             return Ok(());
         }
-        Err(TimeTrackingError::NotFound("time tracking"))
+        Err(TimeTrackingError::NotFound(TIME_TRACKING_OFF))
     }
 
     /// The entry, when the caller can see its task and logged it.

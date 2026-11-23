@@ -28,6 +28,10 @@ pub const DEFAULT_PAGE_LIMIT: u8 = 50;
 /// The most entries one page may list.
 pub const MAX_PAGE_LIMIT: u8 = 200;
 
+/// What [`TimeTrackingError::NotFound`] names when time tracking is off for
+/// the caller, so adapters can tell it from a missing task.
+pub const TIME_TRACKING_OFF: &str = "time tracking";
+
 /// The finest instant the tables store: Postgres keeps microseconds.
 const STORED_PRECISION: u16 = 6;
 

@@ -23,7 +23,7 @@ use serde::Serialize;
 use uuid::Uuid;
 
 use crate::domain::{
-    models::{TimeEntry, TimeEntrySource, TimeTrackingError},
+    models::{TIME_TRACKING_OFF, TimeEntry, TimeEntrySource, TimeTrackingError},
     service::TimeTrackingService,
 };
 
@@ -123,10 +123,14 @@ fn length(minutes: u32) -> String {
 /// What a refused or failed call tells the model, so it can tell the user.
 fn tool_error(error: TimeTrackingError) -> ToolCallError {
     let description = match &error {
-        TimeTrackingError::NotFound(_) => {
-            "The task was not found, is not a task, is in the trash, or time tracking is not \
-             available to you yet."
+        TimeTrackingError::NotFound(TIME_TRACKING_OFF) => {
+            "Time tracking is not turned on for this person yet, so nothing was logged. The task \
+             exists: tell them time tracking isn't available to them yet, and don't retry or look \
+             for the task."
                 .to_string()
+        }
+        TimeTrackingError::NotFound(_) => {
+            "The task was not found, is not a task, or is in the trash.".to_string()
         }
         TimeTrackingError::NotAuthor => {
             "Only the person who logged this time can change or delete it.".to_string()

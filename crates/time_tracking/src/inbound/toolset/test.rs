@@ -134,8 +134,30 @@ async fn logging_is_refused_while_time_tracking_is_off_for_the_user() {
 
     let error = log_as(&tools, EDITOR, log(30)).await.unwrap_err();
 
-    assert!(error.description.contains("time tracking is not available"));
+    assert!(
+        error
+            .description
+            .starts_with("Time tracking is not turned on for this person yet"),
+        "{}",
+        error.description
+    );
+    assert!(error.description.contains("The task exists"));
+    assert!(error.description.contains("don't retry"));
+    assert!(!error.description.contains("not found"));
     assert_eq!(tools.repo.entry_count(), 0);
+}
+
+#[tokio::test]
+async fn logging_on_a_trashed_task_says_the_task_is_gone() {
+    let tools = tools(true);
+    tools.repo.trash(TASK);
+
+    let error = log_as(&tools, EDITOR, log(30)).await.unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "The task was not found, is not a task, or is in the trash."
+    );
 }
 
 #[tokio::test]
