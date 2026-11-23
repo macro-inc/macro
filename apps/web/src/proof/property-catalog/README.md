@@ -57,7 +57,11 @@ retried page load happened.
   `write-transport`. The token refresh is never a stray. The runner's own
   setup writes (accounts, teams, volume, load) run in a separate `setup` mode;
   `otherWrites` counts every non-catalog write by side and mode, and
-  `writeTransport` the request sequence each mutation sent per side.
+  `writeTransport` the request sequence each mutation sent per side. One
+  exception: `ensureTagSet` on the head answers without a request when the
+  cache already lists the set as provisioned (`provisionTagSet`), counted in
+  `coverage["ensureTagSet answered"]`; its result is still compared with
+  main's.
 - Each write's result compares as `{ok, value or failure contract, toasts}`;
   a write both servers refused (400, 403, 404, 409 or 422 on OLD's REST, with
   no transport failure) is a coverage case of its own. Out-of-band SQL steps
@@ -112,14 +116,38 @@ retried page load happened.
   comparison of the same account stays excused while neither side's live copy
   has moved and the cold mounts still agree. That is a write neither side is
   told of (another account's) leaving both behind, the head no staler than
-  main; `oldStale.inherited` counts them.
+  main; `oldStale.inherited` counts them. A key stale on the head alone is
+  accepted in the staleness record only when it is carried that way
+  (`oldStale.headStaleInherited`): main's older copy happens to match the
+  server again.
+  Two more rules, for both copies stale at once. Whole reader
+  (`oldStale.wholeReader`): flags, data and error together, so a read main
+  kept while the server now refuses it (a definition deleted, a team left),
+  where the head shows the refusal, is excused. Point by point
+  (`oldStale.pointwise`): the head's own writes reload every list they
+  change, bringing in another account's rows too, and its cold mount shares
+  the normalized cache as a new screen does, so last step's cold read is on
+  its live screen now; a difference is excused when every place the head's
+  copy differs from main's (a row matched by id, a field, a set member) shows
+  what both cold mounts show there, this step or the last. The last step's
+  counts only where main's copy is not this step's, and the head's rows must
+  keep a cold mount's order (or main's).
+- A failed read is compared by its flags and error, not by the list it still
+  holds, and a select editor row over a failed option read without its
+  options (`failedReadData`): what a failed read holds is the client's
+  cache. A TanStack read that fails keeps its data, and main's app shares one
+  QueryClient, but the runner's cold mount on main has an empty one (no data;
+  `placeholderData` is dropped on failure), while the head's shares the
+  normalized cache and keeps the list (or its empty stand-in).
 - `VALUE_DROPPED` (`run.mjs`) lists writes the head resolves with nothing
   where main resolved with the changed option (`updateTag`, `updateOption`) or
   `{ success: true }` (`deleteTag`, `deleteOption`, `deleteDef`):
   their hooks type the result `void`, so the type check proves no caller reads
   it. Their result compares as `{ok, toasts}`; `valueDropped` counts them.
 - `DUMP=n` writes the first `n` differences (not ties or timestamp formats)
-  in full, both sides, to `out/<run>/dump.jsonl`. It can hold account
+  in full, both sides, to `out/<run>/dump.jsonl`; with `DUMP_OPEN=1` only the
+  ones a clean run fails on (`diff`, `state`), with `DUMP_LANE=<n>` every
+  non-equal comparison of that lane. It can hold account
   addresses; sanitize it before sharing.
 - `OPTIMISM=1` (`run.sh optimism`, `optimism.mjs`) runs every catalog write
   (add, rename and delete an option, create and delete a definition, create,

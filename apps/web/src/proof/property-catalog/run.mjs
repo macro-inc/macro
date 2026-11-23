@@ -90,6 +90,10 @@ const CONFIG = {
   optimism: E.OPTIMISM === '1', // optimistic states only (optimism.mjs), no sequences
 };
 let DUMP_LEFT = Number(E.DUMP || 0);
+// DUMP_OPEN=1: dump only the differences a clean run fails on (diff, state)
+const DUMP_OPEN = E.DUMP_OPEN === '1';
+// DUMP_LANE=n: every comparison of that lane but the equal ones, open or not
+const DUMP_LANE = E.DUMP_LANE ?? null;
 const OUT = path.resolve(
   E.OUT ??
     path.join(
@@ -548,7 +552,8 @@ const R = {
   valueDropped: {},
   // live differences where main's reader was stale and the head's current
   // (see `oldStaleExcuses`), by operation and reader
-  oldStale: { byOp: {}, staleness: 0, inherited: 0 },
+  oldStale: { byOp: {}, staleness: 0, inherited: 0, pointwise: 0, wholeReader: 0, headStaleInherited: 0 },
+  failedReadData: { lists: 0, editorRows: 0 },
   visibility: { checks: 0, oldMissing: 0, newMissing: 0, readFailures: 0 },
   harnessErrors: [],
   settleTimeouts: [], // every settle timeout, whole (first 1,000)
@@ -654,14 +659,14 @@ function freshOf(snap, kind) {
   return reader ? snap?.[reader[1]]?.data : undefined;
 }
 function record(level, kind, cls, a, b, extra = {}, canon = (x) => x) {
-  if (cls === 'diff' && OLD_STALE?.has(kind)) {
+  if ((cls === 'diff' || cls === 'state') && OLD_STALE?.has(kind)) {
     cls = 'old-stale';
     bump(R.oldStale.byOp, here().op ?? level, kind.replace(UUID_RE, '<id>'));
   }
   bump(R.classes, level, cls);
   if (cls === 'equal') return;
   // DUMP=n: the first n differences in full, both sides, to out/<run>/dump.jsonl
-  if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format') {
+  if (DUMP_LEFT > 0 && cls !== 'tie-order' && cls !== 'timestamp-format' && (DUMP_LANE !== null ? String(here().lane) === DUMP_LANE : !DUMP_OPEN || cls === 'diff' || cls === 'state')) {
     DUMP_LEFT--;
     const fresh = FRESH_PAIR ? { freshOld: freshOf(FRESH_PAIR.fo, kind), freshNeu: freshOf(FRESH_PAIR.fn, kind) } : {};
     fs.appendFileSync(path.join(OUT, 'dump.jsonl'), `${JSON.stringify({ level, kind, cls, at: here(), old: a, neu: b, ...fresh })}\n`);
@@ -1443,14 +1448,29 @@ function checkStray(pair) {
 // mounts agree. Such a difference is class `old-stale`, counted by operation
 // and reader in `oldStale` instead of as a difference; a head that is stale
 // itself, or reads otherwise cold, never qualifies.
-function oldStaleExcuses(lo, ln, fo, fn) {
+function oldStaleExcuses(lo, ln, fo, fn, prev) {
   const out = new Set();
   const same = (x, y, canon) => JT(canon(x)) === JT(canon(y));
+  // the cold mounts to compare with: this step's, then the last step's
+  const refsOf = (pick) => [[pick(fo), pick(fn)], ...(prev ? [[pick(prev.fo), pick(prev.fn)]] : [])];
   for (const k of new Set([...Object.keys(lo), ...Object.keys(ln)])) {
     if (k === 'callers') continue;
     const canon = canonFor(readerKind(k));
     const d = (s) => s?.[k]?.data;
     if (!same(d(lo), d(fo), canon) && same(d(ln), d(fn), canon) && same(d(fo), d(fn), canon)) out.add(`reader${k}.data`);
+    // The whole reader (flags, data, error) the same way: main kept a read
+    // the server now refuses (a definition deleted, a team left), and the
+    // head's reader shows the refusal its cold mount and main's show.
+    const whole = (s) => readerWhole(s?.[k], canon);
+    const wholeShown = whole(ln) === whole(fn) && whole(fo) === whole(fn);
+    const wholeShownLast = !!prev && whole(ln) === whole(prev.fn) && whole(prev.fo) === whole(prev.fn) && whole(lo) !== whole(fo) && whole(lo) !== whole(ln);
+    if (whole(lo) !== whole(fo) && (wholeShown || wholeShownLast)) {
+      R.oldStale.wholeReader++;
+      for (const kind of [`reader${k}`, `reader${k}.data`, `reader${k}.error`]) out.add(kind);
+    } else if (!out.has(`reader${k}.data`) && !same(d(lo), d(ln), canon) && fresherPointwise(canon(d(lo)), canon(d(ln)), refsOf((x) => canon(d(x))))) {
+      R.oldStale.pointwise++;
+      out.add(`reader${k}.data`);
+    }
   }
   const of = (s, c) => s?.callers?.[c];
   const gOld = callerGroups(lo, fo);
@@ -1460,8 +1480,80 @@ function oldStaleExcuses(lo, ln, fo, fn) {
     if (c === '__sources') continue;
     const by = (g) => (x) => canonCallers(x, g(c));
     if (!same(of(lo, c), of(fo, c), by(gOld)) && same(of(ln, c), of(fn, c), by(gNew)) && same(of(fo, c), of(fn, c), by(gFresh))) out.add(`caller.${c}`);
+    else if (!same(of(lo, c), of(ln, c), by(gFresh)) && fresherPointwise(by(gFresh)(of(lo, c)), by(gFresh)(of(ln, c)), refsOf((x) => by(gFresh)(of(x, c))))) {
+      R.oldStale.pointwise++;
+      out.add(`caller.${c}`);
+    }
   }
   return out;
+}
+// A reader as its caller sees it, for the whole-reader rule.
+const readerWhole = (r, canon) => (r ? JT({ flags: STATE_FIELDS.map((f) => r[f] ?? null), data: canon(r.data) ?? null, error: r.error !== null && r.error !== undefined }) : null);
+
+// Main's staleness alone, point by point. Both live copies can be stale at
+// once (another account wrote, and neither page is told), and the head's can
+// have caught up on part of it: its own writes reload every list they change,
+// which brings in the other account's rows too, where main refetched only the
+// lists its invalidation named; and the head's cold mount shares the
+// normalized cache (a new screen does), so what it read last step is on the
+// head's live screen now, where main's cold mount had a client of its own.
+// Excused when every place the head's live copy differs from main's shows
+// what both cold mounts show there, this step or the last: a row (matched by
+// id), a field, a set member. The last step's counts only where main's copy
+// is not this step's, so a head that kept an older value than main never
+// qualifies. Rows the head lists must also keep a cold mount's order (or
+// main's). A head that shows anything no cold mount showed never qualifies.
+function rowKey(x) {
+  if (typeof x === 'string') return `s:${x}`;
+  if (Array.isArray(x) && x.length === 2 && typeof x[0] === 'string') return `t:${x[0]}`;
+  if (x && typeof x === 'object') {
+    const id = x.id ?? x.definition?.id;
+    if (typeof id === 'string') return `i:${id}`;
+    if (typeof x.scope === 'string' && 'options' in x) return `c:${x.scope}`;
+  }
+  return null;
+}
+function keyedRows(a) {
+  const m = new Map();
+  for (const x of a) {
+    const k = rowKey(x);
+    if (k === null || m.has(k)) return null;
+    m.set(k, x);
+  }
+  return m;
+}
+// A value no cold mount can match: what a cold mount had where the shapes differ.
+const NO_MATCH = Symbol('no match');
+const shapeOf = (x) => (Array.isArray(x) ? 'array' : x && typeof x === 'object' ? 'object' : 'leaf');
+const JN = (x) => (x === NO_MATCH ? null : JT(x));
+function fresherPointwise(lo, ln, refs) {
+  if (JT(lo) === JT(ln)) return true;
+  const shown = (i) => {
+    const [o, n] = refs[i];
+    return o !== NO_MATCH && n !== NO_MATCH && JT(ln) === JT(n) && JT(o) === JT(n);
+  };
+  if (shown(0)) return true;
+  if (refs.slice(1).some((_, j) => shown(j + 1)) && JN(refs[0][0]) !== JT(lo)) return true;
+  const shape = shapeOf(ln);
+  if (shape === 'leaf' || shapeOf(lo) !== shape) return false;
+  const fit = (x) => (x !== NO_MATCH && shapeOf(x) === shape ? x : NO_MATCH);
+  const pairs = refs.map(([o, n]) => [fit(o), fit(n)]);
+  if (shape === 'array') {
+    const rows = (x) => (x === NO_MATCH ? NO_MATCH : keyedRows(x));
+    const mo = rows(lo);
+    const mn = rows(ln);
+    const mr = pairs.map(([o, n]) => [rows(o), rows(n)]);
+    if (mo === null || mn === null || mr.some(([o, n]) => o === null || n === null)) return false;
+    const get = (m, k) => (m === NO_MATCH ? NO_MATCH : m.get(k));
+    const keys = new Set([...mo.keys(), ...mn.keys(), ...mr.flatMap(([o, n]) => [...(o === NO_MATCH ? [] : o.keys()), ...(n === NO_MATCH ? [] : n.keys())])]);
+    for (const k of keys) if (!fresherPointwise(get(mo, k), get(mn, k), mr.map(([o, n]) => [get(o, k), get(n, k)]))) return false;
+    const order = (m, other) => J([...m.keys()].filter((k) => other.has(k)));
+    return order(mn, mo) === order(mo, mn) || mr.some(([, n]) => n !== NO_MATCH && order(mn, n) === order(n, mn));
+  }
+  const at = (x, k) => (x === NO_MATCH ? NO_MATCH : x[k]);
+  const keys = new Set([lo, ln, ...pairs.flat()].flatMap((x) => (x === NO_MATCH ? [] : Object.keys(x))));
+  for (const k of keys) if (!fresherPointwise(at(lo, k), at(ln, k), pairs.map(([o, n]) => [at(o, k), at(n, k)]))) return false;
+  return true;
 }
 // A live difference main's staleness left behind. Main's copy was stale at
 // the last comparison (excused there), and since then neither live copy has
@@ -1471,6 +1563,8 @@ function oldStaleExcuses(lo, ln, fo, fn) {
 // though the head is never staler than main there. A copy that moved, or cold
 // mounts that disagree, still count.
 const LAST_LIVE = new Map();
+// Each account's cold mounts at its last comparison, for the point-by-point rule.
+const LAST_FRESH = new Map();
 function inheritedExcuses(key, lo, ln, fo, fn) {
   const out = new Set();
   const last = LAST_LIVE.get(key);
@@ -1485,11 +1579,17 @@ function inheritedExcuses(key, lo, ln, fo, fn) {
       if (same(of(lo), of(last.lo), by(callerGroups(lo, last.lo))) && same(of(ln), of(last.ln), by(callerGroups(ln, last.ln))) && same(of(fo), of(fn), by(callerGroups(fo, fn)))) out.add(kind);
       continue;
     }
-    const k = /^reader(.+)\.data$/.exec(kind)?.[1];
-    if (k === undefined) continue;
+    const m = /^reader(\{.*\})(\.data|\.error)?$/.exec(kind);
+    if (!m) continue;
+    const k = m[1];
     const canon = canonFor(readerKind(k));
-    const d = (snap) => snap?.[k]?.data;
-    if (same(d(lo), d(last.lo), canon) && same(d(ln), d(last.ln), canon) && same(d(fo), d(fn), canon)) out.add(kind);
+    if (m[2] === '.data') {
+      const d = (snap) => snap?.[k]?.data;
+      if (same(d(lo), d(last.lo), canon) && same(d(ln), d(last.ln), canon) && same(d(fo), d(fn), canon)) out.add(kind);
+    } else {
+      const whole = (snap) => readerWhole(snap?.[k], canon);
+      if (whole(lo) === whole(last.lo) && whole(ln) === whole(last.ln) && whole(fo) === whole(fn)) out.add(kind);
+    }
   }
   return out;
 }
@@ -1497,8 +1597,20 @@ function inheritedExcuses(key, lo, ln, fo, fn) {
 // The staleness record, given each side's stale keys: main's staleness alone
 // when the head's stale keys are a subset of main's and every key only main
 // has stale is excused (for `callers`, every caller main has stale).
-function staleOnlyOnOld(so, sn, excuses, lo, fo) {
-  if (!sn.every((k) => so.includes(k))) return false;
+// A key stale on the head alone is accepted only when it is carried: an
+// excused difference where neither live copy has moved since, which a write
+// neither side is told of left stale on the head while main's older copy
+// happens to match the server again.
+function staleOnlyOnOld(so, sn, excuses, lo, fo, inherited, ln, fn) {
+  const headOnly = sn.filter((k) => !so.includes(k));
+  const gNew = callerGroups(ln, fn);
+  const carried = headOnly.every((k) => {
+    if (k !== 'callers') return inherited.has(`reader${k}.data`);
+    const stale = Object.keys(ln?.callers ?? {}).filter((c) => c !== '__sources' && JT(canonCallers(ln.callers[c], gNew(c))) !== JT(canonCallers(fn?.callers?.[c], gNew(c))));
+    return stale.length > 0 && stale.every((c) => inherited.has(`caller.${c}`));
+  });
+  if (!carried) return false;
+  if (headOnly.length) R.oldStale.headStaleInherited++;
   const gOld = callerGroups(lo, fo);
   return so
     .filter((k) => !sn.includes(k))
@@ -1507,6 +1619,40 @@ function staleOnlyOnOld(so, sn, excuses, lo, fo) {
       const stale = Object.keys(lo?.callers ?? {}).filter((c) => c !== '__sources' && JT(canonCallers(lo.callers[c], gOld(c))) !== JT(canonCallers(fo?.callers?.[c], gOld(c))));
       return stale.length > 0 && stale.every((c) => excuses.has(`caller.${c}`));
     });
+}
+// A failed read is compared by its flags and error alone, not by the list
+// it still holds. What a failed read holds is the client's cache, not the
+// server: a TanStack read that fails keeps the data it had, and main's app
+// shares one QueryClient, so a new screen there shows the cached list too;
+// but the runner's cold mount on main has an empty QueryClient (no data,
+// `placeholderData` dropped on failure), while the head's shares the
+// normalized cache as a new screen does, and keeps that list (or its empty
+// stand-in: `catalogListResult` data is always a list). For the same reason a
+// select editor row over a failed option read (`usablePropertyOptions`: the
+// read's data, else none) is compared without its options. Counted in
+// `failedReadData`.
+function failedReadsHoldNoData(snap) {
+  if (!snap || typeof snap !== 'object') return snap;
+  const out = { ...snap };
+  const failed = new Set();
+  for (const [k, r] of Object.entries(snap)) {
+    if (k === 'callers' || !r || r.isError !== true) continue;
+    failed.add(k);
+    if (r.data != null) R.failedReadData.lists++;
+    out[k] = { ...r, data: null };
+  }
+  const editors = snap.callers?.selectEditors;
+  if (Array.isArray(editors) && editors.some((row) => failed.has(JSON.stringify({ k: 'opts', id: row?.id })))) {
+    out.callers = {
+      ...snap.callers,
+      selectEditors: editors.map((row) => {
+        if (!failed.has(JSON.stringify({ k: 'opts', id: row?.id })) || !('shown' in row)) return row;
+        R.failedReadData.editorRows++;
+        return { ...row, shown: '<failed read>' };
+      }),
+    };
+  }
+  return out;
 }
 async function compareStep(pair, level, op) {
   checkStray(pair);
@@ -1524,7 +1670,7 @@ async function compareStep(pair, level, op) {
   }
   const keys = pair.keys;
   const expected = tr(pair, keys).map((k) => JSON.stringify(k));
-  const prep = (s, x) => (s.side === 'old' ? prepO(pair, x) : prepN(x));
+  const prep = (s, x) => failedReadsHoldNoData(s.side === 'old' ? prepO(pair, x) : prepN(x));
   // Only a fault applied before a snapshot was taken can show in it.
   const liveAsOf = clockNow();
   const [liveAo, liveAn, liveBo, liveBn] = await Promise.all(sides(pair).map(async (s) => prep(s, await ev(s, 'snapshot'))));
@@ -1559,13 +1705,15 @@ async function compareStep(pair, level, op) {
     if (R.mutant) R.mutant.freshNew = freshOut[at + 1] ? null : fn;
     // main's staleness alone is excused only with both cold mounts in hand
     const liveKey = `${account}:${c.seq}`;
-    const fresh0 = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn);
+    const fresh0 = freshOutHere ? new Set() : oldStaleExcuses(lo, ln, fo, fn, LAST_FRESH.get(liveKey) ?? null);
     const inherited = freshOutHere ? new Set() : inheritedExcuses(liveKey, lo, ln, fo, fn);
     const excuses = new Set([...fresh0, ...inherited]);
     for (const k of inherited) if (!fresh0.has(k)) R.oldStale.inherited++;
     OLD_STALE = excuses;
     if (!liveOut) LAST_LIVE.set(liveKey, { lo, ln, excused: excuses });
     FRESH_PAIR = freshOutHere ? null : { fo, fn };
+    if (freshOutHere) LAST_FRESH.delete(liveKey);
+    else LAST_FRESH.set(liveKey, { fo, fn });
     if (!liveOut) compareSnapshots(`${level}:live`, lo, ln, expected, { account, asOf: liveAsOf });
     OLD_STALE = null;
     FRESH_PAIR = null;
@@ -1588,7 +1736,7 @@ async function compareStep(pair, level, op) {
     const sn = stale(ln, fn);
     if (so.length) bump(R.staleness.byOp, `${op}:${who}`, 'old');
     if (sn.length) bump(R.staleness.byOp, `${op}:${who}`, 'new');
-    if (J(so) !== J(sn) && staleOnlyOnOld(so, sn, excuses, lo, fo)) {
+    if (J(so) !== J(sn) && staleOnlyOnOld(so, sn, excuses, lo, fo, inherited, ln, fn)) {
       R.oldStale.staleness++;
       record(`${level}:staleness`, `stale keys ${who}`, 'old-stale', so, sn);
     } else if (J(so) !== J(sn)) {
@@ -1656,7 +1804,12 @@ function transport(name, s, res) {
   } else {
     if (rest.length) problems.push('head sent a REST catalog write');
     if (ops.some((o) => !NEW_OPS[name].includes(o))) problems.push('head sent another GraphQL operation');
-    if (res.ok && ops.at(-1) !== NEW_OPS[name].at(-1)) problems.push(`succeeded without ${NEW_OPS[name].at(-1)} last`);
+    // A tag set the cache already lists as provisioned answers without a
+    // request (provisionTagSet in tags.ts); the mutation result, compared
+    // with main's below, shows it is the set the server has.
+    const fromCache = name === 'ensureTagSet' && res.ok && ops.length === 0;
+    if (fromCache) bump(R.coverage, 'ensureTagSet answered', 'from the cache');
+    else if (res.ok && ops.at(-1) !== NEW_OPS[name].at(-1)) problems.push(`succeeded without ${NEW_OPS[name].at(-1)} last`);
   }
   return { sent: seq, problems };
 }
