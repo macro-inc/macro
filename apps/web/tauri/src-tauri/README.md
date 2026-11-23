@@ -653,6 +653,15 @@ exist. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
+Failed releases post to the Macro Alerts channel. `Alert native build failures`
+posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's
+run is cancelled without a newer run for the tag replacing it, and names the tag,
+the failed jobs and the run. `Desktop Release Watch` runs hourly and posts when
+a production release (`vYEAR.MONTH.DAY.REVISION`, not a prerelease) still lacks
+its DMG, AppImage or signed update archives 4 hours after it was published, and
+names the tag's latest desktop run and how it ended. That catches the runs that
+never start, wait for a runner or end without uploading.
+
 Bootstrap requires one manual native upgrade: older binaries cannot acquire the
 Rust updater through a frontend OTA. Before promoting the first release, test two
 consecutive signed builds on installed macOS and Linux apps, including offline
