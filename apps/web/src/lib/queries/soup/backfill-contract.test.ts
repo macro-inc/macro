@@ -1,5 +1,6 @@
 import {
   SoupBackfillDocument,
+  SoupChannelDirectoryBackfillDocument,
   SoupMailBackfillDocument,
   SoupSharedMailBackfillDocument,
 } from '@service-storage/graphql/generated/graphql';
@@ -11,6 +12,7 @@ import {
   CORE_SOUP_BACKFILL_LANE,
   DEFAULT_SOUP_BACKFILL_LANES,
   SIGNAL_EMAIL_SOUP_BACKFILL_LANE,
+  type SoupBackfillOperation,
   type SoupBackfillParams,
 } from './backfill';
 import {
@@ -182,11 +184,12 @@ describe('soup backfill lane contracts', () => {
     const filters = fc.dictionary(fc.string({ maxLength: 8 }), json, {
       maxKeys: 6,
     });
-    const operations = [
+    const operations: readonly SoupBackfillOperation[] = [
       SoupBackfillDocument,
+      SoupChannelDirectoryBackfillDocument,
       SoupMailBackfillDocument,
       SoupSharedMailBackfillDocument,
-    ] as const;
+    ];
     const laneArb = fc.record({
       checkpointId: fc.string({ minLength: 1, maxLength: 12 }),
       operation: fc.constantFrom(...operations),
@@ -209,13 +212,12 @@ describe('soup backfill lane contracts', () => {
       fc.property(laneArb, fc.integer({ min: 1, max: 500 }), (lane, limit) => {
         const contract = soupBackfillLaneContract(lane);
         expect(soupBackfillLaneContract(reverseKeys(lane))).toBe(contract);
-        expect(
-          soupBackfillLaneContract({
-            ...lane,
-            input: { ...lane.input, limit },
-            pageDelayMs: limit,
-          })
-        ).toBe(contract);
+        const repaged: SoupBackfillParams = {
+          ...lane,
+          input: { ...lane.input, limit },
+          pageDelayMs: limit,
+        };
+        expect(soupBackfillLaneContract(repaged)).toBe(contract);
         expect(
           soupBackfillLaneContract({
             ...lane,
@@ -226,7 +228,9 @@ describe('soup backfill lane contracts', () => {
           contract
         );
         const otherOperation =
-          operations[(operations.indexOf(lane.operation) + 1) % 3];
+          operations[
+            (operations.indexOf(lane.operation) + 1) % operations.length
+          ];
         expect(
           soupBackfillLaneContract({ ...lane, operation: otherOperation })
         ).not.toBe(contract);

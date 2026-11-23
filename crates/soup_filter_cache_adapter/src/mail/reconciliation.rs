@@ -4,6 +4,7 @@
 use super::*;
 use cache_core::predicate::compose_pending_optimistic_projection;
 use cache_core::queue::{MutationId, OptimisticSource, decode_optimistic_source};
+use cache_core::store::DurableRead;
 use item_filter_index::properties::{compile_mail, mail_profile};
 use predicate_index::{
     EffectiveOptimisticProjection, IndexQuery, OptimisticProjectionState, PredicateExpr,
@@ -14,7 +15,7 @@ use std::collections::HashMap;
 /// Called only for the canonical Soup operation, after composing its current
 /// projections. Backfills and cursor pages are not negative membership evidence.
 /// Preparation and the eventual write run under the host's engine lock.
-pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
+pub(crate) async fn first_page_updates<S: DurableRead>(
     storage: &S,
     variables: &Map<String, Value>,
     data: &Value,
@@ -71,7 +72,7 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
         return Ok(vec![]);
     };
     let records = storage
-        .get_batch(&[EntityKey::entity("GraphqlUser", &[viewer])])
+        .read_records(&[EntityKey::entity("GraphqlUser", &[viewer])])
         .await
         .map_err(ProjectionError::Storage)?;
     let Some(Some(user)) = records.first() else {
@@ -165,6 +166,7 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
     // Bound each authoritative write's work to one index page. A severely stale
     // cache converges over subsequent refreshes rather than scanning the mailbox.
     let local = storage
+        .storage()
         .reconcile_predicate_index(&bounded, &[])
         .await
         .map_err(ProjectionError::Storage)?;
@@ -175,6 +177,7 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
         .filter(|key| !returned.contains(key))
         .collect();
     let pending = storage
+        .storage()
         .load_optimistic_projections(&missing)
         .await
         .map_err(ProjectionError::Storage)?;
@@ -206,7 +209,7 @@ pub(crate) async fn first_page_updates<S: PredicateIndexStorage>(
 /// and the server knows something the cache does not (a thread trashed
 /// through REST while its mark read is queued). An archive whose Undo is
 /// still queued explains it, so that row keeps its pending membership.
-async fn contradicted_writes<S: PredicateIndexStorage>(
+async fn contradicted_writes<S: DurableRead>(
     storage: &S,
     bounded: &ValidatedIndexQuery,
     protected: &[(&RecordKey, &EffectiveOptimisticProjection)],
@@ -216,7 +219,7 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
     }
     let keys: Vec<_> = protected.iter().map(|(key, _)| (*key).clone()).collect();
     let stored = storage
-        .load_projection_states(&keys)
+        .read_projection_states(&keys)
         .await
         .map_err(ProjectionError::Storage)?;
     // Most queued writes are on rows whose stored facts already leave the
@@ -235,7 +238,7 @@ async fn contradicted_writes<S: PredicateIndexStorage>(
         return Ok(HashSet::new());
     }
     let queue = storage
-        .load_mutation_queue()
+        .read_mutation_queue()
         .await
         .map_err(ProjectionError::Storage)?;
     let Ok(sources) = queue

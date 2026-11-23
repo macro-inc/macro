@@ -1,5 +1,19 @@
 import type { SoupBackfillParams } from './backfill';
 
+/** What a lane's saved progress is stored under: its checkpoint id and the
+ * fields of its contract (`soupBackfillLaneContract`). */
+export type SoupBackfillLane = Pick<
+  SoupBackfillParams,
+  | 'checkpointId'
+  | 'operation'
+  | 'input'
+  | 'emailRecency'
+  | 'refreshAll'
+  | 'restartOnRun'
+  | 'catchUpAfterInitialPass'
+  | 'contractVersion'
+>;
+
 /**
  * Bump only when a change to the runner itself invalidates every lane's saved
  * progress (resume, watermark or completion semantics all lanes share). A
@@ -15,14 +29,14 @@ const KEY_PREFIX = 'graphql-soup-backfill';
 const V19_COORDINATOR = `${KEY_PREFIX}:v19:coordinator`;
 
 /**
- * Contracts the default lanes had when checkpoints were keyed by
- * `BACKFILL_VERSION` 19 alone. A lane whose contract is still the one listed
+ * Contracts the default lanes had in the last build before contracts, when
+ * checkpoints were keyed by `BACKFILL_VERSION` 19 alone. A lane whose contract is still the one listed
  * here keeps using its v19 key, so builds from before contracts and after them
  * share its progress in both directions. Never edit an entry: a lane that
  * changes stops matching and moves to a key of its own.
  */
 const V19_CONTRACTS: Readonly<Record<string, string>> = {
-  channels: '7887o0msvo',
+  'channel-directory-reconciled': '3b1kwa7wsg',
   'core-entities': 'kl0z6mxe5w',
   initiatives: 'gukroj7s83',
   'email-signal-filter-metadata': '2c6hk4hanqi',
@@ -66,7 +80,7 @@ function hashString(text: string): string {
 }
 
 /** The name of the operation a lane sends, such as `SoupMailBackfill`. */
-function operationName(lane: SoupBackfillParams): string | null {
+function operationName(lane: SoupBackfillLane): string | null {
   for (const definition of lane.operation.definitions) {
     if (definition.kind === 'OperationDefinition') {
       return definition.name?.value ?? null;
@@ -83,7 +97,7 @@ function operationName(lane: SoupBackfillParams): string | null {
  * issued with. Neither is the operation's selection: a field added to it
  * reaches records as they are next fetched, as before contracts.
  */
-export function soupBackfillLaneContract(lane: SoupBackfillParams): string {
+export function soupBackfillLaneContract(lane: SoupBackfillLane): string {
   const { limit: _pageSize, ...input } = lane.input;
   return hashString(
     stableJson({
@@ -101,7 +115,7 @@ export function soupBackfillLaneContract(lane: SoupBackfillParams): string {
 }
 
 /** Whether a lane still has the contract it had at version 19. */
-function isV19Lane(lane: SoupBackfillParams): boolean {
+function isV19Lane(lane: SoupBackfillLane): boolean {
   return V19_CONTRACTS[lane.checkpointId] === soupBackfillLaneContract(lane);
 }
 
@@ -113,7 +127,7 @@ function isV19Lane(lane: SoupBackfillParams): boolean {
  */
 export function soupBackfillCheckpointKey(
   userId: string,
-  lane: SoupBackfillParams
+  lane: SoupBackfillLane
 ): string {
   return isV19Lane(lane)
     ? `${KEY_PREFIX}:v${BACKFILL_VERSION}:${userId}:${lane.checkpointId}`
@@ -126,7 +140,7 @@ export function soupBackfillCheckpointKey(
  * different backfill versions did before contracts.
  */
 export function soupBackfillCoordinatorKey(
-  lanes: readonly SoupBackfillParams[]
+  lanes: readonly SoupBackfillLane[]
 ): string {
   const contracts = lanes
     .map((lane) => [lane.checkpointId, soupBackfillLaneContract(lane)])
@@ -157,8 +171,8 @@ export function soupBackfillLeadershipLock(coordinator: string): string {
  */
 export function soupBackfillLaneLocks(
   userId: string,
-  lanes: readonly SoupBackfillParams[],
-  lane: SoupBackfillParams
+  lanes: readonly SoupBackfillLane[],
+  lane: SoupBackfillLane
 ): string[] {
   const checkpoint = soupBackfillCheckpointKey(userId, lane);
   return isV19Lane(lane) &&

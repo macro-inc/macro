@@ -27,6 +27,30 @@ impl<S: Storage> Engine<S> {
         scope: &HydrationScope,
         projections: Vec<ProjectionMutation>,
     ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_in_scope(write, Normalization::Pending(None), scope, projections)
+            .await
+    }
+
+    /// [`Self::hydrate_query_in_scope`] for a response [`Self::normalize_network`]
+    /// normalized without a registration.
+    pub async fn hydrate_normalized_query_in_scope(
+        &mut self,
+        write: NetworkWrite<'_>,
+        normalized: NormalizedResponse,
+        scope: &HydrationScope,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
+        self.hydrate_in_scope(write, Normalization::Done(normalized), scope, projections)
+            .await
+    }
+
+    async fn hydrate_in_scope(
+        &mut self,
+        write: NetworkWrite<'_>,
+        normalization: Normalization<'_>,
+        scope: &HydrationScope,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<HydrationWriteResult, EngineError<S::Error>> {
         if scope.identity.is_empty()
             || write.identity != Some(scope.identity.as_str())
             || self.stored_storage_generation().await? != Some(scope.storage_generation)
@@ -37,7 +61,7 @@ impl<S: Storage> Engine<S> {
         {
             return Err(EngineError::StaleHydrationScope);
         }
-        self.hydrate_query_fenced(write, projections, scope.contact_fence)
+        self.hydrate_query_fenced(write, normalization, projections, scope.contact_fence)
             .await
     }
 }

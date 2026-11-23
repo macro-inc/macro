@@ -5,10 +5,19 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Entity, MultiSelectCheckbox } from '@entity';
+import { buildStartDateDefaultProperty } from '@entity/extractors-property';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { cn } from '@ui/utils/classname';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
+import { useProjectsContext } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
 import type { ProjectRowProps } from '../../project-row';
 
@@ -64,6 +73,32 @@ export function ProjectRowColumns(
       (property) => property.propertyDefinitionId === id
     ) ??
     props.definitions?.find((property) => property.propertyDefinitionId === id);
+  // The due date cell reads as the range and sets the start too.
+  const context = usePropertiesContext();
+  const projects = useProjectsContext();
+  const startDateEnabled = () => projects.startDatesEnabled?.() ?? false;
+  const startDate = () => {
+    const property =
+      propertyFor(SYSTEM_PROPERTY_IDS.START_DATE) ??
+      buildStartDateDefaultProperty();
+    return isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = (property: Property) => {
+    if (
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(startDueOf(startDate(), property));
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: startDate,
+    saveOther: (property, value) =>
+      context.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+  });
   const updated = () => {
     const date = new Date(props.row.project.updatedAt);
     return Number.isNaN(date.getTime())
@@ -73,7 +108,10 @@ export function ProjectRowColumns(
 
   return (
     <Entity.Layout
-      class="task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
+      class={cn(
+        'task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm',
+        startDateEnabled() && 'task-grid-dates'
+      )}
       style={taskGridTemplate(columns())}
     >
       <Show when={columns().includes('indicator')}>
@@ -112,6 +150,8 @@ export function ProjectRowColumns(
                 <ListPropertyValue
                   entityId={props.row.project.id}
                   property={property()}
+                  valueText={dueDatesText(property())}
+                  editor={column.id === 'dueDate' ? dueDatesEditor : undefined}
                 />
               )}
             </Show>

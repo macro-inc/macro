@@ -808,7 +808,6 @@ export default {
       'Nenhuma definição encontrada. Experimente «assinatura», «tema» ou «calendário».',
     backToSettings: 'Voltar às definições',
     closeSettings: 'Fechar definições',
-    goToTab: 'Ir para o separador de definições {{number}}',
     editProfile: 'Editar perfil',
     logOut: 'Terminar sessão',
     yourAccount: 'A sua conta',
