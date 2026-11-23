@@ -178,9 +178,10 @@ export function NotificationsView(props: NotificationsViewProps) {
   });
 
   createEffect(() => panel.handle.setDisplayName(t('nav.notifications')));
-  const { condensed, setCondensed } = createCondensedPreference(
-    context.displayStorage
-  );
+  const display = createCondensedPreference(context.displayStorage);
+  // Condensed is a desktop display option; touch, which has no Display
+  // options to turn it off, always shows full rows.
+  const condensed = () => !isTouchDevice() && display.condensed();
 
   const [statusTabs, setStatusTabs] = createSignal<HTMLElement>();
   useViewTabHotkeys<InboxStatus>({
@@ -1029,7 +1030,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                         {listActions()}
                         <InboxDisplayMenu
                           condensed={condensed()}
-                          onCondensedChange={setCondensed}
+                          onCondensedChange={display.setCondensed}
                           onOpenSettings={() => props.onOpenSettings()}
                         />
                       </>

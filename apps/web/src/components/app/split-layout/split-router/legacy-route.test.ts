@@ -115,6 +115,10 @@ describe('upgradeLegacyPath', () => {
   it('sends the retired New Home path to Notifications', () => {
     expect(upgradeLegacyPath(routes, '/new-home')).toBe('/notifications');
   });
+
+  it('leaves a path named like an object property to Not Found', () => {
+    expect(upgradeLegacyPath(routes, '/constructor')).toBe('/constructor');
+  });
 });
 
 describe('legacy link mentions', () => {

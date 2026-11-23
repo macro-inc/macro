@@ -129,12 +129,12 @@ function legacyLocation(type: string, id: string): SplitLocation | undefined {
 }
 
 /** Retired views' own paths, and the view each now opens. */
-const RETIRED_VIEW_ROUTES: Partial<Record<string, string>> = {
+const RETIRED_VIEW_ROUTES = new Map([
   // The Getting Started checklist.
-  'getting-started': 'view-home',
+  ['getting-started', 'view-home'],
   // New Home: its Notifications tab is the Notifications view again.
-  'new-home': 'view-notifications',
-};
+  ['new-home', 'view-notifications'],
+]);
 
 export function handleLegacySplitPath(
   context: LegacySplitPathContext
@@ -146,7 +146,7 @@ export function handleLegacySplitPath(
   }
 
   const retiredView =
-    segments.length === 1 ? RETIRED_VIEW_ROUTES[segments[0]!] : undefined;
+    segments.length === 1 ? RETIRED_VIEW_ROUTES.get(segments[0]!) : undefined;
   if (retiredView) {
     return [{ route: paneRoute({ id: retiredView, params: {} }) }];
   }
