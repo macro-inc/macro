@@ -67,7 +67,7 @@ export function PhoneMonth(props: {
           {(day) => (
             <span class="py-1">
               {day.date.toLocaleDateString(formatLocale(), {
-                weekday: 'narrow',
+                weekday: 'short',
               })}
             </span>
           )}

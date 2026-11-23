@@ -2,7 +2,7 @@ import type { CalendarEvent } from '@app/features/calendar/types';
 import { isSameLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { formatLocale, t } from '@app/lib/i18n';
 import { Layer } from '@ui';
-import { createUniqueId, For } from 'solid-js';
+import { createUniqueId, For, Show } from 'solid-js';
 import {
   type MonthBar,
   type MonthDay,
@@ -52,7 +52,7 @@ export function MonthGrid(props: {
               }}
             >
               {day.date.toLocaleDateString(formatLocale(), {
-                weekday: 'narrow',
+                weekday: 'short',
               })}
             </span>
           )}
@@ -143,15 +143,31 @@ export function MonthGrid(props: {
                       aria-hidden="true"
                       class="phone-month-bar"
                       classList={{
-                        'phone-month-bar-timed': bar.kind === 'timed',
+                        'phone-month-bar-timed':
+                          bar.kind === 'timed' &&
+                          bar.event.eventType !== 'out_of_office',
+                        'calendar-event-out-of-office':
+                          bar.event.eventType === 'out_of_office',
                       }}
+                      data-response-status={
+                        bar.event.attendees.find((attendee) => attendee.isSelf)
+                          ?.responseStatus
+                      }
                       style={{
                         'grid-column': `${bar.startColumn + 1} / ${bar.endColumn + 1}`,
                         top: `${PHONE_MONTH_DATE_HEIGHT + bar.lane * PHONE_MONTH_ROW_PITCH}px`,
                         '--event-calendar-color': bar.event.calendar.color,
                       }}
                     >
-                      <span>
+                      <Show
+                        when={
+                          bar.kind === 'timed' &&
+                          bar.event.eventType !== 'out_of_office'
+                        }
+                      >
+                        <span class="calendar-event-response-dot" />
+                      </Show>
+                      <span class="calendar-event-title">
                         {bar.event.title || t('calendar.agendaUntitled')}
                       </span>
                     </div>

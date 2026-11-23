@@ -264,7 +264,8 @@
 /* Rich, opaque blocks keep busy schedules readable. Bound lightness for
    dark-text contrast and boost chroma without turning neutral calendars colorful. */
 .calendar-view .fc .fc-event,
-.calendar-agenda-event {
+.calendar-agenda-event,
+.phone-month-bar {
 	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
 	--calendar-event-ink: oklch(0.2 0 0);
 	--fc-event-bg-color: var(--calendar-event-fill);
@@ -515,7 +516,8 @@
 	flex-shrink: 1;
 }
 
-.calendar-view .fc .calendar-event-response-dot {
+.calendar-view .fc .calendar-event-response-dot,
+.phone-month-bar .calendar-event-response-dot {
 	width: 0.375rem;
 	height: 0.375rem;
 	flex: none;
@@ -527,7 +529,8 @@
 .calendar-view
 	.fc
 	.calendar-event-content[data-response-status="tentative"]
-	.calendar-event-response-dot {
+	.calendar-event-response-dot,
+.phone-month-bar[data-response-status="tentative"] .calendar-event-response-dot {
 	border-style: dashed;
 	background: transparent;
 }
@@ -535,27 +538,31 @@
 .calendar-view
 	.fc
 	.calendar-event-content[data-response-status="needs_action"]
-	.calendar-event-response-dot {
+	.calendar-event-response-dot,
+.phone-month-bar[data-response-status="needs_action"] .calendar-event-response-dot {
 	background: transparent;
 }
 
 /* Unanswered and tentative invitations stay filled, with a softer tint. */
 .calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])),
-.calendar-agenda-event:not([data-selected="true"]):is([data-response-status="tentative"], [data-response-status="needs_action"]) {
+.calendar-agenda-event:not([data-selected="true"]):is([data-response-status="tentative"], [data-response-status="needs_action"]),
+.phone-month-bar:is([data-response-status="tentative"], [data-response-status="needs_action"]) {
 	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
 }
 
 .calendar-view
 	.fc
 	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]),
-.calendar-agenda-event:not([data-selected="true"])[data-response-status="declined"] {
+.calendar-agenda-event:not([data-selected="true"])[data-response-status="declined"],
+.phone-month-bar[data-response-status="declined"] {
 	--fc-event-bg-color: oklch(from var(--calendar-event-fill) l calc(c * 0.25) h);
 }
 
 .calendar-view
 	.fc
 	.calendar-event-content[data-response-status="declined"]
-	.calendar-event-title {
+	.calendar-event-title,
+.phone-month-bar[data-response-status="declined"] .calendar-event-title {
 	text-decoration: line-through;
 }
 

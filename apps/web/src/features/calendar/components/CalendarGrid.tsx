@@ -3,6 +3,7 @@ import {
   type FullCalendarContextValue,
   useFullCalendar,
 } from '@app/lib/fullcalendar-solid';
+import { formatLocale } from '@app/lib/i18n';
 import type {
   CalendarOptions,
   DateSelectArg,
@@ -465,7 +466,9 @@ export function CalendarGrid(props: CalendarGridProps) {
               </>
             );
           }
-          return text;
+          return view.type === 'dayGridMonth'
+            ? date.toLocaleDateString(formatLocale(), { weekday: 'short' })
+            : text;
         }}
       </FullCalendar.DayHeaderContent>
 

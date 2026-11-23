@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render } from '@solidjs/testing-library';
+import { cleanup, render, waitFor } from '@solidjs/testing-library';
 import { createSnapPager } from '@ui/components/SnapPager';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CalendarGrid, type CalendarGridHandle } from './CalendarGrid';
@@ -79,3 +79,38 @@ it.each(['drag', 'resize'] as const)(
     expect(pager.locked()).toBe(false);
   }
 );
+
+it('keeps Month weekday names short even in a narrow grid', async () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  const { container } = render(() => (
+    <CalendarGrid
+      initialDate={new Date(2026, 10, 1)}
+      events={[]}
+      eventsById={new Map()}
+      settings={{
+        initialView: 'dayGridMonth',
+        showWeekends: true,
+        weekStartsOn: 0,
+        timeFormat: '24-hour',
+        useNarrowDayHeaders: true,
+        useNarrowEventContent: true,
+      }}
+      selection={{ color: 'orange' }}
+    />
+  ));
+  await waitFor(() =>
+    expect(
+      Array.from(
+        container.querySelectorAll('.fc-col-header-cell-cushion'),
+        (node) => node.textContent
+      )
+    ).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
+  );
+});

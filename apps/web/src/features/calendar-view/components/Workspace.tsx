@@ -211,11 +211,18 @@ function CalendarPages() {
 }
 
 function CalendarPageContent(props: { agenda: boolean }) {
+  const calendar = useCalendarView();
   return (
     <Layer offset={1}>
       <div
         ref={tourTarget(CALENDAR_TOUR.grid)}
         class="calendar-view-content flex min-w-0 min-h-0 flex-1 flex-col not-touch:m-3 not-touch:overflow-hidden not-touch:rounded-xl not-touch:bg-surface"
+        classList={{
+          'phone-month-content':
+            isMobile() &&
+            !props.agenda &&
+            calendar.displaySettings.periodView === 'dayGridMonth',
+        }}
       >
         <Show when={props.agenda} fallback={<CalendarPages />}>
           <div class="relative flex min-h-0 min-w-0 flex-1 flex-col">
