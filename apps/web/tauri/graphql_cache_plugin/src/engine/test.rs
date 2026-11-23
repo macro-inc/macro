@@ -933,3 +933,165 @@ fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole()
         panic!("a failed hydrate writes nothing");
     };
 }
+
+fn poll_once<F: std::future::Future>(
+    future: std::pin::Pin<&mut F>,
+    waker: &std::task::Waker,
+) -> std::task::Poll<F::Output> {
+    future.poll(&mut std::task::Context::from_waker(waker))
+}
+
+/// An abandoned read keeps its place in the engine's queue, whether it waits
+/// for the engine or, behind a command, for a turn; when its turn comes it
+/// gives the engine back without reading, and the reads queued after it run.
+#[test]
+fn an_abandoned_read_skips_its_turn_and_the_rest_still_run() {
+    block_on(async {
+        let handle = spawn_handle();
+        let noop = std::task::Waker::noop();
+        for behind_a_command in [false, true] {
+            let gone = handle.clone().abandonable(Some("gone".to_owned()));
+            let kept = handle.clone().abandonable(Some("kept".to_owned()));
+            let unnamed = handle.clone();
+            let reused = handle.clone().abandonable(Some("kept".to_owned()));
+            assert!(reused.abandon.is_none(), "a running id registers once");
+            assert_eq!(handle.abandons.running(), 2);
+
+            let held = handle.inner.write().await;
+            let mut command = Box::pin(handle.inner.lock());
+            if behind_a_command {
+                assert!(poll_once(command.as_mut(), noop).is_pending());
+            }
+            let mut gone_read = Box::pin(gone.current_authority("scope-1"));
+            assert!(poll_once(gone_read.as_mut(), noop).is_pending());
+            let mut kept_read = Box::pin(kept.current_authority("scope-1"));
+            assert!(poll_once(kept_read.as_mut(), noop).is_pending());
+            let mut unnamed_read = Box::pin(unnamed.current_authority("scope-1"));
+            assert!(poll_once(unnamed_read.as_mut(), noop).is_pending());
+
+            assert!(handle.abandon("gone"));
+            assert!(!handle.abandon("never-sent"));
+            assert!(
+                poll_once(gone_read.as_mut(), noop).is_pending(),
+                "an abandoned read keeps its place while the engine is held"
+            );
+            drop(held);
+            if behind_a_command {
+                drop(command.await);
+            } else {
+                drop(command);
+            }
+            assert_eq!(gone_read.await.unwrap_err(), abandon::ABANDONED);
+            assert!(kept_read.await.is_ok());
+            assert!(unnamed_read.await.is_ok());
+            drop((gone, kept, unnamed, reused));
+            assert_eq!(handle.abandons.running(), 0);
+        }
+        // An abandon after the read finished changes nothing for the next one.
+        assert!(!handle.abandon("kept"));
+        let again = handle.clone().abandonable(Some("kept".to_owned()));
+        assert!(again.current_authority("scope-1").await.is_ok());
+    });
+}
+
+/// Abandons `reader`'s queued `read` while the engine is held, then lets it
+/// take its turn, which it skips.
+fn abandon_queued<T: std::fmt::Debug>(
+    handle: &EngineHandle,
+    request_id: &str,
+    read: impl std::future::Future<Output = Result<T, String>>,
+) {
+    block_on(async {
+        let held = handle.inner.write().await;
+        let mut read = Box::pin(read);
+        assert!(poll_once(read.as_mut(), std::task::Waker::noop()).is_pending());
+        assert!(handle.abandon(request_id));
+        drop(held);
+        assert_eq!(read.await.unwrap_err(), abandon::ABANDONED);
+    });
+}
+
+/// A read of an operation registers the records it depends on, so later
+/// writes report the operation. One abandoned before it ran registers the
+/// operation against every change instead, so the next write still reports
+/// it and the webview reads it again.
+#[test]
+fn an_abandoned_read_of_an_operation_is_still_reported_by_the_next_write() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    abandon_queued(
+        &handle,
+        "read-1",
+        reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ),
+    );
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert_eq!(result.affected_ops, vec!["client:1".to_string()]);
+}
+
+/// A watch the webview abandoned drops its retained view, so the next watch
+/// from the webview's last revision reads the operation whole.
+#[test]
+fn an_abandoned_watch_makes_the_next_watch_read_whole() {
+    use cache_core::engine::watch_query::QueryUpdate;
+    async fn watch(handle: &EngineHandle, since: Option<String>) -> Result<QueryUpdate, String> {
+        handle
+            .watch(
+                "view:1".into(),
+                QUERY.into(),
+                None,
+                variables(),
+                vec![],
+                since,
+            )
+            .await
+    }
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let QueryUpdate::Hit { revision, .. } = block_on(watch(&handle, None)).unwrap() else {
+        panic!("expected initial snapshot");
+    };
+    let reader = handle.clone().abandonable(Some("watch-1".to_owned()));
+    abandon_queued(&handle, "watch-1", watch(&reader, Some(revision.clone())));
+    assert!(matches!(
+        block_on(watch(&handle, Some(revision))).unwrap(),
+        QueryUpdate::Hit { .. }
+    ));
+}
+
+/// An abandoned read registers its operation in its own turn, so a teardown
+/// queued behind it still has the last word, as it had over the read.
+#[test]
+fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    block_on(async {
+        let noop = std::task::Waker::noop();
+        let held = handle.inner.write().await;
+        let mut read = Box::pin(reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ));
+        assert!(poll_once(read.as_mut(), noop).is_pending());
+        let mut teardown = Box::pin(handle.teardown("client:1".to_owned()));
+        assert!(poll_once(teardown.as_mut(), noop).is_pending());
+        assert!(handle.abandon("read-1"));
+        drop(held);
+        // Polled in reverse: only the queue's order decides which runs first.
+        let (torn_down, read) = tokio::join!(teardown, read);
+        torn_down.unwrap();
+        assert_eq!(read.unwrap_err(), abandon::ABANDONED);
+    });
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert!(result.affected_ops.is_empty());
+}

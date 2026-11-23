@@ -3459,6 +3459,15 @@ impl<S: Storage> Engine<S> {
         Ok(self.revisioned(affected))
     }
 
+    /// Registers an active operation against every visible change, until its
+    /// next read registers the records it depends on, and drops its retained
+    /// watch view, so its next watch reads it whole: for a host that gave up a
+    /// read of the operation before it ran.
+    pub fn register_operation_broadly(&mut self, op_id: OpId) {
+        self.deps.set_op_broad(op_id);
+        self.query_watches.remove(op_id);
+    }
+
     /// Unregisters an active operation (urql teardown).
     pub fn teardown_operation(&mut self, op_id: OpId) {
         self.deps.remove_op(op_id);
