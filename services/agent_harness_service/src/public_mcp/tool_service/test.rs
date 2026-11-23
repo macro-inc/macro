@@ -1257,6 +1257,11 @@ mod code_mode {
             ] {
                 let answer =
                     rpc_with(app.clone(), USER, caller.clone(), method, params, headers).await;
+                // A refused handshake would also lack the extension.
+                assert!(
+                    answer["result"]["capabilities"].is_object(),
+                    "{label} {method}: {answer}"
+                );
                 let extension = &answer["result"]["capabilities"]["extensions"]["io.modelcontextprotocol/events"];
                 assert_eq!(extension.is_object(), offered, "{label} {method}: {answer}");
             }
@@ -1294,6 +1299,10 @@ mod code_mode {
             ],
         )
         .await;
+        assert!(
+            discovered["result"]["capabilities"].is_object(),
+            "{discovered}"
+        );
         assert!(
             discovered["result"]["capabilities"]
                 .get("extensions")
