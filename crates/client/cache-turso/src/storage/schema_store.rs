@@ -53,7 +53,6 @@ const SEVERAL_BUILDS: &str = "several-builds";
 const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIMIT 1";
 const ANY_QUEUED: &str = "SELECT 1 FROM mutation_queue LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
-const TYPE_SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE __typename = ?1";
 /// A type's index documents, by the `Typename:` prefix of their record keys
 /// ([`key_range`]). Their facts go first: a cascade deletes them one document
 /// at a time.
@@ -458,8 +457,20 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
     for typename in changed {
         let records = driver::execute(connection, TYPE_RECORDS_DELETE, vec![text(typename)])?;
         dropped += u64::try_from(records).map_err(|_| invariant())?;
-        driver::execute(connection, TYPE_SEARCH_DELETE, vec![text(typename)])?;
         driver::execute(connection, TYPE_DOCUMENTS_DELETE, key_range(typename))?;
+    }
+    // The Quick Access rows' key leads with their profile, so one statement
+    // reads the table once for every changed type.
+    if !changed.is_empty() {
+        let names = (1..=changed.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        driver::execute(
+            connection,
+            &format!("DELETE FROM search_documents WHERE __typename IN ({names})"),
+            changed.iter().map(|typename| text(typename)).collect(),
+        )?;
     }
     for store in &DERIVED_STORES {
         if changed

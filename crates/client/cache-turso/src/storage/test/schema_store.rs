@@ -13,6 +13,8 @@ const OLD: &str = "type Query { thing: Thing note: Note } type Mutation { rename
 const ADDED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String extra: Int } type Note { id: ID! value: String }";
 /// [`OLD`] with `Thing.value` retyped.
 const RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: String }";
+/// [`OLD`] with `Thing.value` and `Note.value` retyped.
+const BOTH_RETYPED: &str = "type Query { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: Int } type Note { id: ID! value: Int }";
 /// [`OLD`] under another query root.
 const ROOTS: &str = "schema { query: Root mutation: Mutation } type Root { thing: Thing note: Note } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String }";
 
@@ -414,6 +416,32 @@ fn a_type_holding_most_documents_keeps_the_others_facts() {
             None
         );
         storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn changed_types_drop_their_search_rows_together() {
+    block_on(async {
+        let storage = populate(TursoStorage::open_in_memory("schema-search-rows").unwrap()).await;
+        for typename in ["Thing", "Note", "Kept"] {
+            raw_execute(
+                &storage,
+                "INSERT INTO search_documents (profile, __typename, id, bucket, search_text, timestamp_ms, source_hash) VALUES ('quick-access', ?1, '1', 'bucket', 'text', 0, 'hash')",
+                vec![text(typename)],
+            );
+        }
+        let adoption = adopt(&storage, BOTH_RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, types(&["Note", "Thing"], false));
+        let kept = driver::query(
+            &storage.connection(),
+            "SELECT __typename FROM search_documents ORDER BY __typename",
+            vec![],
+        )
+        .unwrap()
+        .iter()
+        .map(|row| required_text(row, 0).unwrap())
+        .collect::<Vec<_>>();
+        assert_eq!(kept, ["Kept"]);
     });
 }
 
