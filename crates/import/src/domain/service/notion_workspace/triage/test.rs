@@ -7,6 +7,7 @@ fn page(key: &str, title: &str) -> TriageItem {
         title: title.to_string(),
         path: Vec::new(),
         children: 0,
+        explicitly_selected: false,
         table: None,
     }
 }

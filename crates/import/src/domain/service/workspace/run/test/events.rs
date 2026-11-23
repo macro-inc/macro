@@ -54,6 +54,152 @@ fn settled_import(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_fresh_review_reopens_a_previously_discarded_explicit_root(pool: PgPool) {
+    use crate::domain::service::notion_workspace::{plan::PlanTree, triage::Verdict};
+    use import_notion::domain::model::{ImportScope, Inventory, NotionParent};
+
+    let owner = user("re-requested-root");
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+    let repo = service.repo.clone();
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let previous = repo
+        .replace_plan(&owner, ImportSource::Notion, &[page('a', "Template")])
+        .await
+        .unwrap()[0]
+        .id;
+    assert!(repo.discard(&owner, previous).await.unwrap());
+
+    let id = page_id('a');
+    let tree = PlanTree::new(&Inventory {
+        pages: vec![NotionPage {
+            id: id.clone(),
+            title: "Template".into(),
+            url: id.url(),
+            parent: NotionParent::Workspace,
+            last_edited: chrono::Utc::now(),
+            created: chrono::Utc::now(),
+            in_trash: false,
+            properties: Default::default(),
+        }],
+        ..Inventory::default()
+    })
+    .for_scope(&ImportScope::Roots {
+        ids: vec![id.clone()],
+    });
+    let (review, rows) = approved(
+        &pool,
+        &owner,
+        &tree.staged_rows(NotionSharing::Personal, false, &Default::default()),
+    )
+    .await;
+    assert_eq!(rows, [previous]);
+    let items = tree.triage_items(&Default::default());
+    let key = id.to_string();
+    let verdict = Verdict {
+        key: key.clone(),
+        decision: NotionDecision::Skip,
+        reason: Some("Onboarding template".into()),
+        task_fields: None,
+        shared: None,
+        shared_reason: None,
+    };
+    service
+        .stage_verdicts(
+            &owner,
+            &tree,
+            &items,
+            futures::stream::iter([[(key, verdict)].into_iter().collect()]),
+            NotionSharing::Personal,
+            false,
+            &JobControl::new(tokio_util::sync::CancellationToken::new()),
+        )
+        .await
+        .unwrap();
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+
+    let staged = repo.get(&owner, previous).await.unwrap().unwrap();
+    assert_eq!(staged.status, ImportStatus::Staged);
+    assert_eq!(staged.metadata["plan"]["decision"], "copy");
+    assert_eq!(staged.review_id, Some(review));
+    assert!(service.creator.documents.lock().unwrap().is_empty());
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let imported = repo.get(&owner, previous).await.unwrap().unwrap();
+    assert_eq!(imported.status, ImportStatus::Imported);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn approving_a_skipped_page_as_copy_writes_it_but_keeps_other_skips(pool: PgPool) {
+    let owner = user("explicit-review-copy");
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        tokio_util::sync::CancellationToken::new(),
+        tracker.clone(),
+    );
+    let repo = service.repo.clone();
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    let skip = |hex, title| {
+        let mut row = page(hex, title);
+        row.metadata["plan"]["decision"] = serde_json::json!("skip");
+        row.metadata["plan"]["reason"] = serde_json::json!("Setup page");
+        row
+    };
+    let mut by_hand = page('c', "Needs judgment");
+    by_hand.metadata["plan"]["decision"] = serde_json::json!("hand");
+    let (review, ids) = approved(
+        &pool,
+        &owner,
+        &[skip('a', "Template"), skip('b', "Sample"), by_hand],
+    )
+    .await;
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+    service
+        .start_notion_write(
+            &owner,
+            review,
+            NotionWriteChoices {
+                copy_skipped: vec![ids[0], ids[2], Uuid::now_v7()],
+                ..NotionWriteChoices::default()
+            },
+        )
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let written = repo.get(&owner, ids[0]).await.unwrap().unwrap();
+    assert_eq!(written.status, ImportStatus::Imported);
+    assert_eq!(written.metadata["plan"]["decision"], "copy");
+    assert_eq!(
+        repo.get(&owner, ids[1]).await.unwrap().unwrap().status,
+        ImportStatus::Discarded
+    );
+    assert_eq!(
+        repo.get(&owner, ids[2]).await.unwrap().unwrap().status,
+        ImportStatus::Staged
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn approval_keeps_discarded_by_hand_dependencies_in_the_settlement(pool: PgPool) {
     use crate::domain::models::NotionReviewOmissionKind;
 

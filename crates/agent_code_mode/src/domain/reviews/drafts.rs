@@ -65,6 +65,9 @@ pub struct ImportDraft {
     /// Plan rows left out of the import.
     #[serde(default)]
     pub excluded: Vec<Uuid>,
+    /// Skipped Notion pages the owner chose to copy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub copy_skipped: Vec<Uuid>,
     /// Plan rows shared with the team although the plan keeps them private.
     #[serde(default)]
     pub shared: Vec<Uuid>,

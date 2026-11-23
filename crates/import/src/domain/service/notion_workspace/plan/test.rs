@@ -21,6 +21,58 @@ fn page(hex: char, title: &str, parent: NotionParent) -> NotionPage {
 }
 
 #[test]
+fn explicitly_requested_page_overrides_template_skip_but_its_child_does_not() {
+    let template = id('a');
+    let child = id('b');
+    let inventory = Inventory {
+        pages: vec![
+            page('a', "Workspace template", NotionParent::Workspace),
+            page(
+                'b',
+                "Sample page",
+                NotionParent::Page {
+                    id: template.clone(),
+                },
+            ),
+        ],
+        ..Inventory::default()
+    };
+    let tree =
+        PlanTree::new(&inventory).for_scope(&import_notion::domain::model::ImportScope::Roots {
+            ids: vec![template.clone()],
+        });
+    let verdicts = [template, child]
+        .into_iter()
+        .map(|id| {
+            let key = id.to_string();
+            let verdict = Verdict {
+                key: key.clone(),
+                decision: NotionDecision::Skip,
+                reason: Some("Onboarding template".into()),
+                task_fields: None,
+                shared: None,
+                shared_reason: None,
+            };
+            (key, verdict)
+        })
+        .collect();
+
+    let items = serde_json::to_value(tree.triage_items(&HashMap::new())).unwrap();
+    assert_eq!(items[0]["explicitlySelected"], true);
+    assert!(items[1].get("explicitlySelected").is_none());
+    let workspace = PlanTree::new(&inventory);
+    assert_eq!(
+        workspace.decided_rows(&verdicts, NotionSharing::Personal, false)[0].metadata["plan"]["decision"],
+        "skip"
+    );
+
+    let rows = tree.decided_rows(&verdicts, NotionSharing::Personal, false);
+    assert_eq!(rows[0].metadata["plan"]["decision"], "copy");
+    assert_eq!(rows[1].metadata["plan"]["decision"], "skip");
+    assert_eq!(rows[1].metadata["plan"]["reason"], "Onboarding template");
+}
+
+#[test]
 fn the_tree_puts_parents_first_and_plans_every_object_under_its_page() {
     let inventory = Inventory {
         pages: vec![

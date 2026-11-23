@@ -46,6 +46,8 @@ pub enum NotionSharing {
 /// What the owner changed in a plan before approving it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NotionWriteChoices {
+    /// Skipped Notion pages the owner explicitly selected to copy.
+    pub copy_skipped: Vec<Uuid>,
     /// Plan rows left out of the import.
     pub excluded: Vec<Uuid>,
     /// Plan rows to share with the team although the plan keeps them.

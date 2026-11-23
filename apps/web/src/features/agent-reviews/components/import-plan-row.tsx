@@ -7,6 +7,8 @@ import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
+  canCopySkippedPage,
+  type ImportDraft,
   type ImportPlanDecision,
   type ImportPlanNode,
   type ImportTaskFields,
@@ -183,6 +185,8 @@ export function ImportPlanRow(props: {
   /** Show the checkbox that leaves the object out, and the sharing toggle. */
   choosing: boolean;
   disabled: boolean;
+  /** Source determines whether skipping can be overridden in review. */
+  source?: ImportDraft['source'];
   /** Show how the write went instead of the plan. */
   showStatus: boolean;
   /** Keep plan samples without their estimate after confirmed counts arrive. */
@@ -260,7 +264,11 @@ export function ImportPlanRow(props: {
         <Show when={props.choosing}>
           <Checkbox
             checked={included()}
-            disabled={props.disabled || !written()}
+            disabled={
+              props.disabled ||
+              (!written() &&
+                !canCopySkippedPage(props.node, props.source ?? 'notion'))
+            }
             onChange={(checked) => props.onIncludedChange(checked)}
           >
             <Checkbox.Control />

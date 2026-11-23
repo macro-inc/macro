@@ -30,6 +30,9 @@ the server says its connection can be imported from (`importAvailable`),
   trackers, and lets the owner exclude objects and change sharing. On phones,
   **Open full review** uses the existing full-height sheet. Approve on the card,
   or say yes and let the agent submit it with `DecideReview`; planning must be ready.
+  To include a skipped Notion page, tick its checkbox to change it to **Copy**.
+  To retry a previously skipped page in a fresh review, ask to import its
+  Notion link as a workspace root and approve the resulting plan.
   For Notion, items marked **Needs you** cannot be selected for automatic import.
   The completed report shows their reasons in an open **Needs you** section
   apart from items left out in review. Stop affects the selected source only,

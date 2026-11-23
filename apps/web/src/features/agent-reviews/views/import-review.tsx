@@ -92,6 +92,7 @@ export function ImportReview(props: {
         phase={review.phase()}
         progress={review.progress()}
         nodes={review.nodes()}
+        isCopyOverride={review.isCopyOverride}
         hasPlan={review.hasPlan() || state.isPlaceholderData}
         isCollapsed={review.isCollapsed}
         isShowingRows={review.isShowingRows}

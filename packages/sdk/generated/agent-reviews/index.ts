@@ -235,15 +235,44 @@ export type GuestPolicy = {
  *  sharing they changed: `shared` to share with their team, `personal` to
  *  keep to themselves.
  */
-export type ImportDraft = {
+export type ImportDraft = ImportDraft_Serialize | ImportDraft_Deserialize;
+
+/**
+ *  The one draft an import review carries: which source's staged plan it
+ *  presents, the plan rows the user took out of it, and the rows whose
+ *  sharing they changed: `shared` to share with their team, `personal` to
+ *  keep to themselves.
+ */
+export type ImportDraft_Deserialize = {
 	/**  The staged plan's source; fixed once the review is presented. */
 	source: ImportReviewSource,
 	/**  Plan rows left out of the import. */
 	excluded?: string[],
+	/**  Skipped Notion pages the owner chose to copy. */
+	copySkipped?: string[],
 	/**  Plan rows shared with the team although the plan keeps them private. */
 	shared?: string[],
 	/**  Plan rows kept private although the plan shares them. */
 	personal?: string[],
+};
+
+/**
+ *  The one draft an import review carries: which source's staged plan it
+ *  presents, the plan rows the user took out of it, and the rows whose
+ *  sharing they changed: `shared` to share with their team, `personal` to
+ *  keep to themselves.
+ */
+export type ImportDraft_Serialize = {
+	/**  The staged plan's source; fixed once the review is presented. */
+	source: ImportReviewSource,
+	/**  Plan rows left out of the import. */
+	excluded: string[],
+	/**  Skipped Notion pages the owner chose to copy. */
+	copySkipped?: string[],
+	/**  Plan rows shared with the team although the plan keeps them private. */
+	shared: string[],
+	/**  Plan rows kept private although the plan shares them. */
+	personal: string[],
 };
 
 /**
@@ -773,7 +802,7 @@ export type ReviewDraft_Deserialize =
 /**  An edited calendar event. */
 { kind: "calendar"; draft: CreateCalendarEvent_Deserialize } |
 /**  An edited import plan selection. */
-{ kind: "import"; draft: ImportDraft };
+{ kind: "import"; draft: ImportDraft_Deserialize };
 
 /**  One replacement draft, keyed by the kind of the review it edits. */
 export type ReviewDraft_Serialize =
@@ -782,7 +811,7 @@ export type ReviewDraft_Serialize =
 /**  An edited calendar event. */
 { kind: "calendar"; draft: CreateCalendarEvent_Serialize } |
 /**  An edited import plan selection. */
-{ kind: "import"; draft: ImportDraft };
+{ kind: "import"; draft: ImportDraft_Serialize };
 
 /**  The drafts a new review presents, keyed by the review's kind. */
 export type ReviewDrafts = ReviewDrafts_Serialize | ReviewDrafts_Deserialize;
@@ -794,7 +823,7 @@ export type ReviewDrafts_Deserialize =
 /**  Calendar events, each created with the CreateCalendarEvent action. */
 { kind: "calendar"; drafts: DraftList<CreateCalendarEvent_Deserialize> } |
 /**  Exactly one staged import plan, approved as one item. */
-{ kind: "import"; drafts: [ImportDraft] };
+{ kind: "import"; drafts: [ImportDraft_Deserialize] };
 
 /**  The drafts a new review presents, keyed by the review's kind. */
 export type ReviewDrafts_Serialize =
@@ -803,7 +832,7 @@ export type ReviewDrafts_Serialize =
 /**  Calendar events, each created with the CreateCalendarEvent action. */
 { kind: "calendar"; drafts: DraftList<CreateCalendarEvent_Serialize> } |
 /**  Exactly one staged import plan, approved as one item. */
-{ kind: "import"; drafts: [ImportDraft] };
+{ kind: "import"; drafts: [ImportDraft_Serialize] };
 
 /**  Persisted review identity. */
 export type ReviewId = string;
@@ -838,7 +867,7 @@ export type ReviewItems_Deserialize =
 /**  Calendar drafts and their created events. */
 { kind: "calendar"; items: (ReviewItem<CreateCalendarEvent_Deserialize, ToolCalendarEvent>)[] } |
 /**  The import plan selection and the started write's report. */
-{ kind: "import"; items: [(ReviewItem<ImportDraft, NotionImportReport_Deserialize>)] };
+{ kind: "import"; items: [(ReviewItem<ImportDraft_Deserialize, NotionImportReport_Deserialize>)] };
 
 /**  Saved items keyed by the review's kind. */
 export type ReviewItems_Serialize =
@@ -847,7 +876,7 @@ export type ReviewItems_Serialize =
 /**  Calendar drafts and their created events. */
 { kind: "calendar"; items: (ReviewItem<CreateCalendarEvent_Serialize, ToolCalendarEvent>)[] } |
 /**  The import plan selection and the started write's report. */
-{ kind: "import"; items: [(ReviewItem<ImportDraft, NotionImportReport_Serialize>)] };
+{ kind: "import"; items: [(ReviewItem<ImportDraft_Serialize, NotionImportReport_Serialize>)] };
 
 /**  Full UI record, fetched outside the model context. */
 export type ReviewRecord = ReviewRecord_Serialize | ReviewRecord_Deserialize;

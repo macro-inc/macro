@@ -114,6 +114,7 @@ where
                 record.id.0,
                 NotionWriteChoices {
                     excluded: draft.excluded.clone(),
+                    copy_skipped: draft.copy_skipped.clone(),
                     shared: draft.shared.clone(),
                     personal: draft.personal.clone(),
                 },

@@ -252,6 +252,7 @@ type ImportPlanCardProps = {
   isCollapsed: (id: string) => boolean;
   isShowingRows: (id: string) => boolean;
   isExcluded: (id: string) => boolean;
+  isCopyOverride?: (id: string) => boolean;
   isShared: (id: string) => boolean;
   /** The viewer may trim, approve, and stop this import. */
   canAct: boolean;
@@ -437,7 +438,12 @@ function PlanContents(
           <For each={props.nodes}>
             {(node) => (
               <ImportPlanRow
-                node={node}
+                node={
+                  props.isCopyOverride?.(node.id)
+                    ? { ...node, decision: 'copy', reason: null }
+                    : node
+                }
+                source={props.source}
                 collapsed={props.isCollapsed(node.id)}
                 showingRows={props.isShowingRows(node.id)}
                 excluded={props.isExcluded(node.id)}

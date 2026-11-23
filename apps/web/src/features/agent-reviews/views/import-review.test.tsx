@@ -240,7 +240,7 @@ function setup(
         id: 'plan',
         status: 'pending',
         error: null,
-        draft: { source: 'notion' },
+        draft: { source: 'notion', excluded: [], shared: [], personal: [] },
         result: null,
         ...options.item,
       },
@@ -256,7 +256,15 @@ function setup(
       items: [
         decision.action === 'edit'
           ? decision.draft.kind === 'import'
-            ? { ...item, draft: decision.draft.draft }
+            ? {
+                ...item,
+                draft: {
+                  ...decision.draft.draft,
+                  excluded: decision.draft.draft.excluded ?? [],
+                  shared: decision.draft.draft.shared ?? [],
+                  personal: decision.draft.draft.personal ?? [],
+                },
+              }
             : item
           : {
               ...item,
@@ -674,7 +682,7 @@ describe('import review', () => {
     expect(
       screen.getByRole<HTMLInputElement>('checkbox', { name: 'Import Scratch' })
         .disabled
-    ).toBe(true);
+    ).toBe(false);
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'Import Roadmap' }));
     expect(screen.getByRole('button', { name: 'Import 1 page' })).toBeTruthy();
@@ -816,6 +824,71 @@ describe('import review', () => {
       screen.getByText('Import stopped — 2 imported items stay')
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
+  });
+
+  it('saves a skipped Notion page as Copy before approving', async () => {
+    imports.entities = [
+      entity('template', null, 'Workspace template', {
+        decision: 'skip',
+        reason: 'Setup page',
+      }),
+      entity('manual', null, 'Needs a decision', { decision: 'hand' }),
+    ];
+    const decide = setup();
+    const checkbox = screen.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Import Workspace template',
+    });
+    expect(checkbox.disabled).toBe(false);
+    expect(checkbox.checked).toBe(false);
+    expect(
+      screen.getByRole<HTMLInputElement>('checkbox', {
+        name: 'Import Needs a decision',
+      }).disabled
+    ).toBe(true);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 page' }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide.mock.calls[0][0]).toMatchObject({
+      action: 'edit',
+      draft: { kind: 'import', draft: { copySkipped: ['template'] } },
+    });
+    expect(decide.mock.calls[1][0]).toMatchObject({
+      action: 'submit',
+      revision: 1,
+    });
+  });
+
+  it('honors a restored Copy choice when approving immediately', async () => {
+    imports.entities = [
+      entity('template', null, 'Workspace template', { decision: 'skip' }),
+    ];
+    const decide = setup({
+      item: {
+        draft: {
+          source: 'notion',
+          excluded: [],
+          shared: [],
+          personal: [],
+          copySkipped: ['template'],
+        },
+      },
+    });
+    const checkbox = screen.getByRole<HTMLInputElement>('checkbox', {
+      name: 'Import Workspace template',
+    });
+    expect(checkbox.checked).toBe(true);
+    fireEvent.click(checkbox);
+    fireEvent.click(checkbox);
+    fireEvent.click(screen.getByRole('button', { name: 'Import 1 page' }));
+    await waitFor(() => expect(decide).toHaveBeenCalledTimes(2));
+    expect(decide.mock.calls[0][0]).toMatchObject({
+      action: 'edit',
+      draft: { kind: 'import', draft: { copySkipped: ['template'] } },
+    });
+    expect(decide.mock.calls[1][0]).toMatchObject({
+      action: 'submit',
+      revision: 1,
+    });
   });
 
   it('saves who each object is shared with, down the tree', async () => {

@@ -413,7 +413,7 @@ impl<T: NotionPageImporter> AsyncTool<ImportToolContext<T>> for ImportNotionPage
             }
             ImportNotionPageOutcome::PreviouslyDiscarded(entity) => ImportNotionPageResponse {
                 outcome: "previously_declined".to_string(),
-                message: "The user previously declined this page, so it was not imported."
+                message: "An earlier import left this page out. If the user is asking for it again, start a fresh ImportFromNotion plan with this page URL or ID in roots, then present it with PresentReview for approval."
                     .to_string(),
                 entity: ImportEntityView::of(&entity, user.as_ref()),
             },

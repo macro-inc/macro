@@ -1844,7 +1844,8 @@ Link; ticking removes their id from the saved draft's excluded list. Including
 a parent must not opt in external children. Refresh the saved review when new
 dependencies arrive, keeping them excluded until its defaults are saved. Use
 ordinary inclusion and sharing controls;
-unavailable by-hand rows stay disabled and show their reason. Desktop and touch
+unavailable by-hand rows stay disabled and show their reason. Ticking a skipped
+Notion page saves an explicit Copy choice for that page in the review draft. Desktop and touch
 keep the same controls; phone rows let titles wrap, put counts and badges on a second line, and wrap
 **Linked from** onto its own full-width line below them. Keep editable per-row
 sharing controls available even when the current sharing choices are uniform. On phones, the counted notices disclosure starts collapsed

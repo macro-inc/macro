@@ -383,6 +383,11 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   folder or ancestor relocate it to the persistent owner-only `Notion (personal)`
   mirror, with a report note. Derive visibility from the reviewed verdict, never
   the team claim. A folder's link-only setting does not grant database access.
+- A readable Notion page explicitly selected as an import root gets Copy even
+  if triage suggests Skip. Descendants keep their own verdicts. A new scoped
+  plan can stage a previously discarded root again. Respect the approved
+  review’s explicit Copy overrides for skipped Notion pages when writing or
+  resuming the plan.
 - `databases::body_links` builds a separate occurrence map for each page or row;
   `?v` selects the saved view, otherwise the first container tab is assumed and
   reported. Excluded sources retain `notImported` links and do not create folders;

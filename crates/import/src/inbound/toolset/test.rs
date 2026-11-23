@@ -99,6 +99,9 @@ impl NotionPageImporter for MockStager {
             .lock()
             .unwrap()
             .push(page_url_or_id.to_string());
+        if let Some(StageOutcome::PreviouslyDiscarded(row)) = &self.stage_outcome {
+            return Ok(ImportNotionPageOutcome::PreviouslyDiscarded(row.clone()));
+        }
         Ok(ImportNotionPageOutcome::Imported {
             entity: row(ImportSource::Notion, ImportStatus::Imported),
             already_existed: false,
@@ -203,6 +206,28 @@ async fn import_notion_page_runs_the_workflow_and_returns_the_document() {
         stager.notion_import_calls.lock().unwrap().as_slice(),
         &[page_url.to_string()]
     );
+}
+
+#[tokio::test]
+async fn previously_discarded_page_points_to_a_fresh_review() {
+    let target = "https://www.notion.so/4d005e63b2fd4d079df4e376e35b7519";
+    let mut discarded = row(ImportSource::Notion, ImportStatus::Discarded);
+    discarded.foreign_id = "4d005e63b2fd4d079df4e376e35b7519".into();
+    let context = ImportToolContext::wired(Arc::new(MockStager {
+        stage_outcome: Some(StageOutcome::PreviouslyDiscarded(discarded)),
+        ..MockStager::default()
+    }));
+    let response = ImportNotionPage {
+        page_url: target.into(),
+    }
+    .call(ServiceContext(context), RequestContext::new(user()))
+    .await
+    .unwrap();
+
+    assert_eq!(response.outcome, "previously_declined");
+    assert!(response.message.contains("ImportFromNotion"));
+    assert!(response.message.contains("roots"));
+    assert!(response.message.contains("PresentReview"));
 }
 
 #[tokio::test]

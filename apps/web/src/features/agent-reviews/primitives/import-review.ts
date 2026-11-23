@@ -9,6 +9,7 @@ import {
   alreadyInMacro,
   alreadyInMacroSummary,
   buildPlanTree,
+  canCopySkippedPage,
   EMPTY_IMPORT_DRAFT,
   type ImportDraft,
   type ImportPlanEntry,
@@ -74,11 +75,29 @@ export function createImportReview(sources: ImportReviewSources) {
     }
     return { ...current, excluded: [...excluded] };
   };
-  const nodes = createMemo(() =>
-    buildPlanTree(planTreeEntries(sources.entries()))
-  );
   const entriesById = createMemo(
     () => new Map(sources.entries().map((entry) => [entry.id, entry]))
+  );
+  const copyOverrides = createMemo(() => new Set(draft().copySkipped));
+  function isCopyOverride(id: string): boolean {
+    const entry = entriesById().get(id);
+    return Boolean(
+      entry &&
+        copyOverrides().has(id) &&
+        canCopySkippedPage(entry, draft().source)
+    );
+  }
+  const effectiveEntries = createMemo(() =>
+    sources
+      .entries()
+      .map((entry) =>
+        isCopyOverride(entry.id)
+          ? { ...entry, decision: 'copy' as const, reason: null }
+          : entry
+      )
+  );
+  const nodes = createMemo(() =>
+    buildPlanTree(planTreeEntries(sources.entries()))
   );
   const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>();
   // Databases whose sample rows are showing; kept here so a refreshed plan
@@ -108,8 +127,8 @@ export function createImportReview(sources: ImportReviewSources) {
     controller.stale() ||
     record().presentedAt == null;
   const editable = () => !locked() && phase().kind === 'plan';
-  const count = () => importCount(sources.entries(), draft().excluded);
-  const volume = () => importVolume(sources.entries(), draft().excluded);
+  const count = () => importCount(effectiveEntries(), draft().excluded);
+  const volume = () => importVolume(effectiveEntries(), draft().excluded);
 
   let refreshedDependencies = '';
   createEffect(() => {
@@ -149,7 +168,28 @@ export function createImportReview(sources: ImportReviewSources) {
   function setIncluded(id: string, included: boolean) {
     const current = item();
     if (!current || !editable()) return;
-    const next = setExcluded(draft(), nodes(), id, !included);
+    const entry = entriesById().get(id);
+    const saved = draft();
+    let next: ImportDraft;
+    if (entry && canCopySkippedPage(entry, saved.source)) {
+      const copySkipped = new Set(saved.copySkipped);
+      if (included) copySkipped.add(id);
+      else copySkipped.delete(id);
+      next = {
+        ...saved,
+        copySkipped: [...copySkipped],
+        excluded: saved.excluded.filter((excluded) => excluded !== id),
+      };
+    } else {
+      next = setExcluded(
+        saved,
+        nodes().map((node) =>
+          isCopyOverride(node.id) ? { ...node, decision: 'copy' } : node
+        ),
+        id,
+        !included
+      );
+    }
     setEditedDraft(next);
     controller.edit(current.id, { kind: 'import', draft: next });
   }
@@ -214,17 +254,19 @@ export function createImportReview(sources: ImportReviewSources) {
     progress,
     summary: () =>
       planSummary(
-        progress()?.counts ?? planCounts(sources.entries()),
+        phase().kind === 'plan' && copyOverrides().size
+          ? planCounts(effectiveEntries())
+          : (progress()?.counts ?? planCounts(sources.entries())),
         volume(),
         draft().source
       ),
     sharingSummary: () =>
       sharingSummary(
-        sources.entries(),
+        effectiveEntries(),
         draft(),
         sources.report()?.onTeam ?? true
       ),
-    totals: () => planTotals(sources.entries(), draft().excluded),
+    totals: () => planTotals(effectiveEntries(), draft().excluded),
     planningStatus: () =>
       planningStatus(progress(), sources.entries(), draft().source),
     alreadyInMacroSummary: () => alreadyInMacroSummary(sources.entries()),
@@ -234,6 +276,7 @@ export function createImportReview(sources: ImportReviewSources) {
     isCollapsed: (id: string) => collapsedIds().has(id),
     isShowingRows: (id: string) => showingRows().has(id),
     isExcluded: (id: string) => draft().excluded.includes(id),
+    isCopyOverride,
     isShared: (id: string) => {
       const entry = entriesById().get(id);
       return entry ? isShared(entry, draft()) : false;

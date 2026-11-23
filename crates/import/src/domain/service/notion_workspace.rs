@@ -411,7 +411,7 @@ where
         if control.reason().is_some() {
             return Ok(());
         }
-        let tree = plan::PlanTree::with_databases(&discovery);
+        let tree = plan::PlanTree::with_databases(&discovery).for_scope(&scope);
         let team = self.repo.user_team_id(user).await?.is_some();
         let already_imported = self.already_in_macro(user, &tree).await?;
         tracing::Span::current().record("already_in_macro", already_imported.len());

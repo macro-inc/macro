@@ -1,6 +1,7 @@
 //! Approve exactly the saved selection before scheduling a workspace write.
 
 use super::*;
+use crate::domain::ports::PlanRow;
 
 impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
 where
@@ -52,14 +53,34 @@ where
             })
             .map(|fact| fact.import_id)
             .collect();
+        let requested_copies: std::collections::HashSet<_> =
+            choices.copy_skipped.iter().copied().collect();
+        let excluded: std::collections::HashSet<_> = choices.excluded.iter().copied().collect();
+        let mut promoted = Vec::new();
+        for (row, item) in &mut planned {
+            if item.kind == ImportKind::Page
+                && item.decision == NotionDecision::Skip
+                && !item.already_imported
+                && requested_copies.contains(&row.id)
+                && !excluded.contains(&row.id)
+            {
+                item.decision = NotionDecision::Copy;
+                row.metadata["plan"]["decision"] = serde_json::json!(NotionDecision::Copy);
+                row.metadata["plan"]["reason"] =
+                    serde_json::json!("Selected in the import review.");
+                promoted.push(PlanRow {
+                    kind: row.kind,
+                    foreign_id: row.foreign_id.clone(),
+                    parent_foreign_id: None,
+                    metadata: row.metadata.clone(),
+                });
+            }
+        }
         // The owner's sharing changes are recorded on the rows first, so a
         // resumed write shares exactly what they approved.
         let items: Vec<write::WriteItem> = planned.iter().map(|(_, item)| item.clone()).collect();
         let (to_share, to_keep) =
             sharing::sharing_changes(&items, &choices.shared, &choices.personal);
-        self.repo
-            .set_plan_sharing(user, &to_share, &to_keep)
-            .await?;
         for (_, item) in &mut planned {
             if to_share.contains(&item.import_id) {
                 item.shared = true;
@@ -86,9 +107,20 @@ where
         self.hold_new_run(user, RunStatus::Importing, &NotionJob::Write { review_id })
             .await?;
 
+        // Persist the reviewed Copy overrides before claiming rows so a resume
+        // reconstructs the same selection from the ledger.
+        if !promoted.is_empty() {
+            self.repo
+                .update_plan_rows(user, self.workspace_source, &promoted)
+                .await?;
+        }
+        self.repo
+            .set_plan_sharing(user, &to_share, &to_keep)
+            .await?;
+
         let mut to_write = Vec::new();
         for (row, item) in planned {
-            let left_out = choices.excluded.contains(&row.id)
+            let left_out = excluded.contains(&row.id)
                 || (!item.dependency_of.is_empty() && !approved_dependencies.contains(&row.id));
             match (left_out, item.decision) {
                 (true, _) | (false, NotionDecision::Skip) => {

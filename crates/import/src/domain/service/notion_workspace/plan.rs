@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use import_notion::domain::model::{
-    DataSourceSummary, Inventory, NotionId, NotionParent, NotionPropertyKind,
+    DataSourceSummary, ImportScope, Inventory, NotionId, NotionParent, NotionPropertyKind,
 };
 
 use crate::domain::models::{
@@ -52,9 +52,22 @@ pub(in crate::domain::service) struct Node {
 pub(in crate::domain::service) struct PlanTree {
     /// Every node, in breadth-first order from the roots.
     pub nodes: Vec<Node>,
+    explicit_roots: HashSet<NotionId>,
 }
 
 impl PlanTree {
+    /// Remember the roots requested by the user, separately from descendants.
+    pub(in crate::domain::service) fn for_scope(mut self, scope: &ImportScope) -> Self {
+        if let ImportScope::Roots { ids } = scope {
+            self.explicit_roots = ids.iter().cloned().collect();
+        }
+        self
+    }
+
+    fn explicitly_selected(&self, node: &Node) -> bool {
+        node.kind == ImportKind::Page && self.explicit_roots.contains(&node.id)
+    }
+
     /// Arrange an inventory into a tree. A page under a page or a data source
     /// under a page hangs off that page when it is in scope; everything else
     /// is a root.
@@ -89,6 +102,7 @@ impl PlanTree {
         }
         Self {
             nodes: breadth_first(nodes),
+            explicit_roots: HashSet::new(),
         }
     }
 
@@ -186,6 +200,7 @@ impl PlanTree {
                 path: self.path(&node.id, &index),
                 children: children.get(&node.id).copied().unwrap_or(0),
                 table: node.table.clone(),
+                explicitly_selected: self.explicitly_selected(node),
             })
             .collect()
     }
@@ -235,7 +250,11 @@ impl PlanTree {
             .iter()
             .filter_map(|node| {
                 let mut verdict = verdicts.get(node.id.as_str())?.clone();
-                if node.kind == ImportKind::DataSource
+                if self.explicitly_selected(node) {
+                    verdict.decision = NotionDecision::Copy;
+                    verdict.task_fields = None;
+                    verdict.reason = Some("Explicitly selected for import.".into());
+                } else if node.kind == ImportKind::DataSource
                     && !node.inline_on.is_empty()
                     && node.unavailable.is_none()
                 {
@@ -326,6 +345,7 @@ fn triage_item(node: &Node, key: &str) -> TriageItem {
         path: Vec::new(),
         children: 0,
         table: node.table.clone(),
+        explicitly_selected: false,
     }
 }
 

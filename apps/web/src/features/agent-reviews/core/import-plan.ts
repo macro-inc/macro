@@ -160,7 +160,8 @@ export type ImportReviewPhase =
  * The saved draft of an import review. `shared` and `personal` hold the rows
  * the owner switched to or from team sharing, against the plan's choice.
  */
-export type ImportDraft = Required<SavedImportDraft>;
+export type ImportDraft = Omit<Required<SavedImportDraft>, 'copySkipped'> &
+  Pick<SavedImportDraft, 'copySkipped'>;
 
 /** A saved import draft with its omitted row lists filled in. */
 export function withRowLists(draft: SavedImportDraft): ImportDraft {
@@ -169,6 +170,7 @@ export function withRowLists(draft: SavedImportDraft): ImportDraft {
     excluded: draft.excluded ?? [],
     shared: draft.shared ?? [],
     personal: draft.personal ?? [],
+    ...(draft.copySkipped?.length ? { copySkipped: draft.copySkipped } : {}),
   };
 }
 
@@ -185,6 +187,20 @@ export function isWritten(decision: ImportPlanDecision | null): boolean {
     .with('copy', 'tasks', () => true)
     .with('skip', 'hand', null, () => false)
     .exhaustive();
+}
+
+/** The review can promote a skipped Notion page to a copy. */
+export function canCopySkippedPage(
+  entry: ImportPlanEntry,
+  source: ImportDraft['source']
+): boolean {
+  return (
+    source === 'notion' &&
+    entry.kind === 'page' &&
+    entry.status === 'staged' &&
+    entry.decision === 'skip' &&
+    entry.alreadyImported === null
+  );
 }
 
 /** Whether an entry becomes a new Macro object when the plan is approved. */
