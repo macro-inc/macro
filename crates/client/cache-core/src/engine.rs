@@ -366,7 +366,7 @@ pub enum DeferOptimisticWriteResult {
     /// The current mutation retained its optimistic layer and retry state.
     Deferred,
     /// The attempt was superseded, so it was discarded instead of retried.
-    DiscardedSuperseded(SupersededMutationResult),
+    DiscardedSuperseded(Box<SupersededMutationResult>),
 }
 
 /// Tagged rollback result used by transport adapters for settlement fanout.
@@ -2713,10 +2713,10 @@ impl<S: Storage> Engine<S> {
                 .ok_or(EngineError::UnknownTransaction(transaction))?;
             let write_result = self.rollback_optimistic_write(transaction, claim).await?;
             return Ok(DeferOptimisticWriteResult::DiscardedSuperseded(
-                SupersededMutationResult {
+                Box::new(SupersededMutationResult {
                     write_result,
                     replacement_transaction_id,
-                },
+                }),
             ));
         }
         if !self
