@@ -1022,6 +1022,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Match record metadata to the 24px property-control scale while reserving separate
   44px touch targets; see the CRM README for the visible-face and hit-area contract.
   Keep explanations on the chip and retain company-only Email sharing controls.
+  Order both information panels with `RECORD_PANEL_ORDER` (References last) and
+  lay Record details on `SidePanel.Grid`/`SidePanel.Row`, like Properties.
   Use the explicit Visible/Archived filter for People, Companies and company Team;
   reset its admin-only choice on account/team/role/list changes and preserve search.
   Apply confirmed visibility changes to detail, list and normalized search caches;
