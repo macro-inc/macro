@@ -33,6 +33,7 @@ export default {
   dayTotal: '{{day}} · {{length}}',
   timerSource: 'timer',
   noEntries: 'No time logged yet',
+  loadingEntries: 'Loading the time logged',
   entriesFailed: 'Could not load the time logged',
   retry: 'Try again',
   editEntry: 'Edit entry',
