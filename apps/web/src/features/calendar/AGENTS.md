@@ -152,6 +152,10 @@ host lives in `../block-calendar/`.
 - Keep the phone Month switch in `../calendar-view/calendar-month.tsx`; render through `views/mobile/month-bars.tsx` over a Sunday-start, five/six-week range. Assign day columns explicitly so spans cannot move the cells. Compact each day's all-day/multi-day spans before its timed titles; join adjacent same-row span segments and never reserve overflow for an empty lane. Derive complete 14px rows on a 16px pitch from measured height, including header and border clearance; reserve the last slot for the full hidden count. Tapping the count or day opens the existing `MobileDrawer` day sheet. Keep the old PhoneMonth unwired and desktop overflow unchanged. Let day taps and sheet dismissal retire pending focus requests, announce every event title, and preserve bounded sources and focus navigation.
   Center highlighted date numbers, mute only neighboring-month dates, keep
   neighboring-month events opaque, and place chips within 1px of cell edges.
+  Share desktop Month chip materials and response dots at phone scale; use Intl
+  short weekday names in every Month header, including narrow layouts. Fill the
+  height above the larger of safe-area and measured bottom chrome, without extra
+  Month-only bottom gaps; keep week rows equal.
   Use `button-accent-ink` at full opacity for focused event times.
   The phone month island uses `../calendar-view/views/mobile/month-drawer.tsx` with
   shared month/year wheels over `primitives/create-month-wheel-picker.ts`: months
@@ -165,6 +169,8 @@ host lives in `../block-calendar/`.
   `/calendar/settings` is an authenticated native view over existing setting owners;
   give its content `Layer depth={2}` with `bg-surface` cards above `bg-page`. Retain
   its `view-` route id and component registry entry for the split-content bridge and shell metadata.
+  Use the canonical circular MobileHeader.Back, shared settings rows with equal
+  vertical padding, and rounded-4xl card corners.
 - Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
   the timed card, with day headers and all-day lanes above it. The active grid
   supplies a stationary, opaque panel-colored gutter through `create-mobile-grid-axis.ts`;

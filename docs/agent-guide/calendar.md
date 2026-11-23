@@ -65,8 +65,13 @@ centered in both axes. Event chips sit within 1px of the date-cell edges.
 Focused event time uses `button-accent-ink` at full opacity over the accent fill.
 All-day and multi-day segments join across adjacent cells
 while they share a row; continuing events move up when an earlier span ends.
-Timed events stack vertically beneath them in calendar color, one truncated
-line per event. Complete rows fit the measured cell height; when events overflow,
+Timed events stack vertically beneath them, one truncated line per event,
+with the desktop Month chip materials at phone scale: neutral text and calendar
+response dots for timed events, filled spans and out-of-office events. Month
+weekday headings always use localized short names, including at narrow widths.
+The equal-height week rows fill the space above measured bottom chrome or the
+safe area, without an additional Month-only bottom gap. Complete rows fit the
+measured cell height; when events overflow,
 the last available row becomes `+N`, counting all hidden events. Hiding weekends
 widens the five remaining columns. Tapping the count or its day opens the full
 event list in the existing phone sheet without leaving Month. Selecting a sheet
@@ -829,6 +834,9 @@ browser-local calendar preferences. The separate Settings page contains display
 preferences, account consent actions, availability hours and busy calendars, next
 meeting countdown, and flag-gated team sharing. The Settings page places its cards
 at Layer depth 2 over the page surface in both themes, including the busy-calendar subpage.
+Its Back action uses the shared circular mobile-header control. Cards use the
+32px radius token and consistent 8px vertical row padding, including account
+connection actions and the Busy calendars drill-in.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
