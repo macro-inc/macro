@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Up to $2 of a deleted account's inbox-list rows, read in primary-key order\n-- and deleted by row address: a generic plan otherwise scanned the whole\n-- table and hash-joined the batch to it. The account check is repeated so an\n-- account created since the scan keeps its rows.\nDELETE FROM contact_inbox_members\nWHERE ctid = ANY (ARRAY(\n    SELECT m.ctid\n    FROM contact_inbox_members m\n    WHERE m.user_id = $1\n    ORDER BY m.user_id, m.contact_user_id, m.link_id\n    LIMIT $2\n))\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE u.id = $1)\n  AND NOT EXISTS (SELECT 1 FROM \"User\" u WHERE lower(u.email) = substr($1, 7))\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e3577c61b292ac6e8fb34d7d2f49e4c1e6fa79c27f8a7dd6b866dee86f9389c1"
+}

@@ -6,12 +6,13 @@ import { TagSetsProvider } from '@app/features/property/tags/tag-sets-context';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For } from 'solid-js';
@@ -135,7 +136,9 @@ render(
         <PosthogProvider>
           <EntityProvider>
             <UserContextProvider>
-              <ChannelsContextProvider>
+              <ChannelDirectoryProvider
+                directory={staticChannelDirectory(() => [])}
+              >
                 <QuickAccessProvider>
                   <EmailLinksContextProvider>
                     <MobileSettingsProvider>
@@ -147,7 +150,7 @@ render(
                     </MobileSettingsProvider>
                   </EmailLinksContextProvider>
                 </QuickAccessProvider>
-              </ChannelsContextProvider>
+              </ChannelDirectoryProvider>
             </UserContextProvider>
           </EntityProvider>
         </PosthogProvider>

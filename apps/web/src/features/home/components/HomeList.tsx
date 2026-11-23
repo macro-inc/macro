@@ -32,7 +32,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -117,11 +117,15 @@ function HomeTutorial() {
 /** Compact notification list used by the Notifications workspace. */
 export function HomeList(props: HomeListProps) {
   const inlinePreviewLayout = useInlinePreviewLayout();
-  const channels = useChannelsContext();
-  const channelName = (entity: WithNotification<EntityData>) =>
-    entity.type === 'channel_thread'
-      ? getChannelThreadName(entity, channels.channelsById())
-      : undefined;
+  const directory = useChannelDirectory();
+  const channelName = (entity: WithNotification<EntityData>) => {
+    if (entity.type !== 'channel_thread') return undefined;
+    const current = loadedChannel(directory.lookup(entity.channelId));
+    return getChannelThreadName(
+      entity,
+      current ? { [current.id]: current } : {}
+    );
+  };
   const {
     state,
     composerFocusRequest,

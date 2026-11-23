@@ -75,6 +75,14 @@ pub trait UserAccessExpander: Send + Sync + 'static {
         &self,
         entities: &[Entity<'static>],
     ) -> impl Future<Output = Result<Vec<SharedAccess>, Report>> + Send;
+
+    /// Returns the active members of the channel `channel_id`, read now:
+    /// [`Self::expand_user_access`] may answer from a cache a few seconds old,
+    /// which misses the membership change a patch reports.
+    fn current_channel_members(
+        &self,
+        channel_id: &str,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Publishes recipient-targeted Soup patches.
