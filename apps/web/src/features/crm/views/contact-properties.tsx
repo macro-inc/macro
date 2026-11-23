@@ -1,8 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { ContactCompanyProperty } from '../components/contact-company-property';
-import { ContactEmailProperty } from '../components/contact-email-property';
+import {
+  ContactEmailList,
+  ContactEmailPill,
+} from '../components/contact-email-property';
 import { useCrmContext } from '../context/crm-context';
 import {
   type CrmContact,
@@ -26,8 +30,14 @@ function editError(error: unknown): string {
   return t('crm.contactEditFailed');
 }
 
+/** Where a contact's properties are drawn: the record header or Record details. */
+type ContactPropertySurface = 'header' | 'details';
+
 /** Key editor state by record identity so navigation cannot reuse an old draft. */
-export function ContactEmailField(props: { contact: CrmContact }) {
+export function ContactEmailField(props: {
+  contact: CrmContact;
+  surface: ContactPropertySurface;
+}) {
   const mutation = useCrmContext().editContactEmail();
   // The one address on the company's domain is what links the contact to it.
   const companyEmail = () => {
@@ -37,7 +47,10 @@ export function ContactEmailField(props: { contact: CrmContact }) {
   return (
     <Show when={props.contact.id} keyed>
       {(_id) => (
-        <ContactEmailProperty
+        <Dynamic
+          component={
+            props.surface === 'header' ? ContactEmailPill : ContactEmailList
+          }
           emails={contactEmails(props.contact)}
           primary={props.contact.email}
           manageable={props.contact.emails !== undefined}
@@ -65,6 +78,7 @@ export function ContactEmailField(props: { contact: CrmContact }) {
 
 export function ContactCompanyField(props: {
   contact: CrmContact;
+  surface: ContactPropertySurface;
   onOpenCompany?: (id: string) => boolean;
 }) {
   const context = useCrmContext();
@@ -85,6 +99,7 @@ export function ContactCompanyField(props: {
     <Show when={props.contact.id} keyed>
       {(_id) => (
         <ContactCompanyProperty
+          surface={props.surface}
           editable={
             independent() &&
             (props.contact.personalEmail === true || !props.contact.companyId)

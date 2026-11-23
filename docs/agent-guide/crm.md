@@ -200,37 +200,41 @@ forward instead. Touch devices keep the standalone record pages; a Customers
 record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
-a person's **Go to company** action gives `People > <contact> > <company>`. Opening a record
+opening a person's company from its company pill gives `People > <contact> > <company>`. Opening a record
 already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
-Contact properties use Tasks-style pills in the header and **Record details**.
-The email property lists every address the contact holds, the primary first,
-followed by an add control: **Add email** while blank, then a plus button named
-**Add email** at the end of the addresses' last line, which it never leaves for
-a line of its own, even in the narrow **Record details** column (long addresses
-truncate). Save
-adds the address; Cancel or Escape discards the draft, and invalid input stays
-open. Each address pill opens its own actions: **Make primary** and **Remove**.
-Removing an address deletes nothing; the contact's Emails tab and the email
-attachments in Files then stop covering it. Removing the primary promotes the
-oldest address left. Emails and Files cover every address of the contact.
+Contact properties look like task properties, in the header and in **Record
+details**. The header's email pill shows the primary address, `+N` for the
+others and a caret, and hovering lists every address; a blank contact shows an
+empty **Email** pill named **Add email**. **Record details** lists one line per
+address with an envelope icon, **Primary** beside the primary, and an **Add
+email** pill below. The pill, an address or **Add email** opens the email
+editor: an address field (Enter or **Add** adds it and keeps the field for the
+next one; Escape closes it and invalid input stays) above the same address
+rows. Each row offers **Remove** (a trash icon) and **Make primary** (a pin)
+when it can take them: on desktop they appear while the pointer is on the row
+or focus is in it, and on touch they always show. Removing an address deletes
+nothing; the contact's Emails tab and the email attachments in Files then stop
+covering it. Removing the primary promotes the oldest address left. Emails and
+Files cover every address of the contact.
 
-A contact without a company shows **Add company**, whatever its address.
-Contacts whose primary is a known personal-provider address, and that hold no
-address on their company's domain, can also switch company. The company
-pill opens the Tasks singleton picker; on touch, select a company then **Done**.
-Cancel keeps the original relation. **Remove company** sits in the same editor
-for every linked contact that holds no address on the company's domain; a
-contact that cannot switch gets an editor with that action alone. It asks for
-confirmation first. A
-rejected removal stays in the confirmation with its message. A contact
-with an address on its company's domain has a read-only company value, with
-the reason in its tooltip, and the one address that links it to the company
-shows no Remove. Extra addresses can still be added to it. The separate
-**Go to company** action opens an existing company, including for read-only
-contacts; Shift-click opens a separate split on desktop.
+The company is one split pill: its name opens the company (Shift-click opens a
+separate split on desktop), and its caret opens the editor. A contact without a
+company shows an empty **Company** pill (**No company** in **Record details**)
+named **Add company**, whatever its address. Contacts whose primary is a known
+personal-provider address, and that hold no address on their company's domain,
+can also switch company: the caret opens the Tasks singleton picker; on touch,
+select a company then **Done**. Cancel keeps the original relation. **Remove
+company** sits in the same editor for every linked contact that holds no
+address on the company's domain; a contact that cannot switch gets an editor
+with that action alone. It asks for confirmation first. A rejected removal
+stays in the confirmation with its message. A contact with an address on its
+company's domain has no caret, with the reason in its tooltip, and the one
+address that links it to the company shows no **Remove**. Extra addresses can
+still be added to it. A company's header shows its domains as one pill, the
+first and `+N`, with every domain on hover.
 
 Pending controls prevent duplicate saves; rejected edits retain their draft for
 retry. The server enforces the same eligibility (see

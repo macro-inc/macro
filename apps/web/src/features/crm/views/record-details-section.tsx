@@ -35,12 +35,20 @@ export function RecordDetailsSection(props: {
         <Show when={props.contact}>
           {(contact) => (
             <>
-              <EntityMetadataRow label={t('crm.email')}>
-                <ContactEmailField contact={contact()} />
-              </EntityMetadataRow>
+              {/* Several addresses run over several lines, so the label sits
+                  on the first, as the side panel's multi-line values do. */}
+              <div class="flex min-w-0 items-start gap-3">
+                <span class="w-(--sidepanel-label-width) shrink-0 whitespace-nowrap pt-0.5 touch:pt-2">
+                  {t('crm.email')}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <ContactEmailField contact={contact()} surface="details" />
+                </div>
+              </div>
               <EntityMetadataRow label={t('crm.company')}>
                 <ContactCompanyField
                   contact={contact()}
+                  surface="details"
                   onOpenCompany={props.onOpenCompany}
                 />
               </EntityMetadataRow>
