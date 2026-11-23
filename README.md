@@ -1,6 +1,6 @@
 # IMAP/SMTP proof for #11484
 
-Latest round-one checkpoint `7d3b89c17dd`: [non-FIFO mailbox claim measurements](round-one/nonfifo-7d3b89c17dd/README.md). Earlier: [projection queue measurements](round-one/projection-166462eea37/README.md) at `166462eea37`, and [provider repair measurements](round-one/provider-647b23e2aae/README.md) at `647b23e2aae`, superseded because `7d3b89c17dd` removes that repair job. Other round-one fixes remain open; no new movie or real-provider proof is claimed.
+Latest SMTP happy-path runtime proof at `8a06e487b804`: [scope and receipt](round-one/smtp-8a06e487b804/README.md). Mailbox claim measurements remain at `7d3b89c17dd`: [non-FIFO measurements](round-one/nonfifo-7d3b89c17dd/README.md), with [projection measurements](round-one/projection-166462eea37/README.md) at `166462eea37`. [Provider repair measurements](round-one/provider-647b23e2aae/README.md) at `647b23e2aae` are superseded because `7d3b89c17dd` removes that job. Other round-one fixes, human playback and real-provider proof remain open.
 
 Previous runtime checkpoint `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
 

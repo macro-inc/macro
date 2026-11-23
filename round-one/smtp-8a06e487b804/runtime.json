@@ -1,0 +1,78 @@
+{
+  "sourceCommit": "8a06e487b804c2db9f67af8666f295abcc082de0",
+  "sourceTree": "f84f6192d436dc68a6ee386ae9a1b43ba358ad22",
+  "sourceCleanAtBuild": true,
+  "environment": "Local synthetic Dovecot and Mailpit; actual private HTTP and protocol adapters",
+  "components": [
+    {
+      "service": "email_service",
+      "builtSha256": "befc613dcb3a4159e24d1ce1676c88a0537506dbbb4e6ad06ba990e2987de773",
+      "runningMatchesBuilt": true
+    },
+    {
+      "service": "pubsub_workers",
+      "builtSha256": "cb3efccbc828cb83078bd6cfe6a9966637ccb89fd7dbcb85fdc82b2606705137",
+      "runningMatchesBuilt": true
+    },
+    {
+      "service": "imap_service",
+      "builtSha256": "78436b809e31a16b5ad5fab8f540708cf80e689ed6098dd8490b140f165d9b11",
+      "runningMatchesBuilt": true
+    }
+  ],
+  "submissions": {
+    "distinctSyntheticMessages": 2,
+    "submitCallsPerMessage": 1,
+    "localSinkCapturesPerMessage": [
+      1,
+      1
+    ],
+    "accepted": true,
+    "realRecipientDeliveryProved": false
+  },
+  "trace": {
+    "connectedSpanChain": [
+      "execute",
+      "imap.submit",
+      "imap.protocol.submit"
+    ],
+    "spanCount": 21,
+    "deadlineExceeded": false,
+    "renewFailuresAfterPrivateNormalization": 0,
+    "identifiers": "withheld"
+  },
+  "privacy": {
+    "disallowedDataAbsent": true,
+    "typedFieldsRetained": true,
+    "invalidBooleanDropped": true,
+    "linkedSpanDropped": true
+  },
+  "counterScope": {
+    "privateNormalization": "Only 1-15 decimal-digit strings are converted to integers for smtp.renew_failures and remaining_tasks; invalid counts and booleans are dropped.",
+    "productionNumericCounters": "not proved; app u64/usize records export as strings with the current tracing-opentelemetry layer",
+    "followUp": "mac-imap-smtp.105"
+  },
+  "firstProbe": {
+    "accepted": true,
+    "renewCounterNotRetainedByEarlierPrivateFilter": true,
+    "notCountedAsCounterProof": true
+  },
+  "runtimeNotExercised": [
+    "HTTP cancellation",
+    "renewal failure or timeout",
+    "SMTP total deadline expiry",
+    "shutdown drain/refusal"
+  ],
+  "scope": {
+    "directAuthenticatedPrivateHttp": true,
+    "publicGatewayOrBrowserProved": false,
+    "supportServicesAndFrontendRetainedOlderBuilds": true,
+    "realProvider": false,
+    "multiReplicaThroughput": false,
+    "productionNumericAggregation": false
+  },
+  "previewApplicationsStopped": true,
+  "persistentLocalDataKept": true,
+  "mergeHeld": true,
+  "deployed": false
+}
