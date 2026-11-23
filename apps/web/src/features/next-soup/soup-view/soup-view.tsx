@@ -29,10 +29,6 @@ import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/sou
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
 import { SoupRowMetadataProvider } from '@app/features/next-soup/soup-view/soup-row-metadata-provider';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { SoupViewCreateButton } from '@app/features/next-soup/soup-view/soup-view-create-button';
@@ -63,6 +59,7 @@ import { usePreference } from '@app/preferences/use-preference';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import {
@@ -883,7 +880,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const finishTouchHighlight = persistSoupNavigationTouchHighlight(event);
+    const releaseRowPress = holdRowPress(event);
 
     try {
       await openEntityInSplitFromUnifiedList(entity, {
@@ -894,7 +891,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         notificationSource,
       });
     } finally {
-      finishTouchHighlight?.();
+      releaseRowPress?.();
     }
   };
 
@@ -1254,10 +1251,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     >
                       <SoupList
                         cache={readListEntryState()?.virtualCache}
-                        ref={(el) => {
-                          setLocalEntityListRef(el);
-                          soupNavigationTouchHighlight(el);
-                        }}
+                        ref={setLocalEntityListRef}
                         scrollerRef={setListScrollerRef}
                         virtualizerClass="scrollbar-hidden"
                         class="overflow-hidden flex min-w-0"

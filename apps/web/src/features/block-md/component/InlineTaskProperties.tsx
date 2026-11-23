@@ -120,6 +120,7 @@ export function InlineTaskProperties() {
       (property) =>
         selected.includes(property.propertyId) &&
         !property.isMetadata &&
+        property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.TIME_LOGGED &&
         !tagDefinitionIds().has(property.propertyDefinitionId)
     );
     if (documentKind !== 'task') return visible;

@@ -680,7 +680,7 @@ export default {
     more: 'और',
     moreOptions: 'ज़्यादा विकल्प',
     create: 'बनाएं',
-    getMobileApp: 'मोबाइल ऐप पाएं',
+    downloads: 'डाउनलोड',
     signedInAs: '{{name}} के रूप में साइन इन किया है',
     customizeSidebar: 'साइडबार को पसंद के मुताबिक बनाएं',
     customizeSidebarDescription:
@@ -744,8 +744,7 @@ export default {
     tabShortcuts: 'कीबोर्ड शॉर्टकट',
     tabUsage: 'इस्तेमाल',
     tabBilling: 'बिलिंग',
-    tabDesktopApp: 'डेस्कटॉप ऐप',
-    tabMobileApp: 'मोबाइल ऐप',
+    tabDownloads: 'डाउनलोड',
     tabTags: 'टैग',
     tabIntegrations: 'इंटीग्रेशन',
     tabRuntimes: 'मशीनें',

@@ -29,6 +29,7 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { t } from '@app/lib/i18n';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
@@ -71,10 +72,6 @@ import {
 import type { CacheSnapshot } from 'virtua';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { canMarkNotDone } from '../../next-soup/actions/can-mark-not-done';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
 import { canSearchEmailTab, isExcludedEmailFolder } from '../constants';
 import {
@@ -166,8 +163,8 @@ export function EmailList(props: EmailListProps) {
     } = {}
   ) {
     markRowNotificationsSeenOnOpen(entity, notificationSource);
-    const finishTouchHighlight = options.event
-      ? persistSoupNavigationTouchHighlight(options.event)
+    const releaseRowPress = options.event
+      ? holdRowPress(options.event)
       : undefined;
 
     fireAndForget(
@@ -175,7 +172,7 @@ export function EmailList(props: EmailListProps) {
         splitHandle: panel.handle,
         referredFrom: 'mail',
         openInNewSplit: options.openInNewSplit,
-      }).finally(() => finishTouchHighlight?.()),
+      }).finally(() => releaseRowPress?.()),
       'open-entity-in-split'
     );
   }
@@ -830,10 +827,7 @@ export function EmailList(props: EmailListProps) {
 
               <Match when={true}>
                 <div
-                  ref={(element) => {
-                    setViewport(element);
-                    soupNavigationTouchHighlight(element);
-                  }}
+                  ref={setViewport}
                   aria-busy={showsPreviousRows()}
                   classList={{ 'opacity-50': showsPreviousRows() }}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none transition-opacity"

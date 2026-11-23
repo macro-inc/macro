@@ -26,6 +26,7 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
+import { holdRowPress } from '@components/app/mobile/rowPress';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import type { PreviewSelection } from '@components/app/previewTarget';
 import {
@@ -60,10 +61,6 @@ import {
   untrack,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import {
-  persistSoupNavigationTouchHighlight,
-  soupNavigationTouchHighlight,
-} from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { InboxListEntity } from '../../next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   markChannelNotificationsSeenOnOpen,
@@ -261,8 +258,8 @@ export function HomeList(props: HomeListProps) {
   ) {
     markEntitySeen(entity);
 
-    const finishTouchHighlight = options.event
-      ? persistSoupNavigationTouchHighlight(options.event)
+    const releaseRowPress = options.event
+      ? holdRowPress(options.event)
       : undefined;
 
     try {
@@ -273,7 +270,7 @@ export function HomeList(props: HomeListProps) {
         mergeHistory: options.mergeHistory,
       });
     } finally {
-      finishTouchHighlight?.();
+      releaseRowPress?.();
     }
   }
 
@@ -691,10 +688,7 @@ export function HomeList(props: HomeListProps) {
 
               <Match when={true}>
                 <div
-                  ref={(element) => {
-                    setViewport(element);
-                    soupNavigationTouchHighlight(element);
-                  }}
+                  ref={setViewport}
                   class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
                   onScroll={checkNearEnd}
                 >

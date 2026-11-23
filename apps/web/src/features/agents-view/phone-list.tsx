@@ -1,7 +1,6 @@
 import { createListController } from '@app/components/list';
 import { ChannelPinGrid } from '@app/features/channels-view/components/ChannelPins';
 import { toEntityActionListState } from '@app/features/next-soup/actions';
-import { soupNavigationTouchHighlight } from '@app/features/next-soup/soup-view/soup-navigation-touch-highlight';
 import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { t } from '@app/lib/i18n';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
@@ -125,15 +124,10 @@ export function PhoneAgentsList(props: {
     isSelectable: () => false,
   });
   const list = toEntityActionListState({ controller, getEntity: (row) => row });
-  let clearPress: (() => void) | undefined;
   const renderRows = (rows: AgentConversationEntity[], waiting = false) => (
     <For each={rows}>
       {(row) => (
-        <ConversationContextMenu
-          conversation={row}
-          list={list}
-          onOpenChange={() => clearPress?.()}
-        >
+        <ConversationContextMenu conversation={row} list={list}>
           <PhoneConversationRow
             archived={
               Boolean(props.search) &&
@@ -178,9 +172,6 @@ export function PhoneAgentsList(props: {
           onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
         />
         <div
-          ref={(element) => {
-            clearPress = soupNavigationTouchHighlight(element);
-          }}
           class="size-full min-h-0 overflow-auto"
           classList={{
             'pt-2': props.archived || !!props.search || props.rosterLoading,

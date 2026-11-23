@@ -690,7 +690,7 @@ export default {
     more: 'Lisää',
     moreOptions: 'Lisää vaihtoehtoja',
     create: 'Luo',
-    getMobileApp: 'Hanki mobiilisovellus',
+    downloads: 'Lataukset',
     signedInAs: 'Kirjautuneena: {{name}}',
     customizeSidebar: 'Mukauta sivupalkkia',
     customizeSidebarDescription:
@@ -755,8 +755,7 @@ export default {
     tabShortcuts: 'Pikanäppäimet',
     tabUsage: 'Käyttö',
     tabBilling: 'Laskutus',
-    tabDesktopApp: 'Työpöytäsovellus',
-    tabMobileApp: 'Mobiilisovellus',
+    tabDownloads: 'Lataukset',
     tabTags: 'Tunnisteet',
     tabIntegrations: 'Integraatiot',
     tabRuntimes: 'Koneet',

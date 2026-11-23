@@ -1,4 +1,4 @@
-import { createRoot, createSignal } from 'solid-js';
+import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useSettingsTabs } from './settingsTabsConfig';
 
@@ -7,9 +7,7 @@ const touch = vi.hoisted(() => ({ current: false }));
 let flagEnabled: () => boolean;
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: (flag: { key: string }) => () => ({
-    enabled: flag.key === 'desktop-app' && flagEnabled(),
-  }),
+  useFeatureFlag: () => () => ({ enabled: flagEnabled() }),
 }));
 vi.mock('../mobile/isTouchDevice', () => ({
   isTouchDevice: () => touch.current,
@@ -31,33 +29,37 @@ vi.mock('../util/platform', async (importOriginal) => ({
 let dispose: () => void;
 afterEach(() => dispose?.());
 
-describe('Desktop App settings rollout', () => {
-  it.each(['web', 'desktop', 'ios', 'android'])(
-    'gates navigation, search, and direct access on %s',
-    (host) => {
+describe('Downloads settings', () => {
+  // Phones, tablets and the mobile apps have no Downloads page; computers get
+  // it in the browser and the desktop app, whatever the remote flags say.
+  it.each([
+    { host: 'web', onTouch: false, expected: true },
+    { host: 'desktop', onTouch: false, expected: true },
+    { host: 'web', onTouch: true, expected: false },
+    { host: 'ios', onTouch: true, expected: false },
+    { host: 'android', onTouch: true, expected: false },
+    { host: 'ios', onTouch: false, expected: false },
+  ])(
+    'is available on $host with touch=$onTouch: $expected',
+    ({ host, onTouch, expected }) => {
       platform.current = host;
+      touch.current = onTouch;
       const tabs = createRoot((cleanup) => {
         dispose = cleanup;
-        const [enabled, setEnabled] = createSignal(false);
-        flagEnabled = enabled;
-        return { ...useSettingsTabs(), setEnabled };
+        flagEnabled = () => false;
+        return useSettingsTabs();
       });
 
-      for (const enabled of [false, true, false]) {
-        tabs.setEnabled(enabled);
-        const expected = host === 'desktop' || (host === 'web' && enabled);
-        expect(tabs.isAvailable('Desktop App')).toBe(expected);
-        expect(tabs.flatTabs().some((item) => item.tab === 'Desktop App')).toBe(
-          expected
-        );
-        expect(
-          tabs
-            .searchGroups()
-            .some((group) =>
-              group.items.some((item) => item.tab === 'Desktop App')
-            )
-        ).toBe(expected);
-      }
+      expect(tabs.isAvailable('Downloads')).toBe(expected);
+      expect(tabs.flatTabs().some((item) => item.tab === 'Downloads')).toBe(
+        expected
+      );
+      expect(
+        tabs
+          .searchGroups()
+          .some((group) => group.items.some((item) => item.tab === 'Downloads'))
+      ).toBe(expected);
+      touch.current = false;
     }
   );
 });

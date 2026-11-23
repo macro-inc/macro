@@ -12,6 +12,7 @@ import {
   pickDay,
   pickTime,
   pickTimedDay,
+  rescheduledStartDue,
   startDueDays,
   startDueLength,
   startDueOf,
@@ -441,5 +442,86 @@ describe('pickTimedDay past the due date', () => {
       },
       changed: ['start', 'due'],
     });
+  });
+});
+
+describe('rescheduledStartDue', () => {
+  it('saves only the end a whole-day edge drag moved, compared by day', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 23, 59) },
+        { start: at(23, 0), end: at(29, 0), allDay: true }
+      )
+    ).toEqual([{ field: 'due', value: at(29, 0), hasTime: false }]);
+  });
+
+  it('saves the due date first when a moved bar starts after the saved due date', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(25, 0) },
+        { start: at(26, 0), end: at(28, 0), allDay: true }
+      )
+    ).toEqual([
+      { field: 'due', value: at(28, 0), hasTime: false },
+      { field: 'start', value: at(26, 0), hasTime: false },
+    ]);
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 0) },
+        { start: at(22, 0), end: at(26, 0), allDay: true }
+      ).map((end) => end.field)
+    ).toEqual(['start', 'due']);
+  });
+
+  it('keeps the times of a timed bar and compares them by moment', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(26, 14), due: at(26, 16) },
+        { start: at(26, 15), end: at(26, 16), allDay: false }
+      )
+    ).toEqual([{ field: 'start', value: at(26, 15), hasTime: true }]);
+  });
+
+  it('keeps an end saved as a whole day whole on a timed bar', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
+        { start: at(24, 0), end: at(28, 15), allDay: false }
+      )
+    ).toEqual([
+      { field: 'start', value: at(24, 0), hasTime: false },
+      { field: 'due', value: at(28, 15), hasTime: true },
+    ]);
+  });
+
+  it('compares an end saved as a whole day by its day on a timed bar, and saves it at the start of the day', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
+        { start: at(23, 1), end: at(27, 15), allDay: false }
+      )
+    ).toEqual([]);
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
+        { start: at(24, 1), end: at(27, 15), allDay: false }
+      )
+    ).toEqual([{ field: 'start', value: at(24, 0), hasTime: false }]);
+  });
+
+  it('gives a task drawn from its created date a start only when the start moved', () => {
+    const created = new Date(2026, 10, 20, 9, 12);
+    expect(
+      rescheduledStartDue(
+        { start: created, due: at(27, 0) },
+        { start: at(20, 0), end: at(28, 0), allDay: true }
+      )
+    ).toEqual([{ field: 'due', value: at(28, 0), hasTime: false }]);
+    expect(
+      rescheduledStartDue(
+        { start: created, due: at(27, 0) },
+        { start: at(21, 0), end: at(28, 0), allDay: true }
+      ).map((end) => end.field)
+    ).toEqual(['start', 'due']);
   });
 });
