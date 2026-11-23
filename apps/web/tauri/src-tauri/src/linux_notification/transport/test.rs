@@ -118,20 +118,20 @@ async fn setup(early_click: bool, fail: bool) -> (Bus, Connection, Connection, A
         NEXT_BUS.fetch_add(1, Ordering::Relaxed)
     ));
     std::fs::write(&config, BUS_CONFIG).unwrap();
-    let mut child = Command::new("dbus-daemon")
+    // Wrapped at once, so a failed setup below still stops the daemon.
+    let mut bus = Bus(Command::new("dbus-daemon")
         .arg("--nofork")
         .arg("--print-address=1")
         .arg(format!("--config-file={}", config.display()))
         .stdout(Stdio::piped())
         .spawn()
-        .expect("dbus-daemon from the tauri-linux shell");
+        .expect("dbus-daemon from the tauri-linux shell"));
     // The daemon prints its address once it has read the configuration.
     let mut address = String::new();
-    BufReader::new(child.stdout.take().unwrap())
+    BufReader::new(bus.0.stdout.take().unwrap())
         .read_line(&mut address)
         .unwrap();
     std::fs::remove_file(&config).unwrap();
-    let bus = Bus(child);
     let calls = Arc::new(Mutex::new(Calls::default()));
     let server = Builder::address(address.trim())
         .unwrap()
