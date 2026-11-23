@@ -162,6 +162,41 @@ test('keeps lanes apart and scrolls to the end in one move with a larger text si
   await cdp.detach();
 });
 
+test('keeps the lane at the left edge when the text size changes', async ({
+  page,
+}) => {
+  const cdp = await page.context().newCDPSession(page);
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  await expect(page.locator('[data-kanban-card]').first()).toBeVisible({
+    timeout: 30000,
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  // Stage 10, the 13th lane.
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000009"]'
+  );
+  await viewport.evaluate((element) => {
+    element.scrollLeft = 16 + 12 * 352;
+  });
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await cdp.send('Page.setFontSizes', { fontSizes: { standard: 20 } });
+  await expect
+    .poll(() =>
+      page.evaluate(() => getComputedStyle(document.documentElement).fontSize)
+    )
+    .toBe('20px');
+  await expect
+    .poll(async () => {
+      const [lanes, box] = await Promise.all([
+        lane.boundingBox(),
+        viewport.boundingBox(),
+      ]);
+      return lanes && box ? Math.round(lanes.x - box.x) : null;
+    })
+    .toBe(0);
+  await cdp.detach();
+});
+
 test.describe('touch scrolling', () => {
   test.use({
     isMobile: true,

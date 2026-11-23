@@ -313,8 +313,16 @@ function Columns(props: {
   let columnWidth = 336;
   function setColumnWidth(width: number) {
     if (width <= 0 || width === columnWidth) return;
+    // Every lane moves but the viewport keeps its pixel offset, so scroll back
+    // to the lane that was at the left edge. Read the item before `measure()`,
+    // which rewrites it in place.
+    const offset = virtualizer.scrollOffset ?? 0;
+    const item =
+      offset > 0 ? virtualizer.getVirtualItemForOffset(offset) : undefined;
+    const lane = item && item.index + (offset - item.start) / (item.size + 16);
     columnWidth = width;
     virtualizer.measure();
+    if (lane) virtualizer.scrollToOffset(16 + lane * (width + 16));
   }
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
