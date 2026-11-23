@@ -261,7 +261,10 @@ The counts measure work attempted, not successes, and are not interchangeable:
   reused for `ROTATE` (25) sequences, and a refused signup clears the sign-up
   counter in the instance's own Redis (`$REDIS_CONTAINER`, as the email e2e
   tier does) and retries; with `REDIS_CONTAINER=` it waits five minutes instead.
-- Chromium aborts every request in flight when the machine's network
+- `run.sh` runs inside its own network namespace
+  (`apps/web/tests/view-parity/isolated-network.sh`, with only the proxy port of
+  `$BASE` forwarded; `ISOLATE=0` runs on the host network): on the host,
+  Chromium aborts every request in flight when the machine's network
   interfaces change (`ERR_NETWORK_CHANGED`; on a machine where other stacks'
   containers add and remove virtual interfaces all the time), and one lost
   module fails the page's whole module graph. A page that is not ready yet,

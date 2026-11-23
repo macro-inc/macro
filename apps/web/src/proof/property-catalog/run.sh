@@ -23,6 +23,23 @@ ROOT="$(cd "$HERE/../../../../.." && pwd)"
 OLD_COMMIT="$(git -C "$ROOT" rev-parse --verify "${OLD_COMMIT:-c8b5760036c}^{commit}")"
 export OLD_COMMIT
 MODES=("${@:-all}")
+
+# Chromium aborts every request in flight whenever a host network interface
+# changes (net::ERR_NETWORK_CHANGED), and other stacks' containers add and
+# remove interfaces all the time: with 16 pages loading the app at once, every
+# load lost a module and no account could sign in. So the whole run goes into
+# its own network namespace, with only the stack's HTTPS proxy port forwarded
+# (Postgres and Redis are reached through `docker exec`). ISOLATE=0 runs on the
+# host network.
+if [[ -z "${PC_ISOLATED:-}" && "${ISOLATE:-1}" != 0 ]]; then
+  proxy="${BASE:-https://localhost:24709}"
+  port="${proxy##*:}"; port="${port%%/*}"
+  wrapper="$ROOT/apps/web/tests/view-parity/isolated-network.sh"
+  if command -v socat >/dev/null; then
+    PC_ISOLATED=1 exec "$wrapper" "$port" "${BASH_SOURCE[0]}" "${MODES[@]}"
+  fi
+  PC_ISOLATED=1 exec nix shell nixpkgs#socat -c "$wrapper" "$port" "${BASH_SOURCE[0]}" "${MODES[@]}"
+fi
 # The run shape comes from each mode below, never from the caller's
 # environment; only smoke takes SEED and MUTANT from it.
 SMOKE_SEED="${SEED:-1}"
