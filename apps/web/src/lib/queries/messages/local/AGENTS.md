@@ -22,16 +22,23 @@ TanStack path in `../` runs untouched.
   timelines and threads to reread (`onChanged`).
 - Write: `channel-writes.ts` enqueues the `*ChannelMessage` mutations on the
   durable cache mutation queue and waits for their settlement; a retired host
-  (`graphql-soup.ts` cleanup) fails the writes still waiting. A write whose
-  transaction left the queue while the page was suspended (the back/forward
-  cache) is read back from the device when the engine returns. The queue
-  replays a channel write the server answered `SERVICE_UNAVAILABLE`
-  (`graphql-mutation-retry.ts`): the server dedupes by message id.
+  (`graphql-soup.ts` cleanup) fails the writes still waiting. When the cache
+  session changes (the engine returned from the back/forward cache, or reset),
+  a waiting write asks the queue whether it still holds the write: if not, it
+  answers from the device copy, else for a send from the server copy
+  (`ChannelMessage`), else `NOT_SENT`/`NOT_FOUND`; a queue that cannot be read
+  after a reset fails the write with `CACHE_RESET`. The queue replays only
+  sends and deletes the server answered `SERVICE_UNAVAILABLE`
+  (`graphql-mutation-retry.ts`): the server dedupes them by message id, while a
+  replayed edit or reaction could undo a newer one. A send the queue stops
+  retrying answers with the server copy when there is one.
 - Ahead: `channel-prewarm.ts` fetches unread then recent channels while the
   person is idle, and evicts channels untouched for 30 days. A pushed frame
-  for a channel the device does not hold gives it an empty sync row once, so
-  eviction finds the records the frame stored; eviction makes the runtime
-  forget the channels it removed (`forget`), so a later frame adds the row again.
+  for a channel the device does not hold gives it an empty sync row once the
+  device writes it, so eviction finds the records the frame stored. Eviction,
+  here or in another tab (the `macro.channel-timeline.evictions`
+  BroadcastChannel), makes the runtime forget the channels it removed
+  (`forget`), so a later frame adds the row again.
 
 ## Start here
 
@@ -44,14 +51,17 @@ TanStack path in `../` runs untouched.
   also holds the `macro.channel-timeline.deletes` Web Lock shared from before
   its fetch until its coverage is sent (`holdAgainstDeletes`), and eviction and
   resets take it exclusive (`whileNoFills`): eviction gives up after 5 s and
-  tries next round, a reset runs anyway after 30 s. A fill that finds a delete
-  waiting commits no coverage.
+  tries next round, a reset runs anyway after 30 s. A fill holds the lock at
+  most 20 s (`FILL_HOLD_LIMIT_MS`). A fill that finds a delete waiting, or
+  outlived its hold, commits no coverage and reports `yielded`: the open
+  timeline or thread shows what it read, waits for the delete
+  (`afterDeletes`) and reads again, at most twice.
 
 ## Checks
 
 - `bun run test -- src/lib/queries/messages` (from `apps/web`).
 - `bunx oxlint --type-aware apps/web/src/lib/queries/messages` (repository root).
-- End to end: `tests/channels-e2e/README.md`, with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`.
+- End to end: `apps/web/tests/channels-e2e/README.md`, with `VITE_ENABLE_CHANNEL_LOCAL_SYNC=true`.
 
 ## Gotchas
 
@@ -77,4 +87,4 @@ TanStack path in `../` runs untouched.
 ## Related
 
 - Rules: `.agents/rules/web/libraries.md` (FE-46), `.agents/rules/observability.md`
-- Docs: `docs/agent-guide/channels.md`, `tests/channels-e2e/README.md`
+- Docs: `docs/agent-guide/channels.md`, `apps/web/tests/channels-e2e/README.md`

@@ -2100,7 +2100,7 @@ the 40 newest unread and 20 most recently viewed channels are fetched ahead;
 channels unopened for 30 days are dropped. Verify a change both ways: flag off
 must behave as REST always has. The code and its gotchas are in
 `apps/web/src/lib/queries/messages/local/AGENTS.md`; the end-to-end suite is
-`tests/channels-e2e/README.md`.
+`apps/web/tests/channels-e2e/README.md`.
 
 ## Pending message drafts
 
