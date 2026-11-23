@@ -247,7 +247,7 @@ Explicit participant/agent/thread choices remain scoped extras. Matching address
 are deduplicated while keeping the caller's selected representation. Picking a
 selected row again removes it, except where the picker sets
 `markAlreadyAdded` (the email composers): there it is dimmed with its check and
-can't be picked, and only its chip removes it. Other recipient surfaces
+can't be picked; its chip's X or Backspace removes it. Other recipient surfaces
 are migrating separately; these controls do not change the AI planner's people pool.
 
 ## Property people pickers
