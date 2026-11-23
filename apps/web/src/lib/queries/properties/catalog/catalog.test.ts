@@ -355,13 +355,29 @@ describe('catalog list results', () => {
         refused,
       ]);
 
-      // Another read (other variables) does not inherit the refusal.
+      // Another read (other variables) neither inherits the refusal nor,
+      // once the server answers it, clears it.
       state.operationKey = 2;
       expect(list.isError).toBe(false);
+      stamp.onResult(result(2, 'live-network', { user: {} }));
       state.operationKey = 1;
       expect(list.isError).toBe(true);
 
-      // The server's next answer replaces it.
+      // A refetch that reached no server leaves it standing, offline too.
+      onlineManager.setOnline(false);
+      try {
+        const offline = new CombinedError({
+          networkError: new Error('offline'),
+        });
+        state.error = offline;
+        stamp.onResult(result(1, 'live-network', undefined, offline));
+        expect([list.isError, list.error]).toEqual([true, refused]);
+      } finally {
+        onlineManager.setOnline(true);
+      }
+      state.error = undefined;
+
+      // The server's next successful answer replaces it.
       stamp.onResult(result(1, 'live-network', { user: {} }));
       expect([list.isError, list.error]).toEqual([false, null]);
       dispose();
