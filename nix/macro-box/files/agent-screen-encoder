@@ -9,7 +9,8 @@ if ! IFS=' ' read -r -t 10 fps width height keyint extra; then
   exit 64
 fi
 
-in_range() { [[ $1 =~ ^[0-9]+$ ]] && ((10#$1 >= $2 && 10#$1 <= $3)); }
+# At most four significant digits, so the arithmetic can't wrap.
+in_range() { [[ $1 =~ ^0*([0-9]{1,4})$ ]] && ((10#${BASH_REMATCH[1]} >= $2 && 10#${BASH_REMATCH[1]} <= $3)); }
 if [[ -n ${extra:-} ]] ||
   ! in_range "$fps" 1 60 ||
   ! in_range "$width" 160 1920 || ((10#$width % 2)) ||

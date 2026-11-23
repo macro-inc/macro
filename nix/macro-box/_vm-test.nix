@@ -355,7 +355,7 @@ pkgs.testers.runNixOSTest {
           # The instance ends with its connection.
           agent.wait_until_fails(f"systemctl is-active --quiet {instance}")
           # A bad config line closes the connection with nothing sent.
-          agent.fail(f"{viewer} 5902 '0 640 360 10' 5 /tmp/refused.mp4")
+          agent.succeed(f"{viewer} 5902 '0 640 360 10' 5 -")
           # So does a connection that hangs up without one (a port probe),
           # and neither leaves an instance behind.
           agent.succeed("${pkgs.bash}/bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/5902; exec 3>&-'")

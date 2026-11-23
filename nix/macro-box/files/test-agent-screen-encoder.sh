@@ -9,7 +9,7 @@ trap 'kill $xvfb' EXIT
 until [ -S /tmp/.X11-unix/X7 ]; do sleep 0.1; done
 export DISPLAY=:7
 
-for line in "" "0 640 360 10" "10 641 360 10" "10 1922 1080 10" "10 640 360 10 x" "10 640 360"; do
+for line in "" "0 640 360 10" "10 641 360 10" "10 1922 1080 10" "18446744073709551617 640 360 10" "10 640 360 10 x" "10 640 360"; do
   if printf '%s\n' "$line" | agent-screen-encoder > refused.mp4 2> /dev/null; then
     echo "accepted config line '$line'" >&2
     exit 1

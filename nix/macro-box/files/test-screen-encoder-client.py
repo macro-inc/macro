@@ -3,6 +3,8 @@
 # after the first byte (which may take a while: ffmpeg's cold start in a
 # loaded test VM) to <output>, then check it is ftyp + moov, then whole
 # moof + mdat pairs.
+# With <output> `-` it expects a refusal instead: the connection closes with
+# nothing sent.
 # Usage: test-screen-encoder-client.py <port> <config line> <seconds> <output>
 import socket
 import struct
@@ -11,6 +13,7 @@ import time
 
 port, line, seconds, output = int(sys.argv[1]), sys.argv[2], float(sys.argv[3]), sys.argv[4]
 data = bytearray()
+closed = False
 with socket.create_connection(("127.0.0.1", port), timeout=10) as connection:
     connection.sendall(line.encode() + b"\n")
     deadline = time.monotonic() + 60
@@ -21,10 +24,16 @@ with socket.create_connection(("127.0.0.1", port), timeout=10) as connection:
         except TimeoutError:
             break
         if not chunk:
+            closed = True
             break
         if not data:
             deadline = time.monotonic() + seconds
         data += chunk
+
+if output == "-":
+    assert closed and not data, f"closed={closed}, {len(data)} bytes sent for a refused line"
+    print("refused")
+    sys.exit(0)
 
 boxes, at, whole = [], 0, 0
 while at + 8 <= len(data):
