@@ -159,7 +159,9 @@ export async function readTimelineRecords(
   keys: readonly string[]
 ): Promise<ChannelTimelineRecord[] | undefined> {
   if (keys.length === 0) return [];
-  const { records } = await readRecordsByKeys(host, timelineEntrySelection(), [...keys]);
+  const { records } = await readRecordsByKeys(host, timelineEntrySelection(), [
+    ...keys,
+  ]);
   const byKey = new Map(
     records.map(({ recordKey, record }) => [
       recordKey,

@@ -1,6 +1,9 @@
 import type { OperationResult } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CHANNEL_STREAM_RETRY_MS, createChannelStream } from '../channel-stream';
+import {
+  CHANNEL_STREAM_RETRY_MS,
+  createChannelStream,
+} from '../channel-stream';
 import { CHANNEL_ID } from './fixtures';
 
 vi.mock('@macro-inc/observability', () => ({
