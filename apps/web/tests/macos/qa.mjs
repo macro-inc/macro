@@ -12,17 +12,19 @@
 // runner without a GUI session reports window checks as failed, not passed.
 //
 // `--dmg <Macro.dmg>` names the release DMG the app was copied from and adds the
-// checks only a notarized release passes (stapled ticket, Gatekeeper); `Build
+// checks only the release passes (its build's checksum, Gatekeeper); `Build
 // Desktop on Tag` runs the smoke suite that way on the DMG it built, and its
 // desktop-stable promotion waits for a pass.
-// `--attempts N` relaunches the app up to N times when a launch check fails, so
-// one flaky launch does not block a release; every attempt is reported.
+// `--attempts N` relaunches the app up to N times when it shows no window or no
+// screenshot, so one flaky launch does not block a release; a crash, crash
+// report or panic on any attempt fails at once. Every attempt is reported.
 //
 // The desktop app on macOS is Chromium (CEF), not WKWebView, and tauri-driver
 // does not support macOS, so there is no WebDriver route. The `cdp` check
 // instead asks the running app for Chrome DevTools Protocol on a debugging
 // port and reports whether the app honours it.
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
 	appendFileSync,
 	existsSync,
@@ -34,7 +36,7 @@ import {
 	cpSync,
 } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 
 const { values: args } = parseArgs({
@@ -146,12 +148,21 @@ const systemEnv = Object.fromEntries(
 
 if (args.dmg) {
 	const dmg = args.dmg;
-	// Both read the ticket stapled to the DMG, so neither needs Apple's servers.
-	await check("notarization-ticket", async () => {
-		const r = run("/usr/bin/xcrun", ["stapler", "validate", dmg], { env: systemEnv });
-		return r.code === 0
-			? pass(`stapler validate: ticket stapled to ${basename(dmg)}`)
-			: fail(`stapler validate exit ${r.code}: ${`${r.stdout}${r.stderr}`.trim().slice(0, 400)}`);
+	// The DMG is the one build-dmg stapled and checked: its SHA256SUMS, written
+	// after stapling, travels in the same artifact. (stapler validate would ask
+	// Apple's CloudKit, which these runners reach unreliably.)
+	await check("dmg-checksum", async () => {
+		const sums = join(dirname(dmg), "macro-dmg-SHA256SUMS");
+		if (!existsSync(sums)) return fail(`no macro-dmg-SHA256SUMS beside ${basename(dmg)}`);
+		const expected = readFileSync(sums, "utf8")
+			.split("\n")
+			.map((line) => line.trim().split(/\s+\*?/))
+			.find(([, name]) => name === basename(dmg))?.[0];
+		if (!expected) return fail(`macro-dmg-SHA256SUMS has no entry for ${basename(dmg)}`);
+		const actual = createHash("sha256").update(readFileSync(dmg)).digest("hex");
+		return actual === expected
+			? pass(`sha256 ${actual.slice(0, 16)}… matches macro-dmg-SHA256SUMS`)
+			: fail(`sha256 ${actual} does not match macro-dmg-SHA256SUMS (${expected})`);
 	});
 
 	await check("gatekeeper", async () => {
@@ -160,7 +171,8 @@ if (args.dmg) {
 			["--assess", "--type", "open", "--context", "context:primary-signature", "-vv", dmg],
 			{ env: systemEnv },
 		);
-		// spctl reports on stderr: "<dmg>: accepted\nsource=Notarized Developer ID".
+		// Reads the stapled ticket. spctl reports on stderr:
+		// "<dmg>: accepted\nsource=Notarized Developer ID".
 		const text = `${r.stdout}${r.stderr}`.trim();
 		return r.code === 0 && /source=Notarized Developer ID/.test(text)
 			? pass(text.split("\n").slice(1).join("; "))
@@ -232,6 +244,8 @@ const launchAndCheck = async () => {
 	// A clean HOME: the app creates its data directories as a first-time user.
 	const home = join(tmpdir(), `macro-qa-home-${process.pid}-${attempt}`);
 	mkdirSync(home, { recursive: true });
+	const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
+	const reportsBefore = new Set(existsSync(reports) ? readdirSync(reports) : []);
 	const appLog = join(out, named("app.log"));
 	writeFileSync(appLog, "");
 	const launchedAt = Date.now();
@@ -321,13 +335,14 @@ const launchAndCheck = async () => {
 	await sleep(3000);
 
 	await check("no-crash-report", async () => {
-		const reports = join(realHome, "Library", "Logs", "DiagnosticReports");
+		// Only reports written since this attempt began: an earlier attempt's
+		// report belongs to that attempt.
 		const fresh = existsSync(reports)
 			? readdirSync(reports).filter(
 					(n) =>
+						!reportsBefore.has(n) &&
 						/\.(ips|crash)$/.test(n) &&
-						n.toLowerCase().includes(basename(executable).toLowerCase()) &&
-						statSync(join(reports, n)).mtimeMs >= launchedAt,
+						n.toLowerCase().includes(basename(executable).toLowerCase()),
 				)
 			: [];
 		for (const name of fresh) cpSync(join(reports, name), join(out, name));
@@ -359,14 +374,20 @@ const launchAndCheck = async () => {
 	}
 };
 
-// A launch check that fails is retried with a fresh launch, up to `attempts`
+// Failures a fresh launch can clear: the window server or the display, not the
+// app. Anything else (exiting early, a crash report or signal, a panic) is what
+// the gate exists to catch, so it ends the run on the attempt that saw it.
+const RETRYABLE = new Set(["window-appears", "screenshot"]);
+
+// A launch whose only failures are retryable is tried again, up to `attempts`
 // times; the last attempt's checks are the result, earlier ones are reported.
 const retried = [];
 for (;;) {
 	target = [];
 	await launchAndCheck();
 	const failed = target.filter((c) => c.status === "fail");
-	if (failed.length === 0 || attempt >= attempts) break;
+	const retryable = failed.length > 0 && failed.every((c) => RETRYABLE.has(c.name));
+	if (!retryable || attempt >= attempts) break;
 	retried.push({ attempt, failed: failed.map(({ name, detail }) => ({ name, detail })) });
 	console.log(`attempt ${attempt} of ${attempts} failed (${failed.map((c) => c.name).join(", ")}); relaunching`);
 	attempt += 1;
@@ -387,6 +408,8 @@ if (full) {
 		if (!existsSync(cargoStatus)) return skip("cargo test was not run");
 		const status = readFileSync(cargoStatus, "utf8").trim();
 		if (status === "0") return pass("cargo test (src-tauri) passed; log in cargo-test.log");
+		if (status === "no-linker")
+			return skip("this ref predates .#tauri-desktop-apple-linker, which the tests link with; no tests ran");
 		const log = existsSync(join(out, "cargo-test.log")) ? readFileSync(join(out, "cargo-test.log"), "utf8") : "";
 		// A test binary that never linked ran no tests: say so, and still fail.
 		if (/linker command failed|linking with/.test(log) && !/^test result:/m.test(log))

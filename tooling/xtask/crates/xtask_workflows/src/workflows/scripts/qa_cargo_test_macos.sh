@@ -18,7 +18,12 @@ echo development > apps/web/tauri/src-tauri/.macro-tauri-env
 # to it. Link with the DMG build's Apple linker shim, which runs Xcode's ld.
 if ! linker=$(nix build --no-link --print-out-paths ".#tauri-desktop-apple-linker" 2> "$QA_OUT/cargo-test.log"); then
   echo "could not build the Apple linker shim; see cargo-test.log" >&2
-  echo 1 > "$QA_OUT/cargo-test.status"
+  # A ref from before the shim was exported: the harness reports a skip.
+  if grep -q "does not provide attribute" "$QA_OUT/cargo-test.log"; then
+    echo no-linker > "$QA_OUT/cargo-test.status"
+  else
+    echo 1 > "$QA_OUT/cargo-test.status"
+  fi
   tail -n 30 "$QA_OUT/cargo-test.log"
   exit 0
 fi

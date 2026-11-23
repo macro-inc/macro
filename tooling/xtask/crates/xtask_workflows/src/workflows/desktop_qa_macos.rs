@@ -214,7 +214,13 @@ fn run_harness() -> Step<Run> {
 
 fn upload_results(prefix: &str) -> Step<Use> {
     ActionsUploadArtifact::new("Upload QA results", out())
-        .name(format!("{prefix}-{}", github().run_id()))
+        // A re-run of a failed job uploads again; upload-artifact refuses a
+        // name already taken in the run.
+        .name(format!(
+            "{prefix}-{}-{}",
+            github().run_id(),
+            github().run_attempt()
+        ))
         .if_no_files_found("warn")
         .retention_days(14)
         .step()

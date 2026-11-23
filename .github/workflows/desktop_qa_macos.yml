@@ -175,7 +175,12 @@ jobs:
           # to it. Link with the DMG build's Apple linker shim, which runs Xcode's ld.
           if ! linker=$(nix build --no-link --print-out-paths ".#tauri-desktop-apple-linker" 2> "$QA_OUT/cargo-test.log"); then
             echo "could not build the Apple linker shim; see cargo-test.log" >&2
-            echo 1 > "$QA_OUT/cargo-test.status"
+            # A ref from before the shim was exported: the harness reports a skip.
+            if grep -q "does not provide attribute" "$QA_OUT/cargo-test.log"; then
+              echo no-linker > "$QA_OUT/cargo-test.status"
+            else
+              echo 1 > "$QA_OUT/cargo-test.status"
+            fi
             tail -n 30 "$QA_OUT/cargo-test.log"
             exit 0
           fi
@@ -210,6 +215,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           path: ${{ runner.temp }}/qa-out
-          name: macos-qa-${{ github.run_id }}
+          name: macos-qa-${{ github.run_id }}-${{ github.run_attempt }}
           if-no-files-found: warn
           retention-days: '14'

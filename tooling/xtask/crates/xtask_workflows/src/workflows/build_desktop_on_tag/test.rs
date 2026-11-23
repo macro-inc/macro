@@ -347,7 +347,7 @@ fn macos_release_qa_tests_the_signed_dmg() {
     );
     // Not `macro-*`, which the publish jobs attach to the release.
     assert!(
-        qa.contains("name: macos-qa-release-${{ github.run_id }}"),
+        qa.contains("name: macos-qa-release-${{ github.run_id }}-${{ github.run_attempt }}"),
         "{qa}"
     );
 }

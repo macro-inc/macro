@@ -654,11 +654,12 @@ or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
 Promotion waits for the `QA macOS release app` job: it mounts the notarized DMG
-the release built, checks the DMG's stapled ticket and Gatekeeper verdict, and
-launches the app from it on the macOS runner's GUI session with the smoke suite
-of `apps/web/tests/macos/qa.mjs` (window, screenshot, soak, crash report, clean
-quit, app log). A failed launch is retried once with a fresh launch; a second
-failure fails the job, so `desktop-stable` keeps the previous version and
+the release built, checks it against the build's `macro-dmg-SHA256SUMS` and its
+stapled Gatekeeper verdict, and launches the app from it on the macOS runner's
+GUI session with the smoke suite of `apps/web/tests/macos/qa.mjs` (window,
+screenshot, soak, crash report, clean quit, app log). A launch that shows no
+window or screenshot is retried once; a crash, crash report, panic or a second
+failed launch fails the job, so `desktop-stable` keeps the previous version and
 `Alert native build failures` posts to Macro Alerts. The versioned release still
 gets its installers. The release app embeds the production PostHog key, so the
 job blocks the analytics proxy host (read from `src/lib/analytics/analytics.ts`)
