@@ -80,6 +80,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
           </Show>
         }
         status={status()}
+        failure={failure() || undefined}
         time={time()}
         onPrimary={confirm}
         primaryInert={phase() === 'starting' || phase() === 'finishing'}

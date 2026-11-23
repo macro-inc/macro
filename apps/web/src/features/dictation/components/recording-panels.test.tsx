@@ -71,7 +71,7 @@ describe('voice memo panel', () => {
     // The timer is shown but not a live region, which would read it out
     // every second.
     expect(screen.getByText('0:03').closest('[aria-live]')).toBeNull();
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('leaves focus the person moved elsewhere when its phase changes', async () => {
@@ -125,7 +125,10 @@ describe('voice memo panel', () => {
     await settle();
     const row = screen.getByRole('group', { name: 'Recording voice memo' });
     expect(row.contains(document.activeElement)).toBe(true);
-    expect(screen.getByText('Could not attach the voice memo.')).toBeTruthy();
+    // Shown in the row and announced by the live region.
+    expect(
+      screen.getAllByText('Could not attach the voice memo.')
+    ).toHaveLength(2);
     fireEvent.keyDown(row, { key: 'Enter' });
     expect(memo.retry).toHaveBeenCalledOnce();
   });
@@ -162,8 +165,8 @@ describe('dictation panel', () => {
     expect(
       screen.getAllByRole('button').map((b) => b.getAttribute('aria-label'))
     ).toEqual(['Cancel dictation', 'Use dictation']);
-    expect(screen.getByText('0:02')).toBeTruthy();
-    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByText('0:02').closest('[aria-live]')).toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('');
   });
 
   it('keeps Escape working after Use, while it transcribes', async () => {
@@ -188,11 +191,45 @@ describe('dictation panel', () => {
     setMessage('Network error occurred');
     setPhase('review');
     await settle();
-    expect(screen.getByText('Network error occurred')).toBeTruthy();
+    expect(screen.getAllByText('Network error occurred')).toHaveLength(2);
     expect(screen.queryByText('Ready')).toBeNull();
     fireEvent.click(
       screen.getByRole('button', { name: 'Try transcribing again' })
     );
     expect(dictation.confirm).toHaveBeenCalledOnce();
+  });
+});
+
+describe('announcements', () => {
+  it('keeps one polite live region mounted from the start', async () => {
+    const { memo } = memoController();
+    render(() => <VoiceMemoPanel memo={memo} />);
+    await settle();
+    const status = screen.getByRole('status');
+    expect(status.getAttribute('aria-live')).toBe('polite');
+    expect(status.textContent).toBe('');
+  });
+
+  it('announces a failed memo upload', async () => {
+    const { memo, setPhase } = memoController();
+    render(() => <VoiceMemoPanel memo={memo} />);
+    await settle();
+    const status = screen.getByRole('status');
+    setPhase('failed');
+    await settle();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('Could not attach the voice memo.');
+  });
+
+  it('announces a failed transcription', async () => {
+    const { dictation, setPhase, setMessage } = dictationController();
+    render(() => <DictationPanel dictation={dictation} />);
+    await settle();
+    const status = screen.getByRole('status');
+    setMessage('Transcription failed.');
+    setPhase('review');
+    await settle();
+    expect(screen.getByRole('status')).toBe(status);
+    expect(status.textContent).toBe('Transcription failed.');
   });
 });

@@ -102,6 +102,11 @@ export function VoiceMemoPanel(props: { memo: VoiceMemoController }) {
           </Switch>
         }
         status={status()}
+        failure={
+          phase() === 'failed'
+            ? t('channelComposer.voiceMemoUploadFailed')
+            : undefined
+        }
         time={time()}
         onPrimary={primary}
         primaryInert={phase() === 'starting' || phase() === 'attaching'}

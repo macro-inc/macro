@@ -25,6 +25,8 @@ export function RecordingPanel(props: {
   children: JSX.Element;
   /** Announced: what the panel is doing (Starting…, Transcribing…). */
   status?: string;
+  /** Announced when there is no status: why the last step failed. */
+  failure?: string;
   /** Shown, not announced: a timer would be read out every second. */
   time?: string;
   primary: JSX.Element;
@@ -106,14 +108,15 @@ export function RecordingPanel(props: {
         </span>
       </Show>
       <Show when={props.status}>
-        <span
-          class="shrink-0 text-xs tabular-nums text-ink-muted"
-          role="status"
-          aria-live="polite"
-        >
+        <span aria-hidden="true" class="shrink-0 text-xs text-ink-muted">
           {props.status}
         </span>
       </Show>
+      {/* Mounted from the start and only ever refilled: a live region that
+          arrives with its text already in it goes unannounced. */}
+      <span class="sr-only" role="status" aria-live="polite">
+        {props.status ?? props.failure ?? ''}
+      </span>
       {props.primary}
     </div>
   );
