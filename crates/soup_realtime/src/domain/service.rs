@@ -148,7 +148,9 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
     }
 
     /// Resolves the recipients of every patch in one lookup, then publishes the
-    /// patches in order, each to all of its recipients at once.
+    /// patches in order, each to all of its recipients at once. A channel whose
+    /// membership the batch's events changed has its roster read now instead,
+    /// once, for every patch that names it.
     #[tracing::instrument(
         err,
         skip_all,
@@ -159,51 +161,113 @@ impl<A: UserAccessExpander, P: SoupRealtimePublisher> Worker<A, P> {
         )
     )]
     async fn process_batch(&self, patches: Vec<SoupRealtimePatch>) -> Result<Delivery, Report> {
+        // The audience lookup may answer from before the change these patches
+        // report, so these rosters are read now.
+        let mut current_rosters: HashMap<&Entity<'static>, Vec<MacroUserIdStr<'static>>> =
+            HashMap::new();
+        for channel in patches
+            .iter()
+            .filter_map(|patch| patch.named_unless_member_of.as_ref())
+        {
+            if current_rosters.contains_key(channel) {
+                continue;
+            }
+            let mut users = self
+                .access_expander
+                .current_channel_members(channel.entity_id.as_ref())
+                .await
+                .context("failed to read current channel members")?;
+            users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+            users.dedup();
+            current_rosters.insert(channel, users);
+        }
+
         let mut seen = HashSet::with_capacity(patches.len());
         let access_sources = patches
             .iter()
-            .map(|patch| &patch.access_source)
+            .filter_map(|patch| patch.access_source.as_ref())
+            .filter(|source| !current_rosters.contains_key(source))
             .filter(|source| seen.insert(*source))
             .cloned()
             .collect::<Vec<_>>();
-        let shared_access = self
-            .access_expander
-            .expand_user_access(&access_sources)
-            .await
-            .context("failed to expand current user access")?;
+        let shared_access = if access_sources.is_empty() {
+            Vec::new()
+        } else {
+            self.access_expander
+                .expand_user_access(&access_sources)
+                .await
+                .context("failed to expand current user access")?
+        };
 
         // Entities sharing access point at one deduplicated recipient list.
         let mut recipient_lists = Vec::with_capacity(shared_access.len());
         let mut recipient_list_by_source = HashMap::with_capacity(access_sources.len());
-        let mut recipient_sets = HashSet::new();
         for access in shared_access {
             let mut users = access.users;
             users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
             users.dedup();
-            if !users.is_empty() {
-                recipient_sets.insert(users.clone());
-            }
             for entity in access.entities {
                 recipient_list_by_source.insert(entity, recipient_lists.len());
             }
             recipient_lists.push(users);
         }
 
+        // Each audience a patch is sent to is counted once: a shared list the
+        // first time a patch uses it as it is, a named patch's merged list
+        // every time.
+        let mut recipient_sets = HashSet::new();
+        let mut counted_rosters = HashSet::with_capacity(current_rosters.len());
+        let mut counted_lists = vec![false; recipient_lists.len()];
         let mut publish_count = 0;
-        for patch in patches {
-            let current_users = recipient_list_by_source
-                .get(&patch.access_source)
-                .and_then(|&index| recipient_lists.get(index))
+        let accessors_of = |source: Option<&Entity<'static>>| {
+            source
+                .and_then(|source| {
+                    current_rosters.get(source).or_else(|| {
+                        recipient_list_by_source
+                            .get(source)
+                            .and_then(|&index| recipient_lists.get(index))
+                    })
+                })
                 .map(Vec::as_slice)
-                .unwrap_or_default();
+                .unwrap_or_default()
+        };
+        for patch in &patches {
+            let current_users = accessors_of(patch.access_source.as_ref());
             let users = if patch.named_recipients.is_empty() {
+                if let Some(source) = patch.access_source.as_ref() {
+                    let first_use = if current_rosters.contains_key(source) {
+                        counted_rosters.insert(source)
+                    } else {
+                        recipient_list_by_source
+                            .get(source)
+                            .and_then(|&index| counted_lists.get_mut(index))
+                            .is_some_and(|counted| !std::mem::replace(counted, true))
+                    };
+                    if first_use && !current_users.is_empty() {
+                        recipient_sets.insert(current_users.to_vec());
+                    }
+                }
                 Cow::Borrowed(current_users)
             } else {
+                // Sorted, so each named user is found by binary search.
+                let members = accessors_of(patch.named_unless_member_of.as_ref());
                 let mut users = current_users.to_vec();
-                users.extend(patch.named_recipients.iter().cloned());
+                users.extend(
+                    patch
+                        .named_recipients
+                        .iter()
+                        .filter(|user| {
+                            members
+                                .binary_search_by(|member| member.as_ref().cmp(user.as_ref()))
+                                .is_err()
+                        })
+                        .cloned(),
+                );
                 users.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
                 users.dedup();
-                recipient_sets.insert(users.clone());
+                if !users.is_empty() {
+                    recipient_sets.insert(users.clone());
+                }
                 Cow::Owned(users)
             };
             let messages = users

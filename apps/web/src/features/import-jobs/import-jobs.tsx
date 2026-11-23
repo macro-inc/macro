@@ -1,11 +1,11 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { queryReadyGate } from '@queries/gate';
 import {
   useImportRunsQuery,
   useWorkspaceImportReportQuery,
 } from '@queries/import';
-import { connectPipedreamApp } from '@queries/pipedream-connectors';
 import { type JSX, Show } from 'solid-js';
 import type { ImportJobsContext } from './context/contracts';
 import { ImportJobsProvider } from './context/import-jobs-context';
@@ -19,13 +19,6 @@ import {
   ImportJobsCornerView,
   ImportJobsRailView,
 } from './views/import-jobs-tray';
-
-// Product names, not translated.
-const SOURCE_NAMES: Record<WorkspaceSource, string> = {
-  notion: 'Notion',
-  linear: 'Linear',
-  jira: 'Jira',
-};
 
 function useProductionContext(): ImportJobsContext {
   return {
@@ -60,10 +53,7 @@ function useProductionContext(): ImportJobsContext {
       };
     },
     reconnect(source) {
-      return connectPipedreamApp({
-        appSlug: source,
-        serverName: SOURCE_NAMES[source],
-      });
+      return connectConnector({ key: appConnectorKey(source) });
     },
     openSession(sessionId) {
       globalSplitManager()?.openWithSplit(

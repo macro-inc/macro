@@ -6,11 +6,11 @@
  */
 
 /**
- * Request body for adding a new MCP server.
+ * Adding a server by URL.
  */
 export interface AddServerRequest {
-  /** Human-readable name for the server. */
-  server_name: string;
-  /** The MCP server's streamable HTTP URL. */
+  /** Its display name; its tools are listed under it. */
+  name: string;
+  /** The server's streamable HTTP URL. */
   url: string;
 }

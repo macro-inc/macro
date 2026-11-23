@@ -7,13 +7,10 @@ import {
 } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { DemoInteractionBoundary } from '../DemoInteractionBoundary';
-import HomepagePipelineDemo from '../HomepagePipelineDemo';
 import CrmPipelineScene from './CrmPipelineScene';
 
-let revealCompact: (() => void) | undefined;
 let heroVisibility: ((ratio: number) => void) | undefined;
 beforeEach(() => {
-  revealCompact = undefined;
   heroVisibility = undefined;
   vi.stubGlobal('matchMedia', () => ({
     matches: false,
@@ -40,17 +37,6 @@ beforeEach(() => {
                 {
                   isIntersecting: ratio > 0,
                   intersectionRatio: ratio,
-                } as IntersectionObserverEntry,
-              ],
-              this as unknown as IntersectionObserver
-            );
-        if (target.dataset.compact === 'true')
-          revealCompact = () =>
-            this.callback(
-              [
-                {
-                  isIntersecting: true,
-                  intersectionRatio: 1,
                 } as IntersectionObserverEntry,
               ],
               this as unknown as IntersectionObserver
@@ -337,71 +323,6 @@ it('moves a fictional account through the native-style card menu', async () => {
       'button',
       { name: 'Miller & Rowe' }
     )
-  ).toBeTruthy();
-});
-
-it('keeps the landing pipeline to three stages with clickable records and no sidebar', () => {
-  const view = render(() => <HomepagePipelineDemo />);
-  expect(view.queryByRole('complementary')).toBeNull();
-  expect(view.queryByRole('searchbox')).toBeNull();
-  expect(view.getByRole('region', { name: 'Demo deals' })).toBeTruthy();
-  expect(view.getByRole('region', { name: 'Negotiation deals' })).toBeTruthy();
-  expect(view.getByRole('region', { name: 'Customer deals' })).toBeTruthy();
-  expect(view.queryByRole('region', { name: 'Lead deals' })).toBeNull();
-  fireEvent.click(view.getByRole('button', { name: 'Parlor Studio' }));
-  expect(
-    (view.getByRole('textbox', { name: 'Company name' }) as HTMLInputElement)
-      .value
-  ).toBe('Parlor Studio');
-  fireEvent.click(view.getByRole('button', { name: 'Sales pipeline' }));
-  expect(
-    view.getByRole('region', { name: 'Sales pipeline board' })
-  ).toBeTruthy();
-});
-
-it('moves deals, opens their context, and stops when a visitor takes over', () => {
-  vi.useFakeTimers();
-  const view = render(() => <HomepagePipelineDemo />);
-  revealCompact?.();
-  vi.advanceTimersByTime(4200);
-  expect(
-    within(view.getByRole('region', { name: 'Negotiation deals' })).getByRole(
-      'button',
-      { name: 'Parlor Studio' }
-    )
-  ).toBeTruthy();
-  vi.advanceTimersByTime(4200);
-  expect(
-    within(view.getByRole('region', { name: 'Customer deals' })).getByRole(
-      'button',
-      { name: 'Bookend Retail' }
-    )
-  ).toBeTruthy();
-  vi.advanceTimersByTime(2500);
-  expect(
-    (view.getByRole('textbox', { name: 'Company name' }) as HTMLInputElement)
-      .value
-  ).toBe('Parlor Studio');
-  fireEvent.pointerDown(view.getByRole('textbox', { name: 'Company name' }));
-  vi.advanceTimersByTime(12000);
-  expect(view.getByRole('textbox', { name: 'Company name' })).toBeTruthy();
-});
-
-it('shows the email context and returns to the compact board when untouched', () => {
-  vi.useFakeTimers();
-  const view = render(() => <HomepagePipelineDemo />);
-  revealCompact?.();
-  vi.advanceTimersByTime(13600);
-  expect(
-    (
-      view.getByRole('radio', {
-        name: 'Emails',
-      }) as HTMLInputElement
-    ).checked
-  ).toBe(true);
-  vi.advanceTimersByTime(4500);
-  expect(
-    view.getByRole('region', { name: 'Sales pipeline board' })
   ).toBeTruthy();
 });
 

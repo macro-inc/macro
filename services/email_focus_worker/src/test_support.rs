@@ -7,8 +7,8 @@ use std::{
 };
 
 use email::domain::focus::{
-    DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError, FocusEnrollment,
-    FocusNotifier, ProfileSource, ThreadDates,
+    ClassifierLane, DueDateExtractor, DueDateInput, FocusClassifier, FocusClassifierError,
+    FocusEnrollment, FocusNotifier, ProfileSource, ThreadDates,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
@@ -76,6 +76,7 @@ impl FocusClassifier for RecordingClassifier {
         thread_id: Uuid,
         _input: &Value,
         questions: &[&'static str],
+        _lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         if !self.latency.is_zero() {
             tokio::time::sleep(self.latency).await;

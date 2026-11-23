@@ -6,16 +6,13 @@ import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { appConnectorKey, connectConnector } from '@queries/connectors';
 import { queryReadyGate } from '@queries/gate';
 import {
   useCancelWorkspaceImportMutation,
   useImportQuery,
   useWorkspaceImportReportQuery,
 } from '@queries/import';
-import {
-  connectPipedreamApp,
-  usePipedreamOverlaysQuery,
-} from '@queries/pipedream-connectors';
 import { ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -66,22 +63,16 @@ export function ImportReview(props: {
   });
   // Reconnecting runs the app's own connect flow for the source again; the
   // owner then asks the agent to plan again.
-  // Connecting reserves an overlaid app's tab inside the click, from the
-  // cached overlays, so they are loaded before the button is pressed.
-  usePipedreamOverlaysQuery();
   const [reconnecting, setReconnecting] = createSignal(false);
   const [reconnected, setReconnected] = createSignal<
-    'connected' | 'failed' | 'unsupported' | null
+    'connected' | 'failed' | null
   >(null);
   async function reconnect() {
     if (reconnecting()) return;
     setReconnecting(true);
     setReconnected(null);
     const outcome = await ResultAsync.fromPromise(
-      connectPipedreamApp({
-        appSlug: source(),
-        serverName: sourceLabel(source()),
-      }),
+      connectConnector({ key: appConnectorKey(source()) }),
       () => ({ kind: 'connect-failed' as const })
     );
     const result = outcome.isErr()
@@ -90,7 +81,6 @@ export function ImportReview(props: {
           .with('connected', () => 'connected' as const)
           // Closed without finishing: nothing changed, nothing to say.
           .with('closed', () => null)
-          .with('unsupported', () => 'unsupported' as const)
           .exhaustive();
     if (result === 'connected')
       toast.success(`${sourceLabel(source())} is reconnected`, {
@@ -117,10 +107,6 @@ export function ImportReview(props: {
       .with(
         'failed',
         () => `${sourceLabel(source())} could not be reconnected. Try again.`
-      )
-      .with(
-        'unsupported',
-        () => `${sourceLabel(source())} can’t be connected here.`
       )
       .with(null, () => undefined)
       .exhaustive() ??

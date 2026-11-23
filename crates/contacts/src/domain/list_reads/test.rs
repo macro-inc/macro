@@ -136,6 +136,26 @@ impl PeopleSearchService for Legacy {
     }
 }
 
+fn named(viewer: &str, email: &str, name: &str) -> PersonMatch {
+    let mut found = person(viewer, email);
+    found.contact.name = Some(name.to_owned());
+    found
+}
+
+impl PeopleNamingService for Legacy {
+    async fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _query: &NamedPeopleQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        Ok(vec![
+            named(viewer.email_str(), "legacy@example.com", "Tero Nyland"),
+            named(viewer.email_str(), "listed@example.com", "Tero Nolan"),
+        ])
+    }
+}
+
 impl CorrespondentsService for Legacy {
     async fn correspondents(
         &self,
@@ -228,6 +248,22 @@ impl ContactListReader for Lists {
         let mut found = person(viewer.email_str(), "listed-search@example.com");
         found.contact.lists = vec![ContactList::Gmail];
         Ok(vec![found])
+    }
+
+    /// One person the text names and one it does not, as a storage read
+    /// whose rule is looser than the local ranking's could return them.
+    async fn name_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        _query: &NamedPeopleQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        let mut found = named(viewer.email_str(), "listed-tero@example.com", "Tero Nyland");
+        found.contact.lists = vec![ContactList::Gmail];
+        Ok(vec![
+            found,
+            named(viewer.email_str(), "listed-peter@example.com", "Peter Ten"),
+        ])
     }
 
     async fn inbox_contacts(
@@ -494,6 +530,59 @@ async fn a_list_aware_search_too_short_to_match_reads_nothing() {
         .await
         .unwrap();
     assert!(people.is_empty());
+}
+
+#[tokio::test]
+async fn named_people_follow_the_viewers_flag() {
+    let query = NamedPeopleQuery::new("tero n").unwrap();
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    let people = reads
+        .people_named(
+            user("viewer@example.com"),
+            &query,
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        searched(&people),
+        [("listed-tero@example.com", vec![ContactList::Gmail])],
+        "a person whose shown name the text does not name by word starts is dropped"
+    );
+
+    let (reads, _) = router(Flags::new(Err(())), Vec::new());
+    let people = reads
+        .people_named(
+            user("viewer@example.com"),
+            &query,
+            PeopleSearchLimit::DEFAULT,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        searched(&people),
+        [
+            ("legacy@example.com", vec![]),
+            ("listed@example.com", vec![ContactList::Interacted]),
+        ],
+        "legacy matches keep their order and get lists from the list-aware tables"
+    );
+}
+
+#[tokio::test]
+async fn text_that_names_nobody_reads_nothing() {
+    let (reads, _) = router(Flags::new(Ok(Some(true))), Vec::new());
+    for text in ["tero@example.com", "macro|tero@example.com", " - "] {
+        let people = reads
+            .people_named(
+                user("viewer@example.com"),
+                &NamedPeopleQuery::new(text).unwrap(),
+                PeopleSearchLimit::DEFAULT,
+            )
+            .await
+            .unwrap();
+        assert!(people.is_empty(), "{text}");
+    }
 }
 
 #[tokio::test]

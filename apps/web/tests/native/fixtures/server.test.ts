@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  ChannelDirectoryPageDocument,
   ChannelUnreadPresenceDocument,
   type ChannelUnreadPresenceQuery,
   FavoritesDocument,
@@ -10,6 +11,7 @@ import {
   MailAccountsDocument,
   type MailAccountsQuery,
   SoupBackfillDocument,
+  SoupChannelDirectoryBackfillDocument,
   SoupDocument,
   type SoupInput,
   SoupMailBackfillDocument,
@@ -434,6 +436,43 @@ test('favorite previews are ID-scoped and cannot seed arbitrary Mail pages', asy
       })
     ).errors?.[0].message
   ).toBe('ItemPreviews only serves fixture favorites');
+});
+
+test('the channel directory lane and its network fallback read no channels', async () => {
+  server = startFixtureServer();
+  for (const [document, operationName] of [
+    [SoupChannelDirectoryBackfillDocument, 'SoupChannelDirectoryBackfill'],
+    [ChannelDirectoryPageDocument, 'ChannelDirectoryPage'],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(document),
+        operationName,
+        variables: {
+          input: {
+            initial: {
+              limit: 100,
+              emailView: 'ALL',
+              channelReads: 'PRIMARY',
+              filters: {
+                emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+              },
+            },
+          },
+        },
+      }),
+    });
+    const result = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data.user.soup).toEqual({
+      ...(operationName === 'SoupChannelDirectoryBackfill'
+        ? { items: [], scopeIds: [] }
+        : { items: [] }),
+      nextCursor: null,
+    });
+  }
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
 });
 
 test('matrix fixtures validate against the production backfill selections', async () => {

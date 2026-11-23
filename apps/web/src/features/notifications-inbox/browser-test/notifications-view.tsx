@@ -14,7 +14,7 @@ import {
   type SplitPanelContextType,
 } from '@components/app/split-layout/context';
 import type { SplitManager } from '@components/app/split-layout/layoutManager';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { UserContextProvider } from '@core/context/user';
 import {
@@ -28,6 +28,7 @@ import { EntityProvider } from '@entity';
 import type { NotificationSource } from '@notifications';
 import type { UnifiedNotification } from '@notifications/types';
 import { authKeys } from '@queries/auth/keys';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { MutationUndoProvider, useMutationUndoContext } from '@queries/undo';
@@ -273,7 +274,9 @@ render(
           >
             <EntityProvider>
               <UserContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <EmailLinksContextProvider>
                     <MobileSettingsProvider>
                       <MutationUndoProvider>
@@ -286,7 +289,7 @@ render(
                       </MutationUndoProvider>
                     </MobileSettingsProvider>
                   </EmailLinksContextProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </UserContextProvider>
             </EntityProvider>
           </GlobalAppStateProvider>

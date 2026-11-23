@@ -412,8 +412,8 @@ pub async fn call_connected_app_tool<
 
 #[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/discover", tag = "agent-sessions", operation_id = "discover_connected_apps",
     params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path)),
-    request_body = pipedream_mcp::domain::service::discovery::DiscoveryRequest,
-    responses((status = 200, body = pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse), (status = 400), (status = 403), (status = 404)))]
+    request_body = connectors::inbound::toolset::DiscoveryRequest,
+    responses((status = 200, body = connectors::inbound::toolset::DiscoverConnectorsResponse), (status = 400), (status = 403), (status = 404)))]
 /// Search the connectable app catalog, or inspect one app's tools and connection status.
 pub async fn discover_connected_apps<
     Access: EntityAccessService,
@@ -424,8 +424,7 @@ pub async fn discover_connected_apps<
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, execution)): Path<(Uuid, Uuid)>,
     body: Bytes,
-) -> Result<Json<pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse>, CodeExecutionApiError>
-{
+) -> Result<Json<connectors::inbound::toolset::DiscoverConnectorsResponse>, CodeExecutionApiError> {
     let request = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .connected_apps
@@ -442,8 +441,8 @@ pub async fn discover_connected_apps<
 
 #[utoipa::path(post, path = "/agent-sessions/{session_id}/code-executions/{execution_id}/connected-apps/servers", tag = "agent-sessions", operation_id = "add_connected_mcp_server",
     params(("session_id" = Uuid, Path), ("execution_id" = Uuid, Path)),
-    request_body = mcp_client::inbound::toolset::ConnectMcpServer,
-    responses((status = 200, body = mcp_client::inbound::toolset::ConnectMcpServerResponse), (status = 400), (status = 403), (status = 404)))]
+    request_body = connectors::inbound::toolset::ConnectMcpServer,
+    responses((status = 200, body = connectors::inbound::toolset::ConnectMcpServerResponse), (status = 400), (status = 403), (status = 404)))]
 /// Add a custom MCP server to the execution account's connections.
 pub async fn add_connected_mcp_server<
     Access: EntityAccessService,
@@ -454,7 +453,7 @@ pub async fn add_connected_mcp_server<
     State(state): State<CodeExecutionRouterState<Access, Auth>>,
     Path((_session, execution)): Path<(Uuid, Uuid)>,
     body: Bytes,
-) -> Result<Json<mcp_client::inbound::toolset::ConnectMcpServerResponse>, CodeExecutionApiError> {
+) -> Result<Json<connectors::inbound::toolset::ConnectMcpServerResponse>, CodeExecutionApiError> {
     let server = decode(&body).map_err(CodeExecutionApiError)?;
     state
         .connected_apps

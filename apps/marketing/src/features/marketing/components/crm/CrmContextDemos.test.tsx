@@ -1,6 +1,5 @@
 import { cleanup, fireEvent, render, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { CrmEnrichmentDemo } from './CrmEnrichmentDemo';
 import { CrmRecordDemo } from './CrmRecordDemo';
 
 let intersections: IntersectionObserverCallback[];
@@ -56,42 +55,6 @@ function visible(value: boolean) {
 const section = (view: ReturnType<typeof render>) =>
   view.container.querySelector('.sample-record-section h2')?.textContent ??
   'Overview';
-
-it('adds a company from email that is already described, then the team’s note', () => {
-  const view = render(() => <CrmEnrichmentDemo />);
-  expect(view.getByText('Last Interaction')).toBeTruthy();
-  expect(view.queryByText('Kestrel Robotics')).toBeNull();
-  visible(true);
-  vi.advanceTimersByTime(800);
-  const row = view.container.querySelector<HTMLElement>(
-    '[data-company-row="kestrel"]'
-  );
-  expect(row?.dataset.unread).toBe('true');
-  expect(within(row!).getByText('10:08 AM')).toBeTruthy();
-  visible(false);
-  vi.advanceTimersByTime(10000);
-  expect(view.queryByRole('textbox', { name: 'Company name' })).toBeNull();
-  visible(true);
-  vi.advanceTimersByTime(1700);
-  expect(
-    (view.getByRole('textbox', { name: 'Company name' }) as HTMLInputElement)
-      .value
-  ).toBe('Kestrel Robotics');
-  expect(view.getByText(/autonomous inventory robots/)).toBeTruthy();
-  expect(view.getByText('Last interacted 2 minutes ago')).toBeTruthy();
-  expect(view.queryByText(/Priya runs ops/)).toBeNull();
-  vi.advanceTimersByTime(2100);
-  expect(view.getByText(/Priya runs ops/)).toBeTruthy();
-  expect(view.container.querySelector('.demo-cursor')).toBeNull();
-});
-
-it('shows the described company and note at once with reduced motion', () => {
-  reduced = true;
-  const view = render(() => <CrmEnrichmentDemo />);
-  expect(view.getByText(/autonomous inventory robots/)).toBeTruthy();
-  expect(view.getByText(/Priya runs ops/)).toBeTruthy();
-  expect(view.container.querySelector('.demo-cursor')).toBeNull();
-});
 
 it('tours Parlor Studio’s emails and calls, then returns to its Discussion', () => {
   const view = render(() => <CrmRecordDemo />);

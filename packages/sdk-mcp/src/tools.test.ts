@@ -70,11 +70,16 @@ describe('buildTools', () => {
       destructiveHint: true,
       openWorldHint: true,
     });
-    // A grouped task tool also edits templates, so the whole tool is destructive.
+    // A grouped task tool also edits templates and time entries, so the
+    // whole tool is destructive.
     expect([...(taskWrite?.operations.keys() ?? [])]).toEqual([
+      'Task.logTime',
+      'Task.startTimer',
       'tasks.create',
       'TaskTemplate.update',
       'taskTemplates.create',
+      'TimeEntry.edit',
+      'Timer.stop',
     ]);
     expect(taskWrite?.annotations).toMatchObject({
       readOnlyHint: false,

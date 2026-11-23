@@ -776,7 +776,6 @@ export default {
       'Ingen indstillinger fundet. Prøv »signatur«, »tema« eller »kalender«.',
     backToSettings: 'Tilbage til indstillinger',
     closeSettings: 'Luk indstillinger',
-    goToTab: 'Gå til indstillingsfane {{number}}',
     editProfile: 'Rediger profil',
     logOut: 'Log ud',
     yourAccount: 'Din konto',

@@ -47,7 +47,9 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
 - A test for a known defect is `knownDefect()` (from the fixtures) plus a
   row in `ledger/known-defects.tsv`, never a weakened assertion. A defect that shows
   only sometimes cannot be marked that way: wrap its check in `failsSometimes`
-  and list the test in `ledger/intermittent-defects.tsv`.
+  and list the test in `ledger/intermittent-defects.tsv`. For a check that an
+  open page shows someone else's change live, use `arrivesLive`, which also
+  requires the change after a reload.
 - ArrowUp from the composer can lose the keyboard to the composer again on a
   busy page (KEY-05): a test about something else reaches the message list
   with Escape.

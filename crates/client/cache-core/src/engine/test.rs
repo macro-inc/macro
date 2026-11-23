@@ -3,6 +3,7 @@ use crate::store::InMemoryStorage;
 
 mod hydration_search_changes;
 mod query_search_changes;
+mod staged_hydrate;
 
 #[test]
 fn resolved_read_plans_do_not_leak_arguments_or_values_between_reads() {
