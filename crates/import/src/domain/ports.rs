@@ -1096,10 +1096,6 @@ pub trait NotionPlanRepo: Send + Sync + 'static {
     /// recorded its review, staged rows tied to it). Otherwise change nothing
     /// and refuse with [`ImportError::RunNotReviewable`]: still planning,
     /// another review's plan, or a failed, finished, cancelled or missing run.
-    /// The first start records the review as the one admitted to write
-    /// (`import_run.write_review_id`, cleared by a new plan), and a write
-    /// that then failed may be started again by that review alone; a finished
-    /// write never.
     fn start_reviewed_write(
         &self,
         user: &MacroUserIdStr<'static>,

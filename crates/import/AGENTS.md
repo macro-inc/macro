@@ -43,11 +43,7 @@ the run and its staged rows). Writing starts only through
 run recorded reviews, its staged rows do), and otherwise refuses typed
 (`StillPlanning`, `PresentedElsewhere`, `NothingLeft`, failed, finished)
 before anything about the plan changes; the owner's sharing choices are
-written only once it has started. The first start records the review it
-admitted (`import_run.write_review_id`, in the same statement; a new plan
-clears it), and only that review may start a write again, and only from
-`failed`: a finished write is never retried, and admission is never inferred
-from other columns. A failure before the write is held (or
+written only once it has started. A failure before the write is held (or
 after `reopen_plan` put it back) is `ImportError::NotStarted`, safe to
 approve again; once the write is spawned, the returned report is read
 without failing the call. `SETTLED` only

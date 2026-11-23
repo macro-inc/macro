@@ -645,7 +645,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'running', error = NULL, error_kind = NULL, updated_at = NOW(),
                 scanned_pages = NULL, scanned_data_sources = NULL,
                 lease_owner = NULL, lease_expires_at = NULL, adoptions = 0,
-                review_session_id = NULL, review_id = NULL, write_review_id = NULL
+                review_session_id = NULL, review_id = NULL
             WHERE import_run.status::text = ANY($3::text[])
             "#,
             user.as_ref(),
