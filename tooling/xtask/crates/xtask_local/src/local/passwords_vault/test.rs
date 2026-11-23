@@ -77,3 +77,46 @@ fn stages_openbao_config_readable_by_the_container_user_from_a_private_checkout(
         std::fs::read(repo_root().join("infra/local/openbao/local.hcl")).unwrap()
     );
 }
+
+#[test]
+#[ignore = "requires Docker and the local OpenBao image"]
+fn staged_openbao_files_are_readable_in_a_non_root_container() {
+    let dir = tempfile::tempdir().unwrap();
+    let config = dir.path().join("openbao");
+    stage_config(&config).unwrap();
+
+    let output = Command::new("docker")
+        .args([
+            "run",
+            "--rm",
+            "--pull=never",
+            "--network",
+            "none",
+            "--user",
+            "openbao",
+            "--entrypoint",
+            "/bin/sh",
+            "--mount",
+        ])
+        .arg(format!(
+            "type=bind,src={},dst=/openbao/config,readonly",
+            config.display()
+        ))
+        .arg(super::super::inventory::OPENBAO_IMAGE)
+        .args([
+            "-c",
+            "test \"$(id -u)\" -ne 0 && cat /openbao/config/start.sh /openbao/config/macro-local.hcl",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected: Vec<u8> = CONFIG_FILES
+        .iter()
+        .flat_map(|(_, source)| std::fs::read(repo_root().join(source)).unwrap())
+        .collect();
+    assert_eq!(output.stdout, expected);
+}
