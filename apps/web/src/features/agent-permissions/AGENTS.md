@@ -39,7 +39,11 @@ changes.
   Permissions button.
 - Not here: the registry of operations → `crates/agent_permission_registry`;
   the API, resolution and tighten-only rules → `crates/agent_permissions`
-  (agent harness `/agent-tool-permissions`, `/agents/{id}/tool-permissions`).
+  (agent harness `/agent-tool-permissions`, `/agents/{id}/tool-permissions`,
+  and for following another agent's permissions `.../source`, `.../detach`,
+  `/agent-tool-permissions/sources` and `/agent-tool-permissions/policies/{id}`;
+  a following view carries `source` and `inherited`, which this page doesn't
+  show yet).
 
 ## Gotchas
 

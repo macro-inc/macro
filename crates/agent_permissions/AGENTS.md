@@ -70,6 +70,26 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   ones and groups only rows name, every catalog operation; explicit choices
   stay explicit, local restrictions stay restrictions; session overlays and
   approvals are not copied), in one transaction.
+- Who may follow what (`service.rs` `in_scope`): a private agent its owner's
+  own Macro policy, their other private agents and the agents of teams they
+  belong to; a team agent its team's other agents. Never a person's policy
+  for a team agent, a persona other than Macro, or a deleted agent's policy
+  (one already followed stays, frozen). Setting a source and detaching need
+  a person who may edit the follower (`NeedsPerson` otherwise); neither
+  gives any authority over the source, whose own routes check its own
+  owner. A person's `set` on a follower may not ask for a state looser than
+  the source gives (`follows_source`, 409, naming the source and the
+  operations): its rows only restrict. Reset deletes the follower's own rows
+  and keeps following. The view says what it follows (`source`: identity,
+  scope, `live`/`deleted`/`lost`, `inScope` (false once an ownership or
+  membership change would no longer offer it), the caller's own `canEdit`,
+  and the rest of the chain in `via`) and what it inherits (`inherited`,
+  read only); `canSetSource` says whether the caller may change it. The
+  picker (`/agent-tool-permissions/sources`) lists the person's own Macro
+  first (private scope), then the agents in scope (at most
+  `MAX_CANDIDATES`), marking the current one and those that would make a
+  cycle or a chain too long. `ShowPermissions` says "Follows <name>
+  (@handle)" (`follows`).
 - Tighten-only compares, before and after the change, every operation's
   effective state, every catalog group's every action (hidden pairs too) and
   every action's default (`domain/resolve.rs` `tighten_only`); a change that
@@ -122,7 +142,7 @@ reads the viewer's. A new surface goes in this table with its flag-off test.
 
 | Surface | Gate | Off | Flag-off test |
 | --- | --- | --- | --- |
-| Routes `/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
+| Routes `/agent-tool-permissions/catalog`, `/agent-tool-permissions/sources`, `/agent-tool-permissions/policies/{id}`, `/agents/{id}/tool-permissions[/tighten\|/source\|/detach]`, `/agent-sessions/{id}/tool-permissions` | `AgentPermissionsService::ensure_enabled` (`PermissionsRollout`) | 404 | `every_route_is_not_found_while_the_feature_is_off`, `with_the_rollout_off_everything_is_disabled` |
 | The turn's code-mode kind (`CodeModeKind`, once per turn) and the dialect `ExecuteCode` it picks (no `language`: `source` the dialect, optional TypeScript `module` with no network; schema, `js_tools.md` and `js_tools_permissions.md` text, the call; on with the flag, TypeScript is refused) | `CodeModeService::code_mode_kind` (`JsToolsRollout`), `session_toolset(kind)`, `refuse_other_kind`, the in-process agent's `TurnCodeTools` | `TypeScript`: today's tool, pinned by `toolset/test/without_js_tools.json`; a dialect call or a module refused before a credential | `sessions_see_and_call_js_tools_only_with_the_rollout`, `js_tools_without_the_rollout_is_refused_before_a_credential`, `sessions_without_javascript_tools_see_todays_tools` |
 | Public MCP code tools for an agent session's calls (`ManagedAgentSession`) | `CodeModeSurface::kinds` (the same `CodeModeKinds`) | listed and run as today | `a_dialect_sessions_calls_get_no_typescript_code_mode` |
 | The gate: analysis, never, ask holds, `allowed_operations` | `PermissionGate::check` (`LanguageRollout`) | `None`: the run is unchanged; a JS tools program it did not check is refused unrun | `javascript_and_owners_without_the_rollout_are_not_checked`, `each_language_is_checked_only_with_its_own_rollout_and_analyzer`, `the_gate_follows_the_permissions_flag` |
@@ -154,7 +174,8 @@ the tags when the flag goes.
 ## Boundaries
 
 - Depends on: `agent_permission_registry` (the catalog), ports for the
-  agents directory (`bots`' manage rule) and sessions, both adapted in
+  agents directory (`bots`' manage rule, an agent's owner and identity, the
+  agents a person may edit) and sessions, both adapted in
   `agent_harness_service/src/tool_permissions.rs`.
 - Used by: `agent_harness_service` (routes, the code-mode gate).
 
