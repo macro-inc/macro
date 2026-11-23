@@ -106,6 +106,7 @@ check	deploy_sync_service.yml	deploy	Deploy to Cloudflare
 check	deploy_web_app.yml	build/build	Build / Build
 check	deploy_web_app.yml	deploy	Deploy
 check	deploy_website.yml	build-deploy	Build and Deploy Website
+check	desktop-release-watch.yml	watch	Alert when a release's desktop installers are missing
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
 check	email_e2e.yml	email-e2e	Email end-to-end (${{ matrix.partition }}/3)
 check	email_e2e.yml	email-e2e-search	Email end-to-end (search)

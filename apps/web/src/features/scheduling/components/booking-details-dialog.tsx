@@ -58,6 +58,8 @@ export function BookingDetailsDialog(props: {
   event?: EventType;
   members: SchedulingMember[];
   timeZone: string;
+  /** A 12-hour (`true`) or 24-hour (`false`) clock; the locale's when unset. */
+  hour12?: boolean;
   currentUserId: string;
   canManageBookings: boolean;
   busyId: string;
@@ -238,7 +240,11 @@ export function BookingDetailsDialog(props: {
               >
                 <p>{date(props.booking.startsAt)}</p>
                 <p class="mt-1 text-ink-muted">
-                  {bookingTimeRange(props.booking, props.timeZone)}
+                  {bookingTimeRange(
+                    props.booking,
+                    props.timeZone,
+                    props.hour12
+                  )}
                 </p>
               </DetailField>
               <Show when={hosts()}>
@@ -265,7 +271,11 @@ export function BookingDetailsDialog(props: {
               <p>{props.booking.timeZone.replaceAll('_', ' ')}</p>
               <p class="mt-1 text-ink-muted">
                 {date(props.booking.startsAt, props.booking.timeZone)} ·{' '}
-                {bookingTimeRange(props.booking, props.booking.timeZone)}
+                {bookingTimeRange(
+                  props.booking,
+                  props.booking.timeZone,
+                  props.hour12
+                )}
               </p>
             </DetailField>
             <Show when={(props.booking.rescheduleCount ?? 0) > 0}>

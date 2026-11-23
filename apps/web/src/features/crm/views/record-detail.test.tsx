@@ -111,6 +111,7 @@ vi.mock('./use-crm', () => ({
       ? { id: contactId(), companyId: taskContext.contactCompanyId }
       : undefined,
   }),
+  useCrmPermissions: () => ({ canEditCrm: () => true }),
   useIsTeamAdmin: () => () => false,
   useSetCompanyHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),
   useSetContactHiddenMutation: () => ({ isPending: false, mutate: vi.fn() }),

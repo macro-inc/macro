@@ -3,6 +3,12 @@
 //! job reports the failure without exposing the Macro bot token to the build
 //! runners or checking out code from a pull request.
 //!
+//! For `Build Desktop on Tag` every failed job posts, the publish jobs
+//! included, and so does a tag's run that was cancelled without a newer run
+//! for the tag replacing it: a job that runs out of time cancels the run.
+//! [`super::desktop_release_watch`] covers the runs that never end, or never
+//! start.
+//!
 //! It reads the repository variable [`vars::MACRO_BUILD_ALERT_WEBHOOK_URL`]
 //! and the secret [`vars::MACRO_BUILD_ALERT_BOT_TOKEN`], a channel-scoped
 //! webhook credential for the Alerts channel.
@@ -14,10 +20,13 @@ use gh_workflow::{
 
 use crate::workflows::vars;
 
+/// The desktop workflow, whose every job this alerts on.
+const DESKTOP_WORKFLOW: &str = "Build Desktop on Tag";
+
 /// The workflows whose native build jobs this alerts on; the script names
 /// each one's build jobs.
 const WATCHED_WORKFLOWS: &[&str] = &[
-    "Build Desktop on Tag",
+    DESKTOP_WORKFLOW,
     "iOS Preview",
     "Release Android App Bundle",
 ];
@@ -39,10 +48,16 @@ pub fn alert_native_build_failures() -> Workflow {
         .add_job("alert", alert())
 }
 
-/// The watched run failed or timed out.
+/// The watched run failed or timed out, or a tag's desktop run was cancelled.
 fn failed() -> Expr<Bool> {
+    let conclusion = || github().event::<Str>("workflow_run.conclusion");
+    let desktop_tag = github()
+        .event::<Str>("workflow_run.name")
+        .eq(DESKTOP_WORKFLOW)
+        .and(github().event::<Str>("workflow_run.event").eq("push"));
     from_json::<Json>(Expr::from(r#"["failure", "timed_out"]"#))
-        .contains(github().event::<Str>("workflow_run.conclusion"))
+        .contains(conclusion())
+        .or(conclusion().eq("cancelled").and(desktop_tag))
 }
 
 fn alert() -> Job {
@@ -62,6 +77,14 @@ fn notify() -> Step<Run> {
         .add_env((
             "SOURCE_WORKFLOW",
             github().event::<Str>("workflow_run.name"),
+        ))
+        .add_env((
+            "SOURCE_WORKFLOW_ID",
+            github().event::<Str>("workflow_run.workflow_id"),
+        ))
+        .add_env((
+            "SOURCE_CONCLUSION",
+            github().event::<Str>("workflow_run.conclusion"),
         ))
         .add_env((
             "SOURCE_REF",

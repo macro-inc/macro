@@ -96,36 +96,49 @@ describe('pickDay', () => {
   it('sets the field that is picked', () => {
     expect(pickDay(range, 'due', new Date(2026, 10, 30))).toEqual({
       dates: { start: range.start, due: new Date(2026, 10, 30) },
-      changed: 'due',
+      changed: ['due'],
     });
     expect(pickDay(range, 'start', new Date(2026, 10, 25))).toEqual({
       dates: { start: new Date(2026, 10, 25), due: range.due },
-      changed: 'start',
+      changed: ['start'],
     });
   });
 
   it('makes a due day before the start the new start', () => {
     expect(pickDay(range, 'due', new Date(2026, 10, 20))).toEqual({
       dates: { start: new Date(2026, 10, 20), due: range.due },
-      changed: 'start',
+      changed: ['start'],
     });
   });
 
-  it('makes a start day after the due date the new due date', () => {
+  it('moves the due date with a start day picked after it, keeping the length', () => {
     expect(pickDay(range, 'start', new Date(2026, 11, 1))).toEqual({
-      dates: { start: range.start, due: new Date(2026, 11, 1) },
-      changed: 'due',
+      dates: { start: new Date(2026, 11, 1), due: new Date(2026, 11, 5) },
+      changed: ['start', 'due'],
+    });
+    expect(
+      pickDay({ start: null, due: range.due }, 'start', new Date(2026, 11, 1))
+    ).toEqual({
+      dates: { start: new Date(2026, 11, 1), due: new Date(2026, 11, 1) },
+      changed: ['start', 'due'],
+    });
+  });
+
+  it('never moves the due date for a start on or before it', () => {
+    expect(pickDay(range, 'start', range.due)).toEqual({
+      dates: { start: range.due, due: range.due },
+      changed: ['start'],
     });
   });
 
   it('lets either end be set alone', () => {
     expect(pickDay({ start: null, due: null }, 'start', range.start)).toEqual({
       dates: { start: range.start, due: null },
-      changed: 'start',
+      changed: ['start'],
     });
     expect(pickDay({ start: null, due: null }, 'due', range.due)).toEqual({
       dates: { start: null, due: range.due },
-      changed: 'due',
+      changed: ['due'],
     });
   });
 });
@@ -341,6 +354,29 @@ describe('dates with times, at the edges', () => {
         new Date(2026, 10, 2)
       ).dates.due;
       expect([moved?.getDate(), moved?.getHours()]).toEqual([2, 14]);
+    });
+  });
+});
+
+describe('pickTimedDay past the due date', () => {
+  it('moves the due date with a start day picked after it, keeping the length and both times', () => {
+    expect(
+      pickTimedDay(
+        {
+          start: new Date(2026, 10, 26, 14),
+          due: new Date(2026, 10, 27, 16),
+          timed: true,
+        },
+        'start',
+        new Date(2026, 10, 30)
+      )
+    ).toEqual({
+      dates: {
+        start: new Date(2026, 10, 30, 14),
+        due: new Date(2026, 11, 1, 16),
+        timed: true,
+      },
+      changed: ['start', 'due'],
     });
   });
 });

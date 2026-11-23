@@ -114,15 +114,27 @@ Only admins/owners can change visibility. Company archive cascades to all people
 and disables email syncing; company restore explicitly confirms restoring every
 person, including individually archived people, while email syncing stays off.
 A person under an archived company routes to that company before restoration.
-Both information panels start with Record details and References; company-only
-Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
+Both information panels start with Record details and References, then
+Properties, with no duplicate visibility toggle. A company's Properties pin
+Stage, Owner and Revenue before the team's custom properties; a contact's list
+only custom properties (a phone number, a LinkedIn link), since the built-in CRM
+properties are company-only. Company-only Lists and Email sharing follow.
+Both use the shared `EntityPropertiesSection` and the same edit rule.
 
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
 pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another. The company pill offers Add company to any contact
-without a company, switches only for a personal-provider primary with no
-address on the company's domain, and offers Remove company whenever no address
+control adds another: an Add email pill while blank, then a 24px ghost icon
+button in extra-muted ink, named and tooltipped Add email, like the property
+panel's add-value button but with the 12px glyph these controls use. Focused, it
+brightens and takes the address pills' ring. The addresses wrap among
+themselves inside one Email group, so the add button ends the addresses' last
+line instead of taking a line of its own in Record details, and a long address
+truncates there. The add control stays one element across both forms,
+so focus returned after the first address lands on it. The company pill offers
+Add company to any contact without a company, switches only for a
+personal-provider primary with no address on the company's domain, and offers
+Remove company whenever no address
 is on the company's domain (`companyDomain === false`), behind the shared
 confirmation dialog. The single address in `companyDomainEmails`
 shows no Remove, and a company-domain contact keeps a read-only company value

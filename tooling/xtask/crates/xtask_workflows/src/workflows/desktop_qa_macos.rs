@@ -24,7 +24,8 @@ use crate::workflows::{build_dmg_on_tag, runners, steps};
 
 /// The release QA job in `Build Desktop on Tag`.
 pub(crate) const QA_RELEASE: JobHandle<()> = JobHandle::new("qa-macos", ());
-/// [`QA_RELEASE`]'s name, which `Alert native build failures` matches on.
+/// [`QA_RELEASE`]'s name; `Alert native build failures` adds a line to its post
+/// when this job failed.
 pub(crate) const QA_RELEASE_JOB_NAME: &str = "QA macOS release app";
 /// Launches the release QA tries before a launch check counts as failed: one
 /// flaky launch must not block a release, a repeatable failure must.

@@ -41,7 +41,6 @@ export function CodeExecutionToolCall(props: {
         <ToolCard
           title="Workspace activity"
           status={props.common.status}
-          muted={props.common.muted}
           trailing={props.common.trailing}
         />
       </Show>
@@ -120,7 +119,7 @@ function RecordedCall(props: {
     id: props.call.id,
     label: props.call.name,
     status: status(),
-    muted: props.call.status !== 'completed',
+    unsuccessful: props.call.status !== 'completed',
     stopped: false,
     trailing: props.call.outputOmitted
       ? 'Result omitted'

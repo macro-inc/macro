@@ -35,6 +35,8 @@ export type InteractionSource = {
 export type InteractionController = {
   pending: Accessor<readonly PendingInteraction[]>;
   canAnswer: Accessor<boolean>;
+  /** False while the viewer's edit access is still loading. */
+  accessKnown: Accessor<boolean>;
   answering: (request: InteractionIdentity) => boolean;
   respond: (response: InteractionResponse) => Promise<boolean>;
 };
