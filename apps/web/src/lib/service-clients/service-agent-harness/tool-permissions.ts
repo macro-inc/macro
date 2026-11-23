@@ -7,6 +7,7 @@ import type {
   DetachToolPermissions,
   GetAgentToolPermissionSourcesParams,
   SetToolPermissionSource,
+  TeamToolPermissions,
   ToolPermissionCatalog,
   ToolPermissionChanges,
   ToolPermissionSourceCandidates,
@@ -41,6 +42,10 @@ const toolPermissionError: ErrorResponseHandler<
 
 /** These routes answer 404 while the feature is off for the caller. */
 const FEATURE_OFF_IS_EXPECTED = { expectedStatusCodes: [404] };
+
+function teamPath(teamId: string) {
+  return `${host}/agent-tool-permissions/teams/${encodeURIComponent(teamId)}`;
+}
 
 function agentPath(agentId: string) {
   return `${host}/agents/${encodeURIComponent(agentId)}/tool-permissions`;
@@ -175,6 +180,47 @@ export const toolPermissionsClient = {
       {
         errorResponseHandler: toolPermissionError,
         trace: FEATURE_OFF_IS_EXPECTED,
+      }
+    );
+  },
+
+  /** A team's default permissions, which its new agents follow. */
+  team(teamId: string) {
+    return fetchWithToken<TeamToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      teamPath(teamId),
+      {
+        errorResponseHandler: toolPermissionError,
+        trace: FEATURE_OFF_IS_EXPECTED,
+      }
+    );
+  },
+
+  /** Changes a team's default permissions (team admins and owners). */
+  setTeam(
+    teamId: string,
+    changes: ToolPermissionChanges,
+    parentSpan?: TraceContext
+  ) {
+    return fetchWithToken<TeamToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      teamPath(teamId),
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes),
+        errorResponseHandler: toolPermissionError,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  /** Puts a team's default permissions back to Allow. */
+  resetTeam(teamId: string, parentSpan?: TraceContext) {
+    return fetchWithToken<TeamToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      teamPath(teamId),
+      {
+        method: 'DELETE',
+        errorResponseHandler: toolPermissionError,
+        trace: { parentSpan },
       }
     );
   },

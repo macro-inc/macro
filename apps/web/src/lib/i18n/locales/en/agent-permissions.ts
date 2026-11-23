@@ -147,4 +147,13 @@ export default {
     '{{agent}}’s own settings will be replaced by what it follows. Restrictions the agent set on itself stay.',
   draftFailed: 'Agent created, but its permissions weren’t saved',
   draftFailedBody: 'It follows its default permissions for now.',
+  teamDefaultRow: 'Team default permissions',
+  teamDefaultRowHint:
+    'Team agents follow these unless set to follow another or use their own.',
+  teamDefaultToggle: 'Team default permissions',
+  teamReadOnly: 'Only team admins and owners can change these.',
+  teamUnavailable: 'Team default permissions aren’t available.',
+  teamScopeNote:
+    'Applies to every program a team agent that follows the team default runs. Changes reach those agents at once.',
+  resetTeamTitle: 'Reset the team default permissions?',
 };

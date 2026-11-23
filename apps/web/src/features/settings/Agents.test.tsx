@@ -88,10 +88,18 @@ vi.mock('./components/auto-archive-setting', () => ({
 const [permissionsFlag, setPermissionsFlag] = createSignal(false);
 const permissionMocks = vi.hoisted(() => ({
   served: true,
+  teamServed: true,
   applyDraft: vi.fn(),
 }));
 vi.mock('@app/features/agent-permissions', () => ({
   refusalMessage: () => undefined,
+  useTeamPermissionsAvailable: (teamId: () => string | undefined) => () =>
+    permissionsFlag() && permissionMocks.teamServed && teamId() !== undefined,
+  TeamPermissionsPanel: (props: { teamId: string }) => (
+    <section aria-label="Team default permissions panel">
+      Team permissions of {props.teamId}
+    </section>
+  ),
   applyPermissionsDraft: permissionMocks.applyDraft,
   EditAgentPermissions: (props: { agentId: string; agentName: string }) => (
     <section aria-label={`Permissions of ${props.agentName}`}>
@@ -387,6 +395,7 @@ beforeEach(() => {
   device.touch = false;
   setPermissionsFlag(false);
   permissionMocks.served = true;
+  permissionMocks.teamServed = true;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -1170,6 +1179,45 @@ describe('Agents', () => {
       render(() => <Agents {...agentsPageProps} />);
       fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
       expect(panel('Bug fixer')?.textContent).toContain('agent-1');
+    });
+
+    it('shows the team default row to a member and expands it', () => {
+      setPermissionsFlag(true);
+      render(() => <Agents {...agentsPageProps} />);
+      const toggle = screen.getByRole('button', {
+        name: 'Team default permissions',
+      });
+      expect(
+        screen.queryByRole('region', { name: 'Team default permissions panel' })
+      ).toBeNull();
+      fireEvent.click(toggle);
+      expect(
+        screen.getByRole('region', { name: 'Team default permissions panel' })
+          .textContent
+      ).toContain('team-1');
+      // One row open at a time.
+      fireEvent.click(
+        screen.getByRole('button', { name: "Macro's permissions" })
+      );
+      expect(
+        screen.queryByRole('region', { name: 'Team default permissions panel' })
+      ).toBeNull();
+    });
+
+    it('has no team default row without a team, the API or the flag', () => {
+      agentMocks.currentTeam = null;
+      setPermissionsFlag(true);
+      const { unmount } = render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: 'Team default permissions' })
+      ).toBeNull();
+      unmount();
+      agentMocks.currentTeam = { team: { id: 'team-1' } };
+      permissionMocks.teamServed = false;
+      render(() => <Agents {...agentsPageProps} />);
+      expect(
+        screen.queryByRole('button', { name: 'Team default permissions' })
+      ).toBeNull();
     });
 
     it("saves a new agent's permissions once the agent exists", async () => {

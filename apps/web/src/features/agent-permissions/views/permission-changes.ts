@@ -2,8 +2,8 @@ import { t } from '@app/lib/i18n';
 import { beginInteraction } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
+import type { TraceContext } from '@macro-inc/observability';
 import type {
-  AgentToolPermissions,
   ToolPermissionCatalog,
   ToolPermissionChange,
 } from '@service-agent-harness/generated/schemas';
@@ -15,6 +15,7 @@ import {
   actionPermission,
   defaultFor,
   groupPermissions,
+  type PolicyView,
   toolKey,
 } from '../core/model';
 import { createPendingChanges } from '../primitives/pending-changes';
@@ -56,7 +57,7 @@ function changeName(
 
 /** The saved state the failed control goes back to. */
 function savedState(
-  view: AgentToolPermissions | undefined,
+  view: PolicyView | undefined,
   catalog: ToolPermissionCatalog,
   change: ToolPermissionChange
 ) {
@@ -96,18 +97,19 @@ function interactionName(change: ToolPermissionChange) {
 }
 
 /**
- * Saving permission controls: one PUT per click, queued per agent, each in
+ * Saving permission controls: one PUT per click, queued per policy, each in
  * its own trace (`agent_permissions.set_default`, `.set_exception`, `.set`
- * for a tool), with a toast naming what didn't
- * save and the state it went back to.
+ * for a tool), with a toast naming what didn't save and the state it went
+ * back to. `mutate` saves to the agent's or the team's policy.
  */
-export function usePermissionChanges(options: {
-  agentId: Accessor<string>;
+export function usePolicyChanges(options: {
+  mutate: (variables: {
+    changes: ToolPermissionChange[];
+    trace?: TraceContext;
+  }) => Promise<unknown>;
   catalog: Accessor<ToolPermissionCatalog>;
-  view: Accessor<AgentToolPermissions | undefined>;
+  view: Accessor<PolicyView | undefined>;
 }) {
-  const mutation = useSetAgentToolPermissionsMutation(options.agentId);
-
   const save = async (change: ToolPermissionChange) => {
     const interaction = beginInteraction(interactionName(change), {
       attributes: {
@@ -116,8 +118,7 @@ export function usePermissionChanges(options: {
       },
     });
     try {
-      return await mutation.mutateAsync({
-        agentId: options.agentId(),
+      return await options.mutate({
         changes: [change],
         trace: interaction.span,
       });
@@ -141,5 +142,20 @@ export function usePermissionChanges(options: {
         }
       );
     },
+  });
+}
+
+/** `usePolicyChanges` for an agent's own policy. */
+export function usePermissionChanges(options: {
+  agentId: Accessor<string>;
+  catalog: Accessor<ToolPermissionCatalog>;
+  view: Accessor<PolicyView | undefined>;
+}) {
+  const mutation = useSetAgentToolPermissionsMutation(options.agentId);
+  return usePolicyChanges({
+    mutate: (variables) =>
+      mutation.mutateAsync({ agentId: options.agentId(), ...variables }),
+    catalog: options.catalog,
+    view: options.view,
   });
 }

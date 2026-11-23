@@ -27,6 +27,12 @@ export const ACTION_ORDER: readonly PermissionAction[] = [
   'destroy',
 ];
 
+/** What the settings read of a policy's view, an agent's or a team's. */
+export type PolicyView = Pick<
+  AgentToolPermissions,
+  'defaults' | 'groups' | 'rules'
+>;
+
 /** A tool, as the catalog and the overrides both name it. */
 export type ToolRef = { service: string; operation: string };
 
@@ -101,7 +107,7 @@ export function changeForTool(
 
 /** The view's permissions for one group, if the view lists it. */
 export function groupPermissions(
-  view: AgentToolPermissions,
+  view: PolicyView,
   group: string
 ): ToolPermissionGroup | undefined {
   return view.groups.find((entry) => entry.group === group);
@@ -160,7 +166,7 @@ export function entitiesFor(
 
 /** The action's default; no saved default is Allow. */
 export function defaultFor(
-  view: AgentToolPermissions,
+  view: PolicyView,
   action: PermissionAction
 ): ToolPermissionState {
   return (
@@ -186,7 +192,7 @@ const NOTHING_PENDING: PendingLookup = () => undefined;
  */
 export function exceptionsFor(
   catalog: ToolPermissionCatalog,
-  view: AgentToolPermissions,
+  view: PolicyView,
   action: PermissionAction,
   pending: PendingLookup = NOTHING_PENDING,
   /** Rules that make a pair an exception too: what a follower inherits. */
@@ -240,7 +246,7 @@ export type ToolSetting = {
  */
 export function toolSettingsFor(
   catalog: ToolPermissionCatalog,
-  view: AgentToolPermissions,
+  view: PolicyView,
   action: PermissionAction,
   inherited: readonly ToolPermissionRule[] = []
 ): ToolSetting[] {

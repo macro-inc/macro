@@ -10,5 +10,6 @@ export const agentToolPermissionKeys = createQueryKeys(
       query,
     ],
     policy: (policyId: string) => [policyId],
+    team: (teamId: string) => [teamId],
   }
 );

@@ -27,6 +27,11 @@ changes.
   permissions over the source's) that `applyPermissionsDraft` saves once
   the agent exists; `EditAgentPermissions` sets the source (confirming when
   the agent had its own) or uses its own (`detach`) at once.
+- `views/team-permissions-panel.tsx`: a team's default permissions (the
+  Team default permissions row in Settings → Agents), saved through
+  `queries/team.ts` (`/agent-tool-permissions/teams/{id}`); team admins and
+  owners edit, members read. Saving re-reads every following agent's view.
+  `views/permission-changes.ts` `usePolicyChanges` saves either policy.
 - `core/references.ts`: draft application, default candidate, follower
   exceptions (pure, tested).
 - `queries/references.ts`: source candidates, policy previews, set source

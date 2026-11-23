@@ -101,7 +101,7 @@ export function useSessionToolPermissionsQuery(
 }
 
 /** A cached view of an agent that follows another policy. */
-function followsAPolicy(data: unknown): boolean {
+export function followsAPolicy(data: unknown): boolean {
   return (
     typeof data === 'object' &&
     data !== null &&
