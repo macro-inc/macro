@@ -330,6 +330,11 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
    * Backspace, but the field takes no typing and opens no suggestions.
    */
   full?: boolean;
+  /**
+   * List recipients already in the field among suggestions dimmed, with
+   * their check, and not pickable, instead of removing them when picked.
+   */
+  markAlreadyAdded?: boolean;
 } & (
   | {
       /** Explicit scoped options, such as team participants or agents. */
@@ -414,21 +419,23 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     });
   }
 
-  // An added recipient stays listed, so the user sees it is there, but is
-  // disabled: Kobalte would otherwise remove it when it is picked again, and
-  // its keyboard navigation skips disabled rows, so Enter and Tab never land
-  // on one. Chips still remove it.
-  const selectedValues = createMemo(
+  // With markAlreadyAdded, an added recipient stays listed, so the user sees
+  // it is there, but is disabled: Kobalte would otherwise remove it when it
+  // is picked again, and its keyboard navigation skips disabled rows, so
+  // Enter and Tab never land on one. Chips still remove it.
+  const addedValues = createMemo(
     () =>
       new Set(
-        (props.selectedOptions as CombinedRecipientItem[]).map(
-          getRecipientOptionValue
-        )
+        props.markAlreadyAdded
+          ? (props.selectedOptions as CombinedRecipientItem[]).map(
+              getRecipientOptionValue
+            )
+          : []
       )
   );
 
   function getOptionDisabled(option: CombinedRecipientItem): boolean {
-    if (selectedValues().has(getRecipientOptionValue(option))) return true;
+    if (addedValues().has(getRecipientOptionValue(option))) return true;
     if (option.kind === 'custom') {
       return option.data.invalid;
     }
@@ -849,10 +856,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           {(state) => {
             const context = useComboboxContext();
             // Kobalte's list opens on its first selected row, which is meant
-            // to restore a single choice. Here that row is an added
-            // recipient, disabled, so move on to the first row that can be
-            // picked: Enter and Tab act on the highlighted row.
+            // to restore a single choice. With markAlreadyAdded that row is
+            // disabled, so move on to the first row that can be picked:
+            // Enter and Tab act on the highlighted row.
             createEffect(() => {
+              if (!props.markAlreadyAdded) return;
               const list = context.listState();
               const manager = list.selectionManager();
               const focused = manager.focusedKey();
@@ -1245,7 +1253,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                           <RecipientComboboxItem
                             {...item}
                             inviteExternalEmails={props.inviteExternalEmails}
-                            added={selectedValues().has(item.key)}
+                            added={addedValues().has(item.key)}
                           />
                         );
                       }}
