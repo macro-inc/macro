@@ -145,6 +145,7 @@ impl SearchNames {
                 // A name is a strict AND of its words, never a passage match.
                 term_matching: TermMatching::All,
                 collapse: Some(true),
+                time_zone: None,
             };
             Some(
                 self.client

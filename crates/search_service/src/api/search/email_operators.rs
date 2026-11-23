@@ -16,6 +16,8 @@ use item_filters::{
     EmailFilters, EmailLabelMatch, EmailSearchView, EmailTextMatch, EmailTextPart,
     SharedEmailFilter,
 };
+use models_search::MatchType;
+use models_search::unified::SearchEntityFilters;
 use nom::{
     IResult, Parser,
     bytes::complete::{take_while_m_n, take_while1},
@@ -456,6 +458,40 @@ pub(in crate::api::search) fn reported_filters(query: &EmailQuery) -> EmailFilte
         shared: query.shared.unwrap_or_default(),
         ..query.filters.clone()
     }
+}
+
+/// Reads the email operators out of a search's `terms` when the search
+/// reaches email and its match type reads plain words. A search that types
+/// any becomes an email search, since no other kind of item can meet them,
+/// as a tag filter drops the kinds that carry no tags. Returns the terms left
+/// and the operators read, or the terms unchanged and `None`.
+pub(in crate::api::search) fn apply_email_operators(
+    filters: &mut SearchEntityFilters,
+    terms: Vec<String>,
+    match_type: MatchType,
+    clock: QueryClock,
+) -> (Vec<String>, Option<EmailQuery>) {
+    let reads_words = matches!(match_type, MatchType::Exact | MatchType::Partial);
+    if !filters.should_include_emails || !reads_words {
+        return (terms, None);
+    }
+    let query = read_email_operators(terms, clock);
+    if query.operators == 0 {
+        return (query.terms, None);
+    }
+
+    filters.should_include_agent_sessions = false;
+    filters.should_include_documents = false;
+    filters.should_include_chats = false;
+    filters.should_include_channels = false;
+    filters.should_include_projects = false;
+    filters.should_include_call_records = false;
+    filters.should_include_calendar_events = false;
+    match with_operators(std::mem::take(&mut filters.email_filters), &query) {
+        Some(email_filters) => filters.email_filters = email_filters,
+        None => filters.should_include_emails = false,
+    }
+    (query.terms.clone(), Some(query))
 }
 
 /// Parses a request's IANA time zone name.

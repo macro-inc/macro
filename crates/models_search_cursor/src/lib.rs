@@ -190,6 +190,10 @@ pub struct SearchCursor {
         deserialize_with = "known_term_matching"
     )]
     pub document_term_matching: Option<CursorTermMatching>,
+    /// When the first page read the query's relative dates (`newer_than:3d`),
+    /// in epoch milliseconds, so every later page bounds the same instants.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_time_millis: Option<i64>,
 }
 
 fn known_term_matching<'de, D: serde::Deserializer<'de>>(

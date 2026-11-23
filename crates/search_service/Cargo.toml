@@ -26,6 +26,7 @@ comms_db_client = { path = "../comms_db_client" }
 crm = { path = "../crm", default-features = false, features = ["search"] }
 document_sub_type = { path = "../document_sub_type" }
 email_db_client = { path = "../email_db_client" }
+favorites = { path = "../favorites", default-features = false, features = ["postgres"] }
 feature_flags = { path = "../feature_flags" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "outbound",
@@ -44,6 +45,7 @@ system_properties = { path = "../system_properties" }
 readonly_pool = { path = "../readonly_pool" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }

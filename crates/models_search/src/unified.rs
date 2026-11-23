@@ -124,6 +124,13 @@ pub struct UnifiedSearchRequest {
 
     #[schemars(skip)]
     pub collapse: Option<bool>,
+
+    /// The IANA time zone (such as `America/New_York`) the query's typed
+    /// dates are read in: `after:2017/06/01` starts at that day's midnight
+    /// there, and `newer_than:1m` counts a month back on its calendar.
+    /// Defaults to UTC.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub time_zone: Option<String>,
 }
 
 /// Whether a [FileAssociation] is indexed by the search processing service.
@@ -322,6 +329,11 @@ pub struct UnifiedSearchResponse {
     pub results: Vec<UnifiedSearchResponseItem>,
     /// The next cursor to use for paginating results
     pub next_cursor: Option<String>,
+    /// The email filters the query's typed operators (`subject:`, `in:`,
+    /// `after:` and the rest) became, each date as the instant it bounds.
+    /// Absent when the query typed none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_filters: Option<item_filters::EmailFilters>,
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]

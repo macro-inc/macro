@@ -75,6 +75,28 @@ pub(crate) struct ThreadStates {
     pub has_draft: bool,
     /// The thread carries an attachment of one of these kinds.
     pub attachments: Vec<AttachmentKind>,
+    /// The thread carries an attachment of any kind.
+    pub has_attachment: bool,
+    /// States no hit's thread may meet, each checked on its own. Read only by
+    /// [`EmailSearchService::matching_threads`]; a source never sees them.
+    pub excluded: Vec<ThreadStates>,
+}
+
+/// A tag or label condition resolved to what the index stores.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct LabelCondition {
+    /// Label names in the caller's inboxes, as their messages carry them.
+    pub labels: Vec<String>,
+    /// The caller's tag options with the label.
+    pub tag_option_ids: Vec<Uuid>,
+    pub exclude: bool,
+}
+
+/// One of the caller's tag options.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct TagOption {
+    pub label: String,
+    pub option_id: Uuid,
 }
 
 impl ThreadStates {
@@ -91,18 +113,36 @@ impl ThreadStates {
                 attachments.push(*kind);
             }
         }
+        // An attachment of a named kind is an attachment, so asking for any
+        // kind on top of it would only widen the kinds' OR.
+        let has_attachment = filters.has_attachment == Some(true) && attachments.is_empty();
+        let mut excluded = Vec::new();
+        if filters.has_attachment == Some(false) {
+            excluded.push(Self {
+                has_attachment: true,
+                ..Self::default()
+            });
+        }
         Self {
             is_read: filters.is_read,
             done: filters.done,
-            calendar_only: filters.calendar_only == Some(true),
+            calendar_only: filters.calendar_only == Some(true)
+                || filters.view == Some(EmailSearchView::Calendar),
             notification_states,
             sent: filters.view == Some(EmailSearchView::Sent),
             has_draft: filters.view == Some(EmailSearchView::Drafts),
             attachments,
+            has_attachment,
+            excluded,
         }
     }
 
     pub fn is_empty(&self) -> bool {
+        self.requires_nothing() && self.excluded.is_empty()
+    }
+
+    /// No condition a hit must meet, whatever it must not.
+    fn requires_nothing(&self) -> bool {
         self.is_read.is_none()
             && self.done.is_none()
             && !self.calendar_only
@@ -110,6 +150,15 @@ impl ThreadStates {
             && !self.sent
             && !self.has_draft
             && self.attachments.is_empty()
+            && !self.has_attachment
+    }
+
+    /// These states without their exclusions, as a source reads them.
+    fn required(&self) -> Self {
+        Self {
+            excluded: Vec::new(),
+            ..self.clone()
+        }
     }
 
     /// The states that put a thread in `set`.
@@ -146,6 +195,10 @@ pub(crate) struct EmailThreads {
     pub ids_only: bool,
     /// Threads every hit must belong to; empty imposes nothing.
     pub required_thread_ids: Vec<Uuid>,
+    /// Threads no hit may belong to.
+    pub excluded_thread_ids: Vec<Uuid>,
+    /// Tags or labels every hit's thread must, or must not, carry.
+    pub label_conditions: Vec<LabelCondition>,
     /// Conditions each page's hits are checked against.
     pub hit_states: ThreadStates,
     /// The shared threads stopped at [`MAX_SHARED_THREADS`].
@@ -203,13 +256,33 @@ pub(crate) trait EmailSearchSource {
         limit: usize,
     ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
 
-    /// Which of `thread_ids` meet every condition in `states`.
+    /// Which of `thread_ids` meet every condition in `states`. `states`
+    /// carries no exclusions.
     fn threads_in_states(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
         thread_ids: &[Uuid],
         states: &ThreadStates,
     ) -> impl Future<Output = Result<HashSet<Uuid>, Report>> + Send;
+
+    /// The email threads among the caller's favorites, at most `limit`.
+    fn favorite_threads(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        limit: usize,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// The options of every tag set the caller can apply.
+    fn tag_options(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+    ) -> impl Future<Output = Result<Vec<TagOption>, Report>> + Send;
+
+    /// The names of the labels in the given inboxes.
+    fn inbox_labels(
+        &self,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<String>, Report>> + Send;
 }
 
 pub(crate) struct EmailSearchService<S>(pub S);
@@ -223,7 +296,7 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         filters: &EmailFilters,
         inboxes: &ViewerInboxes,
     ) -> Result<EmailScope, Report> {
-        let requested: Vec<Uuid> = filters
+        let mut requested: Vec<Uuid> = filters
             .email_thread_ids
             .iter()
             .filter_map(|id| Uuid::parse_str(id).ok())
@@ -232,6 +305,114 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
             return Ok(EmailScope::Nothing);
         }
 
+        let favorites = match filters.favorite {
+            None => Vec::new(),
+            Some(_) => {
+                self.0
+                    .favorite_threads(user, MAX_THREAD_SET_ALLOWLIST)
+                    .await?
+            }
+        };
+        // Favorites narrow the search as named threads do, so shared ones
+        // still need a share the caller holds.
+        if filters.favorite == Some(true) {
+            requested = if filters.email_thread_ids.is_empty() {
+                favorites.clone()
+            } else {
+                requested
+                    .into_iter()
+                    .filter(|id| favorites.contains(id))
+                    .collect()
+            };
+            if requested.is_empty() {
+                return Ok(EmailScope::Nothing);
+            }
+        }
+
+        let Some(label_conditions) = self.label_conditions(user, filters, inboxes).await? else {
+            return Ok(EmailScope::Nothing);
+        };
+
+        let scope = self.base_scope(user, filters, inboxes, requested).await?;
+        let EmailScope::Threads(mut threads) = scope else {
+            return Ok(scope);
+        };
+        threads.label_conditions = label_conditions;
+        if filters.favorite == Some(false) {
+            threads.excluded_thread_ids = favorites;
+        }
+        for view in &filters.exclude_views {
+            let set = match view {
+                EmailSearchView::Sent => ThreadSet::Sent,
+                EmailSearchView::Drafts => ThreadSet::Drafts,
+                EmailSearchView::Calendar => ThreadSet::Calendar,
+            };
+            // The threads reached by id (shares, or an allowlist) are checked
+            // against the set; the caller's own mailbox is read from it.
+            match self
+                .set_allowlist(user, set, filters.shared, inboxes, &threads.thread_ids)
+                .await?
+            {
+                Some(in_set) => threads.excluded_thread_ids.extend(in_set),
+                None => threads.hit_states.excluded.push(ThreadStates::of_set(set)),
+            }
+        }
+        Ok(EmailScope::Threads(threads))
+    }
+
+    /// Resolves each tag or label name to what the index stores, or `None`
+    /// when a name that must be carried names nothing, so nothing matches.
+    async fn label_conditions(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        filters: &EmailFilters,
+        inboxes: &ViewerInboxes,
+    ) -> Result<Option<Vec<LabelCondition>>, Report> {
+        if filters.label_names.is_empty() {
+            return Ok(Some(Vec::new()));
+        }
+        let (tags, labels) = tokio::try_join!(
+            self.0.tag_options(user),
+            self.0.inbox_labels(&inboxes.link_ids)
+        )?;
+
+        let mut conditions = Vec::new();
+        for wanted in &filters.label_names {
+            let name = wanted.name.to_lowercase();
+            let mut condition = LabelCondition {
+                exclude: wanted.exclude,
+                ..LabelCondition::default()
+            };
+            for label in &labels {
+                if label.to_lowercase() == name && !condition.labels.contains(label) {
+                    condition.labels.push(label.clone());
+                }
+            }
+            for tag in &tags {
+                if tag.label.to_lowercase() == name {
+                    condition.tag_option_ids.push(tag.option_id);
+                }
+            }
+            let names_nothing = condition.labels.is_empty() && condition.tag_option_ids.is_empty();
+            if names_nothing && !wanted.exclude {
+                return Ok(None);
+            }
+            if !names_nothing {
+                conditions.push(condition);
+            }
+        }
+        Ok(Some(conditions))
+    }
+
+    /// The threads the request's own scope reaches, before the conditions
+    /// typed into the search narrow them.
+    async fn base_scope(
+        &self,
+        user: &MacroUserId<Lowercase<'_>>,
+        filters: &EmailFilters,
+        inboxes: &ViewerInboxes,
+        requested: Vec<Uuid>,
+    ) -> Result<EmailScope, Report> {
         let mut project_ids: Vec<String> = Vec::new();
         for id in &filters.project_ids {
             if !id.is_empty() && !project_ids.contains(id) {
@@ -387,7 +568,7 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         Ok(Some(allowlist))
     }
 
-    /// Which of `thread_ids` meet `states`.
+    /// Which of `thread_ids` meet `states` and none of its exclusions.
     pub async fn matching_threads(
         &self,
         user: &MacroUserId<Lowercase<'_>>,
@@ -397,7 +578,25 @@ impl<S: EmailSearchSource> EmailSearchService<S> {
         if thread_ids.is_empty() {
             return Ok(HashSet::new());
         }
-        self.0.threads_in_states(user, thread_ids, states).await
+        let mut matching = if states.requires_nothing() {
+            thread_ids.iter().copied().collect()
+        } else {
+            self.0
+                .threads_in_states(user, thread_ids, &states.required())
+                .await?
+        };
+        for excluded in &states.excluded {
+            if matching.is_empty() {
+                break;
+            }
+            let candidates: Vec<Uuid> = matching.iter().copied().collect();
+            let left_out = self
+                .0
+                .threads_in_states(user, &candidates, &excluded.required())
+                .await?;
+            matching.retain(|id| !left_out.contains(id));
+        }
+        Ok(matching)
     }
 
     /// Which of `thread_ids` outside the caller's inboxes a grant on the

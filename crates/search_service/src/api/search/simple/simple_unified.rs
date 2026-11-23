@@ -8,6 +8,9 @@ use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
 
 use crate::api::search::caller::{caller_label, draws_api_key_allowance, search_caller};
 use crate::api::search::crm_company;
+use crate::api::search::email_operators::{
+    QueryClock, apply_email_operators, reported_filters, time_zone,
+};
 use crate::api::search::simple::{simple_channel, simple_chat};
 use crate::api::{
     context::{SearchAuthorizationService, SearchHandlerState},
@@ -376,6 +379,7 @@ fn unified_search_span(
         search.entity_types = tracing::field::Empty,
         search.terms = tracing::field::Empty,
         search.dropped_terms = tracing::field::Empty,
+        search.email_operators = tracing::field::Empty,
         search.term_matching = tracing::field::Empty,
         search.term_matching_from_cursor = tracing::field::Empty,
         search.email_shared_capped = tracing::field::Empty,
@@ -421,6 +425,8 @@ pub(in crate::api::search) struct UnifiedSearchPage {
     pub(in crate::api::search) hits: Vec<SearchHit>,
     pub(in crate::api::search) next_cursor: Option<String>,
     pub(in crate::api::search) crm_access: Option<CrmTeamReceipt<MemberTeamRole>>,
+    /// The email filters the query's typed operators became, if it typed any.
+    pub(in crate::api::search) query_filters: Option<item_filters::EmailFilters>,
 }
 
 /// Creates a unified search request and performs the search
@@ -557,12 +563,18 @@ async fn search_unified_sources(
     let split_terms = split_search_terms(&terms);
     let split_count = split_terms.len();
     let search_terms = enforce_term_limits(drop_wordless_terms(split_terms, match_type))?;
-    record_term_counts(
-        &tracing::Span::current(),
-        search_terms.len(),
-        split_count - search_terms.len(),
-    );
     let requested_term_matching = req.term_matching;
+
+    // Typed dates are read in the caller's zone, and a later page reads
+    // relative ones against the first page's moment.
+    let clock = QueryClock {
+        now: cursor
+            .as_ref()
+            .and_then(|cursor| cursor.query_time_millis)
+            .and_then(chrono::DateTime::from_timestamp_millis)
+            .unwrap_or_else(chrono::Utc::now),
+        zone: time_zone(req.time_zone.as_deref()).ok_or(SearchError::InvalidTimeZone)?,
+    };
 
     // Property filters live at the top level of the request and only apply to
     // the OpenSearch documents index, so capture them before the conversion
@@ -583,7 +595,20 @@ async fn search_unified_sources(
     let crm_company_filters = req.filters.crm_company_filters.clone();
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    let (search_terms, email_query) =
+        apply_email_operators(&mut search_filters, search_terms, match_type, clock);
+    record_term_counts(
+        &tracing::Span::current(),
+        search_terms.len(),
+        split_count - search_terms.len(),
+    );
+    tracing::Span::current().record(
+        "search.email_operators",
+        email_query.as_ref().map_or(0, |query| query.operators),
+    );
+    // CRM companies cannot meet an email operator either.
+    let include_crm = include_crm && email_query.is_none();
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -1140,6 +1165,10 @@ async fn search_unified_sources(
                     search_terms.len(),
                     document_term_matching,
                 ),
+                query_time_millis: email_query
+                    .as_ref()
+                    .filter(|query| query.reads_now)
+                    .map(|_| clock.now.timestamp_millis()),
             };
             cursor.encode()
         } else {
@@ -1154,6 +1183,7 @@ async fn search_unified_sources(
         hits: final_results,
         next_cursor,
         crm_access,
+        query_filters: email_query.as_ref().map(reported_filters),
     })
 }
 

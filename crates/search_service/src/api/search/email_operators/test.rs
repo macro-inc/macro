@@ -347,3 +347,108 @@ fn a_time_zone_is_an_iana_name() {
     );
     assert_eq!(time_zone(Some("Mars/Olympus")), None);
 }
+
+fn every_kind() -> SearchEntityFilters {
+    SearchEntityFilters::from(item_filters::EntityFilters::default())
+}
+
+fn terms(query: &str) -> Vec<String> {
+    crate::api::search::terms::split_search_terms(&[query.to_string()])
+}
+
+#[test]
+fn an_operator_makes_the_search_an_email_search() {
+    let mut filters = every_kind();
+    assert!(filters.should_include_documents);
+
+    let (left, query) = apply_email_operators(
+        &mut filters,
+        terms("budget subject:lunch"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["budget"]);
+    assert_eq!(query.map(|query| query.operators), Some(1));
+    assert!(filters.should_include_emails);
+    assert!(!filters.should_include_documents);
+    assert!(!filters.should_include_chats);
+    assert!(!filters.should_include_channels);
+    assert!(!filters.should_include_projects);
+    assert!(!filters.should_include_call_records);
+    assert!(!filters.should_include_calendar_events);
+    assert!(!filters.should_include_agent_sessions);
+    assert_eq!(
+        filters.email_filters.text_matches,
+        [text(EmailTextPart::Subject, "lunch", false)]
+    );
+}
+
+#[test]
+fn a_search_without_operators_keeps_every_kind() {
+    let mut filters = every_kind();
+
+    let (left, query) = apply_email_operators(
+        &mut filters,
+        terms("budget"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["budget"]);
+    assert_eq!(query, None);
+    assert!(filters.should_include_documents);
+}
+
+#[test]
+fn a_search_that_leaves_out_email_reads_operators_as_words() {
+    let mut filters = SearchEntityFilters::from(item_filters::EntityFilters {
+        email_filters: EmailFilters {
+            email_thread_ids: vec![uuid::Uuid::nil().to_string()],
+            ..EmailFilters::default()
+        },
+        ..item_filters::EntityFilters::default()
+    });
+    assert!(!filters.should_include_emails);
+
+    let (left, query) = apply_email_operators(
+        &mut filters,
+        terms("subject:lunch"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["subject:lunch"]);
+    assert_eq!(query, None);
+    assert!(filters.should_include_documents);
+}
+
+#[test]
+fn raw_query_syntax_is_left_alone() {
+    let mut filters = every_kind();
+
+    let (left, query) = apply_email_operators(
+        &mut filters,
+        terms("subject:lunch"),
+        MatchType::Regexp,
+        clock(Tz::UTC),
+    );
+
+    assert_eq!(left, ["subject:lunch"]);
+    assert_eq!(query, None);
+}
+
+#[test]
+fn contradicting_operators_search_nothing() {
+    let mut filters = every_kind();
+
+    apply_email_operators(
+        &mut filters,
+        terms("is:read is:unread"),
+        MatchType::Partial,
+        clock(Tz::UTC),
+    );
+
+    assert!(!filters.should_include_emails);
+    assert!(!filters.should_include_documents);
+}

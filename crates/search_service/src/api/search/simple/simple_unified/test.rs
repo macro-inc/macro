@@ -572,6 +572,7 @@ fn channel_name_cursor_round_trips_through_the_unified_cursor() {
             updated_at: ts(1000),
         })),
         document_term_matching: None,
+        query_time_millis: None,
     };
 
     let decoded = SearchCursor::decode(&cursor.encode().expect("encode")).expect("decode");
@@ -621,6 +622,7 @@ fn the_unified_search_span_carries_the_mode_and_not_the_request() {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     };
     req.filters.chat_filters.chat_ids = vec![chat_id.to_string()];
     let query_params = SearchPaginationParams {
@@ -696,6 +698,7 @@ fn the_unified_search_span_defaults_the_page_size() {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     };
     let query_params = SearchPaginationParams {
         page: None,
@@ -975,6 +978,7 @@ fn search_request(query: &str) -> UnifiedSearchRequest {
         calendar_event_scope: Default::default(),
         term_matching: Default::default(),
         collapse: None,
+        time_zone: None,
     }
 }
 
