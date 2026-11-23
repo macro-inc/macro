@@ -761,14 +761,18 @@ impl<S: Storage> Engine<S> {
             for projection in &mut source.projection_mutations {
                 identity::remap_projection(projection, &identities);
             }
-            let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
-            let operation =
-                document.operation(queued.mutation.request.operation_name.as_deref())?;
-            let mut updates = identity::remap_updates(
-                normalize(&self.schema, operation, &variables, &source.mutation_data)?,
-                &source.identity_bindings,
-                &identities,
-            );
+            // A retired overlay adds no records. Its document is not
+            // normalized: it may select a field a later schema removed.
+            let normalized = if crate::schema_change::is_retired(&source) {
+                RecordUpdates::new()
+            } else {
+                let document = Self::document(&mut self.docs, &queued.mutation.request.query)?;
+                let operation =
+                    document.operation(queued.mutation.request.operation_name.as_deref())?;
+                normalize(&self.schema, operation, &variables, &source.mutation_data)?
+            };
+            let mut updates =
+                identity::remap_updates(normalized, &source.identity_bindings, &identities);
             identity::apply_record_lifecycle(&mut updates, &source.identity_bindings, &identities);
             if updates
                 .keys()
