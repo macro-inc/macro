@@ -291,7 +291,12 @@ export function EmailHeader(props: EmailHeaderProps) {
           placeholder={t('emailViews.searchAllMail')}
           value={field().text}
           onValueChange={(text) =>
-            setState('search', editEmailSearchField(field().scope, text))
+            setState(
+              'search',
+              props.searchSuggestions
+                ? editEmailSearchField(field().scope, text)
+                : text
+            )
           }
           onClear={() => setState('search', '')}
           leading={
