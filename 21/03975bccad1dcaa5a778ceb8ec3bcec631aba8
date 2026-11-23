@@ -1,0 +1,19 @@
+apps/web/src/features/channels-view/queries.test.ts
+  s_d6ca1450289ae1::t_28aaea3fa950e7 762,765,792
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2103975bccad1dcaa5a778ceb8ec3bcec631aba8",
+  "prompts": {},
+  "sessions": {
+    "s_d6ca1450289ae1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d1e4fd97-bfbb-4edd-ab80-8a980b6e5e81",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
