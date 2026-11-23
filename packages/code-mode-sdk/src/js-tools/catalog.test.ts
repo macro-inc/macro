@@ -58,24 +58,22 @@ describe('JS tools catalog', () => {
   });
 
   it('skips what the TypeScript SDK excludes, such as person-only routes', () => {
-    expect(
-      catalog.skipped.filter(
-        (skip) =>
-          skip.service === 'agent-harness' &&
-          skip.operationId.endsWith('_agent_tool_permissions')
-      )
-    ).toEqual([
-      {
-        service: 'agent-harness',
-        operationId: 'set_agent_tool_permissions',
-        reason: EXCLUDED_REASON,
-      },
-      {
-        service: 'agent-harness',
-        operationId: 'reset_agent_tool_permissions',
-        reason: EXCLUDED_REASON,
-      },
+    const permissions = catalog.skipped.filter(
+      (skip) =>
+        skip.service === 'agent-harness' &&
+        skip.operationId.includes('tool_permission')
+    );
+    expect(permissions.map((skip) => skip.operationId)).toEqual([
+      'get_agent_tool_permission_policy',
+      'get_agent_tool_permission_sources',
+      'set_agent_tool_permissions',
+      'reset_agent_tool_permissions',
+      'detach_agent_tool_permissions',
+      'set_agent_tool_permissions_source',
     ]);
+    expect(permissions.every((skip) => skip.reason === EXCLUDED_REASON)).toBe(
+      true
+    );
   });
 
   it('otherwise skips only what a tool cannot send or read', () => {
