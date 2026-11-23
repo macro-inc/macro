@@ -1,3 +1,5 @@
+import type { Report as NativeUpdateReport } from '@app/observability/generated/native-update';
+import { reportNativeUpdate } from '@app/observability/native-update';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
@@ -46,6 +48,7 @@ export function createNativeUpdates(flush: () => Promise<void>) {
   });
   let disposed = false;
   let unsubscribe = () => {};
+  let unsubscribeReports = () => {};
 
   async function restart() {
     if (status().status !== 'Ready' || preparing()) return;
@@ -110,12 +113,46 @@ export function createNativeUpdates(flush: () => Promise<void>) {
     }
   }
 
+  /** Sends the check and install outcomes the host has collected. */
+  async function drainReports() {
+    let reports: NativeUpdateReport[];
+    try {
+      reports = await invoke<NativeUpdateReport[]>(
+        'take_native_update_reports'
+      );
+    } catch {
+      // Older binaries do not report update outcomes.
+      return;
+    }
+    for (const report of reports) reportNativeUpdate(report);
+  }
+
+  async function initializeReports() {
+    try {
+      const stop = await listen('native-update-report', () =>
+        fireAndForget(drainReports(), 'native-updates')
+      );
+      if (disposed) {
+        fireAndForget(stop(), 'native-updates');
+        return;
+      }
+      unsubscribeReports = () => fireAndForget(stop(), 'native-updates');
+    } catch {
+      return;
+    }
+    // Reports from before this document listened, such as the last install.
+    await drainReports();
+  }
+
   onMount(() => {
-    if (isPlatform('desktop')) fireAndForget(initialize(), 'native-updates');
+    if (!isPlatform('desktop')) return;
+    fireAndForget(initialize(), 'native-updates');
+    fireAndForget(initializeReports(), 'native-updates');
   });
   onCleanup(() => {
     disposed = true;
     unsubscribe();
+    unsubscribeReports();
   });
   return {
     status,
