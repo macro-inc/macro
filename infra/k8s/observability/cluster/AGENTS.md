@@ -3,8 +3,8 @@
 ## What it is
 
 What runs on the observability EKS cluster, as nixidy modules rendered to
-`manifests/prod/`, which Argo CD applies from `main`. Merging here deploys (with
-`macro.cluster.autoSync` off, at the next manual sync in Argo CD).
+`manifests/prod/`, which Argo CD applies from `main`. Merging here deploys:
+Argo CD syncs `main` automatically (`macro.cluster.autoSync`).
 The [README](README.md) has the application list, bootstrap and contract with
 `../aws/` (OpenTofu, its own flake).
 

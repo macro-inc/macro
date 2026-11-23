@@ -3,16 +3,21 @@
 ## What it is
 
 Imports Granola meeting notes as private Macro calls. Sync follows the user's
-Granola connection in Pipedream; there are no user controls or user routes.
+Granola connection, as the `connectors` services count it; there are no user
+controls or user routes.
 
 ## How it works
 
-The DCS worker (`inbound::run_worker`) reconciles every 30 seconds: each enabled
-Granola account gets one webhook at the widest scope the key accepts (`All`,
-falling back to `Workspace`), and syncs whose account was removed or replaced
-are stopped. Granola posts signed events to the public webhook route; they are
-stored durably, then leased, fetched through the Pipedream proxy, and ingested
-through `call::domain::imports`.
+The worker (`inbound::run_worker`) reconciles every 30 seconds: each user
+whose Granola connection gives API access (`ApiConnectionsService::holders`)
+gets one webhook at the widest scope the key accepts (`All`, falling back to
+`Workspace`), and syncs whose connection went away are stopped. Granola posts
+signed events to the public webhook route; they are stored durably, then
+leased, fetched through `ApiConnectionsService::call`, and ingested through
+`call::domain::imports`. A user connecting Granola starts their sync over at
+once (`inbound::connected_hook`, on the `/connectors` connect hook), and
+reconcile keeps a holder whose connection could not be resolved: `holders`
+fails rather than leave them out, so nothing is stopped on an outage.
 
 ## Start here
 
@@ -22,11 +27,11 @@ through `call::domain::imports`.
 ## Scope
 
 - Owns: webhook lifecycle, delivery verification and deduplication, Granola note mapping.
-- Not here: call storage and reads → `crates/call`; Pipedream accounts → `crates/pipedream_mcp`.
+- Not here: call storage and reads → `crates/call`; which Granola connection counts and how it is called → `crates/connectors`.
 
 ## Boundaries
 
-- Depends on: `call` import port, `pipedream_mcp` `ConnectedAppProxy` / `ConnectionStore` / `AppConnections`.
+- Depends on: `call` import port, `connectors` `ApiConnectionsService` (tests use its `FakeConnectors`).
 - Used by: `services/agent_harness_service` (composition root, worker, webhook route).
 
 ## Checks
@@ -43,6 +48,12 @@ through `call::domain::imports`.
 - `namespace` must survive reconnects: it is the import identity in
   `call_entity_sources`, so re-registering never duplicates calls.
 - Never log provider response bodies; webhook registration returns the signing secret.
+- Sync is off for users on Macro Connect: Connect holds Granola as MCP only, so
+  their connection gives no API access and they are not holders.
+- The connectors services name no account, so reconcile cannot see a
+  reconnect to a different Granola account; the connect hook restarting the
+  sync is what moves the webhook. `account_id` on `granola_sync_connections`
+  only keeps older rows' values.
 
 ## Related
 

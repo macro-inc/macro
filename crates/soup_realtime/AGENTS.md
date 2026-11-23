@@ -11,7 +11,8 @@ tasks itself.
 ## Start here
 
 - `src/domain/service.rs`: resolves the current accessors of a batch of patches
-  in one access lookup and publishes one `Patch` per recipient to `macro.soup`.
+  in one access lookup (plus an uncached roster read per channel a membership
+  removal changed) and publishes one `Patch` per recipient to `macro.soup`.
 - `src/domain/models.rs` + `src/domain/ports.rs`: the `Patch<Entity>` shape
   and the ports the service depends on.
 - `src/inbound/kafka_consumer.rs`: maps each source Kafka event to
@@ -68,6 +69,25 @@ tasks itself.
   names the members it had (`participant_user_ids`), and its `Deleted` patch
   goes to them as well (`SoupRealtimePatch::with_named_recipients`); events
   from before that field reach only current accessors.
+- The audience lookup answers channels from entity access's roster cache,
+  up to ten seconds old, so a membership event is not routed by it alone.
+  `channel.participant_added` names the added users as recipients.
+  `channel.participant_removed` updates the channel for its remaining members
+  and sends the removed members their own patch
+  (`SoupRealtimePatch::only_for_former_members`): `Updated` for a team or
+  public channel, which they can still open unjoined, `Deleted` for a private
+  channel or DM. That patch has the channel's roster read now, uncached
+  (`UserAccessExpander::current_channel_members`), once per channel in a
+  batch, and the members' update uses the same read: a removed member added
+  back before the event is consumed gets only the members' update. Channel
+  side effects publish from separate tasks, so a re-add can be published
+  before the removal it follows; the removal's roster read still sees the
+  rejoin. Every channel settings patch raises `channel.updated`, so conversions and
+  auto-join changes reach members too, and so does a change of the bots in a
+  channel that `crates/bots` makes (it raises one with the name unchanged).
+  An agent DM's membership repair (`crates/channels` `ensure_agent_dm`)
+  raises nothing: no writer marks a direct agent DM row left except deleting
+  its bot, after which the DM cannot be reopened.
 - Agent sessions have no source event here: their patches come from channel
   references, linked pull requests, and the harness publishing through
   `outbound/agent_sessions.rs`' `SoupWorkRegistrationSignal` for registered work.

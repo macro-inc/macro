@@ -321,7 +321,7 @@ old hydration cannot resurrect verified removals, and old absence evidence canno
 delete a newer positive observation. Unfenced network/optimistic contact writes reject.
 The same backfill then verifies existing membership in bounded raw-key windows using
 the existing exact lookup. Only successful requested-ID omissions permit deletion;
-scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+scan omissions do not. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes
 only after an exhaustive, non-malformed verification pass. Context-only stubs,
 explicit selections and shared name labels do not establish membership. See the
 [contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.

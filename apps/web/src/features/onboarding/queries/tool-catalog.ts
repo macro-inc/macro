@@ -1,11 +1,11 @@
-import { createPipedreamCatalogSearch } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { createConnectorCatalogSearch } from '@queries/connectors';
 import { NATIVE_GITHUB_TOOL, ONBOARDING_FEATURED_TOOLS } from '../core/tools';
 
 /** Stable featured metadata plus one paginated, searchable live directory. */
 export function createOnboardingToolCatalog() {
-  const catalog = createPipedreamCatalogSearch(
-    () => new Set<string>(['github'])
+  const catalog = createConnectorCatalogSearch(
+    () => new Set<string>([NATIVE_GITHUB_TOOL.slug])
   );
   return {
     search: catalog.searchInput,
@@ -21,11 +21,11 @@ export function createOnboardingToolCatalog() {
         ...featured,
         ...catalog
           .entries()
-          .filter((entry) => entry.app_slug !== NATIVE_GITHUB_TOOL.slug)
+          .filter((entry) => entry.slug !== NATIVE_GITHUB_TOOL.slug)
           .map((entry) => ({
-            slug: entry.app_slug,
-            name: entry.display_name,
-            iconUrl: entry.icon_url ?? null,
+            slug: entry.slug,
+            name: entry.name,
+            iconUrl: entry.iconUrl ?? null,
           })),
       ];
     },
