@@ -15,6 +15,9 @@ and each task's Time logged total. Served over REST by
   start stops and saves the running timer.
 - `src/outbound/pg_time_repo.rs`: `time_entry`, `time_timer`, and the total.
 - `src/inbound/axum_router.rs`: the REST routes and the typed error body.
+- `src/inbound/toolset/`: `LogTime` and `ReadTimeEntries` for chat, channel
+  bots and MCP (feature `toolset`); code mode uses the SDK's `task.logTime`
+  and `task.timeEntries` and hides them.
 
 ## Scope
 
@@ -26,8 +29,9 @@ and each task's Time logged total. Served over REST by
 ## Boundaries
 
 - Depends on: `entity_access` (receipts), `system_properties` (feature
-  `outbound`), `feature_flags`, `macro_event_broker`, `macro_event_topics`.
-- Used by: `services/document_storage_service`.
+  `outbound`), `feature_flags`, `macro_event_broker`, `macro_event_topics`,
+  `ai_toolset` (feature `toolset`).
+- Used by: `services/document_storage_service`, `ai_tools`.
 
 ## Checks
 
@@ -45,8 +49,12 @@ and each task's Time logged total. Served over REST by
 - The day of an entry is chosen by the client (a timer's: its start in the
   stopping device's zone, UTC when none). Never derive it on read.
 - Writes need `enable-time-tracking` for the caller (`outbound/rollout.rs`);
-  a failed flag load is off. `document_storage_service` picks
-  `LocalTimeTracking` (always on) for the local environment only.
+  a failed flag load is off. `document_storage_service` and `ai_tools` pick
+  `LocalTimeTracking` (always on) for the local environment only, and
+  `ai_tools` picks `TimeTrackingOff` on a host without a flag client.
+- The tools mint the requesting user's receipt, never a bot's: the domain
+  takes the author from an authenticated-user receipt, so an agent's entry
+  is the person it acts for.
 - Events carry the task's new total and never the note. Nothing consumes the
   topic yet.
 

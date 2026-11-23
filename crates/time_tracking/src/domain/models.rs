@@ -54,6 +54,7 @@ pub fn may_change_entry(entry: &TimeEntry, caller: &MacroUserIdStr<'_>) -> bool 
 /// How a time entry was made.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "toolset", derive(schemars::JsonSchema))]
 #[cfg_attr(feature = "outbound", derive(sqlx::Type))]
 #[cfg_attr(
     feature = "outbound",

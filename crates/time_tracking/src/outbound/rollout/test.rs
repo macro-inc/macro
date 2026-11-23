@@ -48,3 +48,8 @@ async fn a_flag_load_that_fails_keeps_writes_off() {
 async fn a_local_stack_has_time_tracking_on() {
     assert!(LocalTimeTracking.enabled_for(&person()).await);
 }
+
+#[tokio::test]
+async fn a_host_without_a_flag_client_keeps_writes_off() {
+    assert!(!TimeTrackingOff.enabled_for(&person()).await);
+}
