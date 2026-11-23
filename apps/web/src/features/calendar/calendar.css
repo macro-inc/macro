@@ -234,9 +234,14 @@
 	color: var(--color-ink-disabled);
 }
 
+/* Mute the number, not the entire header or its selected/today accent. */
+.calendar-view .fc .fc-dayGridMonth-view .fc-day-other .fc-daygrid-day-top {
+	opacity: 1;
+}
+
 .calendar-view .fc .fc-daygrid-event {
-	margin-right: 0.375rem;
-	margin-left: 0.375rem;
+	margin-right: 1px;
+	margin-left: 1px;
 }
 
 .calendar-view .fc-direction-ltr .fc-h-event:not(.fc-event-end) {
@@ -597,7 +602,7 @@
 	z-index: 3;
 	--fc-event-border-color: var(--color-accent);
 	--fc-event-bg-color: var(--color-accent);
-	--fc-event-text-color: var(--color-surface);
+	--fc-event-text-color: var(--button-accent-ink);
 	opacity: 1;
 }
 
@@ -606,7 +611,12 @@
 	.fc-event:has(.calendar-event-content-selected)
 	.calendar-event-content-selected {
 	background-color: var(--color-accent);
-	color: var(--color-surface);
+	color: var(--button-accent-ink);
+}
+
+.calendar-view .fc .calendar-event-content-selected .calendar-event-time {
+	color: var(--button-accent-ink);
+	opacity: 1;
 }
 
 .calendar-view
@@ -627,7 +637,14 @@
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
-	padding-left: 0.625rem;
+	display: inline-flex;
+	width: 1.75rem;
+	height: 1.75rem;
+	padding: 0;
+	margin: 0.125rem 0 0 0.25rem;
+	align-items: center;
+	justify-content: center;
+	line-height: 1;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-top:has(.fc-daygrid-day-number) {
@@ -635,7 +652,7 @@
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-events {
-	margin-inline: 0.25rem;
+	margin-inline: 0;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event {
@@ -654,16 +671,8 @@
 	font-weight: 600;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-day-other .fc-daygrid-day-frame {
-	opacity: 0.5;
-}
-
 .phone-month-page > .calendar-view {
 	visibility: hidden;
-}
-
-.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-number {
-	padding-bottom: 0;
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-events {
@@ -770,7 +779,7 @@
 }
 
 .calendar-view .fc .fc-timegrid-slot-minor {
-	border-top-color: var(--divider);
+	border-top-width: 0;
 }
 
 .calendar-view .fc .fc-timegrid-axis-cushion,

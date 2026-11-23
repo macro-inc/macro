@@ -4,6 +4,11 @@
   border-bottom-width: 1px;
 }
 
+/* Only date-cell boundaries divide Month; its internal content has no subgrid. */
+.calendar-view .fc .fc-dayGridMonth-view :is(.fc-daygrid-day-frame, .fc-daygrid-day-top, .fc-daygrid-day-events) {
+  border: 0;
+}
+
 .calendar-view .fc .fc-dayGridMonth-view tr > .fc-daygrid-day:last-child {
   border-right-width: 0;
 }

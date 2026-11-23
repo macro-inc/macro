@@ -149,19 +149,6 @@ export function MonthGrid(props: {
                         'grid-column': `${bar.startColumn + 1} / ${bar.endColumn + 1}`,
                         top: `${PHONE_MONTH_DATE_HEIGHT + bar.lane * PHONE_MONTH_ROW_PITCH}px`,
                         '--event-calendar-color': bar.event.calendar.color,
-                        'mask-image': `linear-gradient(to right, ${week.days
-                          .slice(bar.startColumn, bar.endColumn)
-                          .flatMap((day, index, days) => {
-                            const color =
-                              day.date.getMonth() === props.month.getMonth()
-                                ? '#000'
-                                : '#0008';
-                            return [
-                              `${color} ${(index / days.length) * 100}%`,
-                              `${color} ${((index + 1) / days.length) * 100}%`,
-                            ];
-                          })
-                          .join(', ')})`,
                       }}
                     >
                       <span>

@@ -64,6 +64,7 @@
   justify-content: center;
   font-size: 13px;
   font-weight: 600;
+  line-height: 1;
 }
 .phone-month-bar {
   grid-row: 1;
@@ -71,7 +72,7 @@
   align-self: start;
   z-index: 1;
   height: var(--phone-month-event-height);
-  inset-inline: 2px;
+  inset-inline: 1px;
   padding: 0 3px;
   border-left: 2px solid var(--event-calendar-color);
   border-radius: 4px;
