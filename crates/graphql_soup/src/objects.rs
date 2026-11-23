@@ -110,6 +110,12 @@ pub trait SoupEntityEdges: ObjectType + Clone + Send + Sync + 'static {
     /// Construct initiative-specific detail fields without loading them.
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges;
 
+    /// Additional fields attached only to document entities, tasks included.
+    type DocumentEdges: ObjectType + Clone + Send + Sync + 'static;
+
+    /// Construct document-specific fields without loading them.
+    fn document_edges(document_id: Uuid) -> Self::DocumentEdges;
+
     /// Additional fields attached only to agent-session entities.
     type AgentSessionEdges: ObjectType + Clone + Send + Sync + 'static;
 
@@ -877,6 +883,12 @@ where
     /// The edges.
     async fn edges(&self) -> E {
         self.1.clone()
+    }
+
+    /// Document-specific fields supplied by the composition crate.
+    #[graphql(flatten)]
+    async fn document_edges(&self) -> E::DocumentEdges {
+        E::document_edges(self.0.id)
     }
 
     /// The viewer's frecency score for this entity, when loaded.

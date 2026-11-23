@@ -50,6 +50,11 @@ impl SoupEntityEdges for TestSoupEdges {
     type CrmRecordEdges = TestEmailThreadEdges;
     type InitiativeEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;
+    type DocumentEdges = TestEmailThreadEdges;
+
+    fn document_edges(_document_id: uuid::Uuid) -> Self::DocumentEdges {
+        TestEmailThreadEdges { available: true }
+    }
 
     fn from_entity(_entity: Entity<'static>) -> Self {
         Self { available: true }
