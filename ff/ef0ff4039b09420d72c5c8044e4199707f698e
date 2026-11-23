@@ -1,0 +1,245 @@
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_0cc55d4013f523::t_a320c9f95d55d1 118,120-128,130-132,134,136,142-143,145-149,151-161,163-164,166,171-182,187
+  s_0cc55d4013f523::t_7f35f254019db8 183
+  s_9aaadd038e8bff::t_a1e082d6f6ccc2 54,56,193,225,227-229
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 37-39,55,105,197-218
+  s_0cc55d4013f523::t_3ca0a0d527f0f6 144,150
+  s_0cc55d4013f523::t_427292f152bd9e 219
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_0cc55d4013f523::t_5048bae160bb22 2,5,21,24-27,74-85,97-100,108,110-111,113
+  s_0cc55d4013f523::t_b42e2f922fae17 101
+  s_0cc55d4013f523::t_785616ffa8aad8 3,13-14,17-20,103-107,118-129,131,133-189
+  s_0cc55d4013f523::t_903374edbb5b4c 130,132
+apps/web/src/features/block-agent/ui/PermissionRequestCard.tsx
+  s_0cc55d4013f523::t_59f72218fc0db6 1-3,5-18,21-55,57,59-78,80-111,113-129
+  s_0cc55d4013f523::t_ce20bfc7bb1d3a 58,79
+  s_0cc55d4013f523::t_785616ffa8aad8 4,19-20,56,112
+apps/web/src/features/block-agent/component/AgentComposer.tsx
+  s_0cc55d4013f523::t_ef4a98f0122616 41,183-190,325,332-336
+  s_0cc55d4013f523::t_f06b103f2382ae 337-340
+apps/web/src/features/block-agent/component/AgentComposer.test.tsx
+  s_0cc55d4013f523::t_088d1fbb9b68ea 42,64,90,105-109,117,123-135
+  s_0cc55d4013f523::t_f3c42a8cecd729 136
+apps/web/src/features/agent-permissions/components/gated-phrases.test.ts
+  s_0cc55d4013f523::t_d83ab90890ee43 13-14,24,26,28-43,46-58
+  s_aa9038102244a3::t_2c77a4761bb72a 27
+  s_0cc55d4013f523::t_94175558ae9979 1-2,119-143,168,178,193
+  s_0cc55d4013f523::t_8a528df17341f2 3,25,44-45,77,94,97-118,144-154,156-167,169-177,179-192,194-241
+apps/web/src/features/agent-permissions/components/gated-phrases.ts
+  s_0cc55d4013f523::t_b36e69e6d79678 28,33,70-90,103-108,111,114-115,120-146,148-154
+  s_aa9038102244a3::t_5a08c0a1ce70cc 118-119
+  s_0cc55d4013f523::t_6299374be12e4c 8,10,29-32,34-67,91-93
+apps/web/src/features/agent-permissions/index.ts
+  s_0cc55d4013f523::t_d6bbe6c1d1861c 4-6
+  s_0cc55d4013f523::t_785616ffa8aad8 1
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_0cc55d4013f523::t_422a259b1e5074 108-124
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.ts
+  s_9aaadd038e8bff::t_26c0926ce121c0 65-69,75,107
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_0cc55d4013f523::t_da9db1eba8236b 75-76,78-80,82-86,93
+  s_aa9038102244a3::t_9cab9de2ccc1f9 92
+  s_0cc55d4013f523::t_785616ffa8aad8 87-90
+  s_0cc55d4013f523::t_baf2f71f0c5327 16-71
+apps/web/src/features/block-agent/state/tool-groups.test.ts
+  s_0cc55d4013f523::t_93cb757696679a 40-56,58-76
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_0cc55d4013f523::t_63b1d3e26c00c7 1678,1695-1701
+  s_0cc55d4013f523::t_c2d92ce56c4472 1702
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_0cc55d4013f523::t_a755fcecc8c10c 40,252-257
+apps/web/src/features/block-agent/component/parts/ToolApprovalPart.tsx
+  s_0cc55d4013f523::t_ae89f233d45d91 3-5,12,58-65
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_0cc55d4013f523::t_328a155dd76150 23-33,100
+  s_0cc55d4013f523::t_b9a0832401db93 10-16,34-36,45-46
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_0cc55d4013f523::t_64b7b8017d2ce5 12-14,33,89-90
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_0cc55d4013f523::t_4f7a2b1b5e8b93 3,116-117,121-122,125
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_0cc55d4013f523::t_465f0d08520f6e 47,49,64-65,68-72,81-84,92-96,98-111
+  s_0cc55d4013f523::t_fad8f7e594ee5c 112-134,136,148-162,274,276-279,281-282
+  s_0cc55d4013f523::t_c506e492a650dd 66-67
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 137-147
+  s_0cc55d4013f523::t_ef79f29066a071 90,97,275
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_0cc55d4013f523::t_4ba65379bfc189 2-4,557-561
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_0cc55d4013f523::t_8f6ac60443eb11 26-27,30,67,79-81
+  s_0cc55d4013f523::t_363ff06342f59b 28-29,74-77
+crates/agent_permissions/AGENTS.md
+  s_0cc55d4013f523::t_af81ef8d8c3dc8 136-137
+  s_aa9038102244a3::t_e0b7361e594d51 92-93
+  s_dfeff50ab3a311::t_fd8891e688a5f8 47-72,98-99,101-102,177-179
+docs/agent-guide/ai-chat.md
+  s_0cc55d4013f523::t_70d7ea00ea32dd 1835-1836,1844-1852,1859-1860,1863,1870-1871
+  s_0cc55d4013f523::t_c506e492a650dd 1861-1862
+  s_0cc55d4013f523::t_c139ce9d8be814 1840-1843
+  s_0cc55d4013f523::t_b6ad14967e6d7f 1837-1839
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_0cc55d4013f523::t_ce20bfc7bb1d3a 73-75,78-79
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_0cc55d4013f523::t_6d436bc51e31bb 3,43,53-55,58-60,62-68,86,98,109,119
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_0cc55d4013f523::t_bd28bda7ff5b3e 61-70
+apps/web/src/features/agent-permissions/components/gated-thing-phrases.ts
+  s_0cc55d4013f523::t_74971f14943625 1-112
+apps/web/src/features/agent-permissions/core/gated-operations.ts
+  s_0cc55d4013f523::t_baf2f71f0c5327 23-24,79-81
+apps/web/src/features/agent-permissions/core/gated-operations.test.ts
+  s_0cc55d4013f523::t_8a528df17341f2 47-48
+crates/macro_db_client/migrations/20261122233513_agent_permission_policy_source.sql
+  s_aa9038102244a3::t_5980b168166761 1-32
+crates/agent_permissions/src/domain/model.rs
+  s_aa9038102244a3::t_38ad08a3471550 329,616-617
+  s_aa9038102244a3::t_1ffbde7acbc8ca 248,251-252,274-275,286-295,303,308-309,315-317,323-328,330,333-335,340-346,351,358,362-364
+  s_aa9038102244a3::t_6735a480a695a9 318-322
+  s_aa9038102244a3::t_fda5ec20bbde33 215-247,249-250,253-273,276-279,283-285,296-302,304-307,310-314,331-332,336-339,347-350,352-357,359-361,365-367,975-984
+  s_aa9038102244a3::t_38aa83592ff9ec 280-282
+  s_aa9038102244a3::t_7340b27fd0ccde 449-484,678-823,856-866,966-970
+  s_aa9038102244a3::t_d09bf5f6e8678d 971-974
+crates/agent_permissions/src/outbound/pg/test/sources.rs
+  s_aa9038102244a3::t_53800235d42c53 1-14,18-206,211-249,255-307,314-316,323-348,355-371,378-381,388-394,412-419,427-504,511-533,535-562
+  s_aa9038102244a3::t_b46e1b8a86a379 563-564
+  s_aa9038102244a3::t_38aa83592ff9ec 15-17,207-210,250-254,308-313,317-322,349-354,372-377,382-387,395-411,420-426,505-510,534
+crates/agent_permissions/src/domain/resolve/chain.rs
+  s_aa9038102244a3::t_f5d18f31462e0b 307-309
+  s_aa9038102244a3::t_0f1fb99ab804b5 1-16,18-275,281-306,310-344
+  s_aa9038102244a3::t_38aa83592ff9ec 17,276-280
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_aa9038102244a3::t_d3bc3d8e18a3ab 2,183,212,364,410,998,1039
+  s_aa9038102244a3::t_edaac2931b343e 1058
+  s_aa9038102244a3::t_38aa83592ff9ec 189-192,194-197,218-221,225-228,252-256,342-349,374-381,1048-1051
+crates/agent_permissions/src/inbound/toolset/test.rs
+  s_aa9038102244a3::t_7e030d4cb2b622 40-44
+  s_aa9038102244a3::t_38aa83592ff9ec 9-10
+  s_aa9038102244a3::t_b401df13a8cafc 74-103
+crates/agent_permissions/src/outbound/pg.rs
+  s_aa9038102244a3::t_9a70a18704aa04 3-4,7-13,28-29,31,43-46,124-136,229-253,256-257,259-278,281,284-317,319-353,355-365,369-371,373-383,385-388,390-392,396-424,432-461,596,598,608,612,614,617,627,637-639,644,682-693,695-745,747-801,846-847,853
+  s_aa9038102244a3::t_087c073a15f683 139-147,694,746,848-849,851-852
+  s_aa9038102244a3::t_38aa83592ff9ec 22,393-395
+  s_aa9038102244a3::t_6d8edd9dd5d1ee 366-368,372,384,389,425-431,850
+  s_aa9038102244a3::t_2d272cfbb03ce4 802-845
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_aa9038102244a3::t_6735a480a695a9 166,169-171
+  s_aa9038102244a3::t_51b794dc442f36 112
+  s_aa9038102244a3::t_38aa83592ff9ec 168
+  s_aa9038102244a3::t_a1509cd9f1e0a0 1-3,17,20,34-35,50-105,111,116-120,135,155-166,182,260-275,539-707
+crates/agent_permissions/src/domain/resolve/chain/test.rs
+  s_aa9038102244a3::t_60490a5ed5b3ac 1-124,129-303,308-375,380-427,432-476,482-503,505-559,566-575
+  s_86a3b382b10917::t_2fc029e956dcc5 504
+  s_aa9038102244a3::t_38aa83592ff9ec 125-128,304-307,376-379,428-431,477-481,560-565
+crates/agent_permissions/src/domain/resolve.rs
+  s_aa9038102244a3::t_26b5ffa47eaa92 43,48-49,54,65,69,87-90
+  s_aa9038102244a3::t_ffb0a34e0b2dab 16-19
+  s_aa9038102244a3::t_a5077ea32a668f 133-165,171-172,174-185,190-222,226,239
+  s_aa9038102244a3::t_ef28fb150c9d93 21,25,267-268,277,280,285,307,313,332,348,355,476-477,486-487,493-494,498-500,502-504,535,547,554-555,569
+  s_aa9038102244a3::t_1a5e758ba4fb34 35
+  s_aa9038102244a3::t_ec9a3878cfe9bf 26
+  s_aa9038102244a3::t_38aa83592ff9ec 251-254,579
+  s_aa9038102244a3::t_fa6a33ef91b6d1 358-360,589-643
+crates/agent_permissions/src/domain/service.rs
+  s_aa9038102244a3::t_9845b217f3423f 34,402-407,413,827,829-833,838-840,843-846,1169-1171,1191-1192,1195-1199,1201,1203-1204,1208-1213,1228
+  s_aa9038102244a3::t_54506468382091 1205-1207
+  s_aa9038102244a3::t_38aa83592ff9ec 834-836
+  s_aa9038102244a3::t_b8f8571fae2b7d 24-28,31-32,40-42,93-131,233-261,408,415-604,756,758-769,889-1161
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_aa9038102244a3::t_97ed2d657bb086 21-29,512,544-545,572-576,578
+crates/agent_permissions/src/domain/ports.rs
+  s_aa9038102244a3::t_ffb0a34e0b2dab 15,20,27-34,42-45,49,53,63,66-67,69-102,110-126
+  s_aa9038102244a3::t_abf5ba4cca75a6 11-12,103-109,164-179
+crates/agent_permissions/src/domain/service/test.rs
+  s_aa9038102244a3::t_d320c2347d26ca 1401-1499,1501-1539
+  s_aa9038102244a3::t_38aa83592ff9ec 273-277,1500
+  s_aa9038102244a3::t_9c6d7ba4687456 10-11,13-14,310-317,323-388,398-430,476,1540-2113
+  s_aa9038102244a3::t_416ab9cd777796 2114
+.sqlx/query-138228fae51b9e23c2ba071fed874a7b3e1522454284728ed6b683c828767acd.json
+  s_aa9038102244a3::t_04985d31e095a8 1-2,4-21,23
+  s_aa9038102244a3::t_b884ce6f6282da 3,22
+.sqlx/query-719b0e181ca36e9737f7de563d3175c0399e1eeaf32d719f0acae8c701044666.json
+  s_aa9038102244a3::t_5f5dbaf319c8ac 1-15
+.sqlx/query-7b2be475796b819b99c5358fd3a682d3a60684e34c473b88ce3fbb23b6fd8080.json
+  s_aa9038102244a3::t_23989f5b876b51 1-23
+.sqlx/query-822a296c69f3782d078c2b19a6049f28531a807e0374705240f3673bdab957f9.json
+  s_aa9038102244a3::t_aef687e0c36d87 1-101
+.sqlx/query-baf4593f77895af4238099a8fdd977d28985cbaabb6aab1095a8a4b75268ac96.json
+  s_aa9038102244a3::t_ae927edf63aa73 1-20
+.sqlx/query-e0ededa53dfc1585c40e1d60366f4251742a8c7765083d0773f553b1782b83a9.json
+  s_aa9038102244a3::t_e3eca089179361 3,13,27
+.sqlx/query-f7055b0949260a943fc9be49d75f011239ea9e502521d767f24d28efe26588a7.json
+  s_aa9038102244a3::t_e59b31f34b2d16 1-14
+.sqlx/query-fe55a80b291d17ac0c64140bc848fb4b4122a99131dc63b37ce266eff29d7b2f.json
+  s_aa9038102244a3::t_fe859b70aab531 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_dfeff50ab3a311::t_d2dbea76dd0461 15-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_dfeff50ab3a311::t_6d19181f8e7a37 21
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_dfeff50ab3a311::t_0b074e21a3b44b 9803,9846-9853
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_dfeff50ab3a311::t_a362f0648e3340 20899,21013
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_dfeff50ab3a311::t_5bff540434cd1d 4942-4948
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_dfeff50ab3a311::t_0e15b77d39bc93 3595-3596,3630
+packages/sdk/specs/agent-harness.json
+  s_dfeff50ab3a311::t_7bbfd76613f781 9803,9846-9853
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_aa9038102244a3::t_b12fd0f452e080 131-164,188-193,226,244-261,404-449
+  s_aa9038102244a3::t_1c29cb2b695488 450-453
+crates/agent_permissions/src/inbound/toolset.rs
+  s_aa9038102244a3::t_97ed0453d2317b 165-168,173-184,265
+.sqlx/query-7d2926cc11e67cec02ff9380cbb0c3f7e91590b5e6de462319e3fdccbeb38299.json
+  s_aa9038102244a3::t_448ac8631e9f06 1-15
+.sqlx/query-f7f5e6a9d02fa51e780072d0fc1e4dd9faa30b7c21496fe83e7be9baf1bea511.json
+  s_aa9038102244a3::t_52eb7a9c02ba09 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ffef0ff4039b09420d72c5c8044e4199707f698e",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_aa9038102244a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8722afde-2cce-4eb5-b137-43e8230dc6d1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
