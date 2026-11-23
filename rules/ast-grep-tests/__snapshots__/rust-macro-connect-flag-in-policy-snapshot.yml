@@ -1,0 +1,23 @@
+id: rust-macro-connect-flag-in-policy
+snapshots:
+  ? |
+    async fn on(flags: &Flags, user: &User) -> bool { flags.is_enabled("macro-connect", user).await }
+  : labels:
+    - source: '"macro-connect"'
+      style: primary
+      start: 67
+      end: 82
+  ? |
+    const FLAG: &str = r#"macro-connect"#;
+  : labels:
+    - source: r#"macro-connect"#
+      style: primary
+      start: 19
+      end: 37
+  ? |
+    pub const MACRO_CONNECT_FLAG: &str = "macro-connect";
+  : labels:
+    - source: '"macro-connect"'
+      style: primary
+      start: 37
+      end: 52

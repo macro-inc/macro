@@ -12,6 +12,7 @@ use models_properties::service::project_metadata::ProjectMetadata;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::thread_metadata::ThreadMetadata;
+use models_properties::shared::DateValue;
 use models_properties::{EntityReference, EntityType};
 use uuid::Uuid;
 
@@ -219,7 +220,7 @@ pub fn create_metadata_property_date(
     value: Option<chrono::DateTime<chrono::Utc>>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    let property_value = value.map(PropertyValue::Date);
+    let property_value = value.map(|value| PropertyValue::Date(DateValue::with_time(value)));
     create_metadata_property_inner(display_name, data_type, property_value, entity_type, None)
 }
 

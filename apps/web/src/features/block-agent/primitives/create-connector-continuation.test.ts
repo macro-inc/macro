@@ -1,11 +1,11 @@
-import type { PipedreamConnectOutcome } from '@queries/pipedream-connectors';
+import type { ConnectOutcome } from '@queries/connectors';
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { createConnectorContinuation } from './create-connector-continuation';
 
 function setup() {
-  let finish!: (outcome: PipedreamConnectOutcome) => void;
-  const outcome = new Promise<PipedreamConnectOutcome>((resolve) => {
+  let finish!: (outcome: ConnectOutcome) => void;
+  const outcome = new Promise<ConnectOutcome>((resolve) => {
     finish = resolve;
   });
   const deps = {
@@ -38,17 +38,14 @@ describe('connector continuation', () => {
     dispose();
   });
 
-  it.each(['closed', 'unsupported'] as const)(
-    'does not resume after %s',
-    async (outcome) => {
-      const { deps, flow, finish, dispose } = setup();
-      const pending = flow.connect(app);
-      finish(outcome);
-      await pending;
-      expect(deps.resume).not.toHaveBeenCalled();
-      dispose();
-    }
-  );
+  it('does not resume after the user closes the connect flow', async () => {
+    const { deps, flow, finish, dispose } = setup();
+    const pending = flow.connect(app);
+    finish('closed');
+    await pending;
+    expect(deps.resume).not.toHaveBeenCalled();
+    dispose();
+  });
 
   it.each(['changed', 'generating', 'unmounted'] as const)(
     'does not resume a session that is %s',

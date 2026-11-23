@@ -21,7 +21,7 @@ use item_filters::ast::{
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
-    Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
+    SortFactDerivation, Token, ValidatedIndexQuery, ValidationError, utc_timestamp_micros,
 };
 use thiserror::Error;
 use uuid::Uuid;
@@ -44,6 +44,11 @@ pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 /// Host-composed profile with complete selectable property snapshots.
 pub const SOUP_FLAT_V6: &str = "soup-flat-v6";
+
+/// Every sort fact a projection here derives from its other facts; storage
+/// applies them to the documents it already holds when this list changes.
+pub const SORT_FACT_DERIVATIONS: &[SortFactDerivation] =
+    &[mail::INBOX_VIEW_DERIVATION, mail::IMPORTANT_VIEW_DERIVATION];
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to

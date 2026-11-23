@@ -135,7 +135,23 @@ async fn a_task_brief_names_the_current_status_priority_due_date_and_assignees()
                         is_multi_select: false,
                         is_system: true,
                         value: Some(PropertyValue::Date(
-                            Utc.with_ymd_and_hms(2026, 10, 15, 17, 0, 0).unwrap(),
+                            models_properties::shared::DateValue::new(
+                                Utc.with_ymd_and_hms(2026, 10, 15, 17, 0, 0).unwrap(),
+                            ),
+                        )),
+                        options: Vec::new(),
+                    },
+                    EntityPropertyInfo {
+                        property_definition_id: SystemPropertyKey::StartDate.uuid(),
+                        owner: PropertyOwner::System,
+                        display_name: "Start Date".to_owned(),
+                        data_type: DataType::Date,
+                        is_multi_select: false,
+                        is_system: true,
+                        value: Some(PropertyValue::Date(
+                            models_properties::shared::DateValue::new(
+                                Utc.with_ymd_and_hms(2026, 10, 12, 17, 0, 0).unwrap(),
+                            ),
                         )),
                         options: Vec::new(),
                     },
@@ -193,6 +209,7 @@ async fn a_task_brief_names_the_current_status_priority_due_date_and_assignees()
             markdown: "Reproduce the race, then add a regression test.".to_owned(),
             status: Some("In Progress".to_owned()),
             priority: Some("High".to_owned()),
+            start: Some(Utc.with_ymd_and_hms(2026, 10, 12, 17, 0, 0).unwrap()),
             due: Some(Utc.with_ymd_and_hms(2026, 10, 15, 17, 0, 0).unwrap()),
             assignee_ids: vec![
                 "macro|assigner@example.com".to_owned(),

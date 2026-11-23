@@ -10,7 +10,9 @@ use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
-use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::people::{
+    NamedPeopleQuery, PeopleSearchLimit, PeopleSearchQuery, PersonMatch,
+};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -132,6 +134,18 @@ pub trait ContactListReader: Send + Sync + 'static {
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
 
+    /// Everyone in the viewer's directory whom `query` names (it names
+    /// anyone), by the name the directory shows. Rank `interacted` and
+    /// `invited` first, then teammates, then inbox contacts, then anyone else;
+    /// within a group exact names first, then by id. Each match carries its
+    /// lists. Return at most `limit`.
+    fn name_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
     /// Everyone the viewer knows through a connected inbox (the `gmail` and
     /// `outlook` lists), each once, in no particular order.
     fn inbox_contacts(
@@ -191,6 +205,17 @@ pub trait PeopleSearchRepository: Send + Sync + 'static {
         needle: &str,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
+    /// The viewer's contacts, self and current teammates whom `query` names
+    /// (it names anyone), by the name the directory shows. Rank teammates
+    /// first; within each group exact names first, then by id. Return at most
+    /// `limit`.
+    fn name_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
 }
 
 /// Ranked people search for authenticated inbound adapters.
@@ -201,6 +226,20 @@ pub trait PeopleSearchService: Send + Sync + 'static {
         &self,
         viewer: MacroUserIdStr<'_>,
         query: &PeopleSearchQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// The people typed text names, for authenticated inbound adapters.
+pub trait PeopleNamingService: Send + Sync + 'static {
+    /// Everyone in the authenticated viewer's whole directory whom `query`
+    /// names exactly or by word starts, by the name the directory shows,
+    /// ranked by list group, then exact names, then id. Text that names
+    /// nobody returns no people without reading storage.
+    fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
 }

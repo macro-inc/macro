@@ -28,6 +28,8 @@ type InlinePropertyValueProps = {
   canManage?: boolean;
   /** The editor the pill opens; see `PropertyValuePill`. */
   editor?: ComponentProps<typeof PropertyValuePill>['editor'];
+  /** Text shown in place of the value; see `PropertyValuePill`. */
+  valueText?: string;
 };
 
 /**
@@ -144,6 +146,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       }
       entitySelfFilter={{ entityType: ctx.entityType, blockId: props.entityId }}
       editor={props.editor}
+      valueText={props.valueText}
     />
   );
 };

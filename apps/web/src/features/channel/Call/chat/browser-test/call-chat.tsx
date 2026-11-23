@@ -1,7 +1,7 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
@@ -9,6 +9,7 @@ import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { Router } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -45,13 +46,15 @@ function Fixture() {
             <EntityProvider>
               <UserContextProvider>
                 <EmailLinksContextProvider>
-                  <ChannelsContextProvider>
+                  <ChannelDirectoryProvider
+                    directory={staticChannelDirectory(() => [])}
+                  >
                     <CallProvider>
                       <QuickAccessProvider>
                         <Router root={MeetingPanel}>{[]}</Router>
                       </QuickAccessProvider>
                     </CallProvider>
-                  </ChannelsContextProvider>
+                  </ChannelDirectoryProvider>
                 </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>

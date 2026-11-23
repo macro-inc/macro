@@ -11,6 +11,12 @@ use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+/// What new rows store in `account_id`. Sync used to follow one Pipedream
+/// account; it now follows whatever Granola connection the connectors
+/// services count for the user, which names no account, so the column only
+/// keeps older rows' values.
+const CONNECTION_ACCOUNT: &str = "connection";
+
 /// Signing secrets are encrypted at rest and bound to their connection ID.
 pub struct PgSyncRepository {
     pool: PgPool,
@@ -79,7 +85,6 @@ impl SyncRepository for PgSyncRepository {
                 id: row.id,
                 namespace: row.namespace,
                 user_id: MacroUserIdStr::parse_from_str(&row.user_id)?.into_owned(),
-                account_id: row.account_id,
                 scope: row.scope.parse()?,
                 enabled: row.enabled,
                 endpoint_id: row.endpoint_id,
@@ -107,7 +112,6 @@ impl SyncRepository for PgSyncRepository {
                 Ok(SyncState {
                     id: row.id,
                     user_id: MacroUserIdStr::parse_from_str(&row.user_id)?.into_owned(),
-                    account_id: row.account_id,
                     scope: row.scope.parse()?,
                     enabled: row.enabled,
                     has_endpoint: row.has_endpoint,
@@ -129,7 +133,7 @@ impl SyncRepository for PgSyncRepository {
                 OR granola_sync_connections.last_error IS NOT NULL
                 OR granola_sync_connections.started_at < now() - interval '2 minutes'
             RETURNING id"#,
-            connection.id, connection.user_id.as_ref(), connection.account_id,
+            connection.id, connection.user_id.as_ref(), CONNECTION_ACCOUNT,
             connection.scope.as_ref(), connection.started_at, connection.namespace
         ).fetch_optional(tx.as_mut()).await?;
         if row.is_some() {

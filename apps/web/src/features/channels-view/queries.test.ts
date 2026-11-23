@@ -1,5 +1,4 @@
 import type { ChannelEntity } from '@entity/types/entity';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { createMemo, createRoot, createSignal, onCleanup } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -19,11 +18,6 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
     }
   )
 );
-
-const fetchAllChannels = vi.hoisted(() =>
-  vi.fn<(signal?: AbortSignal) => Promise<ApiChannelWithLatest[]>>()
-);
-vi.mock('@queries/channel/channels', () => ({ fetchAllChannels }));
 
 const createChannelDetailQuery = vi.hoisted(() =>
   vi.fn((_channelId: () => string | undefined, enabled: () => boolean) => ({
@@ -64,7 +58,7 @@ import {
 } from '@queries/channel/by-ids';
 import { queryClient } from '@queries/client';
 import {
-  fetchChannelGroupIds,
+  channelGroupIds,
   resolveReferencedChannels,
   useChannelsSources,
 } from './queries';
@@ -79,76 +73,22 @@ const channelEntity = (id: string) =>
   }) as ChannelEntity;
 
 describe('built-in section notification membership', () => {
-  it('keeps joined channels in their section and excludes custom-section assignments', async () => {
-    fetchAllChannels.mockResolvedValue([
-      {
-        id: 'private',
-        channel_type: 'private',
-        is_participant: true,
-        created_at: '',
-        updated_at: '',
-        owner_id: '',
-        auto_join_team: false,
-        participants: [],
-        latest_message: null,
-      },
-      {
-        id: 'assigned',
-        channel_type: 'private',
-        is_participant: true,
-        created_at: '',
-        updated_at: '',
-        owner_id: '',
-        auto_join_team: false,
-        participants: [],
-        latest_message: null,
-      },
-      {
-        id: 'team',
-        channel_type: 'team',
-        is_participant: true,
-        created_at: '',
-        updated_at: '',
-        owner_id: '',
-        auto_join_team: false,
-        participants: [],
-        latest_message: null,
-      },
-      {
-        id: 'unjoined',
-        channel_type: 'team',
-        is_participant: false,
-        created_at: '',
-        updated_at: '',
-        owner_id: '',
-        auto_join_team: false,
-        participants: [],
-        latest_message: null,
-      },
-      {
-        id: 'dm',
-        channel_type: 'direct_message',
-        is_participant: true,
-        created_at: '',
-        updated_at: '',
-        owner_id: '',
-        auto_join_team: false,
-        participants: [],
-        latest_message: null,
-      },
-    ]);
-    const signal = new AbortController().signal;
+  it('keeps joined channels in their section and excludes custom-section assignments', () => {
+    const channels = [
+      { id: 'private', channelType: 'private', isParticipant: true },
+      { id: 'assigned', channelType: 'private', isParticipant: true },
+      { id: 'team', channelType: 'team', isParticipant: true },
+      { id: 'unjoined', channelType: 'team', isParticipant: false },
+      { id: 'dm', channelType: 'direct_message', isParticipant: true },
+    ] as const;
 
-    expect(
-      await fetchChannelGroupIds('channels', ['assigned'], signal)
-    ).toEqual(['private']);
-    expect(
-      await fetchChannelGroupIds('team_channels', ['assigned'], signal)
-    ).toEqual(['team']);
-    expect(await fetchChannelGroupIds('direct_messages', [], signal)).toEqual([
-      'dm',
+    expect(channelGroupIds('channels', ['assigned'], channels)).toEqual([
+      'private',
     ]);
-    expect(fetchAllChannels).toHaveBeenLastCalledWith(signal);
+    expect(channelGroupIds('team_channels', ['assigned'], channels)).toEqual([
+      'team',
+    ]);
+    expect(channelGroupIds('direct_messages', [], channels)).toEqual(['dm']);
   });
 });
 describe('channel list query selection', () => {
@@ -819,9 +759,10 @@ describe('channel sidebar cache hydration', () => {
   });
 });
 describe('channel list failures', () => {
-  const failedQuery = (entities: ChannelEntity[]) =>
+  const failedQuery = (entities: ChannelEntity[], hasPageData = false) =>
     ({
       isEnabled: true,
+      hasPageData,
       isPending: false,
       isLoading: false,
       isFetching: false,
@@ -841,6 +782,21 @@ describe('channel list failures', () => {
       );
       expect(sources.direct_messages.items()).toEqual([]);
       expect(sources.direct_messages.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('keeps a cached empty page empty, not failed, when its refresh fails', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([], true));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeUndefined();
       return dispose;
     });
     dispose();
