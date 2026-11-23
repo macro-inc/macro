@@ -37,7 +37,7 @@ fn pending(
     label: &str,
     query: &str,
     data: serde_json::Value,
-    projected: &str,
+    projected: &[&str],
 ) -> NewQueuedMutation {
     let mut mutation = queued(label);
     mutation.mutation.request.query = query.to_owned();
@@ -47,9 +47,12 @@ fn pending(
         mutation_data: data,
         link_patches: Vec::new(),
         revalidations: Vec::new(),
-        projection_mutations: vec![OptimisticProjectionMutation::Replace(
-            authoritative_projection(projected, "queued"),
-        )],
+        projection_mutations: projected
+            .iter()
+            .map(|key| {
+                OptimisticProjectionMutation::Replace(authoritative_projection(key, "queued"))
+            })
+            .collect(),
         uncertain_calendar_event_keys: Vec::new(),
     });
     mutation
@@ -89,7 +92,7 @@ async fn populate(storage: TursoStorage) -> TursoStorage {
             "Rename",
             "mutation Rename { rename(id: \"1\") { id value } }",
             serde_json::json!({ "rename": { "id": "1", "value": "renamed" } }),
-            "Thing:1",
+            &["Thing:1"],
         ))
         .await
         .unwrap();
@@ -98,7 +101,7 @@ async fn populate(storage: TursoStorage) -> TursoStorage {
             "Edit",
             "mutation Edit { edit(id: \"1\") { id value } }",
             serde_json::json!({ "edit": { "id": "1", "value": "edited" } }),
-            "Note:1",
+            &["Note:1"],
         ))
         .await
         .unwrap();
@@ -310,6 +313,42 @@ fn a_changed_type_drops_its_rows_and_keeps_other_types_warm() {
         assert_eq!(
             adopt(&storage, RETYPED, &ProjectionInputs::none()).change,
             None
+        );
+    });
+}
+
+#[test]
+fn a_retired_overlay_takes_its_projections_of_kept_types_with_it() {
+    block_on(async {
+        let mut storage =
+            populate(TursoStorage::open_in_memory("schema-retired-projections").unwrap()).await;
+        // One write returns a changed `Thing` and lists a `Note` that only
+        // its overlay holds.
+        storage
+            .enqueue_mutation(pending(
+                "RenameAndNote",
+                "mutation RenameAndNote { rename(id: \"2\") { id value } }",
+                serde_json::json!({ "rename": { "id": "2", "value": "renamed" } }),
+                &["Thing:2", "Note:new"],
+            ))
+            .await
+            .unwrap();
+        let note_shadow =
+            "SELECT count(*) FROM optimistic_index_documents WHERE record_key = 'Note:new'";
+
+        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.retired_overlays, 2);
+        let sources = sources(&mut storage).await;
+        assert!(is_retired(&sources[2]));
+        assert!(sources[2].projection_mutations.is_empty());
+        assert_eq!(
+            count(&storage, note_shadow),
+            0,
+            "no list entry outlives the overlay that held its record"
+        );
+        assert_eq!(
+            count(&storage, "SELECT count(*) FROM optimistic_index_documents"),
+            1
         );
     });
 }
@@ -528,7 +567,7 @@ fn queued_writes_without_records_are_still_sorted() {
                 "Rename",
                 "mutation Rename { rename(id: \"1\") { id value } }",
                 serde_json::json!({ "rename": { "id": "1", "value": "renamed" } }),
-                "Thing:1",
+                &["Thing:1"],
             ))
             .await
             .unwrap();

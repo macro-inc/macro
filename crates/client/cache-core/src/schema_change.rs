@@ -486,13 +486,14 @@ pub fn overlay_fits(
         && deduplicate_patches(schema, &source.link_patches).is_ok()
 }
 
-/// Drops an optimistic response and its link recipes, so the layer adds no
-/// records. Its revalidations and identity bindings stay: they name keys, not
-/// values a schema shapes. Its projections stay too, unless storage dropped
-/// the records they project.
+/// Drops an optimistic response, its link recipes and its projections, so the
+/// layer adds no records and no list entries: a projection describes a record
+/// the overlay held. Its revalidations and identity bindings stay: they name
+/// keys, not values a schema shapes.
 pub fn retire_overlay(source: &mut OptimisticSource) {
     source.mutation_data = Json::Object(serde_json::Map::new());
     source.link_patches.clear();
+    source.projection_mutations.clear();
 }
 
 /// Whether [`retire_overlay`] left `source` with nothing to normalize. An
