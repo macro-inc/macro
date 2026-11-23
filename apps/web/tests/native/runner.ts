@@ -6,6 +6,7 @@ import { type Browser, remote } from 'webdriverio';
 import {
   assertNativeRecords,
   checkpoints,
+  clippedEmailHeaderControls,
   expectAccountInitials,
   expectRows,
   nativeHttpReachable,
@@ -124,6 +125,30 @@ async function capture(prefix = 'webview') {
   }
 }
 
+/** Fails with the cut-off controls unless the Email header settles showing all of them. */
+async function expectEmailHeaderFits(
+  session: Browser,
+  prefix: string,
+  width: string
+) {
+  let clipped: string[] = [];
+  try {
+    await session.waitUntil(
+      async () => {
+        clipped = await clippedEmailHeaderControls(session);
+        return clipped.length === 0;
+      },
+      { timeout: 5000 }
+    );
+  } catch {
+    await capture(prefix);
+    throw new Error(
+      `Email header controls cut off at ${width}: ${clipped.join('; ')}`
+    );
+  }
+  await capture(prefix);
+}
+
 try {
   const vite = spawn(
     'vite',
@@ -227,6 +252,25 @@ try {
   );
   console.log(
     `PASS: real UI, ${fixture.expectedMetadataPages} metadata pages, and native control records`
+  );
+
+  // The desktop window has no minimum size: at 400px the Email header must
+  // still show every control it keeps, Search included, and what it gave up
+  // comes back once there is room.
+  const windowSize = await browser.getWindowSize();
+  await browser.setWindowSize(400, 900);
+  await expectEmailHeaderFits(browser, 'narrow-header', '400px');
+  await browser.setWindowSize(windowSize.width, windowSize.height);
+  await browser
+    .$('button[aria-label$="reading pane"]')
+    .waitForDisplayed({ timeout: 5000 });
+  await expectEmailHeaderFits(
+    browser,
+    'restored-header',
+    'the restored window'
+  );
+  console.log(
+    'PASS: Email header fits a 400px window and restores its view options'
   );
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);

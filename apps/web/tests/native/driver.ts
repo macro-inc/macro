@@ -187,3 +187,36 @@ export async function expectAccountInitials(
     );
   }
 }
+
+/**
+ * The Email list header's controls that the pane cuts off: each must lie
+ * inside its top bar and be the element at its own center, so a control laid
+ * out past the bar's edge, or clipped by the scrolling actions row, is listed.
+ */
+export async function clippedEmailHeaderControls(browser: Browser) {
+  return browser.execute(() => {
+    const search = document.querySelector('[aria-label="Search email"]');
+    const bar = search?.closest('[data-view-shell-top-bar]');
+    if (!bar) return ['no Email list header with Search email'];
+    const edge = bar.getBoundingClientRect();
+    return [...bar.querySelectorAll('button, label')]
+      .map((control) => ({ control, box: control.getBoundingClientRect() }))
+      .filter(({ box }) => box.width > 0 && box.height > 0)
+      .filter(({ control, box }) => {
+        const hit = document.elementFromPoint(
+          box.left + box.width / 2,
+          box.top + box.height / 2
+        );
+        return (
+          box.left < edge.left ||
+          box.right > edge.right ||
+          !hit ||
+          !control.contains(hit)
+        );
+      })
+      .map(
+        ({ control, box }) =>
+          `${control.getAttribute('aria-label') ?? control.textContent?.trim()} at ${Math.round(box.left)}..${Math.round(box.right)} in a header ending at ${Math.round(edge.right)}`
+      );
+  });
+}

@@ -13,6 +13,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createLabelCollapse } from '@core/signal/create-label-collapse';
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, onCleanup, Show } from 'solid-js';
@@ -36,6 +37,9 @@ import {
   useEmailSavedViewTitle,
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
+
+/** What the header gives up, in order, when its actions would overflow it. */
+const HEADER_COLLAPSE_ORDER = ['viewOptions'] as const;
 
 export type EmailHeaderProps = {
   /** Moves the keyboard from the search field into the list. */
@@ -127,6 +131,13 @@ export function EmailHeader(props: EmailHeaderProps) {
       label: EMAIL_TAB_LABELS[id],
     }));
   const [inboxTabsElement, setInboxTabsElement] = createSignal<HTMLElement>();
+  // A narrow pane (the desktop window has no minimum width) hides the view
+  // options rather than push Search past the header's edge; the reading pane
+  // has no room beside the list there anyway.
+  const [actions, setActions] = createSignal<HTMLDivElement>();
+  const collapsed = createLabelCollapse(actions, () => HEADER_COLLAPSE_ORDER, {
+    watchContent: true,
+  });
 
   useViewTabHotkeys<EmailTab>({
     scopeId: panel.splitHotkeyScope,
@@ -172,6 +183,7 @@ export function EmailHeader(props: EmailHeaderProps) {
 
   return (
     <ListHeader
+      actionsRef={setActions}
       title={
         <div class="flex min-w-0 items-center gap-3">
           <div
@@ -224,6 +236,7 @@ export function EmailHeader(props: EmailHeaderProps) {
           <EmailControls
             filterOpen={filterOpen()}
             onFilterOpenChange={setFilterOpen}
+            hideViewOptions={collapsed('viewOptions')}
           />
         </Show>
         <div class="contents @max-[640px]/split-header:hidden">

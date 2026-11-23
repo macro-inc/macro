@@ -25,10 +25,16 @@ export function collapseUntilFits(
   return total;
 }
 
-/** Whether a row neither overflows nor wraps a child onto a second line. */
+/**
+ * Whether a row neither overflows nor wraps a child onto a second line.
+ * Children without a box of their own (`display: contents` wrappers, hidden
+ * controls) have an empty rect, so they are left out of the line check.
+ */
 export function fitsOnOneLine(row: HTMLElement): boolean {
   if (row.scrollWidth > row.clientWidth + 1) return false;
-  const [first, ...rest] = Array.from(row.children);
+  const [first, ...rest] = Array.from(row.children).filter(
+    (child) => child.getClientRects().length > 0
+  );
   if (!first) return true;
   const firstBottom = first.getBoundingClientRect().bottom;
   return rest.every((child) => child.getBoundingClientRect().top < firstBottom);
