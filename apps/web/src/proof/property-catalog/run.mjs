@@ -17,17 +17,24 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 // 100 ms or more are kept, so a settle timeout can show whether it waited on
 // the driver rather than on the server or the page.
 const driverStalls = [];
-{
-  let last = performance.now();
-  setInterval(() => {
-    const now = performance.now();
-    const ms = Math.round(now - last - 50);
-    if (ms >= 100) {
-      driverStalls.push({ end: Date.now(), ms });
-      if (driverStalls.length > 500) driverStalls.shift();
-    }
-    last = now;
-  }, 50).unref();
+let stallTick = performance.now();
+setInterval(() => {
+  const now = performance.now();
+  const ms = Math.round(now - stallTick - 50);
+  if (ms >= 100) {
+    driverStalls.push({ end: Date.now(), ms });
+    if (driverStalls.length > 500) driverStalls.shift();
+  }
+  stallTick = now;
+}, 50).unref();
+// The driver's stalled time since `sinceEpochMs`, the one that just ended
+// included: a page that asks during a stall is answered only once it ends,
+// before the monitor's next turn has recorded it.
+function driverStalledSince(sinceEpochMs) {
+  const now = Date.now();
+  const ongoing = Math.round(performance.now() - stallTick - 50);
+  const stalls = ongoing >= 100 ? [...driverStalls, { end: now, ms: ongoing }] : driverStalls;
+  return stalls.reduce((a, x) => a + Math.max(0, Math.min(x.end, now) - Math.max(x.end - x.ms, sinceEpochMs)), 0);
 }
 // What the driver did that blocks its loop, kept when it lasts 100 ms or more,
 // so a stall can be matched to its cause: child processes, which run
@@ -1053,7 +1060,7 @@ async function openSide(storageState, side, label) {
   const page = await bctx.newPage();
   // The driver's stalls since a page-side settle began, so the settle can take
   // them out of its bound (`settle` in harness.tsx).
-  await page.exposeFunction('__pcDriverStalledMs', (since) => driverStalls.reduce((a, x) => a + Math.max(0, Math.min(x.end, Date.now()) - Math.max(x.end - x.ms, since)), 0));
+  await page.exposeFunction('__pcDriverStalledMs', driverStalledSince);
   // Uncaught page errors, by side and message: one seen on one side only is a
   // difference (checked at the end of the run).
   page.on('pageerror', (e) => {
@@ -1461,13 +1468,14 @@ async function settleAll(pair) {
     const snap = await ev(all[i], 'snapshot');
     if (!w.busy.every((b) => typeof b.reader === 'string' && snap[b.reader]?.isError === true)) continue;
     t.timedOut = false;
+    t.refusedBusy = true;
     R.settle.refusedBusy = (R.settle.refusedBusy ?? 0) + 1;
     record('settle', `${SIDE_NAMES[i]} kept a refused read marked fetching`, 'refused-busy', null, { readers: w.busy.length }, { waitedOn: w });
   }
   // A side that did not settle within the bound broke the live-update bound:
   // a difference, and its snapshot is not compared as data.
   res.forEach((t, i) => {
-    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: t.ms }, { waitedOn: t.waitedOn });
+    if (t.timedOut) record('settle', `${SIDE_NAMES[i]} did not settle within ${CONFIG.settleMs}ms`, 'state', null, harnessFigures(t), { waitedOn: t.waitedOn });
   });
   for (const [i, t] of res.entries()) {
     R.settle.samples++;
@@ -1479,15 +1487,17 @@ async function settleAll(pair) {
   return res.map((t) => t.timedOut);
 }
 const SIDE_NAMES = ['A old', 'A new', 'B old', 'B new'];
+const harnessFigures = (t) => ({ ms: t.ms, measureMs: t.measureMs, stalledMs: t.stalledMs });
 // A settle that took longer than the bound by the clock, but not by the page's
 // own time: the harness's snapshots and the driver's stalls made up the rest.
-// Not a failure; counted (`settle.harnessTime`) and kept with its figures.
+// Not a failure; counted (`settle.harnessTime`) and kept with its figures. A
+// refused-busy side is counted as that instead.
 function noteHarnessTime(bucket, t, who, what) {
   bucket.measureMsMax = Math.max(bucket.measureMsMax ?? 0, t.measureMs ?? 0);
   bucket.stalledMsMax = Math.max(bucket.stalledMsMax ?? 0, t.stalledMs ?? 0);
-  if (t.timedOut || t.ms < CONFIG.settleMs) return;
+  if (t.timedOut || t.refusedBusy || t.ms < CONFIG.settleMs) return;
   bucket.harnessTime = (bucket.harnessTime ?? 0) + 1;
-  record('settle', `${who} ${what} past the bound in harness time`, 'harness-time', null, { ms: t.ms, measureMs: t.measureMs, stalledMs: t.stalledMs });
+  record('settle', `${who} ${what} past the bound in harness time`, 'harness-time', null, harnessFigures(t));
 }
 // Writes a side sent outside a write window (a late retry, a mutation the
 // cache replayed on its own, OLD writing by itself): each is a difference,
@@ -1809,7 +1819,7 @@ async function compareStep(pair, level, op) {
   }
   fresh.forEach((f, i) => noteHarnessTime(R.settle.fresh, f.timing, SIDE_NAMES[i], 'fresh mount settled'));
   fresh.forEach((f, i) => {
-    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, { ms: f.timing.ms }, { waitedOn: f.timing.waitedOn });
+    if (f.timing.timedOut) record('settle', `${SIDE_NAMES[i]} fresh mount did not settle within ${CONFIG.settleMs}ms`, 'state', null, harnessFigures(f.timing), { waitedOn: f.timing.waitedOn });
   });
   const freshOut = fresh.map((f) => f.timing.timedOut);
   const [frAo, frAn, frBo, frBn] = fresh.map((f) => f.snap);

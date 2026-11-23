@@ -117,11 +117,18 @@ retried page load happened.
   definitions costs hundreds of milliseconds under machine load, and the loop
   takes one every few turns) and the driver's event-loop stalls since it began
   (`stalledMs`, asked of the driver through `__pcDriverStalledMs`: no route
-  handler answers any page while the driver is stalled). It never waits past
+  handler answers any page while the driver is stalled; a page that asks
+  during a stall is answered when it ends, so the answer counts the stall that
+  just ended before the stall monitor has recorded it). It never waits past
   three times the bound. Not a failure; `settle.harnessTime` and
-  `settle.fresh.harnessTime` count them, `measureMsMax` and `stalledMsMax`
-  give the largest of each, and each is kept in `settleTimeouts` with its
-  figures.
+  `settle.fresh.harnessTime` count them (a `refused-busy` side is counted
+  only as that), `measureMsMax` and `stalledMsMax` give the largest of
+  each, and each is kept in `settleTimeouts` with its figures. A timeout
+  records the same figures. In the quiet seed-1 run at harness `e343c96054a`,
+  a head side that waited out the whole bound spent up to 1.7 s of it in
+  snapshots, and the one fresh mount that timed out, in the volume phase, had
+  3.1 s of driver stalls the page had not been told of: the stall in progress
+  when it asked.
 - `old-stale`: main's live readers miss some updates (an invalidation that
   does not reach them) that the cache's live queries pick up. A live reader or
   caller whose data differs counts as `old-stale` instead of `diff` only when
