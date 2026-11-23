@@ -268,7 +268,7 @@ export function ImportReportDetails(props: {
                       {choice.database}
                     </span>
                     {' · '}
-                    Notion didn't say which tab was showing; we used{' '}
+                    Notion didn’t say which tab was showing. We used{' '}
                     {choice.tab}.
                   </li>
                 )}

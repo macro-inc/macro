@@ -534,9 +534,7 @@ where
                 Ok(0) => (RunStatus::Completed, None),
                 Ok(failed) => (
                     RunStatus::Completed,
-                    Some(format!(
-                        "{failed} objects could not be fully imported. See the report for details."
-                    )),
+                    Some(report::partial_write_error(*failed)),
                 ),
                 Err(error) => {
                     tracing::warn!(
@@ -877,7 +875,40 @@ impl Place<'_> {
 /// A failure as the user reads it on the run or the row.
 fn failure_text(error: &ImportError) -> String {
     match error {
-        ImportError::Other(error) => super::admission::failure_reason(error),
+        ImportError::Notion(error) => notion_failure_text(error).to_owned(),
+        ImportError::Other(error) => {
+            let notion = error.chain().find_map(|cause| {
+                cause.downcast_ref::<NotionError>().or_else(|| {
+                    match cause.downcast_ref::<ImportError>() {
+                        Some(ImportError::Notion(error)) => Some(error),
+                        _ => None,
+                    }
+                })
+            });
+            notion.map_or_else(
+                || super::admission::failure_reason(error),
+                |error| notion_failure_text(error).to_owned(),
+            )
+        }
         other => other.to_string(),
+    }
+}
+
+fn notion_failure_text(error: &NotionError) -> &'static str {
+    match error {
+        NotionError::NotFound => "Notion couldn’t find this item or hasn’t shared it.",
+        NotionError::Forbidden => "Notion hasn’t granted access to this item.",
+        NotionError::Upstream { status: 401, .. } => "Reconnect Notion and try again.",
+        NotionError::RateLimited { .. } | NotionError::Upstream { status: 429, .. } => {
+            "Notion limited requests. Try again in a moment."
+        }
+        NotionError::Upstream {
+            status: 400 | 422, ..
+        } => "Notion couldn’t return this item’s content.",
+        NotionError::Decode(_) => "Notion returned data Macro couldn’t read.",
+        NotionError::IncompleteViewList => "Notion only returned part of the database’s tab list.",
+        NotionError::Transport(_) | NotionError::Upstream { .. } => {
+            "Notion couldn’t complete the request."
+        }
     }
 }

@@ -1851,9 +1851,9 @@ sharing controls available even when the current sharing choices are uniform. On
 before the tree in both the card and full review; expanding it preserves every
 warning. Desktop keeps its inline title/control layout and labels, and starts the same counted notices disclosure expanded.
 Use confirmed write counts for the completed Notion outcome. Open Needs
-attention on phone and desktop, show a count when objects failed, and place the
-run error above the failed objects. Call out rows and tasks that survived an
-unfinished copy. Use typed totals
+attention on phone and desktop and show a count when items failed. Place a
+run-level error above the failed items when it adds separate context. Call out
+rows and tasks that survived an unfinished copy. Use typed totals
 for the outcome and disclosures so bounded samples don't change the counts.
 Group changes by source and view identity and label each tab choice with its
 placement. Omit the report when it has no details.

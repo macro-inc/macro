@@ -9,6 +9,70 @@ use crate::domain::models::{
 };
 
 #[test]
+fn partial_write_error_agrees_with_one_and_two_items() {
+    for (count, noun) in [(1, "item"), (2, "items")] {
+        assert_eq!(
+            partial_write_error(count),
+            format!("{count} {noun} couldn’t be imported.")
+        );
+    }
+}
+
+#[test]
+fn completed_reports_only_hide_the_summary_when_failures_are_itemized() {
+    let failed = row(
+        "Guide",
+        ImportKind::Page,
+        ImportStatus::Staged,
+        NotionDecision::Copy,
+        None,
+        Some("Notion couldn’t return this item’s content."),
+    );
+    let mut run = ImportRun {
+        source: ImportSource::Notion,
+        status: RunStatus::Completed,
+        error: Some("1 objects could not be fully imported. See the report for details.".into()),
+        updated_at: Utc::now(),
+        scanned: None,
+        review_id: None,
+        review_session_id: None,
+    };
+    let rows = std::slice::from_ref(&failed);
+    assert_eq!(report(Some(&run), rows).failure_count, 1);
+    assert_eq!(report(Some(&run), rows).error, None);
+    assert_eq!(
+        report(Some(&run), &[]).error.as_deref(),
+        Some("1 item couldn’t be imported.")
+    );
+
+    run.error = Some(partial_write_error(1));
+    assert_eq!(report(Some(&run), rows).error, None);
+
+    run.error = Some("Notion stopped responding".into());
+    assert_eq!(report(Some(&run), rows).error, run.error);
+}
+
+#[test]
+fn workspace_notion_failures_use_safe_copy_for_direct_and_wrapped_provider_errors() {
+    use crate::domain::ports::ImportError;
+    use import_notion::domain::ports::NotionError;
+
+    let rejected = || NotionError::Upstream {
+        status: 400,
+        body: "Provider diagnostics".into(),
+    };
+    for error in [
+        ImportError::from(rejected()),
+        ImportError::Other(anyhow::Error::new(rejected()).context("could not fetch content")),
+    ] {
+        assert_eq!(
+            super::super::failure_text(&error),
+            "Notion couldn’t return this item’s content."
+        );
+    }
+}
+
+#[test]
 fn report_counts_omissions_failures_and_notices_beyond_its_sample() {
     let limit = REPORT_LIST_LIMIT;
     let input = 0..limit + 5;

@@ -20,6 +20,12 @@ mod test;
 /// Maximum sample size for each kind of report detail.
 const REPORT_LIST_LIMIT: usize = 50;
 
+/// Explain the unfinished objects when a write has finished processing its plan.
+pub(super) fn partial_write_error(failed: usize) -> String {
+    let noun = if failed == 1 { "item" } else { "items" };
+    format!("{failed} {noun} couldn’t be imported.")
+}
+
 /// Summarize the ledger for the current plan: the rows tied to the newest
 /// review, plus staged rows not yet tied to one. Objects a teammate already
 /// imported are counted apart: they link to that copy, so they are neither
@@ -306,6 +312,23 @@ pub(in crate::domain::service) fn report(
     importers.truncate(REPORT_LIST_LIMIT);
     report.already_imported_by = importers;
     report.details = details.map(details::Details::finish);
+    // A settled run can still carry the completion summary from an older writer.
+    if report.status == Some(RunStatus::Completed)
+        && let Some(error) = report.error.as_deref()
+        && let Some((count, summary)) = error.split_once(' ')
+        && let Ok(count) = count.parse::<usize>()
+        && (error == partial_write_error(count)
+            || matches!(
+                summary,
+                "objects could not be fully imported. See the report for details."
+                    | "objects could not be imported. Plan again to retry them."
+            ))
+    {
+        report.error = report
+            .failures
+            .is_empty()
+            .then(|| partial_write_error(count));
+    }
     Ok(report)
 }
 

@@ -50,6 +50,10 @@ function ProgressBar(props: { done: number; total: number }) {
   );
 }
 
+function failedItemSentence(count: number) {
+  return `${count}\u00a0${count === 1 ? 'item' : 'items'} couldn’t be imported.`;
+}
+
 function PhaseStatus(props: {
   phase: ImportReviewPhase;
   progress: ImportProgress | undefined;
@@ -59,9 +63,13 @@ function PhaseStatus(props: {
     const confirmed = props.progress?.confirmed;
     const failures =
       props.progress?.failureCount ?? props.progress?.failures.length ?? 0;
-    const failed = failures > 0 ? ` ${failures} couldn't be imported.` : '';
+    const failed = failures > 0 ? ` ${failedItemSentence(failures)}` : '';
     if (!confirmed) {
-      return `Imported ${plural(imported(), 'object')}${failed ? `.${failed}` : ''}`;
+      const written =
+        imported() > 0
+          ? `Imported ${plural(imported(), 'item')}.`
+          : 'Nothing was imported.';
+      return written + failed;
     }
     const parts = [
       confirmed.documents > 0 ? plural(confirmed.documents, 'page') : '',
@@ -76,7 +84,8 @@ function PhaseStatus(props: {
       parts
     );
     const leftOut = omissionTotals(props.progress?.details);
-    return `Imported ${volume || 'nothing'}.${leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : ''}${failed}`;
+    const written = volume ? `Imported ${volume}.` : 'Nothing was imported.';
+    return `${written}${leftOut.total > 0 ? ` ${omissionCountLabel(leftOut)} left out.` : ''}${failed}`;
   };
   const total = () =>
     imported() +
@@ -125,7 +134,7 @@ function PhaseStatus(props: {
         ))
         .with('stopped', () => (
           <p role="status" class="text-sm text-ink">
-            Import stopped — {plural(imported(), 'imported object')}{' '}
+            Import stopped — {plural(imported(), 'imported item')}{' '}
             {imported() === 1 ? 'stays' : 'stay'}
           </p>
         ))
@@ -404,7 +413,7 @@ function PlanContents(
             <p class="text-xs text-ink-muted">
               {props.alreadyInMacro.length > 0
                 ? 'Everything shared by this source is already in Macro.'
-                : 'The plan has no objects to show.'}
+                : 'The plan has no items to show.'}
             </p>
           </Show>
         }
@@ -468,11 +477,9 @@ function PlanContents(
       <Show when={!details() && failures().length > 0}>
         <section aria-label="Failures" class="flex flex-col gap-1">
           <h4 class="text-xs font-medium text-ink-muted">
-            {plural(
-              props.progress?.failureCount ?? failures().length,
-              'object'
-            )}{' '}
-            couldn't be imported
+            {failedItemSentence(
+              props.progress?.failureCount ?? failures().length
+            )}
           </h4>
           <ul class="flex flex-col gap-0.5">
             <For each={failures()}>

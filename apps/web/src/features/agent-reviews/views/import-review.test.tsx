@@ -337,7 +337,7 @@ describe('import review', () => {
     ).toBeTruthy();
     expect(
       expand('Tab choices · 1 placement').getByText(
-        /Notion didn't say which tab was showing; we used Task Board/
+        /Notion didn’t say which tab was showing\. We used Task Board/
       )
     ).toBeTruthy();
     expect(screen.getByRole('list', { name: 'Import plan' })).toBeTruthy();
@@ -368,7 +368,7 @@ describe('import review', () => {
       setup({ item: { status: 'completed' } });
 
       expect(screen.getByRole('status').textContent).toContain(
-        "2 couldn't be imported."
+        '2\u00a0items couldn’t be imported.'
       );
       const summary = screen.getByText('Needs attention · 2 items');
       expect(summary.classList.contains('text-failure')).toBe(true);
@@ -413,7 +413,7 @@ describe('import review', () => {
     setup({ item: { status: 'completed' } });
 
     expect(screen.getByRole('status').textContent).toContain(
-      "Imported 1 page and 1 database (9 rows). 60 pages left out. 55 couldn't be imported."
+      'Imported 1 page and 1 database (9 rows). 60 pages left out. 55\u00a0items couldn’t be imported.'
     );
     expect(screen.getByText('Not imported · 60 pages')).toBeTruthy();
     const disclosure = screen
@@ -453,6 +453,35 @@ describe('import review', () => {
     expect(within(disclosure).queryByText('Cancelled')).toBeNull();
   });
 
+  it('uses the singular failure sentence when no items were written', () => {
+    const report = completedReport();
+    imports.report = {
+      ...report,
+      imported: 0,
+      failureCount: 1,
+      confirmed: {
+        documents: 0,
+        databases: 0,
+        databaseRows: 0,
+        taskLists: 0,
+        tasks: 0,
+      },
+      details: { notImported: [], viewChanges: [], tabChoices: [], notes: [] },
+      failures: [
+        {
+          importId: 'guide',
+          title: 'Guide',
+          kind: 'page',
+          reason: 'No access',
+        },
+      ],
+    };
+    setup({ item: { status: 'completed' } });
+    expect(screen.getByRole('status').textContent).toBe(
+      'Nothing was imported. 1\u00a0item couldn’t be imported.'
+    );
+  });
+
   it('shows an actionable run error without a failed object', () => {
     imports.report = {
       ...completedReport(),
@@ -468,7 +497,7 @@ describe('import review', () => {
       within(disclosure).getByText('Notion stopped responding')
     ).toBeTruthy();
     expect(screen.getByRole('status').textContent).not.toContain(
-      "couldn't be imported"
+      'couldn’t be imported'
     );
   });
 
@@ -764,7 +793,7 @@ describe('import review', () => {
     };
     setup({ item: { status: 'completed' } });
     expect(
-      screen.getByText('Import stopped — 2 imported objects stay')
+      screen.getByText('Import stopped — 2 imported items stay')
     ).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });

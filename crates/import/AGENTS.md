@@ -435,7 +435,9 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   views. Record multi-tab first choices by containing page, container, and
   selected tab, with the placement title in the report. A sole tab needs no
   detail. Group typed report details and keep exact totals alongside bounded
-  samples. Count confirmed copies and rows from the caller's durable markers,
+  samples. Use plain sentences for typed Notion failures, and omit redundant
+  completion summaries from reports with itemized failures. Count confirmed
+  copies and rows from the caller's durable markers,
   including rows from unfinished sources in the partial totals. Teammate links
   and planning estimates do not contribute.
   Report unsupported property types, including buttons, in the plan and report.
