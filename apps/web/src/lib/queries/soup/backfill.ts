@@ -493,8 +493,8 @@ type SoupBackfillRunOptions = {
   onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void;
   /** As the lane starts, with how long its lock took (none without locks). */
   onStarted?: (lockWaitMs: number | undefined) => void;
-  /** When the run fails, while it still holds the lane's locks. */
-  onFailed?: () => void;
+  /** Run when the run fails, while it still holds the lane's locks. */
+  onFailed?: () => Effect.Effect<void>;
   /** Leave the lane, returning false, while another tab is running it. */
   ifAvailable?: boolean;
   /**
@@ -839,7 +839,7 @@ export const runSoupBackfill = (
       params
     ),
     runUnlockedSoupBackfill(userId, host, params, options).pipe(
-      Effect.tapError(() => Effect.sync(() => options.onFailed?.()))
+      Effect.tapError(() => options.onFailed?.() ?? Effect.void)
     ),
     options
   );
@@ -861,6 +861,20 @@ const runTrackedSoupBackfill = (
     let lockWaitMs: number | undefined;
     // The lane's stored checkpoint when the last attempt failed.
     let leftStored: string | null = null;
+    let failures = 0;
+    let marked = false;
+    // Marks the lane failed in the cache's current generation, the one
+    // readers check: a lane that failed before it saved a page in it left
+    // only an older generation in its checkpoint.
+    const markFailed = Effect.gen(function* () {
+      const { storageGeneration } = loadSoupBackfillCheckpoint(userId, lane);
+      const generation = yield* Effect.tryPromise(() =>
+        host.currentStorageGeneration()
+      ).pipe(Effect.orElseSucceed(() => storageGeneration));
+      if (generation !== null) {
+        markSoupBackfillLaneFailed(userId, lane, generation);
+      }
+    });
     // Kept across the attempts of a lane whose retries can resume.
     const retry: SoupBackfillRetry | undefined = lane.resumesAfter
       ? {}
@@ -889,10 +903,17 @@ const runTrackedSoupBackfill = (
           loadSoupBackfillCheckpoint(userId, lane).pagesFetched
         );
       },
-      onFailed: () => {
-        // No other tab can have saved the lane while this one holds it.
-        leftStored = readSoupBackfillCheckpoint(userId, lane).stored;
-      },
+      onFailed: () =>
+        Effect.suspend(() => {
+          // No other tab can save the lane while this one holds it.
+          leftStored = readSoupBackfillCheckpoint(userId, lane).stored;
+          if (failures < BACKFILL_RETRY_COUNT) return Effect.void;
+          // The last attempt marks the lane failed before letting go of it,
+          // so the mark can't land over the progress of a tab that takes the
+          // lane next: that tab's first save clears it.
+          marked = true;
+          return markFailed;
+        }),
       onCheckpoint: (checkpoint) => {
         pagesFetched += 1;
         if (
@@ -905,6 +926,7 @@ const runTrackedSoupBackfill = (
     }).pipe(
       Effect.tapError((error) =>
         Effect.sync(() => {
+          failures += 1;
           if (retry && !lane.resumesAfter?.(thrownBy(error))) {
             retry.pageFetcher = undefined;
           }
@@ -917,23 +939,19 @@ const runTrackedSoupBackfill = (
       Effect.matchEffect({
         onFailure: (error) =>
           Effect.gen(function* () {
-            const checkpoint = loadSoupBackfillCheckpoint(userId, lane);
-            // Readers check the cache's generation now. A lane that failed
-            // before it saved a page in it left only an older generation in
-            // its checkpoint.
-            const generation = yield* Effect.tryPromise(() =>
-              host.currentStorageGeneration()
-            ).pipe(Effect.orElseSucceed(() => checkpoint.storageGeneration));
-            record('failed', checkpoint.pagesFetched);
-            // Readers waiting for the lane to finish stop waiting, unless
-            // another tab has saved the lane since this one's last attempt:
-            // it took the lane and reports its own outcome, and a mark now
-            // would send readers to the network while it makes progress.
+            record(
+              'failed',
+              loadSoupBackfillCheckpoint(userId, lane).pagesFetched
+            );
+            // Readers waiting for the lane to finish stop waiting. A last
+            // attempt that failed taking the lane's locks left the mark to
+            // here, unless another tab saved the lane since this one last held
+            // it: that tab reports its own outcome.
             if (
-              generation !== null &&
+              !marked &&
               readSoupBackfillCheckpoint(userId, lane).stored === leftStored
             ) {
-              markSoupBackfillLaneFailed(userId, lane, generation);
+              yield* markFailed;
             }
             console.warn('[graphql-soup-backfill] lane failed after retries', {
               checkpointId: lane.checkpointId,

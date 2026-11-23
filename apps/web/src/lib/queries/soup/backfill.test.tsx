@@ -1912,31 +1912,43 @@ describe('soup backfill checkpoint locks', () => {
     await initiativesTab.release();
   });
 
-  it('leaves the failure mark to a tab that saved the lane after its last attempt', async () => {
+  it('marks a lane that gave up before a tab waiting for it takes it, so that tab clears the mark', async () => {
     vi.useFakeTimers();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     onTestFinished(() => warn.mockRestore());
-    let otherTab: ReturnType<typeof hold> | undefined;
+    let failedWhenTaken: boolean | undefined;
+    let otherTabDone: Promise<void> | undefined;
     const failing = vi.fn(async (_input: FetchInput) => {
       if (failing.mock.calls.length === 6) {
-        // Another tab asks for the lane during the last attempt, gets it
-        // when that attempt lets go and saves its pass start, all before
-        // this tab reports the failure.
+        // Another tab asks for the lane during the last attempt. Once it has
+        // the lane it saves its pass start, which clears a failure mark.
         const tab = hold(key(lane('core-entities', failing)));
-        otherTab = tab;
+        // Reading the generation for the mark takes until that tab has the
+        // lane, or 100 ms if it can't get it meanwhile.
         mockCacheHost.currentStorageGeneration.mockImplementationOnce(
           async () => {
-            await tab.granted;
-            localStorage.setItem(
-              key(lane('core-entities', failing)),
-              JSON.stringify({
-                ...initialSoupBackfillCheckpoint('user-1', 'storage-1'),
-                scanStartedAt: '2026-09-03T00:00:00.000Z',
-              })
-            );
+            await Promise.race([
+              tab.granted,
+              new Promise((resolve) => setTimeout(resolve, 100)),
+            ]);
             return 'storage-1';
           }
         );
+        otherTabDone = tab.granted.then(async () => {
+          failedWhenTaken = soupBackfillLaneFailed(
+            'user-1',
+            testLane('core-entities'),
+            'storage-1'
+          );
+          saveSoupBackfillCheckpoint(
+            {
+              ...initialSoupBackfillCheckpoint('user-1', 'storage-1'),
+              scanStartedAt: '2026-09-03T00:00:00.000Z',
+            },
+            testLane('core-entities')
+          );
+          await tab.release();
+        });
       }
       throw new Error('failed lane');
     });
@@ -1946,13 +1958,14 @@ describe('soup backfill checkpoint locks', () => {
       ])
     );
 
-    await vi.advanceTimersByTimeAsync(31_000);
+    await vi.advanceTimersByTimeAsync(32_000);
     await run;
+    await otherTabDone;
     expect(failing).toHaveBeenCalledTimes(6);
+    expect(failedWhenTaken).toBe(true);
     expect(
       soupBackfillLaneFailed('user-1', testLane('core-entities'), 'storage-1')
     ).toBe(false);
-    await otherTab?.release();
   });
 
   it('marks a lane that gave up when no other tab took it', async () => {
