@@ -309,3 +309,15 @@ async fn herdr_09_opens_every_session_as_its_own_workspace() {
             .any(|call| call.starts_with("agent start macro-abc --kind codex --pane w7:p1"))
     );
 }
+
+#[test]
+fn an_agent_still_working_is_busy_not_on_a_dialog() {
+    let busy = super::hc::not_ready(true);
+    assert!(matches!(busy, HerdrError::Busy));
+    assert!(busy.to_string().contains("busy"));
+    assert!(!busy.to_string().contains("dialog"));
+
+    let silent = super::hc::not_ready(false);
+    assert!(matches!(silent, HerdrError::NotReady));
+    assert!(silent.to_string().contains("dialog"));
+}

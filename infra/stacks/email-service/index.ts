@@ -167,6 +167,22 @@ const link_manager_queue = new Queue('email-service-refresh', {
 export const linkManagerQueueArn = pulumi.interpolate`${link_manager_queue.queue.arn}`;
 export const linkManagerQueueName = pulumi.interpolate`${link_manager_queue.queue.name}`;
 
+// The link manager's maintenance lane: the refresh handler's periodic refreshes,
+// health polls and removal sweeps, on consumers of their own. The sweep's purges
+// run for minutes each, so on the queue above they held every consumer a
+// person's inbox removal waits for.
+const link_maintenance_queue = new Queue('email-service-link-maintenance', {
+  tags,
+  visibilityTimeoutSeconds: 300,
+  alarm: {
+    // The daily removal sweep backs this queue up for hours on its own.
+    approximateAgeOfOldestMessageThreshold: 21600, // 6 hours
+  },
+});
+
+export const linkMaintenanceQueueArn = pulumi.interpolate`${link_maintenance_queue.queue.arn}`;
+export const linkMaintenanceQueueName = pulumi.interpolate`${link_maintenance_queue.queue.name}`;
+
 const scheduled_queue = new Queue('email-service-scheduled', {
   tags,
 });
@@ -309,6 +325,7 @@ const queueArns = [
   gmailOpsQueueArn,
   gmailOpsRetryQueueArn,
   linkManagerQueueArn,
+  linkMaintenanceQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
   backfillQueueArn,
@@ -475,7 +492,9 @@ const INBOX_HEALTH_POLL_INTERVAL_HOURS = config.require(
 );
 
 const emailRefreshHandler = new EmailRefreshHandler('email-refresh-handler', {
-  queueArns: [linkManagerQueueArn],
+  // The handler sends only to the maintenance queue. It keeps the other queue
+  // so a handler released before the split can still send there mid-rollout.
+  queueArns: [linkManagerQueueArn, linkMaintenanceQueueArn],
   vpc: coparse_api_vpc,
   envVars: {
     DATABASE_URL: pulumi.interpolate`${MACRO_DB_URL}`,

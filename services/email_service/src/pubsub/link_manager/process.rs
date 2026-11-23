@@ -9,13 +9,14 @@ mod test;
 #[cfg(test)]
 use email_api_client::domain::models::{AccessToken, EmailApiError};
 
-/// Decode one delivery and perform the acknowledgement selected by the domain.
-#[tracing::instrument(skip(ctx, message), err)]
+/// Process one decoded delivery and perform the acknowledgement selected by the domain.
+#[tracing::instrument(skip(ctx, message, decoded), err)]
 pub async fn process_message(
     ctx: LinkManagerContext,
     message: &aws_sdk_sqs::types::Message,
+    decoded: anyhow::Result<LinkManagerMessage>,
 ) -> anyhow::Result<()> {
-    match ctx.service.process(extract_message(message)).await {
+    match ctx.service.process(decoded).await {
         LinkManagerDisposition::DoneDelete => {
             cleanup_message(&ctx.sqs_worker, message).await?;
             Ok(())
@@ -37,7 +38,9 @@ fn settle_reauth_result(
 }
 
 #[tracing::instrument(skip(message))]
-fn extract_message(message: &aws_sdk_sqs::types::Message) -> anyhow::Result<LinkManagerMessage> {
+pub(super) fn extract_message(
+    message: &aws_sdk_sqs::types::Message,
+) -> anyhow::Result<LinkManagerMessage> {
     let message_body = message.body().context("message body not found")?;
 
     serde_json::from_str(message_body)
