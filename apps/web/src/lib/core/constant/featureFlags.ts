@@ -522,6 +522,17 @@ export const enableTaskStartDate = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Time tracking on tasks: the Time pill and its entries, the running timer,
+ * and Time logged wherever task properties show. The backend refuses time
+ * writes under the same key.
+ */
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
+  default: onInDev,
+});
+
 /** Task-composer template selection, authoring, and saved-draft recovery. */
 export const enableTaskTemplates = defineFlag({
   key: 'enable-task-templates',

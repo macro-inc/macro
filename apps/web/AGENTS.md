@@ -359,6 +359,12 @@ track sizing, which its own contents can push out, so a glyph sized off the cell
 feeds that loop and can settle with one emoji filling the picker. The same suite
 checks that widening a cell leaves the glyph alone.
 
+Space and Shift+Space page an open thread (the real desktop thread view in a
+frame like Mail's, over the real hotkey root and `registerEmailHotkeys`) from
+the moment it opens, while a focused button, a field and the reply composer
+keep their own Space; backend-free, desktop only:
+`bunx playwright test --config src/features/block-email/browser-test/playwright.config.ts`.
+
 The email reminder menu reads typed times through the real natural-time wasm
 package; its backend-free desktop/phone regression, at a fixed New York clock,
 checks both readings of a guessed hour, saving either, the reasons shown for

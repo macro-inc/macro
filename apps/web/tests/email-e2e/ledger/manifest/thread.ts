@@ -298,6 +298,16 @@ export const thread = {
       viewports: ['desktop'],
     },
     {
+      id: 'AL-913',
+      surface: 'SL-28',
+      fn: ['F-062'],
+      action: 'page the open thread down / up by about a screen',
+      trigger: 'hotkey Space ; Shift+Space',
+      source: [HOTKEYS, NAVIGATION],
+      registered: ['email.pageDown', 'email.pageUp'],
+      viewports: ['desktop'],
+    },
+    {
       id: 'AL-144',
       surface: 'SL-28',
       fn: ['F-073', 'F-074'],
