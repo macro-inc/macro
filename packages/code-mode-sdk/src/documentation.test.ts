@@ -240,6 +240,7 @@ describe('TypeDoc documentation packaging', () => {
     expect(guide('search')).toContain('macro.search.all');
     expect(guide('search')).toContain('macro.documents.search');
     expect(guide('search')).toContain('macro.workspace.page');
+    expect(guide('search')).toContain("types: ['channel']");
     expect(guide('core')).toBe('');
     expect(docs.symbols.DatabaseNamespace).toContain('## Agent guidance');
   });
@@ -290,6 +291,10 @@ describe('TypeDoc documentation packaging', () => {
     expect(entity('chats')).toContain('`Chat.history`');
     expect(entity('core')).not.toContain('SearchNamespace');
     expect(docs.symbols.SearchOptions).toContain('agentSessions');
+    // A message result is typed `channel_message`, but messages are searched
+    // with the `channel` type; a program that passes the result's name as a
+    // search type fails type-checking.
+    expect(docs.symbols.SearchType).toContain('`channel_message`');
     expect(docs.symbols.WorkspaceType).toContain('agent_session');
     // Jev routes the catalog 32 entities per call, so every SDK directory is
     // its own entity, asked about with its own routing sentence.
