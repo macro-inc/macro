@@ -503,14 +503,34 @@ encrypts the secret before calling it.
   the answer (the profile the subscribe result names; the
   `com.macro/eventsProfile` in `_meta`). A row keeps the profile it was
   created with: a subscribe under another one is refused.
-  A worker from before profiles reads every row as `mcp`, so to roll this
-  service back past this change: first roll back the Worker or the MCP
-  server, which stops every ChatGPT subscribe and refresh; wait out the
-  internal subscribe timeout (30 s) for calls already in flight; run
-  `DELETE FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt'`
-  (their queued deliveries then find no row and are dropped); then roll this
-  service back. Rolling back only the MCP server or the Worker leaves stored
-  rows delivering correctly and makes ChatGPT's refreshes fail, so its
+  A worker from before profiles reads every row as `mcp`, so before rolling
+  this service back past this change, fence ChatGPT rows off in the database:
+
+  1. Roll back the MCP server (agent harness), not only the Worker: any MCP
+     client can call the prefixed methods, and the MCP server is the only
+     caller of this service's subscribe route.
+  2. Add the fence, then delete. From the moment the constraint commits, no
+     build can write a ChatGPT row, including a subscribe this service is
+     still finishing after its caller gave up; the DELETE removes every row
+     written before it, and deliveries already queued for them find no row
+     and are dropped. If the ALTER gives up behind a lock, run it again. The
+     DELETE reads the table once (0.4 s at 1.75M rows) and locks only the rows
+     it deletes.
+
+     ```sql
+     SET lock_timeout = '5s';
+     ALTER TABLE mcp_event_subscription
+         ADD CONSTRAINT mcp_event_subscription_no_chatgpt
+         CHECK (delivery_profile <> 'chatgpt') NOT VALID;
+     DELETE FROM mcp_event_subscription WHERE delivery_profile = 'chatgpt';
+     ```
+
+  3. Roll this service back. The migration's down drops the constraint with
+     the column; to roll forward again without it, drop the constraint
+     before the MCP server takes ChatGPT subscriptions again.
+
+  Rolling back only the MCP server or the Worker leaves stored rows
+  delivering correctly and makes ChatGPT's refreshes fail, so its
   subscriptions lapse at `refreshBefore`.
 
 ## Operations
