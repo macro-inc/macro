@@ -1832,35 +1832,37 @@ Behind `enable-agent-permissions`, a JS tools (`language: "js_tools"`)
 Agents → Permissions) before it runs. The cards name no language:
 
 - **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
-  appears above the composer as **Approval needed**: `<Agent> wants to run a
-  program that may:` and the operations set to Ask, by group, each with its
-  action, name and (on a wide card) `service.operation`; more than six fold
-  behind **Show N more**. A note links `<Agent>'s permissions` (for people who
-  can edit the agent) and **View program** reveals the source; a program sent
-  with a TypeScript module shows both, under **Program** and **Module, with no
-  network**. Only the
-  approver the hold names may answer: **Decline**, **Allow for this session**
-  (stops asking for these operations until the session ends) or **Approve**.
-  Anyone else sees `Waiting for <name> to approve` and, with edit access,
-  **Cancel**. Answered holds become a row such as `Run a program that may send
-  email and edit documents · Allowed for this session by you`.
+  docks above the composer, outside the scrolling transcript, at the input's
+  width and 8px above it (after any other held tool calls): `Allow <Agent> to
+  send email and edit documents?`, with each action and entity in accent (up
+  to three, then `and N more things`). Only the approver the hold names may
+  answer: **Deny** and **Edit permissions** on the left, **Allow once** and
+  the primary **Allow in this session** (stops asking for these operations
+  until the session ends) on the right; on a narrow card the Allows stack
+  above. **Edit permissions** (for people who can edit the agent) opens
+  Settings → Agents beside the chat with the agent's permissions expanded at
+  the first asked action. Anyone else sees `Waiting for <name> to approve`,
+  `<Agent> wants to … with <name>'s access.` and, with edit access, **Cancel
+  request**. The card goes as soon as the answer is accepted. A hold has no
+  transcript row: an allowed program shows its usual execution rows.
 - **Never**: nothing runs. The call renders as its own **Blocked by
   permissions** card (outside the tool group) naming what the program could
   have done and the refused operations, with **Review permissions** (opens
   Settings → Agents beside the chat with the agent's permissions expanded, at
   the first refused action or tool) for people who can edit the agent and `Only people who can edit
   <Agent> can change this.` for others.
-- A declined, cancelled or expired hold leaves a quiet row in the tool group,
-  `Didn't run a program that may … · Declined`, not counted as a failure. A
-  step the bootstrap backstop refused mid-run reads **Blocked**.
+- A denied, cancelled or expired hold leaves a failed row in the tool group
+  naming what the program would have done, `Send email · Denied` (or
+  **Cancelled**, **Not approved in time**). A step the bootstrap backstop
+  refused mid-run reads **Blocked**.
 
 With `enable-agent-permissions` off for the session's owner nothing here
 happens: no `js_tools`, no `ShowPermissions`, no holds, and runs go as before.
 With it off for the viewer (on in local stacks, PostHog elsewhere) the cards
 read nothing from the permissions API: `ShowPermissions` is a plain **Show
 permissions** row, the blocked card has no **Review permissions**, and a hold
-is still answered (approve, allow for the session, decline) without the link
-to the agent's permissions. Every surface and its flag:
+is still answered (allow once, allow in this session, deny) without **Edit
+permissions**. Every surface and its flag:
 `crates/agent_permissions/AGENTS.md`.
 
 When the agent calls `ShowPermissions`, the transcript shows **<Agent>'s
