@@ -224,6 +224,42 @@ describe('calendar Today navigation', () => {
 
 // Native scroll events commit the same five mounted FullCalendar instances used by the workspace.
 describe('calendar native paging', () => {
+  it('pages many months both ways without recycling during phone momentum', async () => {
+    const { pager, calendar, viewport, pages } = mountCalendar('dayGridMonth');
+    Object.defineProperty(viewport, 'onscrollend', { value: null });
+    await vi.advanceTimersByTimeAsync(300);
+    const mounted = [...pages.values()].map(({ calendar }) => calendar);
+    viewport.dispatchEvent(new Event('touchstart'));
+    window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    await vi.advanceTimersByTimeAsync(150);
+    expect(pager().pager.phase()).toBe('idle');
+    let offset = 0;
+    for (const direction of [
+      1, 1, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1,
+      1, 1, 1,
+    ]) {
+      const before = pager().pager.position();
+      viewport.dispatchEvent(new Event('touchstart'));
+      viewport.scrollLeft = 200 + direction * 70;
+      viewport.dispatchEvent(new Event('scroll'));
+      window.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+      await vi.advanceTimersByTimeAsync(260);
+      expect(pager().pager.position()).toBe(before);
+      viewport.dispatchEvent(new Event('scrollend'));
+      viewport.dispatchEvent(new Event('scrollend'));
+      await vi.advanceTimersByTimeAsync(150);
+      offset += direction;
+      const expected = new Date(2026, 10 + offset, 1);
+      expect(calendar().view.currentStart.getTime()).toBe(expected.getTime());
+      expect(pager().activeDate().getMonth()).toBe(expected.getMonth());
+      expect(calendar().view.activeStart <= expected).toBe(true);
+      expect(calendar().view.activeEnd > expected).toBe(true);
+      expect([...pages.values()].map(({ calendar }) => calendar)).toEqual(
+        mounted
+      );
+    }
+    expect(pager().pager.position()).toBe(0);
+  });
   it('pauses queued FullCalendar date changes through a long native scroll pause', async () => {
     const { pages, viewport, pager } = mountCalendar();
     Object.defineProperty(viewport, 'onscrollend', { value: null });
