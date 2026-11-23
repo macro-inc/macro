@@ -16,6 +16,7 @@ const soup = vi.hoisted(() => ({
         ) => () => void;
         onCacheGenerationChanged: () => () => void;
         readRecordsByKeys: (args: { keys: string[] }) => Promise<unknown>;
+        readQuery: () => Promise<unknown>;
       }
     | undefined,
   /** Whether the cache holds the definition's options on its record. */
@@ -23,8 +24,8 @@ const soup = vi.hoisted(() => ({
   settle: (_settlement: MutationSettlement) => {},
   optimistic: vi.fn(),
   reload: undefined as Partial<OperationResult> | undefined,
-  /** Answers to cache-only reads, in order; then none. */
-  cachedReads: [] as Partial<OperationResult>[],
+  /** The cache store's answers to reads of the tag sets, in order; then a miss. */
+  cachedReads: [] as unknown[],
   session: 1,
 }));
 
@@ -39,7 +40,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
       toPromise: async () =>
         context?.requestPolicy === 'network-only'
           ? (soup.reload ?? { data: undefined })
-          : (soup.cachedReads.shift() ?? { data: undefined }),
+          : { data: undefined },
     }),
   }),
   getGraphqlSoupCacheHost: () => soup.host,
@@ -105,6 +106,7 @@ function queueingHost() {
           : [],
       };
     },
+    readQuery: async () => soup.cachedReads.shift() ?? { kind: 'miss' },
   };
   soup.optimistic.mockImplementation(() => ({
     toPromise: async () => ({ queued: 'tx-1' }),
@@ -351,24 +353,79 @@ describe('provisioning a tag set', () => {
       },
       options: [],
     };
-    const listing = (tagSets: unknown[]) =>
-      ({
-        data: { user: { tagSets } },
-      }) as unknown as Partial<OperationResult>;
+    const listing = (tagSets: unknown[]) => ({
+      kind: 'hit',
+      data: { user: { tagSets } },
+    });
     for (const [afterReload, ready] of [
       [listing([provisioned]), true],
       // The reload answered, but its cache write did not land.
       [listing([]), false],
+      [{ kind: 'miss' }, false],
     ] as const) {
       queueingHost();
       soup.result = { data: { ensureTagSet: provisioned } };
-      soup.reload = listing([provisioned]);
+      soup.reload = { data: { user: { tagSets: [provisioned] } } };
       soup.cachedReads = [listing([]), afterReload];
       const ensured = await ensureTagSet('team').catch(
         (error: unknown) => error
       );
       expect(ensured instanceof Error).toBe(!ready);
     }
+  });
+
+  it('checks the cache only once the reload is written', async () => {
+    const provisioned = {
+      scope: 'USER',
+      definition: {
+        __typename: 'GraphqlPropertyDefinition',
+        id: 'def-mine',
+        owner: { scope: 'USER', principalId: 'user-1' },
+        displayName: 'Tags',
+        dataType: 'SELECT_STRING',
+        isMultiSelect: true,
+        specificEntityType: null,
+        isSystem: false,
+        isMetadata: false,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
+      },
+      options: [],
+    };
+    queueingHost();
+    let written = false;
+    let persist = (_revision: undefined) => {};
+    soup.result = { data: { ensureTagSet: provisioned } };
+    soup.reload = {
+      data: { user: { tagSets: [provisioned] } },
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          persistence: new Promise<undefined>((resolve) => {
+            persist = (revision) => {
+              written = true;
+              resolve(revision);
+            };
+          }),
+        },
+      },
+    };
+    const reads: boolean[] = [];
+    soup.cachedReads = [];
+    const host = soup.host;
+    if (!host) throw new Error('no host');
+    host.readQuery = async () => {
+      reads.push(written);
+      return {
+        kind: 'hit',
+        data: { user: { tagSets: written ? [provisioned] : [] } },
+      };
+    };
+    const ensured = ensureTagSet('user');
+    await vi.waitFor(() => expect(reads).toHaveLength(1));
+    persist(undefined);
+    await expect(ensured).resolves.toMatchObject({ scope: 'user' });
+    expect(reads).toEqual([false, true]);
   });
 });
 
@@ -488,7 +545,8 @@ describe('option order', () => {
       // Two more commits while the first reload runs.
       settle({ transactionId: 'tx-b', status: 'committed' });
       settle({ transactionId: 'tx-c', status: 'committed' });
-      await Promise.resolve();
+      // Long enough for both commits to reach the coalescer.
+      await new Promise((resolve) => setTimeout(resolve, 20));
       // The trailing reload waits for the one running.
       expect(readers.refreshed).toHaveLength(HOLDING_DEF_1.length);
       readers.release();
