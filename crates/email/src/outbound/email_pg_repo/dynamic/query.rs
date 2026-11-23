@@ -6,6 +6,7 @@ use super::filters::*;
 use super::resolve::{ResolvedFilters, can_short_circuit, resolve_filters};
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::*;
+use crate::outbound::email_pg_repo::{PreviewReadError, RuleDiscoveryPort};
 use chrono::{DateTime, Utc};
 use entity_access::outbound::get_user_source_ids;
 use filter_ast::Expr;
@@ -1237,6 +1238,46 @@ fn extract_project_filter(ast: &Expr<EmailLiteral>) -> Vec<String> {
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
+/// Read with a discovery port supplied by the composition root.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "existing preview query plus its domain discovery port"
+)]
+#[tracing::instrument(
+    name = "dynamic_email_thread_cursor",
+    skip(pool, view, query, user_id, discovery),
+    fields(view = view.span_value(), sort = %query.sort_method()),
+    err
+)]
+pub(crate) async fn dynamic_email_thread_cursor_with_discovery(
+    pool: &PgPool,
+    link_ids: &[Uuid],
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
+    user_id: &str,
+    team_id: Option<Uuid>,
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
+    read_page(
+        pool,
+        link_ids,
+        limit,
+        view,
+        query,
+        user_id,
+        team_id,
+        Reads {
+            team: Some(TeamReadTuning::DEFAULT),
+            owned: Some(OwnedReadTuning::DEFAULT),
+            discovery,
+        },
+    )
+    .await
+    .map(|(rows, _)| rows)
+}
+
+#[cfg(test)]
 #[tracing::instrument(skip(pool, view, query, user_id), fields(view = view.span_value()), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
@@ -1246,7 +1287,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
     team_id: Option<Uuid>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     dynamic_email_thread_cursor_with(
         pool,
         link_ids,
@@ -1267,6 +1308,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     clippy::too_many_arguments,
     reason = "the entry point's arguments plus the team read's tuning"
 )]
+#[cfg(test)]
 pub(crate) async fn dynamic_email_thread_cursor_with(
     pool: &PgPool,
     link_ids: &[Uuid],
@@ -1276,7 +1318,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
     user_id: &str,
     team_id: Option<Uuid>,
     team_read: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     read_page(
         pool,
         link_ids,
@@ -1286,6 +1328,7 @@ pub(crate) async fn dynamic_email_thread_cursor_with(
         user_id,
         team_id,
         Reads {
+            discovery: Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
             team: team_read,
             owned: Some(OwnedReadTuning::DEFAULT),
         },
@@ -1312,7 +1355,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
     user_id: &str,
     team_id: Option<Uuid>,
     owned_read: Option<OwnedReadTuning>,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), PreviewReadError> {
     read_page(
         pool,
         link_ids,
@@ -1322,6 +1365,7 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
         user_id,
         team_id,
         Reads {
+            discovery: Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
             team: Some(TeamReadTuning::DEFAULT),
             owned: owned_read,
         },
@@ -1331,7 +1375,8 @@ pub(crate) async fn dynamic_email_thread_cursor_owned_with(
 
 /// The page-order reads a request may take; `None` leaves its requests to the
 /// general builder.
-struct Reads {
+struct Reads<'a> {
+    discovery: Option<&'a RuleDiscoveryPort>,
     team: Option<TeamReadTuning>,
     owned: Option<OwnedReadTuning>,
 }
@@ -1349,8 +1394,8 @@ async fn read_page(
     query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
     user_id: &str,
     team_id: Option<Uuid>,
-    reads: Reads,
-) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), sqlx::Error> {
+    reads: Reads<'_>,
+) -> Result<(Vec<ThreadPreviewCursorDbRow>, Option<OwnedReadStats>), PreviewReadError> {
     // A repeated inbox would list its threads twice.
     let link_ids = distinct_links(link_ids);
     let link_ids = link_ids.as_slice();
@@ -1430,9 +1475,16 @@ async fn read_page(
         None => params,
     };
     if team_id.is_some() {
-        return read_team_page(pool, view, email_filter, params, reads.team)
-            .await
-            .map(|rows| (rows, None));
+        return read_team_page(
+            pool,
+            view,
+            email_filter,
+            params,
+            reads.team,
+            reads.discovery,
+        )
+        .await
+        .map(|rows| (rows, None));
     }
 
     let mut qb = build_query(view, email_filter, params);

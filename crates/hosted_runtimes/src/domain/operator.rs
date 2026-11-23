@@ -220,12 +220,14 @@ where
         ))
     }
 
-    /// macrod connected on `harness_id`: whether it is a computer's, and
-    /// whether connecting bound the computer's first agent to it.
+    /// macrod connected on `harness_id`, able to take an agent teammate or
+    /// not: whether it is a computer's, and whether connecting bound the
+    /// computer's first agent to it.
     #[tracing::instrument(skip(self), err)]
     pub async fn macrod_connected(
         &self,
         harness_id: HarnessId,
+        applies_agent: bool,
     ) -> Result<MacrodConnected, ComputerError> {
         self.relief.macrod_connected(harness_id);
         let Some(computer_id) = self.computer_of(harness_id).await? else {
@@ -235,7 +237,7 @@ where
         use tracing::Instrument;
         let span = tracing::info_span!("computer.macrod.connected", computer_id = %computer.id, team_id = %computer.team_id, first = computer.enrolled_at.is_none());
         super::telemetry::adopt(&span, &computer.state);
-        self.record_macrod_connected(harness_id, computer)
+        self.record_macrod_connected(harness_id, computer, applies_agent)
             .instrument(span)
             .await
     }
@@ -244,8 +246,22 @@ where
         &self,
         harness_id: HarnessId,
         computer: Computer,
+        applies_agent: bool,
     ) -> Result<MacrodConnected, ComputerError> {
         let now = self.clock.now();
+        let event = if applies_agent {
+            Event::MacrodConnected
+        } else {
+            if computer.state.awaiting_agent
+                && !crate::domain::lifecycle::gave_up(&computer.state.phase)
+            {
+                tracing::error!(
+                    computer_id = %computer.id,
+                    "computer macrod cannot take an agent teammate"
+                );
+            }
+            Event::MacrodConnectedWithoutAgentHandOff
+        };
         self.repo
             .set_harness(computer.id, harness_id)
             .await
@@ -255,7 +271,7 @@ where
             .await
             .map_err(internal)?;
         self.repo
-            .apply(computer.id, Event::MacrodConnected, now)
+            .apply(computer.id, event, now)
             .await
             .map_err(internal)?;
         let mut connected = MacrodConnected::Computer;

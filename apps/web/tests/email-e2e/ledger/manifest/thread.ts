@@ -250,7 +250,7 @@ export const thread = {
       id: 'AL-139',
       surface: 'SL-28',
       fn: ['F-069'],
-      action: 'mark as unread (returns to list)',
+      action: 'mark as unread (keeps the thread open)',
       trigger: 'hotkey u',
       source: [HOTKEYS, READ],
       registered: ['entity.action.markUnread'],
@@ -295,6 +295,16 @@ export const thread = {
       trigger: 'hotkey Shift+O',
       source: [HOTKEYS, NAVIGATION],
       registered: ['email.expandAllMessages'],
+      viewports: ['desktop'],
+    },
+    {
+      id: 'AL-913',
+      surface: 'SL-28',
+      fn: ['F-062'],
+      action: 'page the open thread down / up by about a screen',
+      trigger: 'hotkey Space ; Shift+Space',
+      source: [HOTKEYS, NAVIGATION],
+      registered: ['email.pageDown', 'email.pageUp'],
       viewports: ['desktop'],
     },
     {
@@ -990,7 +1000,7 @@ export const thread = {
         'src/features/email-thread/thread-read-adapter.ts#Marked as unread',
         'src/features/email-thread/thread-read-adapter.ts#Failed to mark as unread',
       ],
-      note: 'the success toast is hidden on mobile; the same toasts are raised from the unread toggle and the title menu (was STL-609, STL-610)',
+      note: 'the unread toggle and title menu report the settled write after the thread closes, including a write queued behind the opening read; the success toast is hidden on mobile (was STL-609, STL-610)',
     },
     {
       id: 'STL-077',
@@ -1520,6 +1530,20 @@ export const thread = {
         'src/features/email-thread/components/draft-reply-preview.tsx',
         'src/features/email-thread/views/message-container.tsx',
       ],
+    },
+    {
+      id: 'STL-996',
+      surface: 'SL-35',
+      fn: ['F-117'],
+      state:
+        'result: the reader’s synced reply draft reopens in the shared thread',
+      trigger:
+        'reload a thread shared at Edit after a reply saves in the reader’s inbox',
+      source: [
+        'src/features/email-thread/primitives/thread-reply-area.ts',
+        'src/features/email-thread/queries/thread-source.ts',
+      ],
+      viewports: ['desktop'],
     },
     {
       id: 'STL-966',

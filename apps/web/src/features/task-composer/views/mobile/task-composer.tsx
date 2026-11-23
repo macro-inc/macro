@@ -1,14 +1,20 @@
+import { TaskTemplateNameStrip } from '@app/features/task-templates/views/shared/task-template-name-strip';
 import { onElementConnect } from '@core/util/onElementConnect';
 import { Property } from '@property';
+import { StartDueSheetEditor } from '@property/editors/popover/StartDueEditor';
 import { InlineTagsSheetPill } from '@property/tags';
 import { cn, EntityComposer } from '@ui';
-import { createSignal, onCleanup } from 'solid-js';
+import { type Component, createSignal, onCleanup, Show } from 'solid-js';
 import type { TaskComposerController } from '../../primitives/task-composer';
 import { TaskComposerParts } from '../shared/task-composer-parts';
 
 /** The task composer in the touch bottom sheet. */
 export function MobileTaskComposer(props: {
   composer: TaskComposerController;
+  templateControls: Component<{
+    composer: TaskComposerController;
+    compact?: boolean;
+  }>;
 }) {
   // Opens taller than its content, the description taking the room above the
   // properties.
@@ -43,6 +49,7 @@ export function MobileTaskComposer(props: {
       composer={props.composer}
       tagsPill={InlineTagsSheetPill}
       propertyEditor={Property.SheetEditor}
+      datesEditor={StartDueSheetEditor}
     >
       <EntityComposer.Header
         ref={observeHeader}
@@ -53,9 +60,13 @@ export function MobileTaskComposer(props: {
           headerPinned() && 'bg-menu'
         )}
       >
-        <div class="flex-1 flex items-center">
-          <TaskComposerParts.ContinueInSplit />
-        </div>
+        <Show
+          when={props.composer.templatesEnabled()}
+          fallback={<div class="flex-1" />}
+        >
+          <props.templateControls composer={props.composer} compact />
+        </Show>
+        <TaskComposerParts.ContinueInSplit />
         {/* Far enough from Create Task that a tap meant for one cannot land
             on the other. */}
         <div class="flex items-center gap-8">
@@ -69,14 +80,20 @@ export function MobileTaskComposer(props: {
           to the sheet's edges. */}
       <EntityComposer.Main
         class="overflow-visible"
+        inert={props.composer.isSavingTemplate()}
         onPointerDown={keepTypingFocus}
         onMouseDown={keepTypingFocus}
       >
+        <Show when={props.composer.templatesEnabled()}>
+          <TaskTemplateNameStrip composer={props.composer} />
+        </Show>
         <TaskComposerParts.Title />
         <TaskComposerParts.Body />
-        <div class="shrink-0 flex items-center py-2">
-          <TaskComposerParts.Attach />
-        </div>
+        <Show when={!props.composer.isTemplateMode()}>
+          <div class="shrink-0 flex items-center py-2">
+            <TaskComposerParts.Attach />
+          </div>
+        </Show>
         <div class="-mx-4 shrink-0 overflow-x-auto overscroll-x-contain scrollbar-hidden">
           <TaskComposerParts.Properties class="w-max flex-nowrap px-4" />
         </div>
@@ -86,6 +103,7 @@ export function MobileTaskComposer(props: {
       <EntityComposer.Footer class="items-center empty:hidden">
         <TaskComposerParts.ShareToggle />
         <TaskComposerParts.LinkInSourceToggle />
+        <TaskComposerParts.CancelTemplate />
       </EntityComposer.Footer>
     </TaskComposerParts.Root>
   );

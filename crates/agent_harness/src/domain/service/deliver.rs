@@ -147,13 +147,15 @@ where
 
     /// Load a live external session onto its runtime's new connection.
     ///
-    /// Safe to repeat: a session already attached here keeps its actor, and
+    /// Safe to repeat: a session already attached here on the runtime's
+    /// current connection keeps its actor, one still on a displaced
+    /// connection is stopped and attached afresh, and
     /// an archived or managed one is never started by a runtime's dial.
     /// Answers whether the session is attached here with its durable queue
     /// loaded, so the caller can dispatch what it holds. That holds for a
     /// session an earlier attempt attached before failing to load its queue,
     /// so a retry finishes the job instead of stranding the queue.
-    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty))]
+    #[tracing::instrument(err, skip(self), fields(agent.session.id = %session_id, agent.session.reattached = tracing::field::Empty, agent.session.displaced_connection = tracing::field::Empty))]
     pub(super) async fn reattach(&self, session_id: AgentSessionId) -> Result<bool> {
         let span = tracing::Span::current();
         let session = self.sessions.get_session(session_id).await?;
@@ -164,13 +166,39 @@ where
             return Ok(false);
         }
         if self.sessions.attached_mcp_servers(session_id).is_some() {
-            span.record("agent.session.reattached", false);
-            self.ensure_hydrated(session_id).await?;
-            return Ok(true);
+            if self.on_current_connection(&session).await? {
+                span.record("agent.session.reattached", false);
+                self.ensure_hydrated(session_id).await?;
+                return Ok(true);
+            }
+            // Still bound to the socket this dial displaced: its actor is
+            // winding down but has not left yet. Wait for it to go, or the
+            // session would count as restored while the new connection drops
+            // its frames.
+            span.record("agent.session.displaced_connection", true);
+            self.sessions
+                .close_session(session_id)
+                .instrument(tracing::info_span!("agent.session.close_displaced"))
+                .await?;
         }
         self.reconnect(session_id).await?;
         span.record("agent.session.reattached", true);
         Ok(true)
+    }
+
+    /// Whether `session`'s live actor here rides on the connection its
+    /// runtime is connected on now, rather than one a redial displaced.
+    async fn on_current_connection(&self, session: &AgentSession) -> Result<bool> {
+        let Some(attached) = self.sessions.attached_connection(session.id) else {
+            return Ok(false);
+        };
+        let current = self
+            .runtimes
+            .bound_harness(session.bot_id)
+            .await
+            .map_err(AgentSessionError::Unknown)?
+            .and_then(|harness| self.runtimes.connection_of(harness));
+        Ok(current == Some(attached))
     }
 
     /// What a runtime's dial does with one of the sessions it listed.
@@ -332,22 +360,87 @@ where
             for context in &batch.producer_contexts {
                 genai_telemetry::propagation::link(&tracing::Span::current(), Some(context));
             }
+            let owner = match self
+                .continuing_owner(session_id, batch.action_id, &batch.notifications)
+                .await
+            {
+                Ok(owner) => owner,
+                Err(error) => {
+                    store.release(batch.lease_id).await?;
+                    return Err(error);
+                }
+            };
             let entry = QueuedEntry {
                 action_id: batch.action_id,
                 action: AgentAction::notification(batch.notifications.clone()),
-                actor: None,
+                prompter: if owner.is_some() {
+                    agent_session::domain::model::PrompterKind::Program
+                } else {
+                    agent_session::domain::model::PrompterKind::User
+                },
+                actor: owner,
                 announce: None,
                 context: None,
                 announced: None,
                 created_at: chrono::Utc::now(),
                 client: None,
-                prompter: agent_session::domain::model::PrompterKind::User,
             };
             self.notification_batches.insert(session_id, batch);
             self.queues.requeue_front(session_id, entry);
             break;
         }
         Ok(())
+    }
+
+    /// The owner a waking batch acts for: only a batch that continues their
+    /// own work
+    /// ([`continues_for_owner`](crate::domain::app_connections::continues_for_owner)),
+    /// picking up the turn that asked for those apps: the latest one, which
+    /// acted for the owner and ended offering every app's connect button.
+    /// The owner connecting an app is not their word on what a bot or
+    /// someone else asked for, so continuing anyone else's turn, or an older
+    /// button from one, acts for nobody and its calls wait for the owner.
+    /// A batch sent again after an interruption already opened its turn, so
+    /// it keeps the authority that turn was given at dispatch.
+    async fn continuing_owner(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        notifications: &[agent_runtime_protocol::domain::notification::Notification],
+    ) -> Result<Option<MacroUserIdStr<'static>>> {
+        if !crate::domain::app_connections::continues_for_owner(notifications) {
+            return Ok(None);
+        }
+        let session = self.sessions.get_session(session_id).await?;
+        let Some(owner) = session.owner_id.as_user() else {
+            return Ok(None);
+        };
+        let Some(previous) = self.sessions.turn_prompter(session_id).await? else {
+            return Ok(None);
+        };
+        if previous.action_id == action_id {
+            let resumed = previous.kind == agent_session::domain::model::PrompterKind::Program
+                && previous.acting_user() == Some(owner);
+            return Ok(resumed.then(|| owner.clone()));
+        }
+        if previous.acting_user() != Some(owner) {
+            return Ok(None);
+        }
+        let Some(agent_session::domain::action_history::RecordedAction::Finished {
+            last_text: Some(reply),
+            ..
+        }) = self
+            .sessions
+            .recorded_action(session_id, previous.action_id)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let offered = crate::domain::app_connections::connect_buttons(&reply);
+        let asked = notifications
+            .iter()
+            .all(|notification| offered.contains(&notification.subject_id));
+        Ok(asked.then(|| owner.clone()))
     }
 
     /// Attach quiet events, or recover the prior turn before dispatching this

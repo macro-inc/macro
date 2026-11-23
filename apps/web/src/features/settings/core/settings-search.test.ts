@@ -77,6 +77,29 @@ describe('individual settings search', () => {
     expect(rowStyle()).toBe(true);
     expect(rowStyle({ emailRowStyle: false })).toBe(false);
   });
+  it('finds the desktop download only where Downloads offers it', () => {
+    const desktopDownload = (options?: { desktopDownload: boolean }) =>
+      searchSettings(SETTINGS_TAB_GROUPS, 'download mac', options).some(
+        (result) => result.title === 'Download the desktop app'
+      );
+    expect(desktopDownload()).toBe(true);
+    expect(desktopDownload({ desktopDownload: false })).toBe(false);
+  });
+  it('lists the Agent pings setting only while agent notifications are on', () => {
+    const agentPings = (agentNotifications?: boolean) =>
+      searchSettings(SETTINGS_TAB_GROUPS, 'agent pings', {
+        agentNotifications,
+      }).filter((result) => result.title.startsWith('Agent pings'));
+
+    expect(agentPings(true)).toMatchObject([{ tab: 'Notifications' }]);
+    expect(agentPings(false)).toEqual([]);
+    // Other notification settings stay searchable.
+    expect(
+      searchSettings(SETTINGS_TAB_GROUPS, 'routine runs', {
+        agentNotifications: false,
+      })[0]
+    ).toMatchObject({ tab: 'Notifications' });
+  });
   it('finds the team members page for inviting people', () => {
     for (const query of ['invite', 'members', 'team members', 'teammates']) {
       expect(search(query)[0]).toMatchObject({
@@ -118,6 +141,7 @@ describe('individual settings search', () => {
     if (!billing) throw new Error('Billing tab missing');
     const groups = [
       {
+        id: 'personal',
         label: '個人',
         items: [{ ...billing, label: '請求', englishLabel: 'Billing' }],
       },

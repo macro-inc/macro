@@ -51,6 +51,11 @@ pub enum Metric {
     ClassifierUnavailable,
     /// Classifier calls it refused or answered unusably.
     ClassifierRejected,
+    /// Times Jev found TypeSafe unavailable (a rate limit, overload, timeout,
+    /// server or connection error) and the worker halved its token rate.
+    ClassifierSlowDowns,
+    /// How long a backfill or sweep call waited on the token budget (sample).
+    ClassifierBudgetWaitSeconds,
     /// Jev input tokens.
     JevInputTokens,
     /// Jev output tokens.
@@ -61,21 +66,26 @@ pub enum Metric {
     DueDateCalls,
     /// Due date asks that failed or ran out of time.
     DueDateFailures,
+    /// Due date asks the harness answered, but whose model answer cited text
+    /// the thread doesn't have, so no date was trusted; not failures.
+    DueDateRejected,
     /// Due date input tokens, cached ones included.
     DueDateInputTokens,
     /// Due date output tokens.
     DueDateOutputTokens,
     /// What due dates cost, at the stored price of the harness's model.
     DueDateCostUsd,
-    /// Inboxes whose owner is in the rollout, per look (sample).
+    /// Inboxes in the rollout (their owner or a user they are linked to has
+    /// the flag), per look (sample).
     EnrolledInboxes,
-    /// Owners whose place in the rollout a look could not read.
+    /// Inboxes whose place in the rollout a look could not read.
     EnrollmentUnknown,
     /// From an email event's publish to its thread's classification (sample).
     EventToClassifiedSeconds,
     /// How long one sweep took (sample).
     SweepSeconds,
-    /// Sweeps that failed.
+    /// Sweeps that failed, or left out an inbox whose threads could not be
+    /// read.
     SweepFailures,
     /// Sweeps the classifier stopped before they were done.
     SweepsStoppedEarly,
@@ -104,6 +114,7 @@ impl Metric {
             self,
             Self::EnrolledInboxes
                 | Self::EventToClassifiedSeconds
+                | Self::ClassifierBudgetWaitSeconds
                 | Self::SweepSeconds
                 | Self::BackfillTopFilledSeconds
                 | Self::BackfillFilledSeconds
@@ -116,6 +127,7 @@ impl Metric {
         match self {
             Self::EventToClassifiedSeconds
             | Self::SweepSeconds
+            | Self::ClassifierBudgetWaitSeconds
             | Self::BackfillTopFilledSeconds
             | Self::BackfillFilledSeconds
             | Self::StaleThreadsSeconds => Unit::Seconds,

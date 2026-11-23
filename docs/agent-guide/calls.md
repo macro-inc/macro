@@ -48,6 +48,9 @@ Native token skipping also requires the selected session to match the native cal
 The `call.join` trace records the intent, source, session ID, and outcome.
 Its `call.lookup` and `call.token` phases share the trace with the HTTP request;
 media connection also runs in that trace. No RTC tokens are recorded.
+The desktop Chat sidebar also lists active channel/DM and quick calls above
+its conversation sections; see [Chat's Live section](channels.md#live-calls-above-the-desktop-sections)
+for joining, dismissing rings, ordering, and touch behavior.
 Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
 
@@ -60,12 +63,41 @@ in a second Calls view. Old copied `/app/call/<callId>` links redirect to the Ca
 detail without losing the transcript target. Existing `/app/drive/call/<callId>`
 links still work. A failed load shows Retry.
 
+The phone floating call pill returns to the media owner's call surface, even
+when its channel is already open. Browser calls select the live `Call` tab
+without joining again; native iOS and Android calls expand their native call
+drawer. The phone pill stays hidden on its own channel, where the composer
+banner offers `Return to call`. Away from that channel, its left action fills
+the pill's inner height with equal top and bottom insets.
+
+### Playback and audio settings
+
+Open **Audio settings** with the caret beside the microphone on desktop or
+phone. The phone opens the shared drawer with microphone selection, noise
+suppression, and Speaker selection only when `HTMLMediaElement.setSinkId` is
+available. iOS Safari/WebKit does not expose that output-routing API: use the
+device's system sound controls instead. Native channel calls use their own
+Speaker/output controls in the call drawer.
+
+For per-person playback volume, use the speaker button on a remote participant's
+tile. Desktop opens the existing vertical slider; supported phone browsers open
+a horizontal slider in a drawer. Moving it changes only local playback, never
+the participant's microphone. iOS Safari ignores media-element volume writes,
+and native calls own their audio, so neither shows this browser slider. Check
+0%, an intermediate value, and 100%, plus closing/reopening and leaving the call.
+
+Call join/leave chimes are separate: **Settings → Notifications → Sounds → Call
+sounds** remains available on phones and desktop. These cues are supported in
+browser calls, not native CallKit sessions, as described below.
+
 ### Join and leave sounds
 
 Browser calls play a clear two-note ascending chime when you or another
 participant joins, and a descending chime when someone deliberately leaves.
 Both last under half a second. Joining an occupied call plays only your own
 join chime. Reconnects and recovery rejoins stay silent.
+Cues arriving within 1.5 seconds share one sound, including rapid leave/rejoin
+cycles. Suppressed announcements are remembered, not queued for later playback.
 
 **Settings → Notifications → Sounds → Call sounds** is on by default, independent
 of the notification-sounds switch. Join and Leave preview buttons play the fixed
@@ -84,6 +116,21 @@ are best-effort: crashes, abrupt tab closure, legacy clients, and native CallKit
 sessions do not announce departures or joins. Native channel calls need a bridge
 extension before they can send or play these cues. Do not infer a leave from a
 missing participant, because recovery uses the same RTC removal events.
+
+Incoming channel-call ringing keeps its original 30-second deadline when duplicate
+start events arrive. Expiry, answer, decline, and end resolutions silence every
+tab and prevent delayed starts from restarting that ring, including answers on
+another device. Resolved calls also reject late system notifications, including
+notifications waiting for a caller name. Late starts cannot restore an ended call
+to the active-call cache; answered or declined calls can still remain active.
+Ring coordination owns the deadline and joined-state checks;
+the audio loop only repeats the phrase while that ownership remains active.
+`call.sound.play` traces record the cue kind and count; incoming rings also carry
+the opaque call ID, a scheduled outcome, and the audio-context state. Scheduling
+a ring does not prove audible playback, especially while the context is suspended.
+Remote participation playback nests `call.sound.play` and
+`audio.cue.play` under the presence receive span. The audio span distinguishes
+scheduled playback from audio that was not ready.
 
 To verify, join one browser call from two participants. Check each self join,
 the first participant hearing the second join, and both sides of a deliberate
@@ -200,8 +247,10 @@ contain only the call ID and tab kind, never transcript or message contents.
 
 ### Imported Granola meetings
 
-Adding Granola in **Settings → Agent connections** (Pipedream Connect, Granola
-Business or Enterprise API key) is the only setup; there are no sync controls.
+Adding Granola in **Settings → Integrations** (Granola Business or Enterprise
+API key) is the only setup; there are no sync controls. Sync needs a
+connection that provides Granola's API; one that does not (Macro Connect holds
+Granola as tools only) reads **Connected · Meetings don't sync**.
 Within about 30 seconds the backend registers a Granola webhook at the widest
 scope the key allows, and removing or disabling the connection stops sync. Notes
 whose first summary is generated, edited, or shared after that are imported as
@@ -253,9 +302,10 @@ rather than collapsing to a thin row. Channel and standalone
 calls navigate and leave through their existing session owner; standalone calls
 do not depend on the quick-call feed loading first.
 
-The desktop Chat sidebar has no separate Live section. Live calls are marked
-on their conversation rows with a waveform and elapsed time. Your current call
-uses the waveform as its channel icon and shows live participant avatars.
+The desktop Chat sidebar also marks live calls on their conversation rows
+with a waveform and elapsed time, in addition to its separate Live section.
+Your current call uses the waveform as its channel icon and shows live
+participant avatars.
 Ringing conversations keep their existing Answer and Decline actions; these
 use the real incoming-call signal rather than treating every active call as ringing.
 

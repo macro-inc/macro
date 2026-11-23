@@ -27,7 +27,7 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SplitPanel } from '../components/SplitPanel';
-import { SplitLayoutContext } from '../context';
+import { SplitLayoutContext, SplitPanelContext } from '../context';
 import { createSplitLayout, type SplitManager } from '../layoutManager';
 import { createAppPanePolicy } from '../split-router/app-pane-policy';
 import {
@@ -132,6 +132,15 @@ function Customers() {
   return <p data-testid="crm">CRM collection</p>;
 }
 
+function Chat() {
+  const navigation = useContext(SplitPanelContext)?.navigationCollapsed;
+  return (
+    <p data-testid="chat">
+      {navigation?.[0]() ? 'Navigation hidden' : 'Navigation shown'}
+    </p>
+  );
+}
+
 function setup(url: string, retainInitialMount = false) {
   let router!: ReturnType<typeof createSplitRouter>;
   let manager!: SplitManager;
@@ -166,7 +175,7 @@ function setup(url: string, retainInitialMount = false) {
           children: [
             { ...companiesRoute, component: Customers },
             { ...callsRoute, component: Calls },
-            { ...channelsSplitRoute, component: () => <p>Chat</p> },
+            { ...channelsSplitRoute, component: Chat },
           ],
         },
       ],
@@ -278,5 +287,18 @@ describe('collection context across pane navigation', () => {
     expect(screen.getByTestId('calls')).toBeTruthy();
     expect(manager.activeSplitId()).toBe(manager.splits()[1]!.id);
     expect(collection.mounts).toBe(1);
+  });
+});
+
+describe('split navigation', () => {
+  it('opens a new split with its navigation shown', () => {
+    const { router, manager } = setup('/companies');
+    manager.openWithSplit(
+      { type: 'component', id: 'channels' },
+      { preferNewSplit: true, allowDuplicate: true, resume: false }
+    );
+
+    expect(router.panes()).toHaveLength(2);
+    expect(screen.getByTestId('chat').textContent).toBe('Navigation shown');
   });
 });

@@ -383,8 +383,15 @@ impl SoupRepo for PgSoupRepo {
         &self,
         company_ids: &'a [uuid::Uuid],
         contact_ids: &'a [uuid::Uuid],
+        custom_task_properties: bool,
     ) -> Result<Vec<CrmPropertyEdge>, Self::Err> {
-        crm_association::property_edges(&self.pool.0, company_ids, contact_ids).await
+        crm_association::property_edges(
+            &self.pool.0,
+            company_ids,
+            contact_ids,
+            custom_task_properties,
+        )
+        .await
     }
 
     async fn touched_soup_page<'a>(

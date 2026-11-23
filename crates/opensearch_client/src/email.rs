@@ -2,7 +2,11 @@ use crate::{
     OpensearchClient, Result, delete,
     error::OpensearchClientError,
     retry::resend_on_lost_connection,
-    upsert::{self, BulkUpsertResult, email::UpsertEmailArgs, properties::IndexedProperty},
+    upsert::{
+        self, BulkUpsertResult,
+        email::UpsertEmailArgs,
+        properties::{IndexedProperty, PropertyUpdate},
+    },
 };
 
 impl OpensearchClient {
@@ -35,7 +39,7 @@ impl OpensearchClient {
         &self,
         thread_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::email::update_email_thread_properties(&self.inner, thread_id, properties)
         })

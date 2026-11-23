@@ -39,11 +39,7 @@ pub(crate) struct InboxSyncEffects {
     >,
     pub invitation_extractor: crate::composition::workers::EmailInvitationExtractor,
     pub db: PgPool,
-    pub contacts_ingress: std::sync::Arc<
-        contacts::domain::service::SqsContactsIngress<
-            contacts::outbound::ingress::SqsContactsQueue,
-        >,
-    >,
+    pub contacts_ingress: std::sync::Arc<crate::composition::ContactsProducer>,
     pub email_api: GmailApi,
     pub notification_ingress_service:
         std::sync::Arc<crate::composition::workers::NotificationIngressType>,

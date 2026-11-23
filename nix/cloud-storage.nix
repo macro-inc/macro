@@ -73,14 +73,15 @@
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
-      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `static_assets/schema.graphql` that `cache-schema`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and timer shims;
+      # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
+      # `crates/rate_limit` embeds;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua)$" path != null;
       # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
@@ -539,6 +540,11 @@
           serviceName = "notification-service";
           packageName = "notification_service";
           binaries = [ "notification_service" ];
+        }
+        {
+          serviceName = "search-freshness-probe";
+          packageName = "search_freshness_probe";
+          binaries = [ "search_freshness_probe" ];
         }
         {
           serviceName = "search-processing-service";

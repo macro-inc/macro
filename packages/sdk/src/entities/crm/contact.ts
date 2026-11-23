@@ -2,7 +2,7 @@ import type { GetContactResponses } from '../../../generated/storage/types.gen';
 import type { RichMessage } from '../../mentions';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import { FavoritableEntity } from '../entity';
+import { PropertiedEntity } from '../entity';
 import {
   DiscussionComment,
   type DiscussionParent,
@@ -20,7 +20,7 @@ import { Company } from './company';
 type ContactDetail = GetContactResponses[200];
 
 /** A CRM contact: a person observed interacting with the team. */
-export class Contact extends FavoritableEntity<ContactDetail> {
+export class Contact extends PropertiedEntity<ContactDetail> {
   /**
    * A shared message thread scoped to this resource.
    *
@@ -55,6 +55,13 @@ export class Contact extends FavoritableEntity<ContactDetail> {
 
   /** Favorites identify CRM contacts as `crm_contact`. */
   readonly entityType = 'crm_contact';
+
+  /**
+   * The properties service identifies CRM contacts as `CONTACT`. A contact
+   * takes the team's custom properties, such as a phone number or a LinkedIn
+   * link; Stage, Owner and Revenue are company-only.
+   */
+  protected readonly propertyEntityType = 'CONTACT';
 
   protected async fetch(): Promise<ContactDetail> {
     return unwrap(
@@ -217,8 +224,9 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /**
-   * Link or switch the company of a contact whose primary address is on a
-   * personal provider. Rejected for a contact on its company's domain.
+   * Link a contact without a company, or switch the company of a contact
+   * whose primary address is on a personal provider. Rejected for a contact
+   * on its company's domain.
    *
    * @write
    * @idempotent

@@ -3,11 +3,17 @@ use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
+mod claim_order;
 mod crm_cleanup;
 mod import_pacing;
 mod import_reads;
 mod live_pass;
+mod lock_timeouts;
+mod no_mailbox;
+mod notified_reads;
 mod outlook_import;
+mod outlook_subscriptions;
+mod projection_retries;
 mod retries;
 mod unstorable_values;
 
@@ -707,6 +713,85 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db: PgPool) {
+    use email_api_client::domain::models::MailboxState;
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'folder_catalog','mail')",Uuid::new_v4(),link).execute(&db).await.unwrap();
+    let mut folders = vec![
+        MailFolder {
+            id: ProviderId::new("trash").unwrap(),
+            parent_id: None,
+            name: "Trash".into(),
+            role: FolderRole::Trash,
+            has_children: true,
+            total_items: None,
+        },
+        MailFolder {
+            id: ProviderId::new("folder").unwrap(),
+            parent_id: None,
+            name: "Invoices".into(),
+            role: FolderRole::Other,
+            has_children: false,
+            total_items: None,
+        },
+    ];
+    let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+    repo.commit_catalog(&catalog, &folders).await.unwrap();
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    repo.ingest(
+        &initial,
+        snapshot(link, "stored", MailboxState::default(), "etag"),
+    )
+    .await
+    .unwrap();
+    repo.complete_message(&initial).await.unwrap();
+    // A re-import queues the stored message for a recheck as import work.
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+
+    folders[1].parent_id = Some(ProviderId::new("trash").unwrap());
+    sqlx::query!("UPDATE email_sync_streams SET next_run_at=now() WHERE link_id=$1 AND kind='folder_catalog'",link).execute(&db).await.unwrap();
+    let catalog = repo.claim_catalog(Uuid::new_v4()).await.unwrap().unwrap();
+    repo.commit_catalog(&catalog, &folders).await.unwrap();
+
+    // The move is a live change: a read Graph answers 404 right after it is
+    // read again rather than settling the message as gone.
+    let row = sqlx::query!("SELECT revision,is_import FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='stored'",link).fetch_one(&db).await.unwrap();
+    assert_eq!(row.revision, 2);
+    assert!(!row.is_import);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_404_read_before_a_newer_change_leaves_the_message_for_that_change(db: PgPool) {
+    use email_api_client::domain::models::MailboxState;
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+    let initial = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+    repo.ingest(
+        &initial,
+        snapshot(link, "stored", MailboxState::default(), "etag"),
+    )
+    .await
+    .unwrap();
+    repo.complete_message(&initial).await.unwrap();
+    sqlx::query!("INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,1,'stored',true)",link).execute(&db).await.unwrap();
+    let recheck = repo.claim_message(Uuid::new_v4()).await.unwrap().unwrap();
+
+    // While Graph answers the recheck's read with 404, a live change to the
+    // message is queued on the same row.
+    sqlx::query!("UPDATE email_message_reconciliation SET revision = revision + 1,is_import = false WHERE link_id=$1 AND provider_id='stored'",link).execute(&db).await.unwrap();
+    repo.absent(&recheck).await.unwrap();
+    repo.complete_message(&recheck).await.unwrap();
+
+    let missing = sqlx::query_scalar!("SELECT COALESCE((mailbox_state->>'provider_missing')::boolean,false) AS \"missing!\" FROM email_messages WHERE link_id=$1 AND provider_id='stored'",link).fetch_one(&db).await.unwrap();
+    assert!(!missing, "the stale 404 leaves the message as it was");
+    let row = sqlx::query!("SELECT revision,lease_id,available_at <= now() AS \"due!\" FROM email_message_reconciliation WHERE link_id=$1 AND provider_id='stored'",link).fetch_one(&db).await.unwrap();
+    assert_eq!(row.revision, recheck.revision + 1);
+    assert!(row.lease_id.is_none());
+    assert!(row.due, "the newer change is read next");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn completed_import_rechecks_attachments_after_later_sent_correspondence(db: PgPool) {
     use email_api_client::domain::models::MailboxState;
     use models_email::service::address::ContactInfo;
@@ -783,7 +868,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
     assert_eq!(eligible.len(), 1);
     assert_eq!(
         queued[0].payload["message_id"],
-        eligible[0].message_db_id.to_string()
+        eligible[0].metadata.message_db_id.to_string()
     );
 }
 

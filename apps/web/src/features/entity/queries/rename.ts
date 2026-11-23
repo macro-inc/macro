@@ -12,7 +12,7 @@ import {
 } from '@queries/auth/account-scope';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import { callKeys } from '@queries/call/keys';
-import { channelKeys } from '@queries/channel/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { historyKeys } from '@queries/history/keys';
@@ -206,6 +206,10 @@ async function performGraphqlRenames(
     }
     if (disposition?.kind === 'permanently-failed') throw disposition.error;
     if (result.error) throw result.error;
+    if (!result.data && disposition?.kind === 'committed') {
+      // Preserve accepted edits until fresh reads can establish each result.
+      return operations.map(() => ({ success: true, queued: true }));
+    }
     if (!result.data) throw new Error('GraphQL rename returned no data');
     return result.data.renameEntities.results.map((result) => ({
       success: result.__typename === 'GraphqlMutationSuccess',
@@ -235,12 +239,11 @@ function observeRenameSettlement(
       queryClient.invalidateQueries({ queryKey: historyKeys.list.queryKey }),
       queryClient.invalidateQueries({ queryKey: soupKeys._def }),
     ];
-    if (operations.some(({ entity }) => entity.type === 'channel'))
-      requests.push(
-        queryClient.invalidateQueries({
-          queryKey: channelKeys.listChannels(account.userId).queryKey,
-        })
-      );
+    const channelIds = operations.flatMap(({ entity }) =>
+      entity.type === 'channel' ? [entity.id] : []
+    );
+    if (channelIds.length > 0)
+      requests.push(refreshChannelDirectory(channelIds));
     for (const { entity } of operations) {
       if (entity.type === 'call')
         requests.push(

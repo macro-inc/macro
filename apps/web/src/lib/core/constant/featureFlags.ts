@@ -141,17 +141,6 @@ export const enableEntityAppearance = defineFlag({
   default: onInDev,
 });
 
-/**
- * Connect apps Macro Connect serves through it instead of Pipedream. The
- * backend reads the same PostHog key and decides per app; this side only
- * reserves the consent popup inside the click. Off in dev too: dev has no
- * Connect customer key until one is added to Doppler.
- */
-export const macroConnect = defineFlag({
-  key: 'macro-connect',
-  env: 'ENABLE_MACRO_CONNECT',
-});
-
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -416,14 +405,6 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   default: false,
 }).enabled;
 
-/** Desktop download settings rollout on web; native desktop always shows it. */
-export const desktopApp = defineFlag({ key: 'desktop-app' });
-
-export const ENABLE_APP_STORE_QR_CODE = defineFlag({
-  env: 'ENABLE_APP_STORE_QR_CODE',
-  default: true,
-}).enabled;
-
 export const ENABLE_PR_DISCUSSION_INPUT = defineFlag({
   env: 'ENABLE_PR_DISCUSSION_INPUT',
   default: false,
@@ -474,10 +455,39 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// Stores each contact's `GraphqlContact.lists` in the local cache. Off in dev
+// too: a server without the field refuses any read that selects it, so this
+// waits for the server to ship it. Override with VITE_ENABLE_CONTACT_LISTS.
+export const enableContactLists = defineFlag({
+  key: 'enable-contact-lists',
+  env: 'ENABLE_CONTACT_LISTS',
+});
+
+// In a tab without the local cache, reads the people typed text names from the
+// whole directory (`GraphqlUser.contactsNamedBy`) instead of the exact-name
+// scan of the first 2,000 contacts. Off in dev too: a server without the field
+// refuses any read that selects it, so this waits for the server to ship it.
+// Override with VITE_ENABLE_NAMED_CONTACT_SEARCH.
+export const enableNamedContactSearch = defineFlag({
+  key: 'enable-named-contact-search',
+  env: 'ENABLE_NAMED_CONTACT_SEARCH',
+});
+
+// No dev override: the server requires this same remote flag before accepting writes.
+export const enableCrmMemberAccessChanges = defineFlag({
+  key: 'enable-crm-member-access-changes',
+});
+
 // Stay off until all ingestion and Team email reader binaries support exceptions.
 // No dev default or local override: the server independently requires this flag.
 export const enableCrmThreadExclusions = defineFlag({
   key: 'enable-crm-thread-exclusions',
+});
+
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
 });
 
 // Company collections are paused until ready; preserve stored lists while off.
@@ -491,6 +501,34 @@ export const enableCrmLists = defineFlag({
 export const enableTaskSourceProperty = defineFlag({
   key: 'enable-task-source-property',
   env: 'ENABLE_TASK_SOURCE_PROPERTY',
+  default: onInDev,
+});
+
+/**
+ * Start Date on tasks and projects: the dates pill and picker, the details
+ * row, the composer, and the range in list cells and board cards.
+ */
+export const enableTaskStartDate = defineFlag({
+  key: 'enable-task-start-date',
+  env: 'ENABLE_TASK_START_DATE',
+  default: onInDev,
+});
+
+/**
+ * Time tracking on tasks: the Time pill and its entries, the running timer,
+ * and Time logged wherever task properties show. The backend refuses time
+ * writes under the same key.
+ */
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
+  default: onInDev,
+});
+
+/** Task-composer template selection, authoring, and saved-draft recovery. */
+export const enableTaskTemplates = defineFlag({
+  key: 'enable-task-templates',
+  env: 'ENABLE_TASK_TEMPLATES',
   default: onInDev,
 });
 
@@ -671,11 +709,31 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
 // Opt-in vertical resizing for desktop Chat sections. Keep it off in development
 // too so sections use their natural height unless PostHog or a local override enables it.
 export const enableChatSidebarSectionResize = defineFlag({
   key: 'enable-chat-sidebar-section-resize',
   env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
+});
+
+// Desktop channel gutter: a Mark done check beside each notification stack,
+// and a bell toggle opening a list of the channel's not-done or unread stacks.
+// On in development; deployed environments defer to PostHog (Macro staff
+// first).
+export const enableChannelNotificationGutter = defineFlag({
+  key: 'enable-channel-notification-gutter',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_GUTTER',
+  default: onInDev,
 });
 
 // Manual and smart channel labels, including their queries and drag/drop UI.
@@ -726,6 +784,19 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Notifications a person, agent or script writes with
+ * `macro.notifications.send`: their "Agent pings" setting. The notification
+ * service refuses to send while the same flag is off for the sender. On only
+ * on a local stack, where that service is on for everyone; a deployment asks
+ * PostHog on both sides. Override with VITE_ENABLE_AGENT_NOTIFICATIONS.
+ */
+export const enableAgentNotifications = defineFlag({
+  key: 'enable-agent-notifications',
+  env: 'ENABLE_AGENT_NOTIFICATIONS',
+  default: LOCAL_ONLY || undefined,
+});
+
 // The unified notifications view: the /notifications route (redirects to Home
 // when off), the rail bell, its go-to hotkey, and the mobile dock bell's
 // target. PostHog-gated with a dev-mode default; override with
@@ -734,6 +805,24 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
+});
+
+// New Home: Home with Recent and Notifications tabs, desktop only. Replaces
+// the rail's Notifications entry and takes `g h`; old Home stays beside it
+// unless `disable-old-home` is also on. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_NEW_HOME.
+export const enableNewHome = defineFlag({
+  key: 'enable-new-home',
+  env: 'ENABLE_NEW_HOME',
+  default: onInDev,
+});
+
+// With `enable-new-home` on, hide old Home so New Home takes its place and
+// `/home`. Off in dev, so dev keeps both Homes side by side to compare;
+// override with VITE_DISABLE_OLD_HOME.
+export const disableOldHome = defineFlag({
+  key: 'disable-old-home',
+  env: 'DISABLE_OLD_HOME',
 });
 
 // Keep navigation numbers off in every environment while unread counts are

@@ -59,8 +59,9 @@ method signature or hint tag changes the snapshots: review the diff, then
   (`packages/code-mode-sdk/scripts/catalog.ts`); a tool's description starts
   with its entity's `@routing` sentence. `GROUP_NAMES` in the generator
   renames directories whose name says nothing as a tool name (`foreign` is
-  `linked_items`) and gives a few non-code-mode directories a group of their
-  own; anything left over lands in `core`, which should stay empty.
+  `linked_items`), maps task templates and time tracking to `tasks`, and
+  gives a few non-code-mode directories a group of their own; anything left
+  over lands in `core`, which should stay empty.
 - Descriptions are written for code mode: the generator rewrites
   `` `macro.web` `` to `` the `web_*` tools ``, `` `macro.web.search` `` to the
   operation and its tool, and drops `{@link}` markup. Write TSDoc for both

@@ -305,7 +305,7 @@ async fn daemon_restart_effect_is_ignored_after_reconnection() {
             .state
             .macrod_misses = crate::domain::lifecycle::MAX_MACROD_MISSES;
         if reconnected {
-            operator.macrod_connected(HARNESS).await.unwrap();
+            operator.macrod_connected(HARNESS, true).await.unwrap();
         }
         operator.fleet.calls.lock().unwrap().clear();
         operator.repo.effects.lock().unwrap().push(PendingEffect {

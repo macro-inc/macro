@@ -105,8 +105,7 @@ where
         let previews = self
             .email_repo
             .previews_for_view_cursor(query, macro_id.copied().into_owned())
-            .await
-            .map_err(anyhow::Error::from)?;
+            .await?;
 
         let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id).collect();
 

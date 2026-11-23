@@ -1,4 +1,4 @@
-# Saved views: reusable storage, Tasks and Email
+# Saved views: reusable storage, Tasks, Projects and Email
 
 **Status:** Approved design, implemented on the task-saved-views branch. The
 starting point below describes the code before this change; rollout requires
@@ -22,10 +22,10 @@ main Tasks screen.
 | Relative people | “Me” means the current viewer; explicitly selected people remain fixed. |
 | Contents | Filters, selected layout, grouping, and ordered sorting, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
-| Navigation | Leaving discards temporary edits without a confirmation prompt. |
-| Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
+| Navigation | Existing saved-view edits reset on leaving. Dirty new drafts ask Discard or Keep editing; clean new drafts leave without prompting. |
+| Creation | The final Create view row below built-in and saved views starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
 | Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
-| Mobile | Shared picker pill after Filters and before built-in tabs; its drawer browses/manages views, while the filter drawer owns save/create/reset actions. |
+| Mobile | Shared Tasks sidebar opened by the hamburger; the filter drawer owns save/create/reset actions. |
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
 | Owner departure | Team sharing stops while the owner is absent and resumes if they rejoin the shared team. |
 
@@ -92,31 +92,34 @@ Keep separate create, update, and delete mutation hooks in `features/saved-views
 Keep `useSavedViews` (paginated list) and `useSavedView` (single definition)
 independent and compose them in the host. Read and mutation hooks resolve the
 shared GraphQL client reactively; callers supply feature inputs, not clients.
-The Task draft primitive receives only the detail source and owns confirmed
-filter/layout/grouping/sort snapshots, dirty state, diagnostics, and revision-aware
-reconciliation. The Tasks host owns selection, navigation,
-and account/task lifecycle. Task actions capture the host request scope before
+The shared draft primitive owns confirmed definition snapshots, dirty state,
+retained edits, and revision-aware reconciliation. Task and Project adapters own
+their codecs, defaults, diagnostics, and application to feature settings.
+Reset discards local edits and applies the latest authorized definition, including
+revisions received while editing. Saves use the revision of the displayed
+baseline, not a newer revision whose settings have not been applied.
+The Tasks host owns navigation and account/task lifecycle. Task actions capture the host request scope before
 writing or reloading, reject stale completions, and explicitly select created
 views. Mutation dialogs receive a refresh callback, not both query sources.
 Compose the list through compound components and reuse styled menu items across
-its context and overflow menus. The mobile picker shows rows without a duplicate
-section heading or general create button. The compact sidebar and picker empty
-state show the heading “Your go-to views”, the muted description “Save your setup
-for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without
-a separate illustration. A subtly bordered, rounded container uses 12px padding,
-inherits the surrounding background, and has no shadow. The sidebar header's
-icon-only plus remains available in every section state, including when the
-empty-state button is visible. The empty-state button starts the existing draft
-flow after closing the picker. Changes from the
-built-in settings expose creation in the filter drawer's overlay banner above the
-footer and existing-view save/reset actions at its footer's right.
-Starting a new view from the desktop sidebar expands the section and shows one
-local, selected New view row labeled Draft in the sidebar and mobile picker.
-Confirmed creation replaces the draft with the named record, including while the
-list refresh is pending. Canceling the draft or leaving its view removes the row;
-closing only the naming dialog retains it. Draft rows never enter the query cache.
-Open the shared create/edit dialog or delete confirmation through the imperative
-dialog system; dialogs own mutation hooks.
+desktop menus and touch sheets. Tasks and Projects append saved-view rows directly
+below their built-in views, with a final Create view row even when no saved views
+exist or reads are loading or failed. No separate saved-view heading or empty-state
+card interrupts either list. Isolate the Create view keyboard scope from list
+shortcuts. Changes from the built-in settings expose creation in the filter
+drawer's overlay banner above the footer and existing-view save/reset actions at
+its footer's right. Every creation entry point starts a fresh, selected draft at
+the end of its consumer's list, including capture and duplication. The shared
+creation primitive owns identity and append ordering, separate from confirmed
+revision reconciliation. Saving replaces that row with the confirmed record;
+discard removes it. Closing only the naming dialog retains the draft and its
+name, sharing, and settings. Draft rows never enter the query cache.
+Use the split router's before-leave handler and the existing Discard/Keep editing
+confirmation before in-app navigation from a dirty new draft, including item
+navigation and pane/tab closure. Browser close or
+reload uses native beforeunload confirmation. Existing saved views and clean new
+drafts do not prompt. Mutation dialogs and the route-owned leave host reuse the
+same create mutation and draft identity.
 Edit combines the name and team-sharing checkbox in the same responsive form.
 Edit and delete dialog titles identify the saved view by name, wrapping long names.
 Keep sharing guidance in the adjacent info control, available on hover, keyboard
@@ -146,6 +149,25 @@ compiled Soup AST. A compiled AST bakes in the current user, requires reverse
 parsing to restore editable controls, and couples persisted definitions to query
 transport details. Reuse the existing compiler at execution time instead.
 
+### Project definition v1
+
+Projects use `kind: "projects"`, `version: 1`, a viewer-relative `scope` (`all`,
+`assigned-to-me`, or `created-by-me`), and `settings` containing layout, status,
+priority, assigned-to-me refinement, due-date bounds, sort, and grouping. The
+existing GraphQL saved-view API accepts this consumer kind without backend or
+schema changes. Project views reuse shared queries, dialogs, menu/list components,
+and draft reconciliation rather than creating another persistence API.
+
+Project views appear directly below the built-in project scopes in the Tasks
+sidebar's Projects section, ending with Create view. The same sidebar opens from
+the touch hamburger button; Projects has no separate dock destination, header
+PillTabs, or saved-view selector.
+Search and filter actions sit on the right of the header. Search and scroll stay local, temporary
+settings stay out of entry snapshots, and phone List fallback preserves stored
+Gantt layout. Unsupported project definitions display an error instead of quietly
+broadening the result set. Sharing controls definition discovery only; every
+project read retains its existing authorization.
+
 ### Task definition v1
 
 The proposed shape below uses explanatory UUID placeholders, not real IDs:
@@ -160,6 +182,7 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   "filters": {
     "statusOptionIds": ["<in-progress-option-uuid>"],
     "priorityOptionIds": [],
+    "projectIds": ["<project-uuid>"],
     "assignees": [{ "type": "viewer" }],
     "creators": [{ "type": "user", "id": "macro|example@example.com" }],
     "tags": [{
@@ -181,6 +204,9 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   with AND. An empty facet adds no restriction.
 - Persist stable status and priority option IDs, not display labels. Persist
   both tag IDs so inaccessible or deleted tag metadata cannot erase a clause.
+- Persist Project selections as optional `projectIds`, never project names. Missing
+  or empty `projectIds` adds no restriction, preserving existing v1 definitions.
+  Unavailable project metadata does not remove a selected ID or its predicate.
 - Capture the actual open-status selection when present. Do not depend on
   whatever default statuses a future client chooses.
 - Capturing My Tasks with an additional assignee uses normal OR matching: tasks
@@ -232,6 +258,10 @@ field. Do not rely on them for schema compatibility. Before enabling a breaking
 format or new settings for already-shipped clients without this write guard,
 require a backend write-version check or update those clients first; the generic
 backend currently stores opaque JSON and does not enforce reader capabilities.
+
+## Appearance
+
+Saved definitions share the entity-appearance icon and color contract, stored outside their consumer-owned filter configuration. Only the owner can change appearance. Everyone who can read a shared definition sees its appearance, including when `enableEntityAppearance` is off; that flag gates editing only. Without an override, rows and breadcrumbs retain the bookmark default. Sidebar and header action menus reuse the desktop embedded picker and touch sheet. Each selection saves immediately without changing filters, the configuration revision, or content timestamps. Creation accepts optional initial appearance so duplication copies it atomically; blank creation keeps the defaults.
 
 ## Ownership, sharing, and lifecycle
 
@@ -365,8 +395,9 @@ control primitives.
 The desktop main pane displays the selected view's bookmark icon before its name
 and its unframed ghost overflow button immediately after it, plus the normal Task
 controls.
-Provide matching sidebar context/overflow and selected-view overflow menus with
-Edit, Duplicate, Copy link, and confirmed Delete.
+Provide matching Task and Project sidebar context/overflow and selected-view
+menus with Rename, Duplicate, and confirmed Delete. Their row overflow trigger
+is a 24px ghost circle; set its dropdown size and variant explicitly.
 Wrap menu items in the existing padded groups. Non-owners get only actions they
 can perform; backend enforcement remains authoritative. Edit updates the name
 and sharing together, preserving temporary filters, layout, grouping, and sort without saving
@@ -385,8 +416,8 @@ not mistaken for the visible search results.
   restrictions and the normal open-status filters. Nothing is persisted until
   Save view succeeds.
 - Reuse the Task filter controls to configure it. Saving prefills the name with
-  New view, which can be edited, and offers optional team sharing. Cancel restores
-  normal navigation without persistence.
+  New view and offers optional team sharing. Closing the naming dialog retains
+  its draft; Discard removes it, and leaving a dirty new draft asks first.
 - Opening a saved view replaces the prior filter scope rather than intersecting
   with the previously selected built-in tab. Clear unrelated text search.
 - Changes show Save changes and Reset for the owner. All viewers can Duplicate
@@ -395,8 +426,8 @@ not mistaken for the visible search results.
   duplicating another sidebar view uses that view's saved definition. Other viewers cannot overwrite
   the shared definition.
 - Only a confirmed write updates the saved baseline. Failures keep the draft and
-  its inputs. Leaving the view discards temporary settings, including when a
-  background save fails after navigation.
+  its inputs. Leaving an existing saved view discards temporary settings; leaving
+  a dirty new view waits for Discard or Keep editing.
 - Task-detail navigation and its return breadcrumb retain the originating saved
   view identity, but do not persist an unsaved filter draft. Scope async results
   to the account, selected view, and revision before installing them. A confirmed
@@ -404,11 +435,10 @@ not mistaken for the visible search results.
 
 ### Mobile
 
-Tasks has navigation pills and a filter drawer, not a mobile sidebar. The shared
-`MobileDrawer` picker shows the named list and active saved-view name without a
-duplicate section heading or `+` button. Keep the active name in the picker pill
-without repeating a title/menu or action row below the tabs. Preserve built-in
-navigation and existing mobile list-only behavior.
+Tasks and Projects share the sidebar opened by the hamburger button on touch.
+Saved views follow their consumer's built-in views, with Create view last.
+Neither collection adds a saved-view picker or project tabs to the
+header. Search and filters stay on the right, and mobile retains its list fallback.
 
 Show a filled Save view button with a leading bookmark icon in a borderless,
 edge-to-edge info banner overlaying filter content immediately above the footer
@@ -422,11 +452,11 @@ at the footer's right, opposite Clear all, while settings are dirty. Keep these
 actions available when all filters are cleared or only sorting changes. Preserve
 the stored desktop layout.
 
-Provide management through each saved-view row's visible overflow button in the
-picker. Use existing dialog/drawer conventions for naming, sharing, conflicts,
-and delete confirmation. Keep row menus inside the picker's portal scope for
-keyboard access. Close the picker and restore its trigger focus before opening
-a management dialog; discard queued actions when the account changes. Saving
+Provide management through long-press options sheets on touch and hover/focus
+overflow buttons or context menus on desktop. Reuse the same permission-aware
+actions and existing dialogs for naming, sharing, conflicts, and deletion.
+Finish sheet closure before opening dialogs, retain focus return, and discard
+queued actions when the account changes. Saving
 from the filter drawer closes it before opening the name dialog. Cancel or Escape
 reopens the current filters only if the navigation scope is unchanged; a confirmed
 creation selects the new view without reopening the drawer. No hover-only controls

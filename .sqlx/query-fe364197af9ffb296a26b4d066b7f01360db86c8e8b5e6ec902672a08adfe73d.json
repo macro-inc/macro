@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_mailbox_drafts SET state = 'pending', error_code = NULL, available_at = now(), updated_at = now()\n                     WHERE link_id = $1 AND message_id = $2 AND state = 'failed' AND error_code = 'send_rejected' AND NOT delete_requested",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe364197af9ffb296a26b4d066b7f01360db86c8e8b5e6ec902672a08adfe73d"
+}

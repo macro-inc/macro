@@ -308,12 +308,13 @@ async fn test_delete_draft_message_rejects_foreign_link_scope(
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
 async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool);
+    let repo = EmailPgRepo::new(pool.clone());
 
     let msg1 = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
     let thread1 = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let own_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let alt_link = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let alt_thread = Uuid::parse_str("cccccccc-0000-0000-0000-0000000000c4")?;
     let moved_draft = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
 
     // The reply draft moved to the alt inbox is found, but the same-thread draft
@@ -338,6 +339,71 @@ async fn test_cross_inbox_reply_drafts(pool: Pool<Postgres>) -> anyhow::Result<(
         "same-thread drafts and inaccessible inboxes must be excluded"
     );
 
+    sqlx::query!(
+        "UPDATE email_messages SET provider_id = 'outlook-moved-draft' WHERE id = $1",
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+
+    assert!(
+        repo.cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+            .await?
+            .is_empty(),
+        "a provider draft without a Macro draft record is excluded"
+    );
+
+    // Outlook binds the same Macro message and thread when it creates the copy.
+    sqlx::query!(
+        "UPDATE email_threads SET provider_id = 'outlook-moved-thread' WHERE id = $1",
+        alt_thread,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_mailbox_drafts (message_id, link_id, generation, actor_id,
+                                          desired_content, provider_id, state)
+        SELECT m.id, m.link_id, l.sync_generation, l.macro_id, '{}', m.provider_id, 'synced'
+        FROM email_messages m JOIN email_links l ON l.id = m.link_id
+        WHERE m.id = $1
+        "#,
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+
+    let found = repo
+        .cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+        .await?;
+    assert_eq!(found.len(), 1, "show the moved draft once after sync");
+    assert_eq!(found[0].db_id, moved_draft);
+
+    let native = repo
+        .messages_by_thread_id_paginated(alt_thread, 0, 20)
+        .await?;
+    assert_eq!(native.len(), 1);
+    assert_eq!(native[0].db_id, moved_draft);
+    let additional = repo
+        .cross_inbox_reply_drafts(&[msg1], &[alt_link], alt_thread)
+        .await?;
+    assert!(
+        additional.is_empty(),
+        "the draft is already in its own thread"
+    );
+
+    sqlx::query!(
+        "UPDATE email_mailbox_drafts SET delete_requested = TRUE WHERE message_id = $1",
+        moved_draft,
+    )
+    .execute(&pool)
+    .await?;
+    assert!(
+        repo.cross_inbox_reply_drafts(&[msg1], &[own_link, alt_link], thread1)
+            .await?
+            .is_empty(),
+        "a provider-backed draft pending deletion is excluded"
+    );
     Ok(())
 }
 

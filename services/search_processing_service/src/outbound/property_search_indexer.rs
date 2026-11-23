@@ -28,6 +28,7 @@ impl PropertyBackfillIndexer for DirectPropertyBackfillIndexer {
     async fn reindex(&self, entity_id: &str, entity_type: EntityType) -> Result<(), BackfillError> {
         process_entity_property_update(&self.opensearch_client, &self.db, entity_id, entity_type)
             .await
+            .map(|_refresh| ())
             .map_err(BackfillError::Reindex)
     }
 }

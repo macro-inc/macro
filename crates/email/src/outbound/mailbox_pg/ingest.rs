@@ -36,7 +36,7 @@ impl MailboxIngest for PgMailboxSync {
             )
             .await
             .map_err(wrapped_db_error)?;
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let active = sqlx::query!(r#"
             SELECT id FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3
                 AND is_sync_active FOR UPDATE
@@ -295,19 +295,35 @@ impl MailboxIngest for PgMailboxSync {
         tx.commit().await.map_err(db_error)
     }
 
+    async fn stored(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        sqlx::query_scalar!(
+            r#"SELECT EXISTS(SELECT 1 FROM email_messages WHERE link_id = $1 AND provider_id = $2) AS "stored!""#,
+            lease.mailbox.link_id,
+            lease.provider_id.as_str()
+        )
+        .fetch_one(&self.db)
+        .await
+        .map_err(db_error)
+    }
+
     async fn absent(&self, lease: &MessageLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let Some(mailbox_address) = sqlx::query_scalar!("SELECT email_address FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active FOR UPDATE",lease.mailbox.link_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)
             .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
         };
-        let work = sqlx::query!(r#"
+        let Some(work) = sqlx::query!(r#"
             SELECT revision FROM email_message_reconciliation
             WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4 AND lease_until > now() FOR UPDATE
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id)
-            .fetch_optional(&mut *tx).await.map_err(db_error)?;
-        if work.is_none() {
+            .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
+        };
+        // A change queued during the lease outdates this read's 404: leave the
+        // message as it is, and `complete_message` keeps the newer revision due
+        // for a read of its own.
+        if work.revision != lease.revision {
+            return Ok(());
         }
         // The correspondents of mail that leaves the mailbox now, read before the
         // mark below: sent mail's recipients and received mail's sender, as a

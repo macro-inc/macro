@@ -1,7 +1,8 @@
-use crate::domain::models::messages::ContactsNodes;
+use crate::domain::models::list::ContactList;
+use crate::domain::models::page::{ContactCursor, ContactPageSize};
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
-use crate::domain::ports::{ContactsService, PeopleSearchService};
-use axum::extract::{FromRef, FromRequestParts, Json, Query, State};
+use crate::domain::ports::{ContactListMembersService, ContactsService, PeopleSearchService};
+use axum::extract::{FromRef, FromRequestParts, Json, Path, Query, State};
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -10,13 +11,14 @@ use axum_extra::extract::Cached;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::Base64Str;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
@@ -63,6 +65,10 @@ pub struct SearchedPerson {
     pub is_teammate: bool,
     /// Whether the person is an agent rather than a human; false for non-Macro contacts.
     pub is_agent: bool,
+    /// The keys of the viewer's contact lists the person is in (`teammates`,
+    /// `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+    /// for the viewer and for a contact only the legacy directory knows.
+    pub lists: Vec<String>,
 }
 
 impl From<PersonMatch> for SearchedPerson {
@@ -72,6 +78,12 @@ impl From<PersonMatch> for SearchedPerson {
             name: person.contact.name,
             is_teammate: person.is_teammate,
             is_agent: person.is_agent,
+            lists: person
+                .contact
+                .lists
+                .iter()
+                .map(|list| list.as_ref().to_owned())
+                .collect(),
         }
     }
 }
@@ -79,7 +91,10 @@ impl From<PersonMatch> for SearchedPerson {
 /// Response body for GET /contacts/search.
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct SearchPeopleResponse {
-    /// Matches ranked teammates first, then prefix matches, then by name or email.
+    /// Matches ranked by group, then prefix matches, then by name or email.
+    /// Teammates come first. For a viewer on the list-aware directory,
+    /// `interacted` and `invited` people come next, then `gmail` and
+    /// `outlook` contacts.
     pub people: Vec<SearchedPerson>,
 }
 
@@ -95,10 +110,7 @@ pub struct SearchPeopleResponse {
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip_all,
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
@@ -124,6 +136,90 @@ pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizat
     }))
 }
 
+/// Query string for GET /contacts/lists/{list}/members.
+#[derive(Deserialize, Debug, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct ListMembersParams {
+    /// Opaque `nextCursor` from the previous page of the same list.
+    pub cursor: Option<String>,
+    /// Page size: default 100; zero or over 500 is rejected.
+    #[param(minimum = 1, maximum = 500)]
+    pub limit: Option<u16>,
+}
+
+/// Response body for GET /contacts/lists/{list}/members.
+#[derive(Deserialize, Serialize, Debug, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ListMembersResponse {
+    /// The members' user IDs (`macro|<email>`), in ID order. Never the viewer.
+    #[schema(value_type = Vec<String>)]
+    pub members: Vec<MacroUserIdStr<'static>>,
+    /// Pass back as `cursor` for the next page. Only its absence means the
+    /// list is exhausted: a page may be short, or even empty, and still have one.
+    pub next_cursor: Option<String>,
+}
+
+/// GET /contacts/lists/{list}/members handler: one page of the members of one
+/// of the viewer's contact lists. Read from the list-aware directory for every
+/// viewer, whatever store the `contacts-list-reads` flag picks for their
+/// other reads; stored lists may be incomplete until the list backfill has
+/// run. `teammates` is the viewer's current team.
+#[utoipa::path(get,
+    tag = "contacts",
+    operation_id = "list_contact_list_members",
+    path = "/contacts/lists/{list}/members",
+    params(("list" = ContactList, Path, description = "The list's key."), ListMembersParams),
+    responses(
+    (status = 200, body=ListMembersResponse),
+    (status = 400, body=String),
+    (status = 401, body=String),
+    (status = 500, body=String)))
+]
+#[instrument(skip_all)]
+pub async fn list_members_handler<S: ContactListMembersService, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<S>>,
+    Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
+    Path(list): Path<ContactList>,
+    Query(params): Query<ListMembersParams>,
+) -> Result<Json<ListMembersResponse>, (StatusCode, &'static str)> {
+    let limit = match params.limit {
+        None => ContactPageSize::DEFAULT,
+        Some(limit) => ContactPageSize::new(limit)
+            .ok_or((StatusCode::BAD_REQUEST, "limit must be from 1 to 500"))?,
+    };
+    let after = params
+        .cursor
+        .map(|raw| {
+            Base64Str::<String>::new_from_string(raw)
+                .decode_json()
+                .ok()
+                .and_then(ContactCursor::from_position)
+                .ok_or((StatusCode::BAD_REQUEST, "invalid cursor"))
+        })
+        .transpose()?;
+    let viewer = authorization.authorization.user.macro_user_id.clone();
+    let page = service
+        .list_members(viewer, list, after.as_ref(), limit)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "failed to list contact list members");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to list contact list members",
+            )
+        })?;
+    Ok(Json(ListMembersResponse {
+        members: page
+            .contacts
+            .into_iter()
+            .map(|entry| entry.user_id)
+            .collect(),
+        next_cursor: page
+            .next_cursor
+            .map(|cursor| Base64Str::encode_json(cursor.position()).type_erase()),
+    }))
+}
+
 /// GET /contacts handler.
 #[utoipa::path(get,
     tag = "contacts",
@@ -135,10 +231,7 @@ pub async fn search_people_handler<S: PeopleSearchService, Auth: MacroAuthorizat
     (status = 404, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(authorization, contacts),
-    fields(actor = %authorization.acting_entity())
-)]
+#[instrument(skip_all)]
 pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(contacts): State<Arc<S>>,
     authorization: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -165,11 +258,7 @@ pub async fn handler<S: ContactsService, Auth: MacroAuthorizationService>(
     (status = 401, body=String),
     (status = 500, body=String)))
 ]
-#[instrument(
-    skip(service, authorization),
-    fields(actor = %authorization.acting_entity()),
-    err
-)]
+#[instrument(skip_all, err)]
 pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<S>>,
     Cached(authorization): Cached<MacroAuthorizationExtractor<Auth, UserOrInternal>>,
@@ -178,12 +267,10 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
     let user = authorization.authorization.user;
 
     service
-        .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([user.macro_user_id.clone(), body.user_id]),
-        })
+        .invite_contact(user.macro_user_id.clone().into_owned(), body.user_id)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "failed to create contact connection");
+            tracing::error!(error=?e, "failed to record invited contact");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)
@@ -230,8 +317,8 @@ where
     }
 }
 
-/// Rate limit for people search: 600 requests per user per hour, the budget
-/// other interactive read routes use.
+/// Rate limit shared by people search and list members: 600 requests per
+/// user per hour, the budget other interactive read routes use.
 pub struct PerUserPeopleSearchRateLimit<Auth>(MacroAuthorizationExtractor<Auth, UserOrInternal>);
 
 impl<S, Auth> RateLimitExtractable<S> for PerUserPeopleSearchRateLimit<Auth>
@@ -343,10 +430,11 @@ where
 }
 
 /// Builds the contacts API router with authorization, and per-user rate
-/// limits on POST /contacts and GET /contacts/search.
+/// limits on POST /contacts, and on GET /contacts/search and
+/// GET /contacts/lists/{list}/members, which share one read budget.
 pub fn contacts_router<S, R, Auth, T>(state: ContactsRouterState<S, R, Auth>) -> Router<T>
 where
-    S: ContactsService + PeopleSearchService,
+    S: ContactsService + PeopleSearchService + ContactListMembersService,
     R: RateLimitService + Clone,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -370,6 +458,10 @@ where
         ));
     let search_route = Router::new()
         .route("/contacts/search", get(search_people_handler::<S, Auth>))
+        .route(
+            "/contacts/lists/{list}/members",
+            get(list_members_handler::<S, Auth>),
+        )
         .layer(axum::middleware::from_fn_with_state(
             rate_limit_state,
             rate_limit_middleware::<
@@ -396,6 +488,7 @@ where
             handler,
             add_contact_handler,
             search_people_handler,
+            list_members_handler,
         ),
         components(
             schemas(
@@ -403,6 +496,8 @@ where
                 AddContactRequest,
                 SearchPeopleResponse,
                 SearchedPerson,
+                ContactList,
+                ListMembersResponse,
             ),
         ),
         tags(

@@ -198,6 +198,13 @@ pub trait Computers: Send + Sync + 'static {
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<ComputerDetails, TeamAgentError>> + Send;
 
+    /// Refuse `buyer` when the computers rollout doesn't include them, before
+    /// anything is created for the purchase.
+    fn require_purchase_rollout(
+        &self,
+        buyer: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<(), TeamAgentError>> + Send;
+
     /// Release the computer now; an already released one is success.
     fn release(
         &self,

@@ -9,6 +9,7 @@ import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
+import channelNotificationStacks from './en/channel-notification-stacks';
 import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
@@ -21,6 +22,8 @@ import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
+import githubConnect from './en/github-connect';
+import home from './en/home';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -33,15 +36,17 @@ import routineMenu from './en/routine-menu';
 import routineSuggestions from './en/routine-suggestions';
 import runtimeSharing from './en/runtime-sharing';
 import settingsBilling from './en/settings-billing';
+import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
-import settingsMobileApp from './en/settings-mobile-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
 import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
+import teamMembers from './en/team-members';
+import timeTracking from './en/time-tracking';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -56,11 +61,13 @@ export default {
   agentNavigation,
   accountManager,
   agentSetup,
+  githubConnect,
   agentWork,
   calendarPrompt,
   calls,
   channelComposer,
   channelLabels,
+  channelNotificationStacks,
   channelSections,
   commandMenu,
   commands,
@@ -73,6 +80,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  home,
   importJobs,
   suggestions,
   localRuntime,
@@ -88,12 +96,14 @@ export default {
   settingsEmail,
   runtimeSharing,
   settingsLanguage,
-  settingsMobileApp,
+  settingsDownloads,
   settingsNav,
   splitMenu,
   subRoutines,
   tabs,
   teamAgents,
+  teamMembers,
+  timeTracking,
   tutorials,
   viewMenus,
 };

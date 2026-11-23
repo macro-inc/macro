@@ -15,6 +15,7 @@ use std::time::Duration;
 use either::Either;
 use macro_env::Environment;
 use opentelemetry::propagation::{Extractor, Injector};
+use rdkafka::config::RDKafkaLogLevel;
 use rdkafka::consumer::{
     CommitMode, Consumer, ConsumerContext, DefaultConsumerContext, StreamConsumer,
 };
@@ -30,6 +31,7 @@ pub use statistics::ConsumerStatistics;
 use statistics::StatisticsContext;
 
 mod msk_iam;
+pub mod progress;
 mod statistics;
 
 const UNGROUPED_GROUP_PREFIX: &str = "macro-event-broker-independent";
@@ -252,6 +254,11 @@ fn base_config(brokers: &str) -> ClientConfig {
 fn consumer_config(brokers: &str) -> ClientConfig {
     let mut config = base_config(brokers);
     config.set("enable.auto.commit", "false");
+    // librdkafka reports an out-of-range offset reset only as a warning, and
+    // rust-rdkafka starts from the `log` crate's level, which can be lower.
+    if (config.log_level as i32) < (RDKafkaLogLevel::Warning as i32) {
+        config.set_log_level(RDKafkaLogLevel::Warning);
+    }
     config
 }
 
@@ -302,6 +309,7 @@ fn create_consumer_from_env<T>(
                 .create_with_context(StatisticsContext {
                     inner: DefaultConsumerContext,
                     observer,
+                    offset_resets: statistics::offset_resets_counter(),
                 })
                 .map_err(KafkaConsumerError::Plaintext)?,
         ),
@@ -312,6 +320,7 @@ fn create_consumer_from_env<T>(
                     .create_with_context(StatisticsContext {
                         inner: MskIamClientContext::from_env(),
                         observer,
+                        offset_resets: statistics::offset_resets_counter(),
                     })
                     .map_err(KafkaConsumerError::MskIam)?,
             )

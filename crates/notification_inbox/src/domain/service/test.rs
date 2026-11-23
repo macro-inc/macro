@@ -1510,3 +1510,175 @@ async fn new_activity_brings_a_read_row_back_into_an_unread_inbox() {
     };
     assert!(entry.rows.iter().all(|row| row.unseen));
 }
+
+#[tokio::test]
+async fn a_new_notification_listing_probes_the_inbox_candidate_query() {
+    let listed = entity(EntityType::Document, 1);
+    let source = FakeSource::with(vec![candidate("doc", listed.clone(), Some(1), None)]);
+
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), listed.clone())
+            .await
+            .unwrap(),
+        Some("doc")
+    );
+    assert_eq!(
+        new_notification_listing(&source, &viewer(), entity(EntityType::Document, 2))
+            .await
+            .unwrap(),
+        None
+    );
+
+    let requests = source.requests.lock().unwrap();
+    assert_eq!(requests[0].only, Some(vec![listed]));
+    assert!(requests[0].assume_attention);
+    assert!(!requests[0].own_work);
+    assert_eq!(requests[0].keying, CandidateKeying::FiledEntity);
+    assert_eq!(requests[0].types, policy::CANDIDATE_TYPES.to_vec());
+    assert_eq!(
+        format!("{:?}", requests[0].filter),
+        format!("{:?}", policy::inbox_filter())
+    );
+}
+
+/// The store each candidate read went to, in order, clearing the record.
+fn take_reads(source: &FakeSource<&'static str>) -> Vec<CandidateRead> {
+    source
+        .requests
+        .lock()
+        .unwrap()
+        .drain(..)
+        .map(|request| request.read)
+        .collect()
+}
+
+#[tokio::test]
+async fn live_recomputes_and_write_replies_read_committed_state() {
+    let harness = inbox();
+
+    harness
+        .service
+        .page(viewer(), query(Vec::new()))
+        .await
+        .unwrap();
+    let reads = take_reads(&harness.source);
+    assert!(!reads.is_empty());
+    assert!(reads.iter().all(|read| *read == CandidateRead::Replica));
+
+    // A live recompute answers a change its client already holds from a
+    // primary-hydrated Soup patch.
+    harness
+        .service
+        .recompute(viewer(), unread(), vec![channel()])
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+
+    // Finding the rows to mark reads the primary too, since a live recompute
+    // may have shown them before the replica had them; the reply, sent after
+    // the write, reads what the write committed.
+    harness
+        .service
+        .mark_seen(viewer(), unread(), vec![row(&channel(), &thread_slot())])
+        .await
+        .unwrap();
+    assert_eq!(
+        take_reads(&harness.source),
+        vec![CandidateRead::Committed, CandidateRead::Committed]
+    );
+
+    let thread = row(&channel(), &thread_slot());
+    harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: thread.clone(),
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+    assert_eq!(take_reads(&harness.source), vec![CandidateRead::Committed]);
+    harness
+        .service
+        .mark_notification_done(viewer(), InboxScope::default(), thread, uuid(4))
+        .await
+        .unwrap();
+    assert_eq!(
+        take_reads(&harness.source),
+        vec![CandidateRead::Committed, CandidateRead::Committed]
+    );
+}
+
+/// The inbox with the channel's group shown to the viewer by a live
+/// recompute, which reads the primary, before the replica had it.
+fn inbox_ahead_of_the_replica() -> Harness {
+    let harness = inbox();
+    harness
+        .source
+        .unreplicated
+        .lock()
+        .unwrap()
+        .push(channel().into_entity());
+    harness
+}
+
+#[tokio::test]
+async fn done_acknowledges_a_row_the_replica_has_not_caught_up_with() {
+    let harness = inbox_ahead_of_the_replica();
+    let thread = row(&channel(), &thread_slot());
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: thread,
+                revision: None,
+            }],
+        )
+        .await
+        .unwrap();
+
+    let mut acknowledged = outcome.receipt.notification_ids;
+    acknowledged.sort();
+    assert_eq!(acknowledged, vec![uuid(2), uuid(3), uuid(4)]);
+}
+
+#[tokio::test]
+async fn done_on_one_notification_the_replica_has_not_caught_up_with_acknowledges_it() {
+    let harness = inbox_ahead_of_the_replica();
+    let thread = row(&channel(), &thread_slot());
+
+    let outcome = harness
+        .service
+        .mark_notification_done(viewer(), InboxScope::default(), thread, uuid(4))
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(4)]);
+}
+
+#[tokio::test]
+async fn seen_marks_a_row_the_replica_has_not_caught_up_with() {
+    let harness = inbox_ahead_of_the_replica();
+
+    harness
+        .service
+        .mark_seen(
+            viewer(),
+            InboxScope::default(),
+            vec![row(&channel(), &thread_slot())],
+        )
+        .await
+        .unwrap();
+
+    let transitions = harness.notifications.transitions.lock().unwrap().clone();
+    let [(seen, NotificationTransition::Seen)] = transitions.as_slice() else {
+        panic!("expected one seen transition, got {transitions:?}");
+    };
+    let mut seen = seen.clone();
+    seen.sort();
+    assert_eq!(seen, vec![uuid(2), uuid(3), uuid(4)]);
+}

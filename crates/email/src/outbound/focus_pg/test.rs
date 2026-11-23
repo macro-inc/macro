@@ -11,9 +11,9 @@ use sqlx::{Pool, Postgres};
 use super::*;
 use crate::domain::{
     focus::{
-        ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers, FocusClassifier,
-        FocusClassifierError, FocusEnrollment, FocusNotifier, FocusQueries, FocusQuestion,
-        FocusService, FocusThread, FocusVerdict, ProfileSource,
+        ClassifierLane, ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers,
+        FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier, FocusQueries,
+        FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource, ThreadDates,
     },
     models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
@@ -58,22 +58,22 @@ impl ProfileSource for NoProfile {
     }
 }
 
-/// Finds the same date in every thread, counting how often it is asked.
+/// Finds the same dates in every thread, counting how often it is asked.
 #[derive(Clone, Default)]
 struct FixedDueDates {
-    due_on: Option<NaiveDate>,
+    dates: ThreadDates,
     asked: Arc<AtomicUsize>,
 }
 
 impl DueDateExtractor for FixedDueDates {
-    async fn due_on(
+    async fn dates(
         &self,
         _owner: &MacroUserIdStr<'static>,
         _thread_id: Uuid,
         _input: &DueDateInput,
-    ) -> Result<Option<NaiveDate>, Report> {
+    ) -> Result<ThreadDates, Report> {
         self.asked.fetch_add(1, Ordering::SeqCst);
-        Ok(self.due_on)
+        Ok(self.dates)
     }
 }
 
@@ -91,6 +91,7 @@ impl FocusClassifier for FixedClassifier {
         _thread_id: Uuid,
         _input: &Value,
         _questions: &[&'static str],
+        _lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         self.answers.clone()
     }
@@ -251,7 +252,7 @@ fn record(thread_id: Uuid, message_id: Uuid, at: DateTime<Utc>, importance: u8) 
         answers: FocusAnswers::from_probabilities(&[0.5; FocusQuestion::ALL.len()]).unwrap(),
         model: "jev-test".to_owned(),
         classified_at: Utc::now(),
-        due_on: None,
+        dates: FocusDates::default(),
     }
 }
 
@@ -408,10 +409,12 @@ async fn inboxes_with_focus_are_those_holding_a_focus_thread(
             FocusInboxOwner {
                 link_id: OWNER_LINK,
                 owner: owner(),
+                delegates: Vec::new(),
             },
             FocusInboxOwner {
                 link_id: OTHER_LINK,
                 owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
             },
         ]
     );
@@ -434,10 +437,12 @@ async fn syncing_inboxes_are_every_connected_inbox_still_syncing(
             FocusInboxOwner {
                 link_id: OWNER_LINK,
                 owner: owner(),
+                delegates: Vec::new(),
             },
             FocusInboxOwner {
                 link_id: OTHER_LINK,
                 owner: MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap(),
+                delegates: Vec::new(),
             },
         ]
     );
@@ -539,6 +544,37 @@ async fn an_older_classification_never_replaces_a_newer_one(
     Ok(())
 }
 
+/// Mail at one instant is ordered by id, as the worker and the reads order it,
+/// so a late classification of the message that sorts first is the older one.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_classification_of_mail_at_the_same_instant_that_sorts_first_is_older(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    let at = Utc::now() - Duration::hours(1);
+    let first = uuid::uuid!("00000000-0000-0000-0000-00000000f0a1");
+    let second = uuid::uuid!("00000000-0000-0000-0000-00000000f0a2");
+    assert!(repo.save(&record(INVOICE, second, at, 80)).await?);
+    assert!(!repo.save(&record(INVOICE, first, at, 10)).await?);
+    let classified = load_thread(&repo, INVOICE).await?.unwrap().classified;
+    assert_eq!(classified.map(|stored| stored.message_id), Some(second));
+    let stored = repo
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
+        .await?;
+    assert_eq!(stored.get(&INVOICE).expect("stored").importance, 80);
+
+    // The same message is decided again.
+    assert!(repo.save(&record(INVOICE, second, at, 70)).await?);
+    let stored = repo
+        .focus_for_threads(&owner(), &[INVOICE], Utc::now(), Utc::now())
+        .await?;
+    assert_eq!(stored.get(&INVOICE).expect("stored").importance, 70);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
@@ -575,9 +611,9 @@ async fn focus_list_is_the_owners_inbox_newest_first(pool: Pool<Postgres>) -> Re
         vec![INVOICE]
     );
 
-    // A newer message in either direction moves a thread up: the owner's reply
-    // an hour ago brings BULK ahead of INVOICE's newer inbound mail.
-    insert_message(&pool, BULK, true, now - Duration::hours(1)).await?;
+    // A newer message moves a thread up: Casey's mail an hour ago brings BULK
+    // ahead of INVOICE's.
+    insert_message(&pool, BULK, false, now - Duration::hours(1)).await?;
     assert_eq!(
         repo.focus_thread_ids(&owner(), since, now, now, 10).await?,
         vec![BULK, INVOICE]
@@ -634,6 +670,88 @@ async fn focus_covers_inboxes_linked_to_the_owner(pool: Pool<Postgres>) -> Resul
         repo.focus_for_threads(&owner(), &[OTHER_THREAD], now, now)
             .await?
             .contains_key(&OTHER_THREAD)
+    );
+    Ok(())
+}
+
+/// The inbox in `inboxes` with id `link_id`.
+fn inbox_of(inboxes: &[FocusInboxOwner], link_id: Uuid) -> &FocusInboxOwner {
+    inboxes
+        .iter()
+        .find(|inbox| inbox.link_id == link_id)
+        .expect("inbox listed")
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked")
+    )
+)]
+async fn every_read_of_a_linked_inbox_names_the_user_it_is_linked_to(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+
+    let linked = repo.thread_inbox(OTHER_THREAD).await?.expect("thread");
+    assert_eq!(
+        linked.owner,
+        MacroUserIdStr::try_from_email("other@elsewhere.example").unwrap()
+    );
+    assert_eq!(linked.delegates, vec![owner()]);
+    let own = repo.thread_inbox(INVOICE).await?.expect("thread");
+    assert!(own.delegates.is_empty());
+
+    let with_focus = repo.inboxes_with_focus().await?;
+    assert_eq!(inbox_of(&with_focus, OTHER_LINK).delegates, vec![owner()]);
+    let syncing = repo.syncing_inboxes().await?;
+    assert_eq!(inbox_of(&syncing, OTHER_LINK).delegates, vec![owner()]);
+    assert!(inbox_of(&syncing, OWNER_LINK).delegates.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_linked", "email_focus_linked_shared")
+    )
+)]
+async fn a_mailbox_several_people_read_names_each_of_them_once(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool);
+    repo.save(&FocusRecord {
+        link_id: OTHER_LINK,
+        ..record(OTHER_THREAD, Uuid::new_v4(), Utc::now(), 70)
+    })
+    .await?;
+    // Sorted, each once, and never the inbox's own owner.
+    let readers = vec![
+        MacroUserIdStr::try_from_email("assistant@acme.example").unwrap(),
+        owner(),
+    ];
+
+    assert_eq!(
+        repo.thread_inbox(OTHER_THREAD)
+            .await?
+            .expect("thread")
+            .delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.inboxes_with_focus().await?, OTHER_LINK).delegates,
+        readers
+    );
+    assert_eq!(
+        inbox_of(&repo.syncing_inboxes().await?, OTHER_LINK).delegates,
+        readers
     );
     Ok(())
 }
@@ -872,6 +990,449 @@ async fn done_threads_and_closed_exchanges_are_not_waiting(
             .await?
             .contains(&CLOSED_WITH_THANKS)
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn the_owners_answer_takes_a_thread_out_until_it_needs_following_up(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    // Worth reading on its own, so it earned Focus while Casey wrote last.
+    let worker = worker(&repo, Ok(HIGH_ANSWERS.to_vec()));
+    let ClassifyOutcome::Classified(verdict) = worker.classify_thread(REPLIED_YESTERDAY).await?
+    else {
+        panic!("expected a classification");
+    };
+    assert!(verdict.is_focus && verdict.awaiting_reply);
+
+    // The owner answered yesterday: out, with no label, while the wait runs.
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, now).await?;
+    assert!(!listed && !focus.is_focus && !focus.needs_reply && !focus.needs_follow_up);
+
+    // Three days on with no answer it comes back, to follow up.
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, now + Duration::days(2)).await?;
+    assert!(listed && focus.is_focus && focus.needs_follow_up && !focus.needs_reply);
+
+    // An answer has it judged again, in at once ahead of the worker.
+    insert_message(&pool, REPLIED_YESTERDAY, false, now).await?;
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, now).await?;
+    assert!(listed && focus.is_focus && !focus.needs_follow_up);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn its_due_day_brings_a_followed_up_thread_back_before_the_wait_ends(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let tomorrow = (now + Duration::days(1)).date_naive();
+    let due_dates = FixedDueDates {
+        dates: ThreadDates {
+            due_on: Some(tomorrow),
+            event_on: None,
+        },
+        asked: Arc::default(),
+    };
+    let ClassifyOutcome::Classified(verdict) =
+        due_date_worker(&repo, Ok(LOW_ANSWERS.to_vec()), &due_dates)
+            .classify_thread(REPLIED_YESTERDAY)
+            .await?
+    else {
+        panic!("expected a classification");
+    };
+    assert!(verdict.awaiting_reply);
+    // With no zone for the owner, the day counts once it has begun everywhere.
+    let due_at = tomorrow.and_hms_opt(12, 0, 0).expect("a time").and_utc();
+    let stored = load_thread(&repo, REPLIED_YESTERDAY)
+        .await?
+        .and_then(|thread| thread.classified)
+        .expect("stored");
+    assert_eq!(stored.dates.due_at, Some(due_at));
+
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at - Duration::minutes(1)).await?;
+    assert!(!listed && !focus.is_focus);
+    // The owner answered two days before: inside the wait, but due.
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(listed && focus.is_focus && focus.needs_follow_up && !focus.needs_reply);
+
+    // The owner writing again leaves the day to the worker's next read.
+    insert_message(&pool, REPLIED_YESTERDAY, true, now).await?;
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(!listed && !focus.is_focus);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_closing_answer_never_comes_back(pool: Pool<Postgres>) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let due_dates = FixedDueDates {
+        dates: ThreadDates {
+            due_on: Some(now.date_naive()),
+            event_on: None,
+        },
+        asked: Arc::default(),
+    };
+    let ClassifyOutcome::Classified(verdict) =
+        due_date_worker(&repo, Ok(HIGH_ANSWERS.to_vec()), &due_dates)
+            .classify_thread(CLOSED_WITH_THANKS)
+            .await?
+    else {
+        panic!("expected a classification");
+    };
+    assert!(verdict.is_focus && !verdict.awaiting_reply);
+    assert_eq!(due_dates.asked.load(Ordering::SeqCst), 1);
+
+    // "Thanks!" five days ago: past the wait and the due day, still out.
+    for at in [now, now + Duration::days(2)] {
+        let (listed, focus) = read_at(&repo, CLOSED_WITH_THANKS, at).await?;
+        assert!(!listed && !focus.is_focus && !focus.needs_follow_up);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("email_focus"))
+)]
+async fn a_thread_about_a_meeting_leaves_focus_once_the_meeting_is_over(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let tomorrow = (now + Duration::days(1)).date_naive();
+    let due_dates = FixedDueDates {
+        dates: ThreadDates {
+            due_on: None,
+            event_on: Some(tomorrow),
+        },
+        asked: Arc::default(),
+    };
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
+    due_date_worker(&repo, Ok(answers), &due_dates)
+        .classify_thread(INVOICE)
+        .await?;
+    // Over once the day after it has begun everywhere, with no zone for the owner.
+    let over_at = (tomorrow + Duration::days(1))
+        .and_hms_opt(12, 0, 0)
+        .expect("a time")
+        .and_utc();
+    let stored = load_thread(&repo, INVOICE)
+        .await?
+        .and_then(|thread| thread.classified)
+        .expect("stored");
+    assert_eq!(stored.dates.event_over_at, Some(over_at));
+
+    let (listed, focus) = read_at(&repo, INVOICE, over_at - Duration::minutes(1)).await?;
+    assert!(listed && focus.is_focus && focus.needs_reply);
+    let (listed, focus) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(!listed && !focus.is_focus && !focus.needs_reply && !focus.needs_follow_up);
+
+    // Mail after the meeting leaves the thread to its verdict until that mail is
+    // classified.
+    insert_message(&pool, INVOICE, false, now).await?;
+    let (listed, focus) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(listed && focus.is_focus);
+    Ok(())
+}
+
+/// What a writer from before the dates does to a row: main's upsert, word for
+/// word, classifying the thread's latest message with the stored verdict and the
+/// due date it read. It sets `classified_at`, even for the message already
+/// classified, and leaves the dates as they were.
+async fn classify_as_an_older_writer(
+    pool: &Pool<Postgres>,
+    thread_id: Uuid,
+    due_on: Option<NaiveDate>,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        INSERT INTO email_thread_focus (
+            thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
+            category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
+            rule_version, pinned, awaiting_reply, calendar_hold_until, importance_rate, due_on
+        )
+        SELECT f.thread_id, f.link_id, latest.id, latest.at, f.is_focus, f.category,
+               f.importance, f.needs_reply, f.needs_follow_up, f.scores, f.model,
+               clock_timestamp(), f.rule_version, f.pinned, f.awaiting_reply,
+               f.calendar_hold_until, f.importance_rate, $2
+        FROM email_thread_focus f
+        -- The message the worker takes as the latest, as `messages` picks it.
+        CROSS JOIN LATERAL (
+            SELECT m.id, COALESCE(m.internal_date_ts, m.created_at) AS at FROM email_messages m
+            WHERE m.thread_id = f.thread_id
+              AND NOT m.is_draft
+              AND NOT EXISTS (
+                  SELECT 1 FROM email_message_labels ml
+                  JOIN email_labels l ON l.id = ml.label_id
+                  WHERE ml.message_id = m.id AND l.name = 'TRASH'
+              )
+            ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
+            LIMIT 1
+        ) latest
+        WHERE f.thread_id = $1
+        ON CONFLICT (thread_id) DO UPDATE SET
+            link_id = EXCLUDED.link_id,
+            classified_message_id = EXCLUDED.classified_message_id,
+            classified_message_ts = EXCLUDED.classified_message_ts,
+            is_focus = EXCLUDED.is_focus,
+            category = EXCLUDED.category,
+            importance = EXCLUDED.importance,
+            needs_reply = EXCLUDED.needs_reply,
+            needs_follow_up = EXCLUDED.needs_follow_up,
+            scores = EXCLUDED.scores,
+            model = EXCLUDED.model,
+            classified_at = EXCLUDED.classified_at,
+            rule_version = EXCLUDED.rule_version,
+            pinned = EXCLUDED.pinned,
+            awaiting_reply = EXCLUDED.awaiting_reply,
+            calendar_hold_until = EXCLUDED.calendar_hold_until,
+            importance_rate = EXCLUDED.importance_rate,
+            due_on = EXCLUDED.due_on
+        WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
+        "#,
+        thread_id,
+        due_on,
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn classified_message(pool: &Pool<Postgres>, thread_id: Uuid) -> Result<Uuid, Report> {
+    Ok(sqlx::query_scalar!(
+        "SELECT classified_message_id FROM email_thread_focus WHERE thread_id = $1",
+        thread_id,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+/// During a rolling deploy, or after a rollback, a worker from before the dates
+/// classifies newer mail; the dates it left behind belong to older mail.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn dates_count_only_for_the_mail_they_were_read_from(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let tomorrow = (now + Duration::days(1)).date_naive();
+    let begun_everywhere = |day: NaiveDate| day.and_hms_opt(12, 0, 0).expect("a time").and_utc();
+
+    // A meeting that ends tomorrow, then fresh mail an older worker classified.
+    let meeting = FixedDueDates {
+        dates: ThreadDates {
+            due_on: None,
+            event_on: Some(tomorrow),
+        },
+        asked: Arc::default(),
+    };
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
+    due_date_worker(&repo, Ok(answers), &meeting)
+        .classify_thread(INVOICE)
+        .await?;
+    let over_at = begun_everywhere(tomorrow + Duration::days(1));
+    insert_message(&pool, INVOICE, false, now).await?;
+    classify_as_an_older_writer(&pool, INVOICE, None).await?;
+    let (listed, focus) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(listed && focus.is_focus);
+    // Nor does the sweep carry them over when it decides the row again.
+    let stored = load_thread(&repo, INVOICE)
+        .await?
+        .and_then(|thread| thread.classified)
+        .expect("stored");
+    assert_eq!(stored.dates.event_over_at, None);
+
+    // A due day, then the owner writing again, classified by an older worker.
+    let due = FixedDueDates {
+        dates: ThreadDates {
+            due_on: Some(tomorrow),
+            event_on: None,
+        },
+        asked: Arc::default(),
+    };
+    due_date_worker(&repo, Ok(LOW_ANSWERS.to_vec()), &due)
+        .classify_thread(REPLIED_YESTERDAY)
+        .await?;
+    let due_at = begun_everywhere(tomorrow);
+    let (listed, _) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(listed);
+    insert_message(&pool, REPLIED_YESTERDAY, true, now).await?;
+    classify_as_an_older_writer(&pool, REPLIED_YESTERDAY, None).await?;
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(!listed && !focus.is_focus && !focus.needs_follow_up);
+    let stored = load_thread(&repo, REPLIED_YESTERDAY)
+        .await?
+        .and_then(|thread| thread.classified)
+        .expect("stored");
+    assert_eq!(stored.dates.due_at, None);
+    Ok(())
+}
+
+/// The sweep and new mail each reach a thread, so a message can be classified
+/// twice; when a worker from before the dates does it the second time, the
+/// dates belong to a verdict that is no longer stored.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn dates_count_only_for_the_verdict_they_were_read_with(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let tomorrow = (now + Duration::days(1)).date_naive();
+    let begun_everywhere = |day: NaiveDate| day.and_hms_opt(12, 0, 0).expect("a time").and_utc();
+
+    // A meeting that ends tomorrow; an older worker reads the same message again
+    // and finds a deadline a week out.
+    let meeting = FixedDueDates {
+        dates: ThreadDates {
+            due_on: None,
+            event_on: Some(tomorrow),
+        },
+        asked: Arc::default(),
+    };
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
+    due_date_worker(&repo, Ok(answers), &meeting)
+        .classify_thread(INVOICE)
+        .await?;
+    let over_at = begun_everywhere(tomorrow + Duration::days(1));
+    let (listed, _) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(!listed);
+    let classified = classified_message(&pool, INVOICE).await?;
+    classify_as_an_older_writer(&pool, INVOICE, Some(tomorrow + Duration::days(7))).await?;
+    assert_eq!(classified_message(&pool, INVOICE).await?, classified);
+    let (listed, focus) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(listed && focus.is_focus);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_due_day_counts_only_for_the_verdict_it_was_read_with(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let tomorrow = (Utc::now() + Duration::days(1)).date_naive();
+    // A due day for the owner's reply; an older worker reads the same reply
+    // again and finds none.
+    let due = FixedDueDates {
+        dates: ThreadDates {
+            due_on: Some(tomorrow),
+            event_on: None,
+        },
+        asked: Arc::default(),
+    };
+    due_date_worker(&repo, Ok(LOW_ANSWERS.to_vec()), &due)
+        .classify_thread(REPLIED_YESTERDAY)
+        .await?;
+    let due_at = tomorrow.and_hms_opt(12, 0, 0).expect("a time").and_utc();
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(listed && focus.needs_follow_up);
+    let classified = classified_message(&pool, REPLIED_YESTERDAY).await?;
+    classify_as_an_older_writer(&pool, REPLIED_YESTERDAY, None).await?;
+    assert_eq!(
+        classified_message(&pool, REPLIED_YESTERDAY).await?,
+        classified
+    );
+    let (listed, focus) = read_at(&repo, REPLIED_YESTERDAY, due_at).await?;
+    assert!(!listed && !focus.is_focus && !focus.needs_follow_up);
+    // Nor does the sweep carry them over when it decides the row again.
+    let stored = load_thread(&repo, REPLIED_YESTERDAY)
+        .await?
+        .and_then(|thread| thread.classified)
+        .expect("stored");
+    assert_eq!(stored.dates.due_at, None);
+    Ok(())
+}
+
+/// The worker takes the latest message by time, then id, so mail at the very
+/// instant of the classified message that sorts after it is newer mail.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn mail_at_the_same_instant_that_sorts_after_is_newer(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    let tomorrow = (Utc::now() + Duration::days(1)).date_naive();
+    let meeting = FixedDueDates {
+        dates: ThreadDates {
+            due_on: None,
+            event_on: Some(tomorrow),
+        },
+        asked: Arc::default(),
+    };
+    let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];
+    due_date_worker(&repo, Ok(answers), &meeting)
+        .classify_thread(INVOICE)
+        .await?;
+    let over_at = (tomorrow + Duration::days(1))
+        .and_hms_opt(12, 0, 0)
+        .expect("a time")
+        .and_utc();
+    let (listed, _) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(!listed);
+
+    let classified = sqlx::query!(
+        "SELECT classified_message_id, classified_message_ts FROM email_thread_focus \
+         WHERE thread_id = $1",
+        INVOICE,
+    )
+    .fetch_one(&pool)
+    .await?;
+    insert_message(&pool, INVOICE, false, classified.classified_message_ts).await?;
+    let thread = load_thread(&repo, INVOICE).await?.expect("thread");
+    assert_ne!(thread.messages[0].id, classified.classified_message_id);
+    let (listed, focus) = read_at(&repo, INVOICE, over_at).await?;
+    assert!(listed && focus.is_focus);
     Ok(())
 }
 
@@ -1150,6 +1711,50 @@ async fn a_held_thread_that_needs_a_reply_loses_the_flag_with_the_hold(
     Ok(())
 }
 
+/// The owner's own message is never one to reply to, even on a thread a
+/// calendar change holds in Focus: a row classified at the owner's answer to
+/// the notice, with the hold and a follow-up flagged, reads without a label.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn a_held_thread_the_owner_wrote_last_never_needs_a_reply(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    let repo = FocusPgRepository(pool.clone());
+    let now = Utc::now();
+    let end = now + Duration::days(2);
+    let answered_at = now - Duration::hours(1);
+    let thread = notice_thread(
+        &pool,
+        "Moved: Demo",
+        Some(invite(InvitationMethod::Request, 2, end)),
+        answered_at - Duration::minutes(1),
+        false,
+    )
+    .await?;
+    insert_message(&pool, thread, true, answered_at).await?;
+    let answer = sqlx::query_scalar!(
+        "SELECT id FROM email_messages WHERE thread_id = $1 AND is_sent",
+        thread
+    )
+    .fetch_one(&pool)
+    .await?;
+    let mut held = record(thread, answer, answered_at, 50);
+    held.verdict.calendar_hold_until = Some(end);
+    held.verdict.needs_reply = false;
+    held.verdict.needs_follow_up = true;
+    assert!(repo.save(&held).await?);
+
+    let (listed, focus) = read_at(&repo, thread, now).await?;
+    assert!(listed && focus.is_focus);
+    assert!(!focus.needs_reply && !focus.needs_follow_up);
+    Ok(())
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(
@@ -1260,7 +1865,7 @@ async fn an_update_to_an_event_already_over_stays_out(pool: Pool<Postgres>) -> R
         scripts("email_focus", "email_focus_waiting")
     )
 )]
-async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
+async fn a_notice_leaves_focus_once_its_event_is_over_whatever_else_it_reads_as(
     pool: Pool<Postgres>,
 ) -> Result<(), Report> {
     let repo = FocusPgRepository(pool.clone());
@@ -1268,8 +1873,7 @@ async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
     let end = now + Duration::days(2);
     let high = worker(&repo, Ok(HIGH_ANSWERS.to_vec()));
 
-    // Jev says it is worth reading: in for that reason once the event is over,
-    // when it reads as its sender's category, since Calendar means a live change.
+    // Jev says it is worth reading, so it earns Focus on its own too.
     let signal = notice_thread(
         &pool,
         "Rescheduled: Demo",
@@ -1278,15 +1882,24 @@ async fn a_thread_in_focus_for_more_than_the_hold_stays_after_the_event(
         false,
     )
     .await?;
-    high.classify_thread(signal).await?;
+    let ClassifyOutcome::Classified(verdict) = high.classify_thread(signal).await? else {
+        panic!("expected a classification");
+    };
+    assert!(verdict.is_focus);
     let (listed, focus) = read_at(&repo, signal, now).await?;
     assert!(listed && focus.is_focus);
     assert_eq!(focus.category, FocusCategory::Calendar);
     let (listed, focus) = read_at(&repo, signal, end).await?;
+    assert!(!listed && !focus.is_focus && !focus.needs_reply && !focus.needs_follow_up);
+
+    // A person writing after it has the thread judged again: in once more,
+    // as its sender's category, since Calendar means a live change.
+    insert_message(&pool, signal, false, now).await?;
+    let (listed, focus) = read_at(&repo, signal, end).await?;
     assert!(listed && focus.is_focus);
     assert_eq!(focus.category, FocusCategory::Other);
 
-    // The same answers outside the signal inbox earn nothing: only the hold had it in.
+    // Outside the signal inbox only the hold had it in.
     let outside = notice_thread(
         &pool,
         "Rescheduled: Demo",
@@ -1679,6 +2292,74 @@ async fn mail_from_a_recent_contact_is_found_and_pinned_outside_the_signal_inbox
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("email_focus", "email_focus_waiting")
+    )
+)]
+async fn only_mail_the_owner_sent_lately_makes_a_sender_a_recent_contact(
+    pool: Pool<Postgres>,
+) -> Result<(), Report> {
+    project_threads(&pool).await?;
+    let repo = FocusPgRepository(pool.clone());
+    // The newsletter's sender is on mail the owner received, as a list address
+    // is on every message sent through it: that alone doesn't count.
+    sqlx::query!(
+        "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+         VALUES ('00000000-0000-0000-0000-00000000f611', '00000000-0000-0000-0000-0000000cf006', 'CC')",
+    )
+    .execute(&pool)
+    .await?;
+    assert!(!is_stale(&repo, NOISE).await?);
+
+    // Mail to the sender counts once it is sent, not drafted, and only from
+    // the last RECENT_CONTACT_DAYS before the window.
+    let note = |id: &'static str, days: i64, is_draft: bool| {
+        let pool = pool.clone();
+        async move {
+            let id = Uuid::parse_str(id)?;
+            sqlx::query!(
+                "INSERT INTO email_messages (id, thread_id, link_id, is_sent, is_draft, from_contact_id,
+                                             internal_date_ts, subject)
+                 VALUES ($1, '00000000-0000-0000-0000-00000000f305', '00000000-0000-0000-0000-000000000f01',
+                         NOT $3, $3, '00000000-0000-0000-0000-0000000cf002', NOW() - make_interval(days => ($2::bigint)::int), 'Numbers')",
+                id,
+                days,
+                is_draft,
+            )
+            .execute(&pool)
+            .await?;
+            sqlx::query!(
+                "INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
+                 VALUES ($1, '00000000-0000-0000-0000-0000000cf006', 'TO')",
+                id,
+            )
+            .execute(&pool)
+            .await?;
+            Ok::<_, Report>(())
+        }
+    };
+    note(
+        "00000000-0000-0000-0000-00000000f652",
+        30 + RECENT_CONTACT_DAYS + 5,
+        false,
+    )
+    .await?;
+    assert!(!is_stale(&repo, NOISE).await?, "sent before the look-back");
+    note("00000000-0000-0000-0000-00000000f653", 2, true).await?;
+    assert!(!is_stale(&repo, NOISE).await?, "only drafted");
+    note(
+        "00000000-0000-0000-0000-00000000f654",
+        30 + RECENT_CONTACT_DAYS - 5,
+        false,
+    )
+    .await?;
+    assert!(is_stale(&repo, NOISE).await?, "sent within the look-back");
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("email_focus"))
 )]
 async fn a_thread_that_lost_signal_leaves_focus_unless_pinned(
@@ -1869,7 +2550,7 @@ async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> R
     project_threads(&pool).await?;
     let repo = FocusPgRepository(pool.clone());
     let now = Utc::now();
-    // Jev flagged an open loop on the owner's own message, inside the wait.
+    // Jev flagged an open loop on the owner's own message, answered yesterday.
     let thread = load_thread(&repo, REPLIED_YESTERDAY)
         .await?
         .expect("thread");
@@ -1892,7 +2573,8 @@ async fn editing_a_draft_never_changes_who_wrote_last(pool: Pool<Postgres>) -> R
         .focus_for_threads(&owner(), &[REPLIED_YESTERDAY], waiting_before, now)
         .await?;
     let drafting = focus.get(&REPLIED_YESTERDAY).expect("stored");
-    assert!(drafting.needs_follow_up && !drafting.needs_reply);
+    // Still the owner's answer, inside the wait: out, with no label.
+    assert!(!drafting.is_focus && !drafting.needs_follow_up && !drafting.needs_reply);
 
     // Mail from someone else does change it.
     insert_message(&pool, REPLIED_YESTERDAY, false, now).await?;
@@ -2134,7 +2816,10 @@ async fn a_stored_due_date_reads_back_as_a_calendar_date(
     let thread = load_thread(&repo, INVOICE).await?.expect("thread");
     let latest = thread.messages.last().expect("message");
     let due = FocusRecord {
-        due_on: Some(nov(6)),
+        dates: FocusDates {
+            due_on: Some(nov(6)),
+            ..FocusDates::default()
+        },
         ..record(INVOICE, latest.id, latest.at, 50)
     };
     assert!(repo.save(&due).await?);
@@ -2144,7 +2829,7 @@ async fn a_stored_due_date_reads_back_as_a_calendar_date(
         .await?;
     assert_eq!(focus.get(&INVOICE).expect("stored").due_on, Some(nov(6)));
     let classified = load_thread(&repo, INVOICE).await?.unwrap().classified;
-    assert_eq!(classified.expect("stored").due_on, Some(nov(6)));
+    assert_eq!(classified.expect("stored").dates.due_on, Some(nov(6)));
     Ok(())
 }
 
@@ -2163,11 +2848,17 @@ async fn a_classification_of_an_older_message_never_replaces_a_newer_date(
         thread.messages.last().expect("message"),
     );
     let newer = FocusRecord {
-        due_on: Some(nov(6)),
+        dates: FocusDates {
+            due_on: Some(nov(6)),
+            ..FocusDates::default()
+        },
         ..record(INVOICE, latest.id, latest.at, 50)
     };
     let older = FocusRecord {
-        due_on: Some(nov(20)),
+        dates: FocusDates {
+            due_on: Some(nov(20)),
+            ..FocusDates::default()
+        },
         ..record(INVOICE, first.id, first.at, 50)
     };
     assert!(repo.save(&newer).await?);
@@ -2189,7 +2880,10 @@ async fn deciding_a_row_again_keeps_its_due_date_without_asking_the_model(
 ) -> Result<(), Report> {
     let repo = FocusPgRepository(pool.clone());
     let due_dates = FixedDueDates {
-        due_on: Some(nov(6)),
+        dates: ThreadDates {
+            due_on: Some(nov(6)),
+            event_on: None,
+        },
         asked: Arc::default(),
     };
     let answers = vec![0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.0, 0.0, 0.0];

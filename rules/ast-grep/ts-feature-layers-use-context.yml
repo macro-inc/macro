@@ -15,6 +15,16 @@ note: |-
   `files` in each ts-/tsx-feature-* rule. Block-agent uses `ui/` for
   presentation and `component/` for composition.
 files:
+  - apps/web/src/features/time-tracking/queries/**
+  - apps/web/src/features/time-tracking/primitives/**
+  - apps/web/src/features/time-tracking/components/**
+  - apps/web/src/features/time-tracking/views/**
+  - apps/web/src/features/time-tracking/context/**
+  - apps/web/src/features/task-templates/queries/**
+  - apps/web/src/features/task-templates/primitives/**
+  - apps/web/src/features/task-templates/components/**
+  - apps/web/src/features/task-templates/views/**
+  - apps/web/src/features/task-templates/context/**
   - apps/web/src/features/entity-appearance/queries/**
   - apps/web/src/features/entity-appearance/primitives/**
   - apps/web/src/features/entity-appearance/components/**
@@ -27,8 +37,12 @@ files:
   - apps/web/src/features/passwords/context/**
   - apps/web/src/features/notifications-inbox/queries/**
   - apps/web/src/features/notifications-inbox/primitives/**
+  - apps/web/src/features/channel-notification-stacks/primitives/**
   - apps/web/src/features/notifications-inbox/components/**
+  - apps/web/src/features/channel-notification-stacks/components/**
   - apps/web/src/features/notifications-inbox/views/**
+  - apps/web/src/features/channel-notification-stacks/views/**
+  - apps/web/src/features/new-home/components/**
   - apps/web/src/features/command/queries/**
   - apps/web/src/features/document-composer/queries/**
   - apps/web/src/features/task-composer/queries/**

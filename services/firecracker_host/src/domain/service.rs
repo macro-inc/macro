@@ -19,7 +19,9 @@ use tracing::Instrument;
 use crate::crash_point::{self, CrashPoint};
 use crate::domain::metrics::{HostMetrics, Operation};
 use crate::domain::model::{ComputerRecord, Process, SlotPool};
-use crate::domain::ports::{BootSource, Disks, GoldenAvailability, Goldens, Machines, Store};
+use crate::domain::ports::{
+    BootSource, Disks, GoldenAvailability, Goldens, GuestSwap, Machines, Store,
+};
 use crate::domain::power::{Step, after, plan};
 
 mod enrollment;
@@ -207,6 +209,24 @@ pub struct HostMeasurement {
     pub swap_used_bytes: u64,
     /// RAM zram devices hold, compressed (`mm_stat` `mem_used_total`).
     pub zram_used_bytes: u64,
+    /// Where swapped pages can go (`/proc/swaps`).
+    pub swap_placement: SwapPlacement,
+}
+
+/// Where the host's swap puts pages.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SwapPlacement {
+    /// Only zram without a writeback device, or no swap at all.
+    RamOnly,
+    /// Swap devices that write to a disk: any but zram, and zram with a
+    /// writeback device.
+    Disk {
+        /// How many.
+        devices: u32,
+    },
+    /// `/proc/swaps` is unreadable: treated as on disk.
+    #[default]
+    Unknown,
 }
 
 type Entry = Arc<Mutex<Option<ComputerRecord>>>;
@@ -243,6 +263,8 @@ pub struct HostService<S, D, G, M, P> {
     tasks: TaskTracker,
     /// Running computers' activity and squeeze state (`pressure`).
     activity: std::sync::Mutex<HashMap<ComputerId, pressure::Tracked>>,
+    /// Whether VMs may swap, as last applied (`None`: not yet).
+    guest_swap: std::sync::Mutex<Option<GuestSwap>>,
 }
 
 impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D, G, M, P> {
@@ -308,6 +330,7 @@ impl<S: Store, D: Disks, G: Goldens, M: Machines, P: HostProbe> HostService<S, D
             reconcile_clean: std::sync::atomic::AtomicBool::new(report.unresolved.is_empty()),
             tasks,
             activity: std::sync::Mutex::new(HashMap::new()),
+            guest_swap: std::sync::Mutex::new(None),
         })
     }
 

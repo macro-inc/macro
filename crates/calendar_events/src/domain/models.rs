@@ -2159,6 +2159,10 @@ pub enum CalendarBackfillClaim {
         lease_token: Uuid,
         /// Calendar account provisioned by the grant transaction.
         account_id: Uuid,
+        /// When the first delivery of this round claimed the job. A round
+        /// deferred at Macro's per-inbox request limit keeps it, so a later
+        /// delivery skips the calendars the round already synced.
+        round_started_at: DateTime<Utc>,
     },
     /// The durable job already completed.
     Complete,

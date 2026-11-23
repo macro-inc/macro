@@ -10,10 +10,10 @@ use uuid::Uuid;
 
 use crate::{
     domain::focus::{
-        CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusInbox, FocusInboxOwner,
-        FocusMail, FocusMessage, FocusRecord, FocusStore, ImportanceTrend, RECENT_CONTACT_DAYS,
-        SentNote, StaleThread, StoredClassification, ThreadFocus, change_subject_pattern,
-        importance_at,
+        CalendarPart, FOCUS_RULE_VERSION, FocusAnswers, FocusCategory, FocusDates, FocusInbox,
+        FocusInboxOwner, FocusMail, FocusMessage, FocusRecord, FocusStore, ImportanceTrend,
+        RECENT_CONTACT_DAYS, SentNote, StaleThread, StoredClassification, ThreadFocus,
+        change_subject_pattern, importance_at,
     },
     outbound::invitation_pg,
 };
@@ -202,11 +202,29 @@ impl FocusStore for FocusPgRepository {
         let Some(row) = sqlx::query!(
             r#"
             SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,
+                   -- The other users whose Focus tab lists the inbox, as
+                   -- focus_thread_ids reads it for them: an index probe on
+                   -- macro_user_links_link_idx, sorted and deduplicated in
+                   -- `delegates` rather than once per inbox here.
+                   -- inboxes_with_focus and syncing_inboxes restate it;
+                   -- change all three.
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = t.link_id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!",
                    f.classified_message_id AS "classified_message_id?",
                    f.rule_version AS "rule_version?",
                    f.scores AS "scores?",
                    f.model AS "model?",
-                   f.due_on AS "due_on?"
+                   f.due_on AS "due_on?",
+                   -- The dates count only with the write that stored them: a writer
+                   -- from before them sets classified_at and leaves them behind.
+                   -- focus_thread_ids and focus_for_threads restate it.
+                   CASE WHEN f.dates_classified_at = f.classified_at THEN f.due_at END
+                       AS "due_at?",
+                   CASE WHEN f.dates_classified_at = f.classified_at THEN f.event_over_at END
+                       AS "event_over_at?"
             FROM email_threads t
             JOIN email_links el ON el.id = t.link_id
             LEFT JOIN email_thread_focus f ON f.thread_id = t.id
@@ -237,7 +255,11 @@ impl FocusStore for FocusPgRepository {
                     rule_version,
                     answers,
                     model,
-                    due_on: row.due_on,
+                    dates: FocusDates {
+                        due_on: row.due_on,
+                        due_at: row.due_at,
+                        event_over_at: row.event_over_at,
+                    },
                 })
             }
             _ => None,
@@ -246,6 +268,7 @@ impl FocusStore for FocusPgRepository {
             thread_id: row.id,
             link_id: row.link_id,
             owner: MacroUserIdStr::try_from(row.macro_id)?,
+            delegates: delegates(row.link_id, row.delegates),
             owner_email: row.email_address.to_lowercase(),
             is_signal: row.is_signal,
             inbox_visible: row.inbox_visible,
@@ -275,15 +298,20 @@ impl FocusStore for FocusPgRepository {
     #[tracing::instrument(skip(self, record), fields(thread_id = %record.thread_id), err)]
     async fn save(&self, record: &FocusRecord) -> Result<bool, Report> {
         let scores = serde_json::to_value(record.answers)?;
-        // A slower classification of an older message never replaces a newer one.
+        // A slower classification of an older message never replaces a newer one,
+        // in the order the worker picks the latest message and the reads compare it.
         let result = sqlx::query!(
             r#"
             INSERT INTO email_thread_focus (
                 thread_id, link_id, classified_message_id, classified_message_ts, is_focus,
                 category, importance, needs_reply, needs_follow_up, scores, model, classified_at,
-                rule_version, pinned, awaiting_reply, calendar_hold_until, importance_rate, due_on
+                rule_version, pinned, awaiting_reply, calendar_hold_until, importance_rate, due_on,
+                due_at, event_over_at, dates_classified_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+            VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                $19, $20, $12
+            )
             ON CONFLICT (thread_id) DO UPDATE SET
                 link_id = EXCLUDED.link_id,
                 classified_message_id = EXCLUDED.classified_message_id,
@@ -301,8 +329,12 @@ impl FocusStore for FocusPgRepository {
                 awaiting_reply = EXCLUDED.awaiting_reply,
                 calendar_hold_until = EXCLUDED.calendar_hold_until,
                 importance_rate = EXCLUDED.importance_rate,
-                due_on = EXCLUDED.due_on
-            WHERE email_thread_focus.classified_message_ts <= EXCLUDED.classified_message_ts
+                due_on = EXCLUDED.due_on,
+                due_at = EXCLUDED.due_at,
+                event_over_at = EXCLUDED.event_over_at,
+                dates_classified_at = EXCLUDED.dates_classified_at
+            WHERE (email_thread_focus.classified_message_ts, email_thread_focus.classified_message_id)
+                <= (EXCLUDED.classified_message_ts, EXCLUDED.classified_message_id)
             "#,
             record.thread_id,
             record.link_id,
@@ -321,7 +353,9 @@ impl FocusStore for FocusPgRepository {
             record.verdict.awaiting_reply,
             record.verdict.calendar_hold_until,
             i16::from(record.verdict.importance_rate),
-            record.due_on,
+            record.dates.due_on,
+            record.dates.due_at,
+            record.dates.event_over_at,
         )
         .execute(&self.0)
         .await?;
@@ -348,8 +382,25 @@ impl FocusStore for FocusPgRepository {
         // each per thread, off everything else. A thread below the cursor has
         // both times at or below it, so a later page starts each index range
         // at the cursor instead of reading the window from the top again.
+        //
+        // The people the owner wrote to lately are read once, from the
+        // owner's own sent mail, and each thread only looks its senders up
+        // in that set. Looking each sender up through every message
+        // addressed to them instead costs a probe per message: a mailing
+        // list is both the sender and a recipient of every message through
+        // it, so each of its threads read the whole list's history, and a
+        // busy inbox's first page passed the statement timeout.
         let rows = sqlx::query!(
             r#"
+            WITH recent_contact AS MATERIALIZED (
+                SELECT DISTINCT r.contact_id
+                FROM email_messages sent
+                JOIN email_message_recipients r ON r.message_id = sent.id
+                WHERE sent.link_id = $1
+                  AND sent.is_sent
+                  AND NOT sent.is_draft
+                  AND sent.internal_date_ts >= $5
+            )
             SELECT s.id AS "id!", s.latest_at AS "latest_at!"
             FROM (
                 SELECT t.id, t.is_signal, t.latest_inbound_message_ts,
@@ -417,14 +468,10 @@ impl FocusStore for FocusPgRepository {
                OR EXISTS (
                    SELECT 1
                    FROM email_messages inbound
-                   JOIN email_message_recipients r ON r.contact_id = inbound.from_contact_id
-                   JOIN email_messages sent ON sent.id = r.message_id
                    WHERE inbound.thread_id = s.id
                      AND NOT inbound.is_sent
                      AND NOT inbound.is_draft
-                     AND sent.is_sent
-                     AND NOT sent.is_draft
-                     AND sent.internal_date_ts >= $5
+                     AND inbound.from_contact_id IN (SELECT contact_id FROM recent_contact)
                )
             ORDER BY s.latest_at DESC, s.id DESC
             LIMIT $3
@@ -476,7 +523,12 @@ impl FocusStore for FocusPgRepository {
                 FROM focus_links l
                 WHERE l.link_id IS NOT NULL
             )
-            SELECT el.id, el.macro_id
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
             FROM focus_links l
             JOIN email_links el ON el.id = l.link_id
             "#,
@@ -489,6 +541,7 @@ impl FocusStore for FocusPgRepository {
                 Ok(FocusInboxOwner {
                     link_id: row.id,
                     owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
                 })
             })
             .collect()
@@ -496,16 +549,29 @@ impl FocusStore for FocusPgRepository {
 
     #[tracing::instrument(skip(self), fields(inboxes = tracing::field::Empty), err)]
     async fn syncing_inboxes(&self) -> Result<Vec<FocusInboxOwner>, Report> {
-        // One row per connected mailbox: a small table, read whole.
-        let rows = sqlx::query!("SELECT id, macro_id FROM email_links WHERE is_sync_active")
-            .fetch_all(&self.0)
-            .await?;
+        // One row per connected mailbox: a small table, read whole, with an
+        // index probe each for the users it is linked to.
+        let rows = sqlx::query!(
+            r#"
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
+            FROM email_links el
+            WHERE el.is_sync_active
+            "#,
+        )
+        .fetch_all(&self.0)
+        .await?;
         tracing::Span::current().record("inboxes", rows.len());
         rows.into_iter()
             .map(|row| {
                 Ok(FocusInboxOwner {
                     link_id: row.id,
                     owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
                 })
             })
             .collect()
@@ -520,8 +586,8 @@ impl FocusStore for FocusPgRepository {
         now: DateTime<Utc>,
         limit: i64,
     ) -> Result<Vec<Uuid>, Report> {
-        // The waiting and calendar hold tests here restate `focus_for_threads`;
-        // change both together.
+        // Who wrote last, the wait, the due day, the calendar hold and the event
+        // being over restate `focus_for_threads`; change both together.
         let thread_ids = sqlx::query_scalar!(
             r#"
             SELECT f.thread_id
@@ -530,7 +596,7 @@ impl FocusStore for FocusPgRepository {
             -- Who wrote last comes from the mail itself: editing a draft moves
             -- the thread's own timestamps. An indexed per-thread top-one probe.
             CROSS JOIN LATERAL (
-                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent
+                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.id, m.is_sent
                 FROM email_messages m
                 WHERE m.thread_id = t.id
                   AND NOT m.is_draft
@@ -541,6 +607,18 @@ impl FocusStore for FocusPgRepository {
                 ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC
                 LIMIT 1
             ) latest
+            CROSS JOIN LATERAL (
+                -- No mail since the classified message, in the order above, so a
+                -- message at the same instant counts as newer when it sorts first.
+                SELECT (latest.at, latest.id) <= (f.classified_message_ts, f.classified_message_id)
+                           AS untouched,
+                       -- Dates count only with the write that stored them, as
+                       -- thread_inbox reads them.
+                       CASE WHEN f.dates_classified_at = f.classified_at THEN f.due_at END
+                           AS due_at,
+                       CASE WHEN f.dates_classified_at = f.classified_at THEN f.event_over_at END
+                           AS event_over_at
+            ) seen
             WHERE f.link_id IN (
                     -- The owner's inboxes, as Soup lists them: their own and linked ones.
                     SELECT el.id FROM email_links el WHERE el.macro_id = $1
@@ -555,18 +633,27 @@ impl FocusStore for FocusPgRepository {
               AND GREATEST(t.latest_inbound_message_ts, t.latest_outbound_message_ts) >= $2
               AND latest.at >= $2
               AND (
-                  (f.is_focus AND (t.is_signal OR f.pinned))
+                  -- The owner's own reply takes a thread out until it needs
+                  -- following up.
+                  (f.is_focus AND (t.is_signal OR f.pinned) AND NOT latest.is_sent)
                   OR (
                       -- Nothing reclassifies a thread as it ages, so the wait is
                       -- measured here, and a newer reply ends it before the worker
-                      -- gets to the thread.
+                      -- gets to the thread. Its due day brings it back sooner,
+                      -- until the owner writes again and the worker reads anew.
                       f.awaiting_reply
                       AND latest.is_sent
-                      AND latest.at <= $3
+                      AND (latest.at <= $3 OR (seen.untouched AND seen.due_at <= $4))
                   )
                   -- A calendar change holds a thread until its event is over, and
                   -- a newer message ends that before the worker gets to the thread.
-                  OR (f.calendar_hold_until > $4 AND latest.at <= f.classified_message_ts)
+                  OR (f.calendar_hold_until > $4 AND seen.untouched)
+              )
+              -- Once the event the classified mail is about is over, nothing
+              -- keeps the thread; newer mail is the worker's to judge.
+              AND NOT COALESCE(
+                  seen.untouched AND COALESCE(f.calendar_hold_until, seen.event_over_at) <= $4,
+                  false
               )
             -- Newest first, so the limit keeps the newest threads.
             ORDER BY latest.at DESC, f.thread_id
@@ -589,7 +676,9 @@ impl FocusStore for FocusPgRepository {
         fields(
             threads = thread_ids.len(),
             waiting = tracing::field::Empty,
+            due_back = tracing::field::Empty,
             calendar_held = tracing::field::Empty,
+            event_over = tracing::field::Empty,
             trending = tracing::field::Empty,
         ),
         err
@@ -604,30 +693,33 @@ impl FocusStore for FocusPgRepository {
         // The labels are settled here rather than trusted from the row: who
         // wrote last can move before the worker reaches the thread, rows from an
         // older rule can carry a follow-up on someone else's message, which reads
-        // as a reply needed, and a held thread's event can end.
+        // as a reply needed, a due day can come, and the event a thread is about
+        // can end. The tests restate `focus_thread_ids`; change both together.
         let rows = sqlx::query!(
             r#"
             SELECT f.thread_id, f.category, f.importance, f.classified_at, f.due_on,
-                   now_state.earned OR now_state.waiting OR now_state.calendar_held
+                   (now_state.earned OR now_state.waited OR now_state.due_back
+                       OR now_state.calendar_held)
+                       AND NOT now_state.event_over
                        AS "is_focus!",
                    (now_state.earned OR now_state.calendar_held)
                        AND (f.needs_reply OR f.needs_follow_up)
-                       AND NOT now_state.owner_latest
+                       AND NOT seen.owner_latest
+                       AND NOT now_state.event_over
                        AS "needs_reply!",
-                   ((now_state.earned OR now_state.calendar_held)
-                       AND f.needs_follow_up
-                       AND now_state.owner_latest)
-                       OR now_state.waiting
+                   (now_state.waited OR now_state.due_back) AND NOT now_state.event_over
                        AS "needs_follow_up!",
-                   now_state.waiting AS "waiting!",
+                   now_state.waited AS "waited!",
+                   now_state.due_back AS "due_back!",
                    now_state.calendar_held AS "calendar_held!",
+                   now_state.event_over AS "event_over!",
                    f.classified_message_ts,
                    f.importance_rate,
-                   now_state.untouched AS "untouched!"
+                   seen.untouched AS "untouched!"
             FROM email_thread_focus f
             JOIN email_threads t ON t.id = f.thread_id AND t.link_id = f.link_id
             LEFT JOIN LATERAL (
-                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.is_sent
+                SELECT COALESCE(m.internal_date_ts, m.created_at) AS at, m.id, m.is_sent
                 FROM email_messages m
                 WHERE m.thread_id = t.id
                   AND NOT m.is_draft
@@ -640,17 +732,35 @@ impl FocusStore for FocusPgRepository {
             ) latest ON TRUE
             CROSS JOIN LATERAL (
                 SELECT COALESCE(latest.is_sent, false) AS owner_latest,
-                       f.is_focus AND (t.is_signal OR f.pinned) AS earned,
+                       COALESCE(
+                           (latest.at, latest.id)
+                               <= (f.classified_message_ts, f.classified_message_id),
+                           false
+                       ) AS untouched,
+                       -- Dates count only with the write that stored them.
+                       CASE WHEN f.dates_classified_at = f.classified_at THEN f.due_at END
+                           AS due_at,
+                       CASE WHEN f.dates_classified_at = f.classified_at THEN f.event_over_at END
+                           AS event_over_at
+            ) seen
+            CROSS JOIN LATERAL (
+                SELECT f.is_focus AND (t.is_signal OR f.pinned) AND NOT seen.owner_latest
+                           AS earned,
                        f.awaiting_reply
                            AND t.inbox_visible
-                           AND COALESCE(latest.is_sent AND latest.at <= $3, false) AS waiting,
+                           AND seen.owner_latest
+                           AND COALESCE(latest.at <= $3, false) AS waited,
+                       f.awaiting_reply
+                           AND t.inbox_visible
+                           AND seen.owner_latest
+                           AND seen.untouched
+                           AND COALESCE(seen.due_at <= $4, false) AS due_back,
                        t.inbox_visible
-                           AND COALESCE(
-                               f.calendar_hold_until > $4
-                                   AND latest.at <= f.classified_message_ts,
-                               false
-                           ) AS calendar_held,
-                       COALESCE(latest.at <= f.classified_message_ts, false) AS untouched
+                           AND seen.untouched
+                           AND COALESCE(f.calendar_hold_until > $4, false) AS calendar_held,
+                       seen.untouched
+                           AND COALESCE(COALESCE(f.calendar_hold_until, seen.event_over_at) <= $4, false)
+                           AS event_over
             ) now_state
             WHERE f.thread_id = ANY($1)
               AND f.link_id IN (
@@ -667,10 +777,15 @@ impl FocusStore for FocusPgRepository {
         .fetch_all(&self.0)
         .await?;
         let span = tracing::Span::current();
-        span.record("waiting", rows.iter().filter(|row| row.waiting).count());
+        span.record("waiting", rows.iter().filter(|row| row.waited).count());
+        span.record("due_back", rows.iter().filter(|row| row.due_back).count());
         span.record(
             "calendar_held",
             rows.iter().filter(|row| row.calendar_held).count(),
+        );
+        span.record(
+            "event_over",
+            rows.iter().filter(|row| row.event_over).count(),
         );
         span.record(
             "trending",
@@ -720,6 +835,24 @@ impl FocusStore for FocusPgRepository {
             })
             .collect())
     }
+}
+
+/// The users other than its owner inbox `link_id` is linked to, sorted, each
+/// once: a user can reach an inbox through more than one account. A malformed id
+/// is left out, so one bad row never fails a read of many inboxes, and is never
+/// quoted: a Macro user id holds an address.
+fn delegates(link_id: Uuid, mut ids: Vec<String>) -> Vec<MacroUserIdStr<'static>> {
+    ids.sort_unstable();
+    ids.dedup();
+    ids.into_iter()
+        .filter_map(|id| {
+            MacroUserIdStr::try_from(id)
+                .inspect_err(
+                    |_| tracing::warn!(%link_id, "focus left out a malformed linked user id"),
+                )
+                .ok()
+        })
+        .collect()
 }
 
 #[cfg(test)]

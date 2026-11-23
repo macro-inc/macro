@@ -4,9 +4,37 @@ const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
 const emit = vi.hoisted(() => vi.fn());
 const load = vi.hoisted(() => vi.fn());
-vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('@tauri-apps/api/core', async () => {
+  const { testAuthority } = await import('@graphql-cache/authority-fixture');
+  return {
+    invoke: (command: string, args: Record<string, unknown> = {}) => {
+      if (command === 'graphql_cache_current_authority')
+        return Promise.resolve(testAuthority(String(args.identity)));
+      const {
+        authority: _,
+        authorityGeneration: _generation,
+        ...request
+      } = args;
+      return invoke(command, request);
+    },
+  };
+});
 vi.mock('@tauri-apps/api/event', () => ({ listen, emit }));
-vi.mock('../worker/wasm-module', () => ({ loadCacheWasm: load }));
+vi.mock('../worker/wasm-module', async () => {
+  const { testAuthority } = await import('../authority-fixture');
+  return {
+    loadCacheWasm: async () => {
+      const module = await load();
+      return {
+        ...module,
+        openCache: async (...args: unknown[]) => ({
+          currentAuthority: async (identity: string) => testAuthority(identity),
+          ...(await module.openCache(...args)),
+        }),
+      };
+    },
+  };
+});
 
 import { createTauriCacheHost } from '../host/tauri-host';
 import { CacheWorkerCore } from '../worker/worker-core';
@@ -116,11 +144,13 @@ it.each([false, true])(
       kind: 'people-references',
       request: REQUEST,
     });
-    expect(port.postMessage).toHaveBeenCalledWith({
-      id: 2,
-      ok: true,
-      result: supported ? RESPONSE : { kind: 'unsupported' },
-    });
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 2,
+        ok: true,
+        result: supported ? RESPONSE : { kind: 'unsupported' },
+      })
+    );
     expect(port.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'cache-hydrated' })
     );

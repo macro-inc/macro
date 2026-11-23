@@ -285,10 +285,12 @@ mod code_mode {
         http::Request,
     };
     use code_execution::domain::ExecuteRequest;
+    use rmcp::model::ProtocolVersion;
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
     use serde::Deserialize;
+    use std::collections::BTreeSet;
     use std::sync::Mutex;
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
@@ -501,9 +503,26 @@ mod code_mode {
         method: &str,
         params: serde_json::Value,
     ) -> serde_json::Value {
+        rpc_with(app, user, caller, method, params, None).await
+    }
+
+    /// [`rpc_as`], declaring `protocol_version` in `mcp-protocol-version`.
+    async fn rpc_with(
+        app: axum::Router,
+        user: &str,
+        caller: Option<ToolCaller>,
+        method: &str,
+        params: serde_json::Value,
+        protocol_version: Option<String>,
+    ) -> serde_json::Value {
         let mut request = Request::builder();
         if let Some(caller) = caller {
             request = request.extension(caller);
+        }
+        if let Some(version) = protocol_version {
+            request = request
+                .header("mcp-protocol-version", version)
+                .header("mcp-method", method);
         }
         let response = app
             .oneshot(
@@ -641,6 +660,140 @@ mod code_mode {
         names
     }
 
+    /// The handshake a client opens `version` with, as (method, params,
+    /// `mcp-protocol-version` header).
+    fn handshake(version: &ProtocolVersion) -> (&'static str, serde_json::Value, Option<String>) {
+        let client_info = serde_json::json!({"name": "test", "version": "1"});
+        if version.has_initialize() {
+            return (
+                "initialize",
+                serde_json::json!({
+                    "protocolVersion": version,
+                    "capabilities": {},
+                    "clientInfo": client_info,
+                }),
+                None,
+            );
+        }
+        assert_eq!(
+            version,
+            &ProtocolVersion::V_2026_07_28,
+            "protocol {version} is supported but this test doesn't know its handshake: add it, \
+             and make the server answer it with `instructions` for the caller's mode"
+        );
+        (
+            "server/discover",
+            serde_json::json!({"_meta": {
+                "io.modelcontextprotocol/protocolVersion": version,
+                "io.modelcontextprotocol/clientInfo": client_info,
+                "io.modelcontextprotocol/clientCapabilities": {},
+            }}),
+            Some(version.to_string()),
+        )
+    }
+
+    /// The tool names `instructions` mentions, out of every tool the server
+    /// has in any mode.
+    fn named_tools(instructions: &str) -> BTreeSet<String> {
+        let words: BTreeSet<&str> = instructions
+            .split(|c: char| !c.is_ascii_alphanumeric())
+            .collect();
+        ai_tools::tools_for(ai_tools::AiHost::Mcp)
+            .toolset
+            .tools
+            .keys()
+            .chain(
+                agent_code_mode::inbound::toolset::user_toolset()
+                    .tools
+                    .keys(),
+            )
+            .filter(|name| words.contains(name.as_str()))
+            .cloned()
+            .collect()
+    }
+
+    /// Every handshake at every protocol version the server supports, for
+    /// every kind of caller, describes the tools that caller is listed, and
+    /// no others. A handshake that falls back to rmcp's default (`get_info`)
+    /// describes the direct tools to a code-mode client, which then calls
+    /// tools it doesn't have.
+    ///
+    /// Checked on the surface paragraph, before the shared guidance
+    /// (`mcp_instructions`) every mode appends: that guidance is written for
+    /// both modes and names a direct tool beside its SDK form.
+    #[tokio::test]
+    async fn every_handshake_describes_the_listed_tools() {
+        let app = app(Arc::new(Runs::default()));
+        let service = catalog_service();
+        let versions = service.supported_protocol_versions();
+        assert!(
+            versions.iter().any(|version| !version.has_initialize()),
+            "the discover handshake must stay covered"
+        );
+        // What production lists in standard mode (`list_tools`' ChatGPT
+        // filter): the HTTP test catalog only stands in for it, so a new
+        // filter there must be mirrored here.
+        let direct_tools: BTreeSet<String> = ai_tools::tools_for(ai_tools::AiHost::Mcp)
+            .toolset
+            .tools
+            .keys()
+            .filter(|name| !HIDDEN_FROM_CHATGPT.contains(&name.as_str()))
+            .cloned()
+            .collect();
+        let callers = [
+            ("api key", Some(ToolCaller::ApiKey)),
+            ("agent", Some(ToolCaller::Agent(BotId::TEST_A))),
+            ("mcp client", mcp_client("Claude Code")),
+            ("chatgpt", mcp_client("ChatGPT")),
+            (
+                "nameless client",
+                Some(ToolCaller::McpClient { name: None }),
+            ),
+        ];
+        for (label, caller) in callers {
+            let listed = rpc_as(
+                app.clone(),
+                USER,
+                caller.clone(),
+                "tools/list",
+                serde_json::json!({}),
+            )
+            .await;
+            let listed: BTreeSet<String> = tool_names(&listed).into_iter().collect();
+            let code_mode = listed.contains("ExecuteCode");
+            for version in versions.iter() {
+                let (method, params, header) = handshake(version);
+                let response =
+                    rpc_with(app.clone(), USER, caller.clone(), method, params, header).await;
+                let instructions = response["result"]["instructions"]
+                    .as_str()
+                    .unwrap_or_else(|| panic!("{label} {method} {version}: {response}"));
+                let surface = instructions
+                    .strip_suffix(&mcp_instructions("https://macro.com"))
+                    .unwrap_or_else(|| {
+                        panic!("{label} {method} {version}: shared guidance missing")
+                    });
+                let named = named_tools(surface);
+                if code_mode {
+                    assert_eq!(
+                        named, listed,
+                        "{label} {method} {version}: instructions name other tools than it lists"
+                    );
+                } else {
+                    let unlisted: Vec<_> = named.difference(&direct_tools).collect();
+                    assert!(
+                        unlisted.is_empty(),
+                        "{label} {method} {version}: instructions name unlisted tools {unlisted:?}"
+                    );
+                    assert!(
+                        named.contains("ReadContent"),
+                        "{label} {method} {version}: direct-tool instructions expected"
+                    );
+                }
+            }
+        }
+    }
+
     #[tokio::test]
     async fn every_client_but_chatgpt_sees_code_mode_tools_and_instructions() {
         let app = app(Arc::new(Runs::default()));
@@ -667,6 +820,7 @@ mod code_mode {
         assert!(code_mode_instructions.contains("Code mode is on"));
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
+        assert!(code_mode_instructions.contains("Never guess an SDK method"));
         for leaked in [
             "NameSearch",
             "ReadContent",
@@ -703,6 +857,92 @@ mod code_mode {
                 "export async function main() { return {data: 1}; }".to_owned()
             )]
         );
+    }
+
+    /// Every public tool call, in either mode, has a span tying it to its
+    /// caller by opaque ids alone: the FusionAuth id, the OAuth client's id
+    /// and registered name. The Macro user id, an email, is never on it.
+    #[tokio::test]
+    async fn a_tool_call_span_names_its_caller_by_opaque_ids() {
+        use opentelemetry::{Key, Value};
+
+        let spans = crate::test_spans::exported_spans();
+        let app = app(Arc::new(Runs::default()));
+        for (client_id, client_name, tool) in [
+            ("client-code-mode", "Hermes", "ExecuteCode"),
+            ("client-standard-mode", "ChatGPT", "NameSearch"),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::builder()
+                        .extension(ToolCaller::McpClient {
+                            name: Some(client_name.to_owned()),
+                        })
+                        .extension(mcp_auth_proxy::inbound::middleware::McpCallerIds {
+                            fusionauth_user_id: Some("fusion-user-1".to_owned()),
+                            oauth_client_id: Some(client_id.to_owned()),
+                        })
+                        .method("POST")
+                        .uri("/mcp")
+                        .header("host", "localhost")
+                        .header("x-user", USER)
+                        .header("content-type", "application/json")
+                        .header("accept", "application/json, text/event-stream")
+                        .body(Body::from(
+                            serde_json::json!({
+                                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                "params": {"name": tool, "arguments": {"source": "1"}},
+                            })
+                            .to_string(),
+                        ))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(response.status().is_success());
+        }
+
+        spans.provider.force_flush().unwrap();
+        let finished = spans.exporter.get_finished_spans().unwrap();
+        for (client_id, client_name, tool, mode) in [
+            ("client-code-mode", "Hermes", "ExecuteCode", "code"),
+            ("client-standard-mode", "ChatGPT", "NameSearch", "standard"),
+        ] {
+            let span = finished
+                .iter()
+                .find(|span| {
+                    span.name == "public_mcp.call_tool"
+                        && span.attributes.iter().any(|attribute| {
+                            attribute.key == Key::from_static_str("mcp.client.id")
+                                && attribute.value == Value::from(client_id)
+                        })
+                })
+                .unwrap_or_else(|| panic!("no tool call span for {client_id}"));
+            let attributes: std::collections::BTreeMap<String, String> = span
+                .attributes
+                .iter()
+                .map(|attribute| (attribute.key.to_string(), attribute.value.to_string()))
+                .collect();
+            for (key, value) in [
+                ("mcp.tool.name", tool),
+                ("mcp.tool_mode", mode),
+                ("mcp.caller", "oauth_client"),
+                ("mcp.client.name", client_name),
+                ("fusionauth_user_id", "fusion-user-1"),
+                ("mcp.outcome", "success"),
+            ] {
+                assert_eq!(
+                    attributes.get(key).map(String::as_str),
+                    Some(value),
+                    "{key}: {attributes:?}"
+                );
+            }
+            assert!(
+                attributes.values().all(|value| !value.contains(USER)),
+                "{attributes:?}"
+            );
+        }
     }
 
     /// `ExecuteCode` runs for exactly the caller the middleware
@@ -860,7 +1100,7 @@ mod code_mode {
 
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
-    async fn a_user_runs_real_javascript_over_mcp() {
+    async fn a_user_runs_a_checked_program_over_mcp() {
         let scratch = tempfile::tempdir().unwrap();
         let path = tokio::process::Command::new("which")
             .arg("deno")
@@ -868,15 +1108,26 @@ mod code_mode {
             .await
             .unwrap();
         assert!(path.status.success(), "Deno 2.9.6 must be on PATH");
+        let binary: std::path::PathBuf = String::from_utf8(path.stdout).unwrap().trim().into();
         let deno = code_execution::outbound::deno::DenoRunner::new(
-            String::from_utf8(path.stdout).unwrap().trim().into(),
-            scratch.path().to_owned(),
+            binary.clone(),
+            scratch.path().join("runs"),
             128,
+        )
+        .await
+        .unwrap();
+        let checker = code_execution::outbound::deno::check::DenoChecker::new(
+            binary,
+            scratch.path().join("checks"),
+            1,
+            4,
+            64 * 1024,
         )
         .await
         .unwrap();
         let runner = code_execution::domain::ExecutionService::new(
             Arc::new(deno),
+            Arc::new(checker),
             code_execution::domain::Limits::default(),
         )
         .unwrap();
@@ -891,7 +1142,7 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro, session}) { return {data: {sdk: typeof macro.documents, session: session ?? null, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: {sdk: typeof macro.documents, sum: [1, 2, 3].reduce((a, b) => a + b)}}; }"},
             }),
         )
         .await;
@@ -899,7 +1150,7 @@ mod code_mode {
         assert_eq!(receipt["status"], "succeeded", "{succeeded}");
         assert_eq!(
             receipt["result"],
-            serde_json::json!({"data": {"sdk": "object", "session": null, "sum": 6}})
+            serde_json::json!({"data": {"sdk": "object", "sum": 6}})
         );
 
         let failed = rpc(
@@ -908,15 +1159,19 @@ mod code_mode {
             "tools/call",
             serde_json::json!({
                 "name": "ExecuteCode",
-                "arguments": {"source": "export async function main({macro}) { return {data: await macro.noSuchEntity.list()}; }"},
+                "arguments": {"source": "export async function main({macro}: CodeContext) { return {data: await macro.noSuchEntity.list()}; }"},
             }),
         )
         .await;
         let receipt = &failed["result"]["structuredContent"];
         assert_eq!(receipt["status"], "failed", "{failed}");
+        // A public run has no session, and the SDK has no such entity.
+        let error = receipt["error"].as_str().unwrap();
+        assert!(error.contains("doesn't type-check"), "{failed}");
         assert!(
-            receipt["error"].as_str().unwrap().contains("TypeError"),
+            error.contains("Property 'noSuchEntity' does not exist on type 'Macro"),
             "{failed}"
         );
+        assert!(error.contains("at main.ts:1:"), "{failed}");
     }
 }

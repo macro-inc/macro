@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: compactor
+    app.kubernetes.io/instance: tempo
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/part-of: memberlist
+    app.kubernetes.io/version: 2.10.7
+    helm.sh/chart: tempo-distributed-2.26.2
+  name: tempo-compactor
+  namespace: observability
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: compactor
+      app.kubernetes.io/instance: tempo
+      app.kubernetes.io/name: tempo
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    metadata:
+      annotations:
+        checksum/config: e65db8750e500c37d513919b059b04353457aa94b2add4b204f372ce614d0d35
+      labels:
+        app.kubernetes.io/component: compactor
+        app.kubernetes.io/instance: tempo
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/name: tempo
+        app.kubernetes.io/part-of: memberlist
+        app.kubernetes.io/version: 2.10.7
+        helm.sh/chart: tempo-distributed-2.26.2
+        observability.macro.com/aws-apis: "true"
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/component: compactor
+                    app.kubernetes.io/instance: tempo
+                    app.kubernetes.io/name: tempo
+                topologyKey: topology.kubernetes.io/zone
+              weight: 100
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/component: compactor
+                  app.kubernetes.io/instance: tempo
+                  app.kubernetes.io/name: tempo
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - args:
+            - -target=compactor
+            - -config.file=/conf/tempo.yaml
+          env:
+            - name: GOMEMLIMIT
+              value: 870MiB
+            - name: GOGC
+              value: "80"
+          image: docker.io/grafana/tempo:2.10.7
+          imagePullPolicy: IfNotPresent
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: http-metrics
+            initialDelaySeconds: 60
+            timeoutSeconds: 5
+          name: compactor
+          ports:
+            - containerPort: 7946
+              name: http-memberlist
+              protocol: TCP
+            - containerPort: 3200
+              name: http-metrics
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http-metrics
+            initialDelaySeconds: 30
+            timeoutSeconds: 1
+          resources:
+            limits:
+              memory: 1Gi
+            requests:
+              cpu: 50m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsGroup: 1000
+            runAsNonRoot: true
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - mountPath: /conf
+              name: config
+            - mountPath: /runtime-config
+              name: runtime-config
+            - mountPath: /var/tempo
+              name: tempo-compactor-store
+      enableServiceLinks: false
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        runAsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: tempo
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - labelSelector:
+            matchLabels:
+              app.kubernetes.io/component: compactor
+              app.kubernetes.io/instance: tempo
+              app.kubernetes.io/name: tempo
+          maxSkew: 1
+          minDomains: 3
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+      volumes:
+        - configMap:
+            items:
+              - key: tempo.yaml
+                path: tempo.yaml
+            name: tempo-config
+          name: config
+        - configMap:
+            items:
+              - key: overrides.yaml
+                path: overrides.yaml
+            name: tempo-runtime
+          name: runtime-config
+        - emptyDir: {}
+          name: tempo-compactor-store

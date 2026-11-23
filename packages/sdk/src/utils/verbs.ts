@@ -74,7 +74,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     deleted: 'deleteAgentSession',
     ran: `
       startFreshAgentConversation retryAgentConversationTurn refreshAgentSessionChanges
-      callConnectedAppTool controlAgentSession steerQueuedAction openInApp
+      callConnectedAppTool controlAgentSession steerQueuedAction
     `,
     linked: `
       linkAgentSessionPullRequest
@@ -85,6 +85,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     removed: 'removeQueuedAction unregisterAgentSessionWork',
     submitted: 'answerAgentSessionToolApproval',
     approved: 'decideSessionReview',
+    requested: 'openInApp',
     shared: 'presentSessionView',
     registered: 'registerAgentSessionWork',
   },
@@ -160,7 +161,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     generated: 'generateImage',
     stopped: 'stopChatStream',
   },
-  contacts: { searched: 'searchPeople' },
+  contacts: { searched: 'searchPeople', listed: 'listContactListMembers' },
   email: {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
@@ -190,8 +191,12 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     copied: 'copyThreadCalendarInvitation',
   },
   notification: {
-    removed: 'removeUnsubscribeItem',
-    listed: 'listTypedNotifications getNotificationTypePreferences',
+    removed: 'removeUnsubscribeItem resetChannelNotificationSettings',
+    listed: `
+      listChannelNotificationSettings
+      listTypedNotifications
+      getNotificationTypePreferences
+    `,
     read: 'getTypedNotificationById',
     deleted: 'bulkDeleteUserNotificationsV2 deleteUserNotificationV2',
     marked:
@@ -201,6 +206,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       unsubscribeItem
     `,
     enabled: 'enableNotificationType',
+    edited: 'updateChannelNotificationSettings',
+    sent: 'sendPing',
   },
   properties: {
     labeled: 'ensureTagSet',
@@ -223,7 +230,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: `
       getAccountManagerGrant getDocumentAnchors getSelfBot getBot meetingLookup
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
-      getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
+      getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany getCompanyByDomain
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
       getCrmEmailPolicy getCrmEmailPrivacy getCrmEmailRulePreview getCrmEmailRuleRevision
       getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
@@ -240,6 +247,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       exportDocument streamEvents
       passwordsAgentDisclose passwordsAgentMyRequest passwordsAgentTotpCode
       exportCrmPipelineCsv getBatchCallRecordPreview getCallRecording getCrmPipelineCsv getDatabaseQuery getDocumentMarkdown getInitiativeActivity getInitiativeDescription getSavedViewDefinition readCanvasScene readDesign readIllustratorDocument readPhotoshopDocument readPresentation readSpreadsheet readWordDocument
+      getTaskTemplate getTimer
     `,
     listed: `
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
@@ -254,6 +262,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       getPinsHandler getProjectContentHandler recentlyDeleted listEmailReminders listUserApiKeys
       listWebhooks whatsappChats
       getCallParticipants getLiveCalls listCrmRecordPipelineEntries listHarnessDirectory listHarnessResidents listSavedViewDefinitions pageInitiatives
+      listTaskTemplates listTimeEntries
     `,
     searched: `
       searchContacts taskSimilaritySearchHandler passwordsAgentSearch
@@ -277,7 +286,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       createCanvasHandler createMarkdownHandler createSkillHandler createSnippetHandler
       createTaskHandler externalChatAdd createForm createHarnessPairing createInitiative
       entityMessageCreate createProjectHandler createUserApiKey createWebhook
-      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall passwordsAgentCreate
+      createSavedViewDefinition createSpreadsheet saveDatabaseQuery startCall
+      createTaskTemplate passwordsAgentCreate
     `,
     edited: `
       passwordsAgentUpdate passwordsAgentSetTotp
@@ -293,7 +303,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
+      updateTaskTemplate updateTimeEntry
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
@@ -304,6 +315,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       entityMessageDeleteMessage entityMessageDeleteThread deleteProjectHandler
       permanentlyDeleteProject deleteUserApiKey deleteWebhook
       deleteSavedViewDefinition
+      deleteTaskTemplate deleteTimeEntry
     `,
     removed: `
       removeBotFromChannelByBot removeParticipants removeFavoriteByEntity removePinHandler
@@ -311,7 +323,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     added: `
       addChannelBot addParticipants addFavorite addPinHandler
-      addCrmPipelineEntries
+      addCrmPipelineEntries logTime
     `,
     blocked: 'blockCrmDomain',
     unblocked: 'unblockCrmDomain',
@@ -332,7 +344,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     unshared: 'revokeAccountManagerGrant',
     invited: 'meetingInvite meetingInviteUsers',
-    cancelled: 'meetingCancel cancelChannelAccessRequest accessRequestsCancel',
+    cancelled:
+      'meetingCancel cancelChannelAccessRequest accessRequestsCancel discardTimer',
     joined: `
       joinChannel
       joinCall meetingGuestJoin meetingJoin
@@ -363,7 +376,8 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     labeled: 'setChannelLabel',
     marked: 'setEmailFollowup externalChatRead',
-    ran: 'claimAccountManagerToken',
+    ran: 'claimAccountManagerToken startTimer',
+    stopped: 'stopTimer',
   },
 };
 

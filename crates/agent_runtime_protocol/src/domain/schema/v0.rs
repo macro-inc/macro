@@ -133,6 +133,10 @@ pub const RUNTIME_ACCEPTS_HEADER: &str = "x-macro-runtime-accepts";
 /// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::AgentsChanged`].
 pub const ACCEPTS_AGENTS_CHANGED: &str = "agents-changed";
 
+/// The [`RUNTIME_ACCEPTS_HEADER`] entry for [`ToRuntimeMessage::ApplyAgent`]:
+/// a runtime that doesn't list it can't run an agent teammate.
+pub const ACCEPTS_APPLY_AGENT: &str = "apply-agent";
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -160,6 +164,10 @@ pub enum ToRuntimeMessage {
     ApplyAgent {
         /// The agent's environment.
         environment: AgentEnvironment,
+        /// W3C context of the computer's setup, so the agent's start joins
+        /// its trace. Absent from older services.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        traceparent: Option<String>,
     },
 }
 
@@ -171,6 +179,15 @@ pub struct AgentEnvironment(
     #[specta(type = std::collections::HashMap<String, String>)]
     pub  std::collections::BTreeMap<String, String>,
 );
+
+/// The values are credentials: wiped from memory when dropped.
+impl Drop for AgentEnvironment {
+    fn drop(&mut self) {
+        for value in self.0.values_mut() {
+            zeroize::Zeroize::zeroize(value);
+        }
+    }
+}
 
 impl std::fmt::Debug for AgentEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

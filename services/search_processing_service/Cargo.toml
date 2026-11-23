@@ -8,6 +8,7 @@ version = "0.1.0"
 [features]
 default = ["processing", "service", "pdf"]
 processing = [
+  "dep:aws-sdk-cloudwatch",
   "dep:call",
   "dep:channels",
   "dep:chat",
@@ -20,9 +21,11 @@ processing = [
   "dep:opentelemetry",
   "dep:projects",
   "dep:properties",
+  "dep:rand",
   "dep:rdkafka",
   "dep:rootcause",
   "dep:tokio-retry",
+  "dep:tracing-opentelemetry",
 ]
 service = [
   "dep:documents",
@@ -53,6 +56,7 @@ entity_registry = { path = "../../crates/entity_registry/entity_registry", defau
 entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 agent_fold = { path = "../../crates/folds/agent_fold" }
 anyhow = { workspace = true }
+aws-sdk-cloudwatch = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true }
@@ -89,7 +93,6 @@ macro_event_topics = { path = "../../crates/macro_event_topics", optional = true
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false }
 macro_user_id = { path = "../../crates/macro_user_id" }
-macro_uuid = { path = "../../crates/macro_uuid" }
 mention_utils = { path = "../../crates/mention_utils" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents = { path = "../../crates/documents", default-features = false, optional = true }
@@ -106,13 +109,14 @@ models_properties = { path = "../../crates/models_properties", optional = true }
 models_search = { path = "../../crates/models_search" }
 nom = { workspace = true }
 opensearch_client = { path = "../../crates/opensearch_client" }
-opentelemetry = { workspace = true, features = ["metrics"], optional = true }
+opentelemetry = { workspace = true, features = ["metrics", "trace"], optional = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
 pdfium-render = { workspace = true, optional = true }
 properties = { path = "../../crates/properties", default-features = false, features = [
   "outbound",
 ], optional = true }
 projects = { path = "../../crates/projects", default-features = false, optional = true }
+rand = { workspace = true, optional = true }
 rdkafka = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 rust-embed = "8.6.0"
@@ -132,6 +136,7 @@ tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }

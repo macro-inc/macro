@@ -1,6 +1,6 @@
 import type { LexicalEditor } from 'lexical';
 export interface ComposeBodyActions {
-  focusSibling?: (direction: 'next' | 'prev') => boolean | void;
+  focusSibling?: (direction: 'next' | 'prev') => boolean;
   recipientAdded(email: string): void;
   readDroppedFiles(
     files: FileSystemFileEntry[],

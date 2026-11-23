@@ -1,4 +1,5 @@
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { createSignal } from 'solid-js';
 
 // App-level launchers connect global create actions to the one mounted dialog host.
@@ -10,10 +11,12 @@ const [contactTarget, setContactTarget] = createSignal<ContactCreationTarget>();
 const companyLock = useFocusLock('create-company');
 const contactLock = useFocusLock('create-contact');
 export function openCreateCompanyModal() {
+  if (!crmAccessAllowed()) return;
   companyLock.acquire();
   setCompanyOpen(true);
 }
 export function openCreateContactModal(company?: { companyId: string }) {
+  if (!crmAccessAllowed()) return;
   contactLock.acquire();
   setContactTarget({ company });
 }

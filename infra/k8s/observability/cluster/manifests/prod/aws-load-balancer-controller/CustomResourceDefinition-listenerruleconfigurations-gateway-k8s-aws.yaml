@@ -1,0 +1,563 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: listenerruleconfigurations.gateway.k8s.aws
+spec:
+  group: gateway.k8s.aws
+  names:
+    kind: ListenerRuleConfiguration
+    listKind: ListenerRuleConfigurationList
+    plural: listenerruleconfigurations
+    singular: listenerruleconfiguration
+  scope: Namespaced
+  versions:
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.creationTimestamp
+          name: AGE
+          type: date
+      name: v1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                actions:
+                  items:
+                    properties:
+                      authenticateCognitoConfig:
+                        properties:
+                          authenticationRequestExtraParams:
+                            additionalProperties:
+                              type: string
+                            maxProperties: 10
+                            type: object
+                          onUnauthenticatedRequest:
+                            default: authenticate
+                            enum:
+                              - deny
+                              - allow
+                              - authenticate
+                            type: string
+                          scope:
+                            default: openid
+                            type: string
+                          sessionCookieName:
+                            default: AWSELBAuthSessionCookie
+                            type: string
+                          sessionTimeout:
+                            default: 604800
+                            format: int64
+                            maximum: 604800
+                            minimum: 1
+                            type: integer
+                          userPoolArn:
+                            type: string
+                          userPoolClientId:
+                            type: string
+                          userPoolDomain:
+                            type: string
+                        required:
+                          - userPoolArn
+                          - userPoolClientId
+                          - userPoolDomain
+                        type: object
+                      authenticateOIDCConfig:
+                        properties:
+                          authenticationRequestExtraParams:
+                            additionalProperties:
+                              type: string
+                            maxProperties: 10
+                            type: object
+                          authorizationEndpoint:
+                            type: string
+                          issuer:
+                            type: string
+                          onUnauthenticatedRequest:
+                            default: authenticate
+                            enum:
+                              - deny
+                              - allow
+                              - authenticate
+                            type: string
+                          scope:
+                            default: openid
+                            type: string
+                          secret:
+                            properties:
+                              name:
+                                type: string
+                            required:
+                              - name
+                            type: object
+                          sessionCookieName:
+                            default: AWSELBAuthSessionCookie
+                            type: string
+                          sessionTimeout:
+                            default: 604800
+                            format: int64
+                            maximum: 604800
+                            minimum: 1
+                            type: integer
+                          tokenEndpoint:
+                            type: string
+                          useExistingClientSecret:
+                            type: boolean
+                          userInfoEndpoint:
+                            type: string
+                        required:
+                          - authorizationEndpoint
+                          - issuer
+                          - secret
+                          - tokenEndpoint
+                          - userInfoEndpoint
+                        type: object
+                      fixedResponseConfig:
+                        properties:
+                          contentType:
+                            default: text/plain
+                            enum:
+                              - text/plain
+                              - text/css
+                              - text/html
+                              - application/javascript
+                              - application/json
+                            type: string
+                          messageBody:
+                            type: string
+                          statusCode:
+                            format: int32
+                            type: integer
+                            x-kubernetes-validations:
+                              - message: StatusCode must be a valid HTTP status code in the 2XX, 4XX, or 5XX range
+                                rule: (self >= 200 && self <= 299) || (self >= 400 && self <= 599)
+                        required:
+                          - statusCode
+                        type: object
+                      forwardConfig:
+                        properties:
+                          targetGroupStickinessConfig:
+                            default: {}
+                            properties:
+                              durationSeconds:
+                                default: 3600
+                                format: int32
+                                maximum: 604800
+                                minimum: 1
+                                type: integer
+                              enabled:
+                                default: false
+                                type: boolean
+                            type: object
+                        type: object
+                      jwtValidationConfig:
+                        properties:
+                          additionalClaims:
+                            items:
+                              properties:
+                                format:
+                                  enum:
+                                    - single-string
+                                    - string-array
+                                    - space-separated-values
+                                  type: string
+                                name:
+                                  minLength: 1
+                                  type: string
+                                values:
+                                  items:
+                                    maxLength: 256
+                                    type: string
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - format
+                                - name
+                                - values
+                              type: object
+                            type: array
+                          issuer:
+                            maxLength: 256
+                            type: string
+                          jwksEndpoint:
+                            maxLength: 256
+                            type: string
+                        required:
+                          - issuer
+                          - jwksEndpoint
+                        type: object
+                      redirectConfig:
+                        properties:
+                          query:
+                            default: '#{query}'
+                            type: string
+                        type: object
+                      type:
+                        enum:
+                          - forward
+                          - fixed-response
+                          - redirect
+                          - authenticate-cognito
+                          - authenticate-oidc
+                          - jwt-validation
+                        type: string
+                    required:
+                      - type
+                    type: object
+                    x-kubernetes-validations:
+                      - message: forwardConfig must be specified only when type is 'forward'
+                        rule: 'has(self.type) && self.type == ''forward'' ? has(self.forwardConfig) : !has(self.forwardConfig)'
+                      - message: redirectConfig must be specified only when type is 'redirect'
+                        rule: 'has(self.type) && self.type == ''redirect'' ? has(self.redirectConfig) : !has(self.redirectConfig)'
+                      - message: fixedResponseConfig must be specified only when type is 'fixed-response'
+                        rule: 'has(self.type) && self.type == ''fixed-response'' ? has(self.fixedResponseConfig) : !has(self.fixedResponseConfig)'
+                      - message: authenticateCognitoConfig must be specified only when type is 'authenticate-cognito'
+                        rule: 'has(self.type) && self.type == ''authenticate-cognito'' ? has(self.authenticateCognitoConfig) : !has(self.authenticateCognitoConfig)'
+                      - message: authenticateOIDCConfig must be specified only when type is 'authenticate-oidc'
+                        rule: 'has(self.type) && self.type == ''authenticate-oidc'' ? has(self.authenticateOIDCConfig) : !has(self.authenticateOIDCConfig)'
+                      - message: jwtValidationConfig must be specified only when type is 'jwt-validation'
+                        rule: 'has(self.type) && self.type == ''jwt-validation'' ? has(self.jwtValidationConfig) : !has(self.jwtValidationConfig)'
+                  maxItems: 2
+                  minItems: 1
+                  type: array
+                conditions:
+                  items:
+                    properties:
+                      field:
+                        enum:
+                          - source-ip
+                        type: string
+                      matchIndexes:
+                        items:
+                          type: integer
+                        type: array
+                      sourceIPConfig:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                    required:
+                      - field
+                    type: object
+                    x-kubernetes-validations:
+                      - message: sourceIPConfig must be specified only when field is 'source-ip'
+                        rule: 'has(self.field) && self.field == ''source-ip'' ? has(self.sourceIPConfig) : !has(self.sourceIPConfig)'
+                  minItems: 1
+                  type: array
+                tags:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+              x-kubernetes-validations:
+                - message: At least one action must be specified if actions field is present
+                  rule: '!has(self.actions) || size(self.actions) > 0'
+                - message: Only forward, redirect, authenticate-oidc, authenticate-cognito, jwt-validation, and fixed-response action types are supported
+                  rule: '!has(self.actions) || self.actions.all(a, a.type == ''authenticate-oidc'' || a.type == ''authenticate-cognito'' || a.type == ''jwt-validation'' || a.type == ''fixed-response'' || a.type == ''forward'' || a.type == ''redirect'')'
+                - message: At most one pre-routing action (authenticate-oidc, authenticate-cognito, or jwt-validation) can be specified
+                  rule: '!has(self.actions) || size(self.actions.filter(a, a.type == ''authenticate-oidc'' || a.type == ''authenticate-cognito'' || a.type == ''jwt-validation'')) <= 1'
+                - message: At most one routing action (fixed-response or forward or redirect) can be specified
+                  rule: '!has(self.actions) || size(self.actions.filter(a, a.type == ''fixed-response'' || a.type == ''forward'' || a.type == ''redirect'')) <= 1'
+            status:
+              properties:
+                accepted:
+                  type: boolean
+                message:
+                  type: string
+                observedGeneration:
+                  format: int64
+                  type: integer
+              type: object
+          type: object
+      served: true
+      storage: true
+      subresources:
+        status: {}
+    - additionalPrinterColumns:
+        - jsonPath: .metadata.creationTimestamp
+          name: AGE
+          type: date
+      deprecated: true
+      deprecationWarning: gateway.k8s.aws/v1beta1 ListenerRuleConfiguration is deprecated; use gateway.k8s.aws/v1 instead
+      name: v1beta1
+      schema:
+        openAPIV3Schema:
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              properties:
+                actions:
+                  items:
+                    properties:
+                      authenticateCognitoConfig:
+                        properties:
+                          authenticationRequestExtraParams:
+                            additionalProperties:
+                              type: string
+                            maxProperties: 10
+                            type: object
+                          onUnauthenticatedRequest:
+                            default: authenticate
+                            enum:
+                              - deny
+                              - allow
+                              - authenticate
+                            type: string
+                          scope:
+                            default: openid
+                            type: string
+                          sessionCookieName:
+                            default: AWSELBAuthSessionCookie
+                            type: string
+                          sessionTimeout:
+                            default: 604800
+                            format: int64
+                            maximum: 604800
+                            minimum: 1
+                            type: integer
+                          userPoolArn:
+                            type: string
+                          userPoolClientId:
+                            type: string
+                          userPoolDomain:
+                            type: string
+                        required:
+                          - userPoolArn
+                          - userPoolClientId
+                          - userPoolDomain
+                        type: object
+                      authenticateOIDCConfig:
+                        properties:
+                          authenticationRequestExtraParams:
+                            additionalProperties:
+                              type: string
+                            maxProperties: 10
+                            type: object
+                          authorizationEndpoint:
+                            type: string
+                          issuer:
+                            type: string
+                          onUnauthenticatedRequest:
+                            default: authenticate
+                            enum:
+                              - deny
+                              - allow
+                              - authenticate
+                            type: string
+                          scope:
+                            default: openid
+                            type: string
+                          secret:
+                            properties:
+                              name:
+                                type: string
+                            required:
+                              - name
+                            type: object
+                          sessionCookieName:
+                            default: AWSELBAuthSessionCookie
+                            type: string
+                          sessionTimeout:
+                            default: 604800
+                            format: int64
+                            maximum: 604800
+                            minimum: 1
+                            type: integer
+                          tokenEndpoint:
+                            type: string
+                          useExistingClientSecret:
+                            type: boolean
+                          userInfoEndpoint:
+                            type: string
+                        required:
+                          - authorizationEndpoint
+                          - issuer
+                          - secret
+                          - tokenEndpoint
+                          - userInfoEndpoint
+                        type: object
+                      fixedResponseConfig:
+                        properties:
+                          contentType:
+                            default: text/plain
+                            enum:
+                              - text/plain
+                              - text/css
+                              - text/html
+                              - application/javascript
+                              - application/json
+                            type: string
+                          messageBody:
+                            type: string
+                          statusCode:
+                            format: int32
+                            type: integer
+                            x-kubernetes-validations:
+                              - message: StatusCode must be a valid HTTP status code in the 2XX, 4XX, or 5XX range
+                                rule: (self >= 200 && self <= 299) || (self >= 400 && self <= 599)
+                        required:
+                          - statusCode
+                        type: object
+                      forwardConfig:
+                        properties:
+                          targetGroupStickinessConfig:
+                            default: {}
+                            properties:
+                              durationSeconds:
+                                default: 3600
+                                format: int32
+                                maximum: 604800
+                                minimum: 1
+                                type: integer
+                              enabled:
+                                default: false
+                                type: boolean
+                            type: object
+                        type: object
+                      jwtValidationConfig:
+                        properties:
+                          additionalClaims:
+                            items:
+                              properties:
+                                format:
+                                  enum:
+                                    - single-string
+                                    - string-array
+                                    - space-separated-values
+                                  type: string
+                                name:
+                                  minLength: 1
+                                  type: string
+                                values:
+                                  items:
+                                    maxLength: 256
+                                    type: string
+                                  maxItems: 10
+                                  minItems: 1
+                                  type: array
+                              required:
+                                - format
+                                - name
+                                - values
+                              type: object
+                            type: array
+                          issuer:
+                            maxLength: 256
+                            type: string
+                          jwksEndpoint:
+                            maxLength: 256
+                            type: string
+                        required:
+                          - issuer
+                          - jwksEndpoint
+                        type: object
+                      redirectConfig:
+                        properties:
+                          query:
+                            default: '#{query}'
+                            type: string
+                        type: object
+                      type:
+                        enum:
+                          - forward
+                          - fixed-response
+                          - redirect
+                          - authenticate-cognito
+                          - authenticate-oidc
+                          - jwt-validation
+                        type: string
+                    required:
+                      - type
+                    type: object
+                    x-kubernetes-validations:
+                      - message: forwardConfig must be specified only when type is 'forward'
+                        rule: 'has(self.type) && self.type == ''forward'' ? has(self.forwardConfig) : !has(self.forwardConfig)'
+                      - message: redirectConfig must be specified only when type is 'redirect'
+                        rule: 'has(self.type) && self.type == ''redirect'' ? has(self.redirectConfig) : !has(self.redirectConfig)'
+                      - message: fixedResponseConfig must be specified only when type is 'fixed-response'
+                        rule: 'has(self.type) && self.type == ''fixed-response'' ? has(self.fixedResponseConfig) : !has(self.fixedResponseConfig)'
+                      - message: authenticateCognitoConfig must be specified only when type is 'authenticate-cognito'
+                        rule: 'has(self.type) && self.type == ''authenticate-cognito'' ? has(self.authenticateCognitoConfig) : !has(self.authenticateCognitoConfig)'
+                      - message: authenticateOIDCConfig must be specified only when type is 'authenticate-oidc'
+                        rule: 'has(self.type) && self.type == ''authenticate-oidc'' ? has(self.authenticateOIDCConfig) : !has(self.authenticateOIDCConfig)'
+                      - message: jwtValidationConfig must be specified only when type is 'jwt-validation'
+                        rule: 'has(self.type) && self.type == ''jwt-validation'' ? has(self.jwtValidationConfig) : !has(self.jwtValidationConfig)'
+                  maxItems: 2
+                  minItems: 1
+                  type: array
+                conditions:
+                  items:
+                    properties:
+                      field:
+                        enum:
+                          - source-ip
+                        type: string
+                      matchIndexes:
+                        items:
+                          type: integer
+                        type: array
+                      sourceIPConfig:
+                        properties:
+                          values:
+                            items:
+                              type: string
+                            minItems: 1
+                            type: array
+                        required:
+                          - values
+                        type: object
+                    required:
+                      - field
+                    type: object
+                    x-kubernetes-validations:
+                      - message: sourceIPConfig must be specified only when field is 'source-ip'
+                        rule: 'has(self.field) && self.field == ''source-ip'' ? has(self.sourceIPConfig) : !has(self.sourceIPConfig)'
+                  minItems: 1
+                  type: array
+                tags:
+                  additionalProperties:
+                    type: string
+                  type: object
+              type: object
+              x-kubernetes-validations:
+                - message: At least one action must be specified if actions field is present
+                  rule: '!has(self.actions) || size(self.actions) > 0'
+                - message: Only forward, redirect, authenticate-oidc, authenticate-cognito, jwt-validation, and fixed-response action types are supported
+                  rule: '!has(self.actions) || self.actions.all(a, a.type == ''authenticate-oidc'' || a.type == ''authenticate-cognito'' || a.type == ''jwt-validation'' || a.type == ''fixed-response'' || a.type == ''forward'' || a.type == ''redirect'')'
+                - message: At most one pre-routing action (authenticate-oidc, authenticate-cognito, or jwt-validation) can be specified
+                  rule: '!has(self.actions) || size(self.actions.filter(a, a.type == ''authenticate-oidc'' || a.type == ''authenticate-cognito'' || a.type == ''jwt-validation'')) <= 1'
+                - message: At most one routing action (fixed-response or forward or redirect) can be specified
+                  rule: '!has(self.actions) || size(self.actions.filter(a, a.type == ''fixed-response'' || a.type == ''forward'' || a.type == ''redirect'')) <= 1'
+            status:
+              properties:
+                accepted:
+                  type: boolean
+                message:
+                  type: string
+                observedGeneration:
+                  format: int64
+                  type: integer
+              type: object
+          type: object
+      served: true
+      storage: false
+      subresources:
+        status: {}

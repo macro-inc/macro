@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { isUnreadChannelMessageNotification } from '@notifications/top-level-channel-notification';
 import {
   ChannelUnreadCacheWriteDocument,
@@ -18,6 +19,7 @@ const channelMessageEvents = new Set([
   'channel_message_send',
   'document_mention',
   'channel_access_requested',
+  'channel_invite',
 ]);
 
 const relationshipQuery = stringifyDocument(ChannelUnreadCacheWriteDocument);
@@ -37,7 +39,8 @@ const membershipQuery = stringifyDocument(
 export async function cacheNewChannelUnread(
   host: Pick<CacheHost, 'writeQuery' | 'readQuery'>,
   notification: SoupNotificationFieldsFragment,
-  isCurrent: () => boolean
+  isCurrent: () => boolean,
+  generation = cacheSessionGeneration.capture()
 ): Promise<boolean> {
   if (
     !isCurrent() ||
@@ -59,6 +62,7 @@ export async function cacheNewChannelUnread(
     createdAt: notification.createdAt,
   };
   await host.writeQuery({
+    generation,
     query: relationshipQuery,
     operationName: 'ChannelUnreadCacheWrite',
     variables: {},
@@ -108,6 +112,7 @@ export async function cacheNewChannelUnread(
     if (data.user.soup.items.some((item) => item.id === channel.id)) continue;
     const limit = Math.min(initial.limit ?? 500, 500);
     await host.writeQuery({
+      generation,
       query: membershipQuery,
       operationName: 'ChannelUnreadMembershipCacheWrite',
       variables,

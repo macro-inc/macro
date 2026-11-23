@@ -237,6 +237,7 @@ impl FindingPrompts {
             .replace("{items}", ITEMS.trim())
             .replace("{conditions}", conditions)
             .replace("{steps}", &steps)
+            .replace("{icons}", &model_entity::macro_icon_names().join(", "))
             .replace("{reference}", reference.trim())
     }
 }
@@ -533,6 +534,7 @@ impl<Code: RoutineCode, Sessions: RoutineSessions> super::RoutineDrafts<Code, Se
                 &context.agent_model,
             )),
             prompt: prompt(&task, owner, context, &lookup, &areas),
+            apps: None,
         }))
     }
 

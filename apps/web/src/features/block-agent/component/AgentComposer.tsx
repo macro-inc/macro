@@ -1,5 +1,8 @@
-import { SpeedSelector } from '@core/component/AI/component/input/SpeedSelector';
-import { catalogModelLabel } from '@core/component/AI/constant/model-label';
+import { UnifiedModelSelector } from '@app/features/agents-view/model-selector';
+import {
+  catalogModelLabel,
+  modelLabel,
+} from '@core/component/AI/constant/model-label';
 import { nativeSpeeds, resolveSpeed } from '@core/component/AI/constant/speed';
 import {
   preferredSpeed,
@@ -24,7 +27,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { isNoRuntimeAccessError } from '@service-agent-harness/no-runtime-access';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, createMemo, createSignal, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   createSessionAttachmentTracker,
@@ -38,20 +41,15 @@ import {
 import {
   type EffortSelection,
   effortConfigOption,
-  effortLabel,
   selectConfigOption,
 } from '../state/session-config';
 import {
   AgentInput,
   type AgentInputProps,
-  AgentModelSelector,
   ComposerNotice,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
-import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
-import { AgentModelMenuItem } from './AgentModelMenuItem';
-import { EffortSelector } from './EffortSelector';
 import { PermissionRequest } from './PermissionRequest';
 import { promptActionOf } from './prompt-action';
 import { ToolApprovalRequest } from './ToolApprovalRequest';
@@ -63,10 +61,8 @@ export function AgentComposer(props: {
    */
   autofocus?: boolean;
   input?: Component<AgentInputProps>;
-  modelSelector?: Component<AgentModelSelectorProps>;
 }) {
   const Input = props.input ?? AgentInput;
-  const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
     session,
     selectModel,
@@ -148,6 +144,14 @@ export function AgentComposer(props: {
     const option = effort();
     return option ? changingConfig(messages(), option.id) : undefined;
   };
+
+  const catalog = createMemo(() =>
+    (metadata()?.supportedModels ?? []).map((option) => ({
+      id: option.id,
+      label: modelLabel(option.id, option.name, option.description),
+      group: option.group ?? undefined,
+    }))
+  );
 
   // A turn is open in some form: the send button becomes a stop square and
   // prompts sent now wait in the server queue behind it. A stop the fold has
@@ -297,7 +301,7 @@ export function AgentComposer(props: {
         <ComposerNotice
           text={
             interactions.canAnswer()
-              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              ? 'The agent is waiting for your answer above; Skip lets it continue without one. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
@@ -368,72 +372,45 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <div class="flex min-w-0 items-center gap-1">
-            <ModelSelector
-              onCloseAutoFocus={restoreInputFocus}
-              model={metadata()?.model ?? null}
-              changingTo={changingModel(messages(), metadata()?.model ?? null)}
-              options={metadata()?.supportedModels ?? []}
-              effortLabel={effortLabel(effort(), changingEffort())}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined
-              }
-              onSelect={(model) =>
-                fireAndForget(chooseModel(model), 'agent-composer')
-              }
-              modelRow={(row) => (
-                <AgentModelMenuItem
-                  {...row}
-                  harness={session()?.harness}
-                  effort={
-                    row.option.id === metadata()?.model ? effort() : undefined
-                  }
-                  effortValue={
-                    row.option.id === metadata()?.model
-                      ? changingEffort()
-                      : undefined
-                  }
-                  onSelectEffort={(selection) =>
-                    fireAndForget(
-                      chooseModel(row.option.id, selection),
-                      'agent-composer'
-                    )
-                  }
-                />
-              )}
-            />
-            <EffortSelector
-              onCloseAutoFocus={restoreInputFocus}
-              config={effort()}
-              value={changingEffort()}
-              disabled={
-                loadFailed() ||
-                readOnly() ||
-                pending() ||
-                configuring() ||
-                changingEffort() !== undefined ||
+          <UnifiedModelSelector
+            state={{
+              model:
+                changingModel(messages(), metadata()?.model ?? null) ??
+                metadata()?.model ??
+                undefined,
+              models: catalog(),
+              suggestedModels: catalog(),
+              effort: effort(),
+              effortValue: changingEffort(),
+              effortDisabled:
                 changingModel(messages(), metadata()?.model ?? null) !==
+                undefined,
+              speeds: speedOption()?.option.options.map(
+                (option) => option.value
+              ),
+              speedValue: speed(),
+              disabled:
+                loadFailed() ||
+                readOnly() ||
+                pending() ||
+                configuring() ||
+                changingEffort() !== undefined,
+              onModel: (model) =>
+                fireAndForget(chooseModel(model), 'agent-composer'),
+              onEffort: (choice) => {
+                if (
+                  changingModel(messages(), metadata()?.model ?? null) !==
                   undefined
-              }
-              onChange={(choice) => {
+                )
+                  return;
                 const model = metadata()?.model;
                 if (model)
                   fireAndForget(chooseModel(model, choice), 'agent-composer');
-              }}
-            />
-
-            <SpeedSelector
-              onCloseAutoFocus={restoreInputFocus}
-              offered={speedOption()?.option.options ?? []}
-              value={speed() ?? 'standard'}
-              disabled={readOnly() || configuring()}
-              onChange={setPreferredSpeed}
-            />
-          </div>
+              },
+              onSpeed: setPreferredSpeed,
+              onCloseAutoFocus: restoreInputFocus,
+            }}
+          />
         }
       />
     </>

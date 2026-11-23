@@ -33,11 +33,12 @@ routine cards) and routines sessions that write routine suggestions (catalog
 picks and drafted routines). Each section runs one kind alone, with only its
 flag on, so its number moves only with that kind's prompt and tools. Both
 also turn on `enable-event-routines` (`BASE_FLAGS`), without which a drafted
-routine can't start when mail arrives; every other flag is off.
+routine can't start when mail arrives (and the routines brief asks only for
+scheduled ones); every other flag is off.
 
 | Section | Generation | Persona copy | Answer key |
 | --- | --- | --- | --- |
-| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines sessions of the onboarding layout, in parallel, 240 s cap, one retry when a session suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do), 4 or 5 decoys, and every other catalog routine placed as `fine` or `misfit` |
+| `routines` | onboarding (`POST /suggestions/generate`), `enable-routine-suggestions` only: the routines session of the onboarding layout (one for every surface), 240 s cap, one retry when it suggests nothing | `signup`: the person a minute after signing up, their mailbox and nothing else | 5 or 6 needs a routine would meet (which catalog keys meet each, or what a drafted routine must do), 4 or 5 decoys, and every other catalog routine placed as `fine` or `misfit` |
 | `feed` | fresh suggestions (`POST /suggestions/regenerate`), `enable-suggestions` only: the suggestions session with nightly timeouts | `full`: weeks of use, with documents, tasks, channels, calls and mail | 9 planted opportunities that connect sources, and 3 stale decoys |
 
 The nightly run is the manual one with another brief line, a paid-plan check
@@ -85,7 +86,31 @@ apart: it calls as a grader account of its own.
 The judge (`anthropic/claude-opus-5-5` through the stack's structured
 completion) sees the persona's mail or workspace, the answer key and the
 suggestions, never the build, the label or other runs, and gets the run's own
-"now" and time zone.
+"now" and time zone. Every seat copies the first under a domain of its own, so
+where renaming a seat's domain to the first seat's loses nothing (none of its
+mail or suggestions names the first seat's domain in any case or its own in
+another case, and its mail renamed is the first seat's word for word: a
+snippet cut at 500 characters can cut a longer domain's copy elsewhere), a
+routines judgement reads the first seat's mail and the seat's suggestions
+renamed (`routinesEvidence`), so a persona's seats, in every rep of the run
+(all at one "now"), share the person, mail, catalog and key word for word;
+those go after the rubric, which the route caches, and the persona's first
+judgement writes the cache the others then read. Any other seat is judged on
+its own mail, which no other seat's judgement shares. Rejudged that way, the
+same generations scored within the judge's own pass-to-pass difference (main
+12.3 against 12.3 and 11.0, a single-session build 64.7 against 66.3) at about
+half the judge's cost.
+
+A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
+bump with any change to a rubric, a schema or what a judgement reads), and
+`compare` and `noise` refuse two sides judged by different judges (`rejudge`
+each run of the older side) or a side whose judge wasn't recorded, and no side
+joins runs without one. A run also records a digest of each persona's
+workspace and mail as its generations read them: `compare` and `noise` refuse
+two sides that read a persona they share differently or without a digest, no
+side joins runs that do, and `rejudge` refuses a run whose persona has changed
+since, or one from before the digest was kept, so the judge reads what the
+generation read: run that one again instead.
 
 ## Running it
 
@@ -116,14 +141,16 @@ seat is a copy of a persona under a domain of its own (`founder`,
 by side (see **Seats** below). Seats sign up on their first run (one signup
 each for `routines`, five for `feed`'s teams), against the webhook's 50
 an hour: on a new stack, run the two sections an hour apart, or `all` stops
-part way through the feed when the webhook refuses a seat. Judging runs alongside, as three
-grader accounts, while the next rep seeds.
+part way through the feed when the webhook refuses a seat. Judging runs as
+three grader accounts: the feed's while the next rep seeds, the routines'
+once the last rep has generated (see **Seats** below).
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
-sessions' transcripts beside it. `run` starts the stand-in if it isn't up
-and holds the stack while it runs (the drafting eval's lock), so two runs
-never share it.
+sessions' transcripts beside it. A routines attempt is written as soon as it
+has generated, marked not judged until it is, so `rejudge` can judge a run
+that stopped first. `run` starts the stand-in if it isn't up and holds the
+stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
@@ -148,8 +175,9 @@ bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
 A side of `compare`, `noise` or `report` may be several runs of one section
-joined by commas (`a1.json,a2.json`), read as one. The margins hold at the
-default size: a smaller run (fewer seats or reps) is only a look.
+and set, judged by one recorded judge on personas read the same way, joined by
+commas (`a1.json,a2.json`), read as one. The margins hold at the default size:
+a smaller run (fewer seats or reps) is only a look.
 
 ### Held-out personas
 
@@ -173,6 +201,13 @@ aggregate. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.
+
+The seed CLI refuses an address whose local part isn't ASCII, so as a
+persona is loaded, each such address in its mail, workspace and answer keys
+alike is spelled in ASCII (accents dropped, any other non-ASCII character
+removed), or tagged where that would match another of the persona's
+addresses in any case or leave the local part empty (`asciiSpellings` in
+`personas.ts`). `bun test $B` checks those spellings.
 
 ## Baseline
 
@@ -243,15 +278,35 @@ briefs, customer requests); the sales rep lost one of the two needs only a
 drafted routine meets (found 3.83 to 2.94). Wrong sidebars fell from 0.56 to
 0.19 a generation.
 
+### One onboarding session, judged once a run
+
+Main `fa31ccc0c0` (one routines session for every surface) twice on
+`routines`, every rep at one "now" and each persona's judge prefix written
+once a run (`judgeLast`), 2026-11-19, on one stack:
+
+| Run | Score | Found / needs | Bad | Suggested | First | End |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 70.5 (61.6 to 79.5) | 4.07 / 5.7 | 0.11 | 4.8 | 136 s | 151 s |
+| B | 70.4 (61.5 to 79.3) | 4.11 / 5.7 | 0.15 | 4.9 | 141 s | 155 s |
+
+`noise` A against B: score −0.1 (95% −7.5 to 7.2), found +0.04 (−0.28 to
+0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
+run leaves `MARGINS` as they were.
+
 ## Cost and time
 
-From the baseline runs. A generation's cost is its `ai_usage`; the judge
-(Opus 5.5) costs about as much again.
+An attempt's cost, from the baseline runs (`feed`, 2026-11-18) and main's
+runs above (`routines`, 2026-11-19). A generation's cost is its
+`ai_usage`; the judge is Opus 5.5.
 
 | Section | Generation | Judge | One run (27 attempts) | Wall time of a run |
 | --- | --- | --- | --- | --- |
-| `routines` | $0.21 | $0.24 | about $12 | 31 to 34 minutes |
+| `routines` | $0.08 | $0.05 | about $3.70 | 33 to 35 minutes |
 | `feed` | $0.18 | $0.28 | about $12 | 26 to 32 minutes |
+
+A `routines` run's judge costs $1.35 to $1.65. Of one at $1.64, $0.75 wrote each
+persona's prefix and each attempt's own part, $0.70 was output and $0.20
+cached reads.
 
 A comparison is one run of the change against a stored run of main from the
 same stack: the cost of one run. Run main again when main changes what the
@@ -298,8 +353,14 @@ cost nothing beyond the model calls.
   session (`delivery_unknown`) a bench error, so a build that breaks prompt
   delivery has nothing scored and `compare` refuses it rather than calling it
   a loss. The feed section indexes the
-  seeded items for search first. Judging runs alongside, three grader
-  accounts at a time, each judgement's cost read from its grader's usage.
+  seeded items for search first. Judging takes three grader accounts at a
+  time, each judgement's cost read from its grader's usage. The feed's
+  runs alongside, while the next rep seeds. Every rep of a routines run
+  reads its mail at the run's one "now", so a persona's judgements share
+  one cached prefix (the rubric, mail, catalog and key) across seats and
+  reps; they wait for the last rep, so the cache is still warm, and each
+  persona's first judgement pays to write it once, not once a rep
+  (`judgeLast`).
 
 ## Adding a persona or a section
 

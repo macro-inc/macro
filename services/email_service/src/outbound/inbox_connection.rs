@@ -4,6 +4,8 @@ mod backfill;
 pub(crate) mod grants;
 mod links;
 mod provider;
+#[cfg(test)]
+mod test;
 mod transactions;
 
 pub use backfill::*;

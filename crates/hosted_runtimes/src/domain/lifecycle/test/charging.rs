@@ -427,6 +427,10 @@ fn an_agent_connecting_before_its_charge_settles_gets_its_credentials_after() {
                 kind: TimerKind::AgentStartDue,
                 at: now() + AGENT_START_DEADLINE,
             },
+            Effect::ScheduleTimer {
+                kind: TimerKind::AgentRedeliver,
+                at: now() + AGENT_REDELIVERY,
+            },
         ]
     );
 }
@@ -456,6 +460,10 @@ fn an_agent_whose_charge_settles_before_macrod_connects_gets_them_on_connection(
             Effect::ScheduleTimer {
                 kind: TimerKind::AgentStartDue,
                 at: now() + AGENT_START_DEADLINE,
+            },
+            Effect::ScheduleTimer {
+                kind: TimerKind::AgentRedeliver,
+                at: now() + AGENT_REDELIVERY,
             },
         ]
     );

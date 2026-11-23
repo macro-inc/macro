@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pairs.link_id AS \"link_id!\", c.id, c.bytes AS \"bytes!\"\n            FROM unnest($1::uuid[],$2::text[]) pairs(link_id,address)\n            CROSS JOIN LATERAL (\n                SELECT id,octet_length(email_address) AS bytes FROM email_contacts\n                WHERE link_id=pairs.link_id AND lower(email_address)=pairs.address LIMIT $3 OFFSET 0\n            )c LIMIT $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "bytes!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "388259dd2e87d2c9dd37e6b28b39c5d1567661c8337451db4361e8b934bd1f1d"
+}

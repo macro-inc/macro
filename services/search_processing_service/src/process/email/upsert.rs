@@ -206,6 +206,7 @@ pub async fn process_upsert_thread_message(
             .context("failed to fetch thread properties for search index")?,
     );
 
+    let mut rejected_items = None;
     loop {
         let messages =
             email_db_client::messages::get_parsed_search::get_paginated_parsed_search_messages_by_thread_id(
@@ -257,25 +258,25 @@ pub async fn process_upsert_thread_message(
                 .await?;
         }
 
-        if !upsert_email_message_args.is_empty() {
-            let result = opensearch_client
+        if !upsert_email_message_args.is_empty()
+            && let Err(error) = opensearch_client
                 .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
-                .await?;
-
-            if result.failed > 0 {
-                tracing::warn!(
-                    failed = result.failed,
-                    errors = ?result.errors,
-                    "some email messages failed to upsert"
-                );
+                .await
+        {
+            // Items OpenSearch rejected on one page must not keep the later
+            // pages out of the index. A refusal stops the thread instead: the
+            // later pages would meet the same load.
+            if error.refusal().is_some() || error.failed_items() == 0 {
+                return Err(error.into());
             }
+            rejected_items.get_or_insert(error);
         }
 
         // Update offset
         message_offset += message_limit;
     }
 
-    Ok(())
+    rejected_items.map_or(Ok(()), |error| Err(error.into()))
 }
 
 pub async fn process_upsert_thread_batch_message(
@@ -340,17 +341,9 @@ pub async fn process_upsert_thread_batch_message(
     }
 
     if !upsert_email_message_args.is_empty() {
-        let result = opensearch_client
+        opensearch_client
             .bulk_upsert_email_messages(&upsert_email_message_args, index_override)
             .await?;
-
-        if result.failed > 0 {
-            tracing::warn!(
-                failed = result.failed,
-                errors = ?result.errors,
-                "some email messages failed to upsert"
-            );
-        }
     }
 
     Ok(())

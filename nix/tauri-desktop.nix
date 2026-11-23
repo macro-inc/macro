@@ -437,8 +437,8 @@
         outputHashes = webauthnOutputHashes // {
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e" =
-            "sha256-xoMJo7EejK3Ql+348K1+35siC7XHTgxhGU9pHhGBm+k=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
+            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
             "sha256-7Noz7RMN+4nhlU5BBLzxZZ53nNFGewrr8BFMO1adkCo=";
           "git+https://github.com/seanaye/tauri?rev=95a7521b#95a7521b8c565cfba568319ddd8ba79c9ce244e2" =
@@ -458,7 +458,7 @@
         # filtered Cargo source used by crane.
         cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # cache-core's build script generates metadata from the GraphQL schema.
+        # cache-schema embeds and fingerprints the GraphQL schema at build time.
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql
@@ -1000,8 +1000,8 @@
         cargoLock = ../apps/web/tauri/desktop-cef/Cargo.lock;
         overrideVendorGitCheckout = vendorWebauthnGitCheckout;
         outputHashes = webauthnOutputHashes // {
-          "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e" =
-            "sha256-xoMJo7EejK3Ql+348K1+35siC7XHTgxhGU9pHhGBm+k=";
+          "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92" =
+            "sha256-9b4wI8CEnqoaFQJX686x723z0fGYXJ7jLXx3a7NtBF8=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
           "git+https://github.com/macro-inc/tauri?rev=4b8a46f1#4b8a46f15c0a54a5c06a1486cd5432d444c17bd8" =

@@ -45,9 +45,9 @@ impl<Image> GuestImages<Image> {
 
 /// The `/home` sizes the current catalog sells, in GiB, smallest first.
 pub fn sold_home_disk_gib() -> Vec<u32> {
-    let mut sizes: Vec<u32> = crate::domain::size::current_catalog()
-        .into_iter()
-        .filter_map(|entry| data_disk_gib(entry.resources))
+    let mut sizes: Vec<u32> = crate::domain::size::SIZE_SPECS
+        .iter()
+        .map(|spec| spec.home_disk_gib.get())
         .collect();
     sizes.sort_unstable();
     sizes.dedup();

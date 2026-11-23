@@ -3,19 +3,8 @@ import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { EventReplacementController } from '../context/event-replacement-source';
 import type { EventReplacementPreview } from '../core/event-replacement';
-
-function replacementTime(preview: EventReplacementPreview) {
-  if (!preview.allDay)
-    return `${new Date(preview.startsAt).toLocaleString()} – ${new Date(preview.endsAt).toLocaleString()}`;
-  const lastDay = new Date(
-    new Date(`${preview.endsAt}T00:00:00Z`).getTime() - 86_400_000
-  )
-    .toISOString()
-    .slice(0, 10);
-  return preview.startsAt === lastDay
-    ? `${preview.startsAt} · All day`
-    : `${preview.startsAt} – ${lastDay} · All day`;
-}
+import type { CalendarTimeFormat } from '../types';
+import { formatEventSchedule } from '../utils/event-schedule';
 
 function ReplacementConfirmation(props: {
   preview: EventReplacementPreview;
@@ -57,19 +46,20 @@ function ReplacementConfirmation(props: {
 /** Pure presentation: all provider I/O and retry decisions are supplied by the owner. */
 export function EventReplacementDialog(props: {
   controller: EventReplacementController;
-  hasConference: boolean;
-  hasOccurrence: boolean;
-  recurring: boolean;
+  timeFormat: CalendarTimeFormat;
   onOpenUrl: (url: string) => void;
   onDone: () => void;
 }) {
   const state = props.controller;
   return (
-    <Dialog open={state.open()} onOpenChange={state.setOpen}>
-      <Panel
-        depth={2}
-        class="w-full max-w-[min(32rem,calc(100vw-2rem))] rounded-xl text-ink"
-      >
+    <Dialog
+      open={state.open()}
+      onOpenChange={(open) => {
+        if (!open) state.close();
+      }}
+      class="w-128"
+    >
+      <Panel depth={2} class="rounded-xl text-ink">
         <Panel.Header class="p-3">
           <Dialog.Title>Replace Outlook event</Dialog.Title>
         </Panel.Header>
@@ -77,53 +67,16 @@ export function EventReplacementDialog(props: {
           <Show
             when={state.preview()}
             fallback={
-              <>
-                <p>
-                  Replace the saved event to reset guest RSVPs or remove Teams.
-                  You will review the event before any invitations are sent.
-                </p>
-                <Show when={props.hasConference}>
-                  <label class="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.removeConference()}
-                      disabled={state.pending()}
-                      onChange={(e) =>
-                        state.setRemoveConference(e.currentTarget.checked)
-                      }
-                    />
-                    Remove online meeting from the replacement
-                  </label>
-                </Show>
-                <Show when={props.hasOccurrence}>
-                  <label class="flex gap-2">
-                    <input
-                      type="checkbox"
-                      checked={state.onlyOccurrence()}
-                      disabled={state.pending()}
-                      onChange={(e) =>
-                        state.setOnlyOccurrence(e.currentTarget.checked)
-                      }
-                    />
-                    Only this occurrence
-                  </label>
-                </Show>
-                <Show when={props.recurring && !state.onlyOccurrence()}>
-                  <p>
-                    This replaces the entire recurring series, including its
-                    edited and cancelled occurrences.
-                  </p>
-                </Show>
+              <Show when={state.error() && !state.pending()}>
                 <Button
                   variant="secondary"
-                  disabled={state.pending()}
                   onClick={() =>
                     fireAndForget(state.prepare(), 'calendar-replacement')
                   }
                 >
                   Review replacement
                 </Button>
-              </>
+              </Show>
             }
           >
             {(preview) => (
@@ -132,7 +85,16 @@ export function EventReplacementDialog(props: {
                   <p class="font-medium">
                     {preview().title || '(Untitled event)'}
                   </p>
-                  <p>{replacementTime(preview())}</p>
+                  <p>
+                    {formatEventSchedule(
+                      {
+                        start: preview().startsAt,
+                        end: preview().endsAt,
+                        allDay: preview().allDay,
+                      },
+                      props.timeFormat
+                    )}
+                  </p>
                   <p>
                     {preview().isSeries
                       ? 'Entire recurring series'
@@ -192,18 +154,6 @@ export function EventReplacementDialog(props: {
                           fireAndForget(state.confirm(), 'calendar-replacement')
                         }
                       />
-                      <Button
-                        variant="ghost"
-                        disabled={state.pending()}
-                        onClick={() =>
-                          fireAndForget(
-                            state.changeOptions(),
-                            'calendar-replacement'
-                          )
-                        }
-                      >
-                        Change options
-                      </Button>
                     </Show>
                   }
                 >
@@ -247,7 +197,7 @@ export function EventReplacementDialog(props: {
           <Show when={state.pending()}>
             <p role="status">Checking Outlook…</p>
           </Show>
-          <Button variant="ghost" onClick={() => state.setOpen(false)}>
+          <Button variant="ghost" onClick={() => state.close()}>
             Close
           </Button>
         </Panel.Body>

@@ -1,14 +1,317 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CacheRequest, INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  TEST_AUTHORITY_GENERATION,
+  testAuthority,
+  withoutAuthorityEnvelope,
+} from '../authority-fixture';
+import {
+  type CacheRequest,
+  INITIAL_CACHE_REVISION,
+  parseCacheRevision,
+} from '../protocol';
 
 const loadCacheWasmMock = vi.hoisted(() => vi.fn());
 
-vi.mock('./wasm-module', () => ({ loadCacheWasm: loadCacheWasmMock }));
+vi.mock('./wasm-module', () => ({
+  loadCacheWasm: async () => {
+    const module = await loadCacheWasmMock();
+    const wrap = (engine: object) => ({
+      currentAuthority: async (identity: string) => testAuthority(identity),
+      ...engine,
+    });
+    const result = { ...module };
+    for (const name of [
+      'openCache',
+      'openCacheWithOutcome',
+      'openCacheForRecovery',
+      'openCacheForRecoveryWithOutcome',
+    ]) {
+      if (module[name])
+        result[name] = async (...args: unknown[]) => {
+          const opened = await module[name](...args);
+          return opened && 'engine' in opened
+            ? { ...opened, engine: wrap(opened.engine) }
+            : wrap(opened);
+        };
+    }
+    return result;
+  },
+}));
 
 import { cacheDatabaseIdentity } from './coordinator-protocol';
 import { CacheWorkerCore } from './worker-core';
 
 describe('CacheWorkerCore', () => {
+  it('uses the owner stamp for warm reads and refreshes it after a clear', async () => {
+    let generation = TEST_AUTHORITY_GENERATION;
+    const currentAuthority = vi.fn(async (identity: string) => ({
+      ...testAuthority(identity),
+      generation,
+    }));
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: async () => ({
+        currentAuthority,
+        readQuery: async () => ({ kind: 'miss' }),
+        clear: async () => {
+          generation = crypto.randomUUID();
+          return '1';
+        },
+      }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'profile' });
+    for (let id = 2; id < 5; id++)
+      await core.handleRequest(port, {
+        id,
+        kind: 'read',
+        query: '{ user { id } }',
+      });
+    expect(currentAuthority).toHaveBeenCalledTimes(1);
+    await core.handleRequest(port, { id: 5, kind: 'clear' });
+    await core.handleRequest(port, {
+      id: 6,
+      kind: 'read',
+      query: '{ user { id } }',
+    });
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 6,
+        ok: true,
+        authorityGeneration: generation,
+      })
+    );
+    expect(currentAuthority).toHaveBeenCalledTimes(3);
+  });
+
+  it('rejects an omitted snapshot generation in protocol 18', async () => {
+    const writeQuery = vi.fn();
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: async () => ({ writeQuery }),
+    });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'profile' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'write',
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+    });
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 2,
+        ok: false,
+        error: 'cache response belongs to an older session generation',
+      })
+    );
+  });
+
+  it('rejects an unstamped request of a kind it does not know as a stale write', async () => {
+    loadCacheWasmMock.mockResolvedValue({ openCache: async () => ({}) });
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(port);
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'profile' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'a-later-write',
+    } as unknown as CacheRequest);
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 2,
+        ok: false,
+        error: 'cache response belongs to an older session generation',
+      })
+    );
+  });
+
+  it('broadcasts implicit retirement recovery to every tab before an ordinary read completes', async () => {
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    let unfinished = false;
+    const writeQuery = vi.fn();
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => {
+          if (unfinished) {
+            generation = next;
+            unfinished = false;
+          }
+          return { ...testAuthority(identity), generation };
+        },
+        transitionAuthority: async () => {
+          unfinished = true;
+          throw new Error('cleanup interrupted after its durable marker');
+        },
+        readQuery: vi.fn().mockResolvedValue({ kind: 'miss' }),
+        writeQuery,
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(first);
+    core.addPort(second);
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    await core.handleRequest(first, {
+      id: 2,
+      kind: 'transition-authority',
+      identity: 'shared-profile',
+      expected: generation,
+      policy: 'team:denied',
+    });
+    first.postMessage.mockClear();
+    second.postMessage.mockClear();
+    await core.handleRequest(second, {
+      id: 3,
+      kind: 'read',
+      query: '{ user { id } }',
+    });
+    for (const port of [first, second])
+      expect(port.postMessage.mock.calls[0]?.[0]).toMatchObject({
+        kind: 'authority-changed',
+        authority: { generation: next },
+      });
+    await core.handleRequest(first, {
+      id: 4,
+      kind: 'write',
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(first.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 4, ok: false })
+    );
+  });
+
+  it('publishes first account binding from a person-context update to other tabs', async () => {
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => ({
+          ...testAuthority(identity),
+          generation,
+        }),
+        peopleContext: vi.fn(),
+        peopleSearch: vi.fn(),
+        peopleUpdate: async () => {
+          generation = next;
+          return { revision: '1', revisionAdvanced: true };
+        },
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    core.addPort(first);
+    core.addPort(second);
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    await core.handleRequest(first, {
+      id: 2,
+      kind: 'people-update',
+      generation,
+      update: {
+        scope: {
+          identity: 'viewer',
+          storageGeneration: TEST_AUTHORITY_GENERATION,
+        },
+        epoch: TEST_AUTHORITY_GENERATION,
+        action: { kind: 'begin', previousEpoch: null },
+      },
+    });
+    expect(second.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'authority-changed',
+        authority: expect.objectContaining({ generation: next }),
+      })
+    );
+  });
+
+  it('rejects a delayed write from another tab after the shared owner retires its generation', async () => {
+    const started = Promise.withResolvers<void>();
+    const cleanup = Promise.withResolvers<void>();
+    const next = '00000000-0000-4000-8000-000000000099';
+    let generation = TEST_AUTHORITY_GENERATION;
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+    const writeQuery = vi.fn().mockResolvedValue(written);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        currentAuthority: async (identity: string) => ({
+          ...testAuthority(identity),
+          generation,
+        }),
+        transitionAuthority: async (identity: string) => {
+          generation = next;
+          started.resolve();
+          await cleanup.promise;
+          return {
+            ...written,
+            changed: true,
+            authority: { ...testAuthority(identity), generation },
+          };
+        },
+        writeQuery,
+      }),
+    });
+    const first = { postMessage: vi.fn() };
+    const second = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore();
+    await core.handleRequest(first, {
+      id: 1,
+      kind: 'init',
+      scope: 'shared-profile',
+    });
+    const transition = core.handleRequest(second, {
+      id: 2,
+      kind: 'transition-authority',
+      identity: 'shared-profile',
+      expected: generation,
+      policy: '00000000-0000-4000-8000-000000000001:denied',
+    });
+    await started.promise;
+    const write = {
+      id: 3,
+      kind: 'write' as const,
+      query: '{ user { id } }',
+      data: { user: { id: 'viewer' } },
+    };
+    const delayed = core.handleRequest(first, {
+      ...write,
+      generation: TEST_AUTHORITY_GENERATION,
+    });
+    cleanup.resolve();
+    await Promise.all([transition, delayed]);
+    expect(writeQuery).not.toHaveBeenCalled();
+    expect(first.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 3,
+        ok: false,
+        error: 'cache response belongs to an older session generation',
+      })
+    );
+    await core.handleRequest(first, { ...write, id: 4, generation: next });
+    expect(writeQuery).toHaveBeenCalledOnce();
+  });
+
   it('uses GraphQL JSON variable semantics for every WASM query and mutation path', async () => {
     const written = {
       revision: INITIAL_CACHE_REVISION,
@@ -38,7 +341,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue(engine),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
 
@@ -62,9 +368,20 @@ describe('CacheWorkerCore', () => {
     const requests: CacheRequest[] = [
       { id: 2, kind: 'read', query, variables },
       { id: 3, kind: 'read', query, variables, opId: 'watch', watch: {} },
-      { id: 4, kind: 'write', ...payload },
-      { id: 5, kind: 'hydrate', ...payload },
       {
+        generation: TEST_AUTHORITY_GENERATION,
+        id: 4,
+        kind: 'write',
+        ...payload,
+      },
+      {
+        generation: TEST_AUTHORITY_GENERATION,
+        id: 5,
+        kind: 'hydrate',
+        ...payload,
+      },
+      {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 6,
         kind: 'enqueue-optimistic-mutation',
         ...payload,
@@ -75,6 +392,7 @@ describe('CacheWorkerCore', () => {
         leaseExpiresAtMs: 1000,
       },
       {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 7,
         kind: 'commit-optimistic-write',
         ...payload,
@@ -135,7 +453,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -186,7 +505,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ currentStorageGeneration }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
     await core.handleRequest(port, {
@@ -218,7 +540,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ readRecordsByKeys }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -265,7 +590,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ search }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -333,7 +661,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -345,6 +674,7 @@ describe('CacheWorkerCore', () => {
       messages.length = 0;
 
       await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 2,
         kind: 'commit-optimistic-write',
         transactionId: '1',
@@ -409,7 +739,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
     await core.handleRequest(port, {
@@ -420,6 +753,7 @@ describe('CacheWorkerCore', () => {
     messages.length = 0;
 
     const enqueue = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'enqueue-optimistic-mutation',
       uuid: '00000000-0000-4000-8000-000000000007',
@@ -625,6 +959,7 @@ describe('CacheWorkerCore', () => {
     });
     await blockerStarted;
     const hydration = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'hydrate',
       query: 'query Backfill { backfill }',
@@ -716,7 +1051,11 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: vi.fn((message) => messages.push(message)) };
+    const port = {
+      postMessage: vi.fn((message) =>
+        messages.push(withoutAuthorityEnvelope(message))
+      ),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
@@ -728,12 +1067,14 @@ describe('CacheWorkerCore', () => {
     });
     await blockerStarted;
     const hydration = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'hydrate',
       query: 'query CalendarOccurrences { occurrences }',
       data: { occurrences: [] },
     });
     const commit = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 4,
       kind: 'calendar-commit',
       commit: {
@@ -828,12 +1169,14 @@ describe('CacheWorkerCore', () => {
     });
     await blockerStarted;
     const hydration = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'hydrate',
       query: 'query Backfill { document { id title } }',
       data: { document: { id: 'doc-1', title: 'stale' } },
     });
     const write = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 4,
       kind: 'write',
       query: 'query Current { document { id title } }',
@@ -890,6 +1233,7 @@ describe('CacheWorkerCore', () => {
       });
       await started.promise;
       const hydration = core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 3,
         kind: 'hydrate',
         query: 'query Old { document { title } }',
@@ -899,6 +1243,7 @@ describe('CacheWorkerCore', () => {
         port,
         action === 'commit'
           ? {
+              generation: TEST_AUTHORITY_GENERATION,
               id: 4,
               kind: 'commit-optimistic-write',
               transactionId: 'txn',
@@ -907,7 +1252,12 @@ describe('CacheWorkerCore', () => {
               query: 'mutation Save { document { title } }',
               data: { document: { title: 'committed' } },
             }
-          : { id: 4, kind: 'delete-records', keys: ['Document:doc-1'] }
+          : {
+              generation: TEST_AUTHORITY_GENERATION,
+              id: 4,
+              kind: 'delete-records',
+              keys: ['Document:doc-1'],
+            }
       );
       blocker.resolve();
       await Promise.all([running, hydration, write]);
@@ -954,6 +1304,7 @@ describe('CacheWorkerCore', () => {
     });
     await started.promise;
     const hydration = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'hydrate',
       query: 'query Backfill { backfill }',
@@ -1034,6 +1385,7 @@ describe('CacheWorkerCore', () => {
     await started.promise;
     const queued = [
       core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 3,
         kind: 'hydrate',
         query: 'query Backfill { backfill }',
@@ -1147,6 +1499,7 @@ describe('CacheWorkerCore', () => {
       rows(6, 'typed', true),
       core.handleRequest(port, { id: 7, kind: 'teardown', opId: 'visible' }),
       core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 8,
         kind: 'write',
         query: 'query Current { document { id } }',
@@ -1154,6 +1507,7 @@ describe('CacheWorkerCore', () => {
       }),
       rows(9, 'typed-after-network-write', true),
       core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 10,
         kind: 'enqueue-optimistic-mutation',
         uuid: '00000000-0000-4000-8000-000000000009',
@@ -1339,7 +1693,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     await core.handleRequest(port, {
       id: 1,
@@ -1368,6 +1725,7 @@ describe('CacheWorkerCore', () => {
       query: 'query Child { child }',
     });
     const firstEnqueue = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 5,
       kind: 'enqueue-optimistic-mutation',
       uuid: '00000000-0000-4000-8000-000000000008',
@@ -1379,6 +1737,7 @@ describe('CacheWorkerCore', () => {
       leaseExpiresAtMs: 1_001,
     });
     const secondEnqueue = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 6,
       kind: 'enqueue-optimistic-mutation',
       uuid: '00000000-0000-4000-8000-000000000009',
@@ -1590,6 +1949,7 @@ describe('CacheWorkerCore', () => {
       opId: 'client:group-soup',
     });
     const enqueue = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 5,
       kind: 'enqueue-optimistic-mutation',
       uuid: '00000000-0000-4000-8000-000000000010',
@@ -1636,7 +1996,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ inspectQueryVariants }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     const query =
       'query Views($input: GroupedSoupInput!) { user { groupSoup(input: $input) { bins { key } } } }';
@@ -1661,7 +2024,10 @@ describe('CacheWorkerCore', () => {
 
   it('fails a request kind from a newer page instead of answering it', async () => {
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     const fromNewerPage = JSON.parse('{"id":1,"kind":"future-request"}');
 
@@ -1683,7 +2049,10 @@ describe('CacheWorkerCore', () => {
       openCache: vi.fn().mockResolvedValue({ writeQuery }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
 
@@ -1693,6 +2062,7 @@ describe('CacheWorkerCore', () => {
       scope: 'scope-1',
     });
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'write',
       originOpId: 'client:7',
@@ -1742,12 +2112,14 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
       await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
       await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 2,
         kind: 'write',
         query: '{ user { id } }',
@@ -1775,7 +2147,10 @@ describe('CacheWorkerCore', () => {
       }),
     });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
     core.addPort(port);
 
@@ -1785,6 +2160,7 @@ describe('CacheWorkerCore', () => {
       scope: 'scope-1',
     });
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'write',
       query: 'subscription { soupUpdates { __typename } }',
@@ -1814,7 +2190,8 @@ describe('CacheWorkerCore', () => {
       });
       const messages: unknown[] = [];
       const port = {
-        postMessage: (message: unknown) => messages.push(message),
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
       };
       const core = new CacheWorkerCore();
       core.addPort(port);
@@ -1825,6 +2202,7 @@ describe('CacheWorkerCore', () => {
         scope: 'scope-1',
       });
       await core.handleRequest(port, {
+        generation: TEST_AUTHORITY_GENERATION,
         id: 2,
         kind: 'hydrate',
         query: 'query Backfill { cursor }',
@@ -1895,7 +2273,7 @@ describe('CacheWorkerCore', () => {
     const messages: unknown[] = [];
     const port = {
       postMessage: (message: unknown) => {
-        messages.push(message);
+        messages.push(withoutAuthorityEnvelope(message));
         if ((message as { id?: number }).id === 2) order.push('response');
       },
     };
@@ -1958,7 +2336,10 @@ describe('CacheWorkerCore', () => {
       });
 
       await core.handleRequest(
-        { postMessage: (message: unknown) => messages.push(message) },
+        {
+          postMessage: (message: unknown) =>
+            messages.push(withoutAuthorityEnvelope(message)),
+        },
         { id: 1, kind: 'init', scope: 'scope-1' }
       );
 
@@ -1980,7 +2361,10 @@ describe('CacheWorkerCore', () => {
     });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
 
@@ -2001,7 +2385,10 @@ describe('CacheWorkerCore', () => {
   const initMessages = async (core: CacheWorkerCore): Promise<unknown[]> => {
     const messages: unknown[] = [];
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
     return messages;
@@ -2110,7 +2497,10 @@ describe('CacheWorkerCore', () => {
     const core = new CacheWorkerCore({ recoveryOpen: true });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1', hotCapacity: 17 }
     );
 
@@ -2123,7 +2513,10 @@ describe('CacheWorkerCore', () => {
     const openCache = vi.fn().mockResolvedValue({});
     loadCacheWasmMock.mockResolvedValue({ openCache });
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore();
 
     await core.handleRequest(port, {
@@ -2219,6 +2612,7 @@ describe('CacheWorkerCore', () => {
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
     monotonicNow = 1;
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'write',
       query: 'query Read { value }',
@@ -2232,6 +2626,7 @@ describe('CacheWorkerCore', () => {
     expect(queueDiagnostics).toHaveBeenCalledTimes(1);
     monotonicNow = 60_001;
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'write',
       query: 'query Read { value }',
@@ -2282,6 +2677,161 @@ describe('CacheWorkerCore', () => {
         oldestAgeMs: 1_100,
         queueDiagnosticsAvailability: 'available',
       },
+    ]);
+  });
+
+  it('reports a request answered a second after it arrived, split into its wait and its run', async () => {
+    let monotonicNow = 0;
+    let finishWrite!: () => void;
+    const writeQuery = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishWrite = () =>
+            resolve({
+              revision: INITIAL_CACHE_REVISION,
+              changed: [],
+              affectedOps: [],
+              reset: false,
+            });
+        })
+    );
+    const readQuery = vi.fn(async (opId: string) => {
+      if (opId === 'op-3') monotonicNow += 300;
+      return { kind: 'miss' };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ writeQuery, readQuery }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+    const write = core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 2,
+      kind: 'write',
+      query: 'query Read { value }',
+      data: { value: true },
+    });
+    await vi.waitFor(() => expect(writeQuery).toHaveBeenCalledOnce());
+    const readOp = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { value }',
+      });
+    monotonicNow = 200;
+    const read = readOp(3, 'op-1');
+    // Joins the queued op-1 read, so its wait counts from 200.
+    monotonicNow = 400;
+    const duplicate = readOp(4, 'op-1');
+    monotonicNow = 700;
+    const behind = readOp(5, 'op-2');
+    monotonicNow = 1_700;
+    finishWrite();
+    await Promise.all([write, read, duplicate, behind]);
+    // Ran 300 ms: not reported.
+    monotonicNow = 2_000;
+    await readOp(6, 'op-3');
+
+    expect(readQuery.mock.calls.map(([opId]) => opId)).toEqual([
+      'op-1',
+      'op-2',
+      'op-3',
+    ]);
+    for (const id of [3, 4, 5, 6]) {
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id, ok: true })
+      );
+    }
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'write',
+        requestKind: 'write',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 0,
+        durationMs: 1_700,
+        queueDepth: 0,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_500,
+        durationMs: 0,
+        queueDepth: 1,
+      },
+      {
+        name: 'graphql_cache.slow_request',
+        operationCategory: 'read',
+        requestKind: 'read',
+        outcome: 'success',
+        errorCode: 'none',
+        queueWaitMs: 1_000,
+        durationMs: 0,
+        queueDepth: 0,
+      },
+    ]);
+  });
+
+  it('reports a slow request that failed with its error class', async () => {
+    let monotonicNow = 0;
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async () => {
+          monotonicNow += 1_200;
+          throw new Error('OPFS read failed');
+        },
+      }),
+    });
+    const observations: Array<Record<string, unknown>> = [];
+    const core = new CacheWorkerCore({
+      monotonicNow: () => monotonicNow,
+      telemetry: {
+        record: (observation) => observations.push(observation),
+        flush: vi.fn(),
+      },
+    });
+    const port = { postMessage: vi.fn() };
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'op-1',
+      query: 'query Read { value }',
+    });
+
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: false })
+    );
+    expect(
+      observations.filter(
+        (observation) => observation.name === 'graphql_cache.slow_request'
+      )
+    ).toEqual([
+      expect.objectContaining({
+        requestKind: 'read',
+        outcome: 'error',
+        errorCode: 'opfs-io',
+        queueWaitMs: 0,
+        durationMs: 1_200,
+      }),
     ]);
   });
 
@@ -2355,6 +2905,7 @@ describe('CacheWorkerCore', () => {
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope' });
     monotonicNow = 1;
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'write',
       query: 'query Read { value }',
@@ -2380,6 +2931,7 @@ describe('CacheWorkerCore', () => {
     await read;
     expect(readQuery).toHaveBeenCalledOnce();
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       id: 3,
       ok: true,
       result: { kind: 'miss' },
@@ -2435,6 +2987,7 @@ describe('CacheWorkerCore', () => {
     const port = { postMessage: vi.fn() };
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope' });
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'write',
       query: 'query Read { value }',
@@ -2465,6 +3018,7 @@ describe('CacheWorkerCore', () => {
     });
 
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 3,
       kind: 'write',
       query: 'query Read { value }',
@@ -2502,9 +3056,15 @@ describe('CacheWorkerCore', () => {
     } as const;
     await core.handleRequest(port, { id: 2, kind: 'people-context', scope });
     expect(engine.peopleContext).toHaveBeenCalledWith(scope);
-    await core.handleRequest(port, { id: 3, kind: 'people-update', update });
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 3,
+      kind: 'people-update',
+      update,
+    });
     expect(engine.peopleUpdate).toHaveBeenCalledWith(update);
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'cache-hydrated',
       revision: '9',
       searchChangedBuckets: ['person'],
@@ -2516,7 +3076,12 @@ describe('CacheWorkerCore', () => {
     engine.peopleUpdate.mockRejectedValue(
       new Error('cache hydration scope changed')
     );
-    await core.handleRequest(port, { id: 4, kind: 'people-update', update });
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 4,
+      kind: 'people-update',
+      update,
+    });
     expect(port.postMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ kind: 'cache-hydrated' })
     );
@@ -2546,6 +3111,7 @@ describe('CacheWorkerCore', () => {
       storageGeneration: '00000000-0000-4000-8000-000000000001',
     };
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'hydrate',
       query: '{ user { id } }',
@@ -2593,6 +3159,7 @@ describe('CacheWorkerCore', () => {
     await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
 
     await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
       id: 2,
       kind: 'hydrate',
       query: 'query Backfill { cursor }',
@@ -2607,16 +3174,19 @@ describe('CacheWorkerCore', () => {
       })
     );
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'ops-affected',
       opIds: ['client:7'],
       keys: ['GraphqlUser:user-1'],
     });
     expect(port.postMessage).toHaveBeenCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       kind: 'cache-changed',
       revision: INITIAL_CACHE_REVISION,
       reset: true,
     });
     expect(port.postMessage).toHaveBeenLastCalledWith({
+      authorityGeneration: TEST_AUTHORITY_GENERATION,
       id: 2,
       ok: true,
       result: {
@@ -2729,7 +3299,10 @@ describe('CacheWorkerCore', () => {
     const onStorageResetRequired = vi.fn();
     const observations: Array<Record<string, unknown>> = [];
     const messages: unknown[] = [];
-    const port = { postMessage: (message: unknown) => messages.push(message) };
+    const port = {
+      postMessage: (message: unknown) =>
+        messages.push(withoutAuthorityEnvelope(message)),
+    };
     const core = new CacheWorkerCore({
       onStorageResetRequired,
       telemetry: {
@@ -2770,6 +3343,319 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
+  function quietTimer() {
+    const timers: { run: () => void; cancelled: boolean }[] = [];
+    const afterQuiet = vi.fn((run: () => void) => {
+      const timer = { run, cancelled: false };
+      timers.push(timer);
+      return () => {
+        timer.cancelled = true;
+      };
+    });
+    return {
+      afterQuiet,
+      armed: () => timers.filter((timer) => !timer.cancelled).length,
+      /** Ends the quiet period of every wait still armed. */
+      elapse: () => {
+        const live = timers.filter((timer) => !timer.cancelled);
+        timers.length = 0;
+        for (const timer of live) timer.run();
+      },
+    };
+  }
+
+  it('checkpoints the WAL once quiet after a write, after the requests that follow it', async () => {
+    const order: string[] = [];
+    const checkpointIfDue = vi.fn(async () => {
+      order.push('checkpoint');
+      return { ran: true, walFrames: 640, backfilledFrames: 640 };
+    });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({
+        readQuery: async (opId: string) => {
+          order.push(`read:${opId}`);
+          return { kind: 'miss' };
+        },
+        writeQuery: async () => {
+          order.push('write');
+          return {
+            revision: INITIAL_CACHE_REVISION,
+            revisionAdvanced: false,
+            changed: [],
+            affectedOps: [],
+            reset: false,
+          };
+        },
+        checkpointIfDue,
+      }),
+    });
+    const record = vi.fn();
+    const port = { postMessage: vi.fn() };
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      telemetry: { record, flush: vi.fn() },
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    const read = (id: number, opId: string) =>
+      core.handleRequest(port, {
+        id,
+        kind: 'read',
+        opId,
+        query: 'query Read { read }',
+      });
+
+    // Opening may leave a WAL from the last session; the boot reads that
+    // follow run first and re-arm the wait.
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    await read(2, 'boot');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(order).toEqual(['read:boot', 'checkpoint']));
+
+    // A read writes nothing, so it leaves nothing to copy.
+    await read(3, 'alone');
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+
+    await core.handleRequest(port, {
+      generation: TEST_AUTHORITY_GENERATION,
+      id: 4,
+      kind: 'write',
+      query: 'query { user { id } }',
+      data: { user: { id: 'user-1' } },
+    });
+    await read(5, 'after-write');
+    expect(order.slice(3)).toEqual(['write', 'read:after-write']);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() =>
+      expect(order.slice(3)).toEqual([
+        'write',
+        'read:after-write',
+        'checkpoint',
+      ])
+    );
+    expect(checkpointIfDue).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'graphql_cache.wal_checkpoint',
+        operationCategory: 'storage',
+        outcome: 'success',
+        count: 640,
+        walFrames: 640,
+      })
+    );
+  });
+
+  it('copies no WAL while a request runs, and waits for the next quiet period', async () => {
+    let finishRead!: () => void;
+    const readQuery = vi.fn(
+      () =>
+        new Promise<{ kind: 'miss' }>((resolve) => {
+          finishRead = () => resolve({ kind: 'miss' });
+        })
+    );
+    const checkpointIfDue = vi
+      .fn()
+      .mockResolvedValue({ ran: true, walFrames: 600, backfilledFrames: 600 });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery, checkpointIfDue }),
+    });
+    const quiet = quietTimer();
+    const port = { postMessage: vi.fn() };
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    const read = core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'slow',
+      query: 'query Read { read }',
+    });
+    await vi.waitFor(() => expect(readQuery).toHaveBeenCalledTimes(1));
+    quiet.elapse();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(checkpointIfDue).not.toHaveBeenCalled();
+
+    finishRead();
+    await read;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps the engine healthy when a WAL checkpoint fails and retries it after the next request', async () => {
+    const checkpointIfDue = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('cache turso database error'))
+      .mockResolvedValue({ ran: false, walFrames: 12, backfilledFrames: 0 });
+    const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery, checkpointIfDue }),
+    });
+    const record = vi.fn();
+    const onStorageResetRequired = vi.fn();
+    const port = { postMessage: vi.fn() };
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      telemetry: { record, flush: vi.fn() },
+      onStorageResetRequired,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() =>
+      expect(record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'graphql_cache.wal_checkpoint',
+          outcome: 'error',
+        })
+      )
+    );
+
+    // The next request runs, even a read, and the quiet after it tries again.
+    await core.handleRequest(port, {
+      id: 2,
+      kind: 'read',
+      opId: 'after-failure',
+      query: 'query Read { read }',
+    });
+    expect(port.postMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: 2, ok: true })
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(2));
+    expect(onStorageResetRequired).not.toHaveBeenCalled();
+    // A checkpoint with nothing due records nothing, and is not retried.
+    expect(
+      record.mock.calls.filter(
+        ([event]) => event.name === 'graphql_cache.wal_checkpoint'
+      )
+    ).toHaveLength(1);
+    await core.handleRequest(port, {
+      id: 3,
+      kind: 'read',
+      opId: 'later',
+      query: 'query Read { read }',
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+  });
+
+  it('reports a WAL checkpoint that found the database files busy', async () => {
+    const busyError = Object.assign(
+      new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
+      { cacheStorageBusy: true as const }
+    );
+    const checkpointIfDue = vi.fn().mockRejectedValue(busyError);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ checkpointIfDue }),
+    });
+    const onStorageBusy = vi.fn();
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      onStorageBusy,
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(onStorageBusy).toHaveBeenCalledOnce());
+  });
+
+  it('arms no WAL checkpoint when the engine cannot copy one', async () => {
+    const readQuery = vi.fn().mockResolvedValue({ kind: 'miss' });
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ readQuery }),
+    });
+    const quiet = quietTimer();
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.afterQuiet).not.toHaveBeenCalled();
+  });
+
+  it('cancels a pending WAL checkpoint on drain and waits for a running one', async () => {
+    let finishCheckpoint!: () => void;
+    const checkpointIfDue = vi.fn(
+      () =>
+        new Promise<{
+          ran: boolean;
+          walFrames: number;
+          backfilledFrames: number;
+        }>((resolve) => {
+          finishCheckpoint = () =>
+            resolve({ ran: true, walFrames: 500, backfilledFrames: 500 });
+        })
+    );
+    const close = vi.fn().mockResolvedValue(undefined);
+    loadCacheWasmMock.mockResolvedValue({
+      openCache: vi.fn().mockResolvedValue({ checkpointIfDue, close }),
+    });
+    const quiet = quietTimer();
+    const pending = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await pending.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    await pending.drain();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(0);
+    expect(checkpointIfDue).not.toHaveBeenCalled();
+
+    const core = new CacheWorkerCore({
+      afterArrivedMessages: (resume) => queueMicrotask(resume),
+      afterQuiet: quiet.afterQuiet,
+    });
+    await core.handleRequest(
+      { postMessage: vi.fn() },
+      { id: 1, kind: 'init', scope: 'scope-1' }
+    );
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(quiet.armed()).toBe(1);
+    quiet.elapse();
+    await vi.waitFor(() => expect(checkpointIfDue).toHaveBeenCalledTimes(1));
+    let drained = false;
+    const drain = core.drain().then(() => {
+      drained = true;
+    });
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(drained).toBe(false);
+    expect(close).toHaveBeenCalledTimes(1);
+    finishCheckpoint();
+    await drain;
+    expect(close).toHaveBeenCalledTimes(2);
+  });
+
   it('reports an open that gave up on busy database files', async () => {
     const busyError = Object.assign(
       new Error('OPFS sync handle open failed (NoModificationAllowedError)'),
@@ -2784,7 +3670,10 @@ describe('CacheWorkerCore', () => {
     const core = new CacheWorkerCore({ onStorageBusy, onStorageResetRequired });
 
     await core.handleRequest(
-      { postMessage: (message: unknown) => messages.push(message) },
+      {
+        postMessage: (message: unknown) =>
+          messages.push(withoutAuthorityEnvelope(message)),
+      },
       { id: 1, kind: 'init', scope: 'scope-1' }
     );
 
@@ -2797,5 +3686,429 @@ describe('CacheWorkerCore', () => {
         error: 'OPFS sync handle open failed (NoModificationAllowedError)',
       },
     ]);
+  });
+
+  describe('a hydrate in two halves', () => {
+    const written = {
+      revision: INITIAL_CACHE_REVISION,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    };
+
+    /** An engine whose first prepare waits until `release` is called. */
+    function splitEngine(order: string[]) {
+      const prepareStarted = Promise.withResolvers<void>();
+      const releasePrepare = Promise.withResolvers<void>();
+      let prepares = 0;
+      const engine = {
+        prepareHydrate: vi.fn(async (query: string) => {
+          prepares += 1;
+          order.push(`prepare:${query}`);
+          if (prepares === 1) {
+            prepareStarted.resolve();
+            await releasePrepare.promise;
+          }
+        }),
+        commitHydrate: vi.fn(async () => {
+          order.push('commit');
+          return { ...written, data: null };
+        }),
+        hydrateQuery: vi.fn(async () => {
+          order.push('hydrateQuery');
+          return { ...written, data: null };
+        }),
+        readQuery: vi.fn(async (opId: string | undefined) => {
+          order.push(`read:${opId}`);
+          if (opId === 'client:fails') throw new Error('read failed');
+          return { kind: 'miss' as const };
+        }),
+        entityFilter: vi.fn(async () => {
+          order.push('entity-filter');
+          return {
+            kind: 'incomplete' as const,
+            revision: INITIAL_CACHE_REVISION,
+          };
+        }),
+        writeQuery: vi.fn(async () => {
+          order.push('write');
+          return written;
+        }),
+        invalidateKeys: vi.fn(async () => {
+          order.push('invalidate');
+          return written;
+        }),
+        teardownOperation: vi.fn(async () => {
+          order.push('teardown');
+        }),
+      };
+      return {
+        engine,
+        prepareStarted: prepareStarted.promise,
+        release: () => releasePrepare.resolve(),
+      };
+    }
+
+    async function start(engine: object) {
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue(engine),
+      });
+      const messages: { id: number; ok: boolean }[] = [];
+      const port = {
+        postMessage: (message: { id: number; ok: boolean }) =>
+          messages.push(message),
+      };
+      const core = new CacheWorkerCore();
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+      return { core, port, messages };
+    }
+
+    const hydrate = (id: number, query: string): CacheRequest => ({
+      generation: TEST_AUTHORITY_GENERATION,
+      id,
+      kind: 'hydrate',
+      query,
+      data: { backfill: true },
+    });
+    const read = (id: number, opId: string): CacheRequest => ({
+      id,
+      kind: 'read',
+      opId,
+      query: `query Q${id} { q }`,
+      priority: 'user-visible',
+    });
+
+    it('runs the reads sent while a hydrate reads before its write, and nothing else', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port, messages } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 3,
+          kind: 'write',
+          query: 'query Current { current }',
+          data: { current: true },
+        }),
+        core.handleRequest(port, hydrate(4, 'second')),
+        core.handleRequest(port, read(5, 'client:visible')),
+        core.handleRequest(port, {
+          id: 6,
+          kind: 'entity-filter',
+          request: {
+            filters: {},
+            sortMethod: 'UPDATED_AT',
+            sortDirection: 'DESC',
+            limit: 20,
+          },
+        })
+      );
+      release();
+      await Promise.all(sent);
+
+      // The queued write and the next hydrate keep their places behind it.
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:visible',
+        'entity-filter',
+        'commit',
+        'write',
+        'prepare:second',
+        'commit',
+      ]);
+      expect(engine.hydrateQuery).not.toHaveBeenCalled();
+      expect(messages.filter((message) => !message.ok)).toEqual([]);
+    });
+
+    it('lets no request that writes, and no read behind a fence, run between', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, {
+          generation: TEST_AUTHORITY_GENERATION,
+          id: 3,
+          kind: 'invalidate',
+          keys: ['Document:1'],
+        }),
+        core.handleRequest(port, read(4, 'client:after-invalidate'))
+      );
+      release();
+      await Promise.all(sent);
+      expect(order).toEqual([
+        'prepare:first',
+        'commit',
+        'invalidate',
+        'read:client:after-invalidate',
+      ]);
+
+      order.length = 0;
+      const fenced = splitEngine(order);
+      const second = await start(fenced.engine);
+      const sentAgain = [
+        second.core.handleRequest(second.port, hydrate(2, 'first')),
+      ];
+      await fenced.prepareStarted;
+      sentAgain.push(
+        second.core.handleRequest(second.port, read(5, 'client:before')),
+        second.core.handleRequest(second.port, {
+          id: 3,
+          kind: 'teardown',
+          opId: 'client:gone',
+        }),
+        second.core.handleRequest(second.port, read(4, 'client:remount'))
+      );
+      fenced.release();
+      await Promise.all(sentAgain);
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:before',
+        'commit',
+        'teardown',
+        'read:client:remount',
+      ]);
+    });
+
+    it('stamps the hydrate notice with its authority after a read between fails', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      engine.commitHydrate.mockImplementationOnce(async () => {
+        order.push('commit');
+        return {
+          ...written,
+          revision: parseCacheRevision('1'),
+          revisionAdvanced: true,
+          searchChangedBuckets: ['document'],
+          data: null,
+        };
+      });
+      const { core, port } = await start(engine);
+      const posted: unknown[] = [];
+      port.postMessage = (message) => posted.push(message);
+      core.addPort(port);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(core.handleRequest(port, read(3, 'client:fails')));
+      release();
+      await Promise.all(sent);
+
+      expect(order).toEqual(['prepare:first', 'read:client:fails', 'commit']);
+      expect(posted).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
+        kind: 'cache-hydrated',
+        revision: '1',
+        searchChangedBuckets: ['document'],
+      });
+    });
+
+    it('answers a read that fails between the halves and still writes the hydrate', async () => {
+      const order: string[] = [];
+      const { engine, prepareStarted, release } = splitEngine(order);
+      const { core, port, messages } = await start(engine);
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      release();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'read:client:fails',
+        'read:client:next',
+        'commit',
+      ]);
+      expect(
+        messages.map(({ id, ok }) => ({ id, ok })).filter(({ id }) => id > 1)
+      ).toEqual([
+        { id: 3, ok: false },
+        { id: 4, ok: true },
+        { id: 2, ok: true },
+      ]);
+    });
+
+    it('reports a slow read that runs between the halves as that read', async () => {
+      let monotonicNow = 0;
+      const { engine, prepareStarted, release } = splitEngine([]);
+      loadCacheWasmMock.mockResolvedValue({
+        openCache: vi.fn().mockResolvedValue({
+          ...engine,
+          readQuery: vi.fn(async (opId: string | undefined) => {
+            monotonicNow += 1_200;
+            if (opId === 'client:fails') throw new Error('read failed');
+            return { kind: 'miss' as const };
+          }),
+        }),
+      });
+      const observations: Array<Record<string, unknown>> = [];
+      const core = new CacheWorkerCore({
+        monotonicNow: () => monotonicNow,
+        telemetry: {
+          record: (observation) => observations.push(observation),
+          flush: vi.fn(),
+        },
+      });
+      const port = { postMessage: vi.fn() };
+      await core.handleRequest(port, { id: 1, kind: 'init', scope: 'scope-1' });
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await prepareStarted;
+      monotonicNow = 100;
+      sent.push(
+        core.handleRequest(port, read(3, 'client:fails')),
+        core.handleRequest(port, read(4, 'client:next'))
+      );
+      monotonicNow = 300;
+      release();
+      await Promise.all(sent);
+
+      expect(
+        observations.filter(
+          (observation) =>
+            observation.name === 'graphql_cache.slow_request' &&
+            observation.requestKind === 'read'
+        )
+      ).toEqual([
+        expect.objectContaining({
+          outcome: 'error',
+          queueWaitMs: 200,
+          durationMs: 1_200,
+          queueDepth: 1,
+        }),
+        expect.objectContaining({
+          outcome: 'success',
+          queueWaitMs: 1_400,
+          durationMs: 1_200,
+          queueDepth: 0,
+        }),
+      ]);
+    });
+
+    it.each([
+      [
+        true,
+        ['prepare:first', 'stage', 'read:client:visible', 'commit', 'write'],
+      ],
+      // A failed stage may have marked storage for reset: it fails the
+      // hydrate before any read runs, and the rest keep their order.
+      [false, ['prepare:first', 'stage', 'write', 'read:client:visible']],
+    ])(
+      'runs the reads sent while a hydrate stages its write before the write (staged: %s)',
+      async (stagedOk, expected) => {
+        const order: string[] = [];
+        const { engine, release } = splitEngine(order);
+        const stageStarted = Promise.withResolvers<void>();
+        const releaseStage = Promise.withResolvers<void>();
+        const staged = {
+          ...engine,
+          stageHydrate: vi.fn(async () => {
+            order.push('stage');
+            stageStarted.resolve();
+            await releaseStage.promise;
+            if (!stagedOk) throw new Error('stage failed');
+          }),
+        };
+        const { core, port, messages } = await start(staged);
+        release();
+
+        const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+        await stageStarted.promise;
+        sent.push(
+          core.handleRequest(port, {
+            generation: TEST_AUTHORITY_GENERATION,
+            id: 3,
+            kind: 'write',
+            query: 'query Current { current }',
+            data: { current: true },
+          }),
+          core.handleRequest(port, read(4, 'client:visible'))
+        );
+        releaseStage.resolve();
+        await Promise.all(sent);
+
+        expect(order).toEqual(expected);
+        expect(
+          messages.filter((message) => !message.ok).map((message) => message.id)
+        ).toEqual(stagedOk ? [] : [2]);
+      }
+    );
+
+    it('runs the reads sent during each projection pass before the next', async () => {
+      const order: string[] = [];
+      const { engine, release } = splitEngine(order);
+      const passes = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      const passStarted = [
+        Promise.withResolvers<void>(),
+        Promise.withResolvers<void>(),
+      ];
+      let pass = 0;
+      const stepped = {
+        ...engine,
+        stepHydrate: vi.fn(async () => {
+          const current = pass;
+          pass += 1;
+          if (current >= passes.length) {
+            order.push('step:none');
+            return false;
+          }
+          order.push(`step:${current}`);
+          passStarted[current]?.resolve();
+          await passes[current]?.promise;
+          return true;
+        }),
+        stageHydrate: vi.fn(async () => {
+          order.push('stage');
+        }),
+      };
+      const { core, port } = await start(stepped);
+      release();
+
+      const sent = [core.handleRequest(port, hydrate(2, 'first'))];
+      await passStarted[0]?.promise;
+      sent.push(core.handleRequest(port, read(3, 'client:visible')));
+      passes[0]?.resolve();
+      await passStarted[1]?.promise;
+      sent.push(core.handleRequest(port, read(4, 'client:visible')));
+      passes[1]?.resolve();
+      await Promise.all(sent);
+
+      expect(order).toEqual([
+        'prepare:first',
+        'step:0',
+        'read:client:visible',
+        'step:1',
+        'read:client:visible',
+        'step:none',
+        'stage',
+        'commit',
+      ]);
+    });
+
+    it('writes with hydrateQuery when the engine cannot split a hydrate', async () => {
+      const order: string[] = [];
+      const { engine } = splitEngine(order);
+      const {
+        prepareHydrate: _prepare,
+        commitHydrate: _commit,
+        ...whole
+      } = engine;
+      const { core, port, messages } = await start(whole);
+      await core.handleRequest(port, hydrate(2, 'first'));
+      expect(order).toEqual(['hydrateQuery']);
+      expect(messages.at(-1)).toMatchObject({ id: 2, ok: true });
+    });
   });
 });

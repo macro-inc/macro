@@ -1,5 +1,6 @@
 pub mod body_parsed;
 pub mod body_replyless;
+pub mod bounded_html;
 pub mod generic_email;
 pub mod macro_sender;
 pub mod normalize_contact;

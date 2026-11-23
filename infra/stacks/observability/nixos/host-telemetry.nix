@@ -9,17 +9,25 @@
       "--disable-reporting"
     ];
   };
-  # Journal access is separate from the externally reachable OTLP receiver.
   users.users.alloy.extraGroups = [ "systemd-journal" ];
-  systemd.services.alloy.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User = "alloy";
-    Group = "alloy";
-    # No private mount namespace: filesystem metrics must describe the host,
-    # not sandbox read-only bind mounts. Unix permissions restrict this user.
-    StateDirectory = lib.mkForce "";
-    WorkingDirectory = lib.mkForce "/srv/observability/alloy";
-    MemoryMax = "1G";
+  systemd.services.alloy = {
+    # The cluster's edge takes the OTLP token as the basic-auth password.
+    requires = [ "observability-secrets.service" ];
+    after = [ "observability-secrets.service" ];
+    partOf = [ "observability-secrets.service" ];
+    serviceConfig = {
+      DynamicUser = lib.mkForce false;
+      User = "alloy";
+      Group = "alloy";
+      # TELEMETRY_ORIGIN, the cluster's ingest address.
+      EnvironmentFile = "/opt/observability/runtime.env";
+      LoadCredential = [ "otlp_token:/run/macro-observability/otlp_token" ];
+      # No private mount namespace: filesystem metrics must describe the host,
+      # not sandbox read-only bind mounts. Unix permissions restrict this user.
+      StateDirectory = lib.mkForce "";
+      WorkingDirectory = lib.mkForce "/srv/observability/alloy";
+      MemoryMax = "1G";
+    };
   };
 
   users.groups.cloudwatch-agent = { };
@@ -33,8 +41,8 @@
     mode = "ec2";
     configuration = import ./cloudwatch.nix;
   };
-  # Independent of Alloy, the data mount and the Grafana stack. Missing
-  # data-disk samples must reach the alarm's missing-data policy, not a fallback.
+  # Independent of Alloy, the data mount and GoAlert. Missing data-disk samples
+  # must reach the alarm's missing-data policy, not a fallback.
   systemd.services.amazon-cloudwatch-agent = {
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
