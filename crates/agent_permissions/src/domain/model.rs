@@ -748,7 +748,7 @@ pub enum SourceScope {
         #[serde(rename = "teamId")]
         team_id: Uuid,
         /// Its name, when it could be read.
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(rename = "teamName", skip_serializing_if = "Option::is_none")]
         team_name: Option<String>,
     },
 }
