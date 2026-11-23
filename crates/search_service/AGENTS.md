@@ -166,6 +166,34 @@ per-entity-type search plus a unified search across them — mounted into
   change to any of these with the default model on rows that are really in the
   index, and a user whose memory does not describe the behavior under test.
 
+- Typed Mail search operators are read out of the query by the service, so
+  Mail's search field, the API, the SDK and the AI tools search the same way
+  (`api/search/email_operators.rs`, after `split_search_terms`): `subject:`,
+  `from:`, `to:` (To, Cc and Bcc), `cc:`, `bcc:`, `in:<view>` (the last one
+  wins; `in:focus` is the web app's and stays a word here), `in:<name>` and
+  `label:` (a tag or inbox label of that name), `is:unread|read|starred|shared`,
+  `has:attachment`, `after:`/`before:` (a day, from its midnight in the
+  request's `time_zone`) and `newer_than:`/`older_than:` (`3d`, `2w`, `1m`,
+  `1y` back on that zone's calendar), each with a minus to leave matches out;
+  a minus before a word or phrase leaves out mail containing it. Each becomes
+  an `EmailFilters` field ANDed with the request's own, applied before
+  paging; an unknown name or invalid value stays a word. A search that types
+  any operator becomes an email search (no other kind can meet them); one
+  that leaves email out, or uses `regexp`/`query` matching, reads none. Opposite
+  operators search nothing. A cursor keeps the first page's moment
+  (`query_time_millis`) so relative dates bound the same instants on every
+  page, and the response's `query_filters` reports what the operators became.
+  `-in:signal` and `-in:noise` stay a word left out: each view is two
+  conditions, so leaving it out is an OR across the index and Postgres.
+- The typed conditions that are not thread states run in OpenSearch: text
+  matches, labels and tags (`labels` terms or the nested tag filter, each name
+  resolved for the caller in Postgres; a required name naming nothing matches
+  nothing), favorites (the caller's favorite threads as required or excluded
+  ids) and the sent range on `sent_at_millis`, which is stored for sorting
+  only (doc values, not indexed), so the range is checked per candidate.
+  `has:attachment` and the left-out views past `MAX_THREAD_SET_ALLOWLIST`
+  are page checks: `ThreadStates::excluded` runs each as its own positive
+  check and drops the threads it matches.
 - Email search scopes by the owners of the inboxes the caller can reach
   (`fetch_search_inboxes_for_macro_id`), so a link's mail matches until its
   documents are deleted. An inbox whose disconnect has started (`deleting_at`)
