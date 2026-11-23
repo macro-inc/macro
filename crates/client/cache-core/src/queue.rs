@@ -84,7 +84,7 @@ impl StoredMutation {
 }
 
 /// Current version of the durable optimistic source envelope.
-pub const OPTIMISTIC_SOURCE_VERSION: u8 = 4;
+pub const OPTIMISTIC_SOURCE_VERSION: u8 = 3;
 
 const OPTIMISTIC_SOURCE_ENVELOPE_PREFIX: &str = "@macro-cache/optimistic-source:";
 
@@ -205,7 +205,7 @@ pub fn decode_optimistic_source(value: &str) -> Result<OptimisticSource, String>
                 uncertain_calendar_event_keys: Vec::new(),
             })
         }
-        version if version == 3 || version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
+        version if version == u64::from(OPTIMISTIC_SOURCE_VERSION) => {
             let envelope: OptimisticSourceEnvelope =
                 serde_json::from_value(value).map_err(|error| error.to_string())?;
             Ok(OptimisticSource {

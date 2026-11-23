@@ -98,6 +98,41 @@ fn optimistic_source_supports_versioned_and_legacy_json() {
     );
 }
 
+#[test]
+fn task_recipe_keeps_the_deployed_version_three_queue_contract() {
+    let source = OptimisticSource {
+        task_dependency_recipe: Some(cache_core::task_dependency::TaskDependencyRecipe {
+            task_id: "00000000-0000-0000-0000-000000000001".into(),
+            change: cache_core::task_dependency::TaskDependencyChange::DependsOn {
+                target_ids: vec!["00000000-0000-0000-0000-000000000002".into()],
+            },
+        }),
+        client_metadata: None,
+        identity_bindings: Vec::new(),
+        mutation_data: json!({"setTaskProperty": {"property": {"id": "assignment"}}}),
+        link_patches: Vec::new(),
+        revalidations: Vec::new(),
+        projection_mutations: Vec::new(),
+        uncertain_calendar_event_keys: Vec::new(),
+    };
+    let encoded = encode_optimistic_source(&source);
+    let envelope = encoded
+        .strip_prefix("@macro-cache/optimistic-source:")
+        .unwrap();
+    let mut envelope: serde_json::Value = serde_json::from_str(envelope).unwrap();
+    assert_eq!(envelope["version"], 3);
+
+    // Deployed v3 hosts ignore the additive recipe when reconstructing a source.
+    envelope
+        .as_object_mut()
+        .unwrap()
+        .remove("taskDependencyRecipe");
+    let legacy =
+        decode_optimistic_source(&format!("@macro-cache/optimistic-source:{envelope}")).unwrap();
+    assert_eq!(legacy.task_dependency_recipe, None);
+    assert_eq!(legacy.mutation_data, source.mutation_data);
+}
+
 fn queued(value: &str, created_at_ms: i64) -> NewQueuedMutation {
     let mut update = Record::default();
     update

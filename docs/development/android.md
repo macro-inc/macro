@@ -923,6 +923,12 @@ supplied stale generation is rejected on response writes. Reads and watches do
 not require an admission claim. Cut the store build from the final
 native tree, including this compatibility behavior.
 
+The optional cache `taskDependencyRecipe` argument is also compatible with older
+hosts: they ignore the argument and repair reciprocal links and Blocked state from
+the server response when the edit settles. Keep the durable envelope at version 3
+so a rolled-back host can still read queued commands. This additive argument does
+not raise the native floor or require a Play release; use `skip-android-update`.
+
 Android ConnectivityManager reports the validated default network and takes a
 fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
 native binaries lacking the command retain browser connectivity. Neither signal

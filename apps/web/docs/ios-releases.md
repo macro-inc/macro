@@ -185,6 +185,16 @@ termination/WebContent eviction and ordinary icon resume, as well as auth
 failures, account switching, and rapid successive taps. Confirm the app stays
 visible in the app switcher and under Control Center and Notification Center.
 
+### Task dependency recipe compatibility
+
+The optional cache `taskDependencyRecipe` argument adds reciprocal optimistic
+replay without changing the mutation request. Older native hosts ignore the
+argument and use the server's task-state response for settlement-time repair;
+reciprocal links and Blocked state update after confirmation instead of optimistically.
+Keep the durable source envelope at version 3: its decoder ignores additive fields,
+so rollback can still read queued commands. This change does not raise the native
+floor or require a native release; use `skip-ios-update` for the compatible change.
+
 ### CRM cache command compatibility
 
 New bundles use `current_authority` and `transition_authority` to observe and
