@@ -1,0 +1,19 @@
+apps/web/src/lib/queries/connectors/connect.ts
+  s_faaa49c7c59dde::t_fb038eddde15a3 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35a0d4c32b2e324beaf4142f50b5c7217aab48c1",
+  "prompts": {},
+  "sessions": {
+    "s_faaa49c7c59dde": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e19473a2-7e99-4e26-8318-c2cc8c698650",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
