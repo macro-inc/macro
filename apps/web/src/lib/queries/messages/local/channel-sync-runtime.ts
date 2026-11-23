@@ -74,6 +74,11 @@ type ChannelState = {
    * read older than it missed a change, so it cannot prove the channel current.
    */
   seenSeq: bigint | undefined;
+  /**
+   * The device has a sync row for the channel, held or not: eviction finds a
+   * channel's records through it.
+   */
+  sweepable: boolean;
   debounce?: Fiber.Fiber<unknown, unknown>;
 };
 
@@ -159,6 +164,7 @@ export function createChannelSyncRuntime(
         repairFrom: undefined,
         views: 0,
         seenSeq: undefined,
+        sweepable: false,
       };
       channels.set(channelId, state);
     }
@@ -212,6 +218,22 @@ export function createChannelSyncRuntime(
     Effect.tryPromise(() =>
       deps.host.channelTimelineCommit({ channelId, ...args }, generation)
     );
+
+  /**
+   * A frame stored records for a channel the device does not hold: an empty
+   * commit gives it a sync row, untouched, so the next eviction pass takes
+   * those records with it. Once per channel and runtime; a failure only
+   * leaves them until the channel is opened.
+   */
+  const markSweepable = Effect.fn('channel.sync.mark_sweepable')(function* (
+    channelId: string,
+    state: ChannelState,
+    generation: string
+  ) {
+    if (state.sweepable) return;
+    state.sweepable = true;
+    yield* commit(channelId, {}, generation).pipe(Effect.ignore);
+  });
 
   /**
    * Applies the frames that now continue the stored sequence, each in the
@@ -395,7 +417,10 @@ export function createChannelSyncRuntime(
     }
     // Ignored until known held: one device read per channel and session.
     const known = yield* state.lock.withPermits(1)(learnSeq(channelId, state));
-    if (known === null) return 'not-held';
+    if (known === null) {
+      if (stored) yield* markSweepable(channelId, state, generation);
+      return 'not-held';
+    }
     return yield* state.lock.withPermits(1)(
       Effect.gen(function* () {
         const current = state.seq;
@@ -525,6 +550,7 @@ export function createChannelSyncRuntime(
         state.current = false;
         state.held.clear();
         state.repairFrom = undefined;
+        state.sweepable = false;
       }
     },
     dispose() {

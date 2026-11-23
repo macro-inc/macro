@@ -185,9 +185,24 @@ describe('createChannelSyncRuntime', () => {
     await new Promise((resolve) =>
       setTimeout(resolve, CATCH_UP_DEBOUNCE_MS * 2)
     );
-    expect(host.commits).toEqual([]);
+    // One empty commit: a sync row the eviction sweep can find.
+    expect(host.commits).toEqual([{ channelId: CHANNEL_ID }]);
     expect(fetch).not.toHaveBeenCalled();
     release();
+  });
+
+  it('gives an unheld channel one sync row however many frames store records', async () => {
+    const { host, runtime } = setup(null);
+    runtime.onConnected();
+    runtime.onFrame(frame(6), true);
+    runtime.onFrame(frame(7), true);
+    runtime.onFrame(frame(8), false);
+    await waitFor(() => host.commits.length > 0);
+    await settle();
+
+    expect(host.commits).toEqual([{ channelId: CHANNEL_ID }]);
+    expect(host.heads).toBe(1);
+    expect(host.seq).toBeNull();
   });
 
   it('holds a frame past a gap and catches up a channel on screen', async () => {
