@@ -312,7 +312,9 @@ function Columns(props: {
   // as wide as the last one measured, which places unvisited lanes and sizes
   // the scroll range correctly before they mount.
   let columnWidth = 336;
-  function setColumnWidth(width: number) {
+  // The viewport width as of the last layout, before a resize in this one.
+  let viewportWidth = 0;
+  function setColumnWidth(width: number, shown: number) {
     if (width <= 0 || width === columnWidth) return;
     // Every lane moves but the viewport keeps its pixel offset. Keep the lane
     // at the left edge there, or the end in view when scrolled to it, and the
@@ -335,7 +337,8 @@ function Columns(props: {
     // The lanes have their new width but not yet their new place, so the
     // focused control's offset inside its lane is already the new one. Keep
     // it in view, from its left edge when it is wider than the viewport, when
-    // its lane was in view; overscan keeps lanes out of view mounted too.
+    // its lane was in view (overscan keeps lanes out of view mounted too) in
+    // the viewport as it was, which may narrow in the same layout.
     const active = document.activeElement;
     const slot = viewport?.contains(active)
       ? active?.closest<HTMLElement>('[data-kanban-board-column]')
@@ -348,7 +351,7 @@ function Columns(props: {
       active &&
       slot &&
       focused &&
-      focused.start < offset + visible &&
+      focused.start < offset + (shown || visible) &&
       focused.end > offset
     ) {
       const box = active.getBoundingClientRect();
@@ -373,10 +376,19 @@ function Columns(props: {
     // browser already clamped the offset to the target while re-measuring.
     viewport.dispatchEvent(new Event('scroll'));
   }
-  // Not `createResizeObserver`: it rounds widths and drops a change of less
-  // than a pixel, which would leave every lane at a width none of them has.
-  const slots = makeResizeObserver((entries) => {
-    for (const entry of entries) setColumnWidth(entry.contentRect.width);
+  // One observer for the viewport and every lane slot. Not
+  // `createResizeObserver`: it rounds widths and drops a change of less than a
+  // pixel, which would leave every lane at a width none of them has.
+  const sizes = makeResizeObserver((entries) => {
+    const shown = viewportWidth;
+    for (const entry of entries) {
+      if (entry.target === viewport) viewportWidth = entry.contentRect.width;
+    }
+    for (const entry of entries) {
+      if (entry.target !== viewport) {
+        setColumnWidth(entry.contentRect.width, shown);
+      }
+    }
   });
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
@@ -421,7 +433,12 @@ function Columns(props: {
       scrollRef={(element) => {
         releaseViewport?.();
         viewport = element;
-        releaseViewport = board.attachViewport(element);
+        const release = board.attachViewport(element);
+        sizes.observe(element);
+        releaseViewport = () => {
+          sizes.unobserve(element);
+          release();
+        };
       }}
       onWheel={wheel.onWheel}
       class="ph-no-capture min-h-0 min-w-0 w-full flex-1"
@@ -444,8 +461,8 @@ function Columns(props: {
             const key = item().key;
             let slot!: HTMLDivElement;
             onMount(() => {
-              slots.observe(slot);
-              onCleanup(() => slots.unobserve(slot));
+              sizes.observe(slot);
+              onCleanup(() => sizes.unobserve(slot));
             });
 
             return (

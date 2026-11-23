@@ -213,6 +213,50 @@ test('keeps a card being edited in view when the text size grows', async ({
   await cdp.detach();
 });
 
+test('keeps a card being edited when the pane narrows as the text grows', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1800, height: 900 });
+  await page.goto('/src/features/crm/browser-test/board.html?stages=20');
+  const card = page.locator(
+    '[data-kanban-card="00000000-0000-0000-0000-000000000011"]'
+  );
+  await expect(card).toBeVisible({ timeout: 30000 });
+  // Stage 2, the fifth lane, is in view at 1800px but not at 1280px.
+  await card.hover();
+  await card.getByRole('button', { name: /^Move / }).click();
+  await page.getByRole('menuitem', { name: 'Stage 2', exact: true }).click();
+  const lane = page.locator(
+    '[data-kanban-lane="option:00000000-0000-0000-0001-000000000001"]'
+  );
+  await expect(lane.locator('[data-kanban-card]')).toHaveCount(1);
+  await expect(lane).toBeInViewport({ ratio: 1 });
+  await card.getByRole('button', { name: /^Next step:/ }).click();
+  const editor = card.getByRole('textbox', { name: 'Edit Next step' });
+  await editor.fill('Unsaved next step');
+  // Both in one layout, as when a split opens beside the board.
+  await page.evaluate(() => {
+    document.body.style.width = '1280px';
+    document.documentElement.style.fontSize = '32px';
+  });
+  const viewport = page.locator('[data-kanban-board-viewport]');
+  await expect
+    .poll(() => viewport.evaluate((element) => element.clientWidth))
+    .toBeLessThanOrEqual(1280);
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveValue('Unsaved next step');
+  const inside = async () => {
+    const [field, box] = await Promise.all([
+      editor.boundingBox(),
+      viewport.boundingBox(),
+    ]);
+    return field && box
+      ? field.x >= box.x && field.x + field.width <= box.x + box.width
+      : false;
+  };
+  await expect.poll(inside).toBe(true);
+});
+
 test.describe('on a phone', () => {
   test.use({
     isMobile: true,
