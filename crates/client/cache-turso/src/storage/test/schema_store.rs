@@ -2,7 +2,10 @@
 //! on records, derived rows, queued writes and the storage generation.
 use super::*;
 use crate::storage::migration::test_hooks;
-use cache_core::engine::{IDENTITY_META_KEY, IDENTITY_VALUE_FIELD};
+use cache_core::engine::{
+    BeginOptimisticWrite, CommitOptimisticWriteResult, Engine, IDENTITY_META_KEY,
+    IDENTITY_VALUE_FIELD,
+};
 use cache_core::meta::Schema;
 use cache_core::queue::{OptimisticSource, decode_optimistic_source, encode_optimistic_source};
 use cache_core::schema_change::{ProjectionInputs, ResetReason, Tier, is_retired};
@@ -738,6 +741,86 @@ fn a_changed_query_root_drops_its_document_and_shadow() {
         // The other types' documents stay.
         assert!(facts(&storage, "Thing:0") > 0);
         assert!(facts(&storage, "Note:0") > 0);
+    });
+}
+
+#[test]
+fn a_write_whose_response_the_new_schema_cannot_hold_settles_as_failed() {
+    block_on(async {
+        // A projection reads `label`, so dropping it changes `Saved`.
+        let old = schema(
+            "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! label: String }",
+        );
+        let new = schema(
+            "type Query { saved: Saved } type Mutation { save: Saved } type Saved { id: ID! revision: Int }",
+        );
+        let inputs = ProjectionInputs::none().own("Saved", &["label"]);
+        let storage = TursoStorage::open_in_memory("schema-unwritable-response").unwrap();
+        storage
+            .adopt_schema(&old, &inputs, Unrecorded::Guess)
+            .unwrap();
+        let mut engine = Engine::with_schema(storage, 32, old);
+        let query = "mutation Save { save { id label } }";
+        let variables = serde_json::Map::new();
+        let (transaction, _) = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    client_metadata: None,
+                    identity_bindings: &[],
+                    uuid: "11111111-1111-4111-8111-111111111111",
+                    query,
+                    operation_name: None,
+                    variables: &variables,
+                    data: &serde_json::json!({ "save": { "id": "9", "label": "pending" } }),
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 0,
+                },
+            )
+            .await
+            .unwrap();
+        let storage = engine.into_storage();
+        let adoption = storage
+            .adopt_schema(&new, &inputs, Unrecorded::Guess)
+            .unwrap();
+        assert_eq!(adoption.change, types(&["Saved"], false));
+        assert_eq!(adoption.retired_overlays, 1);
+
+        // A server still on the older schema answers with the dropped field.
+        let mut engine = Engine::with_schema(storage, 32, adoption.schema);
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        let outcome = engine
+            .commit_optimistic_write_with_outcome(
+                transaction,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claimed.lease_generation,
+                },
+                query,
+                None,
+                &variables,
+                &serde_json::json!({ "save": { "id": "9", "label": "accepted" } }),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(outcome, CommitOptimisticWriteResult::Failed(_)));
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
     });
 }
 

@@ -258,7 +258,7 @@ pub enum DeferOptimisticWriteResultWire {
     rename_all_fields = "camelCase"
 )]
 pub enum CommitOptimisticWriteResultWire {
-    /// Invalid response identity data permanently failed this attempt.
+    /// A response that did not normalize permanently failed this attempt.
     Failed {
         /// Diagnostic for the cache error handler.
         error: String,
@@ -1201,7 +1201,7 @@ impl EngineHandle {
             .await
             .map_err(|error| error.to_string())?;
         let projections = if admitted {
-            soup::write_projections(
+            match soup::write_projections(
                 engine,
                 &query,
                 operation_name.as_deref(),
@@ -1210,7 +1210,27 @@ impl EngineHandle {
                 None,
                 None,
             )
-            .await?
+            .await
+            {
+                Ok(projections) => projections,
+                // The engine retires a write whose response does not
+                // normalize; the passes have nothing to project from it.
+                Err(error) => {
+                    let schema = engine.schema_snapshot();
+                    let response = soup::write_response(
+                        &schema,
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                        None,
+                    );
+                    if response.normalizes() {
+                        return Err(error);
+                    }
+                    Vec::new()
+                }
+            }
         } else {
             Vec::new()
         };

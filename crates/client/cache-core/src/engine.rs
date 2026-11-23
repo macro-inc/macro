@@ -112,9 +112,10 @@ pub enum EngineError<S: std::error::Error + 'static> {
     },
     #[error("invalid optimistic projection: {0}")]
     InvalidOptimisticProjection(String),
-    /// Identity resolution and normalization failed; the mutation was durably discarded.
-    #[error("invalid optimistic identity: {}", .0.error)]
-    IdentityResolutionFailed(Box<FailedMutationResult>),
+    /// A confirmed response did not normalize under the schema; the
+    /// mutation was durably discarded.
+    #[error("unwritable mutation response: {}", .0.error)]
+    UnwritableResponse(Box<FailedMutationResult>),
     #[error("invalid optimistic mutation UUID `{0}`")]
     InvalidMutationUuid(String),
     #[error("durable optimistic queue changed while staging UUID upsert")]
@@ -326,7 +327,7 @@ pub enum CommitOptimisticWriteResult {
     Committed(WriteResult),
     /// The response committed beneath a newer optimistic replacement.
     CommittedSuperseded(SupersededMutationResult),
-    /// Invalid identity data and an unnormalizable response permanently failed this attempt.
+    /// A response that did not normalize permanently failed this attempt.
     Failed(FailedMutationResult),
 }
 
@@ -335,7 +336,8 @@ pub enum CommitOptimisticWriteResult {
 pub struct FailedMutationResult {
     /// Changes caused by removing the failed optimistic layer.
     pub write_result: WriteResult,
-    /// Identity-resolution diagnostic for the host's cache error handler.
+    /// Normalization and identity diagnostic for the host's cache error
+    /// handler.
     pub error: String,
     /// Newer intent preserved when the failed attempt was superseded.
     pub replacement_transaction_id: Option<OptimisticTransactionId>,
@@ -2881,8 +2883,8 @@ impl<S: Storage> Engine<S> {
     /// network response without flickering through the pre-mutation value.
     /// Real records and queue deletion commit in one storage transaction.
     /// Invalid response identities are reported in [`WriteResult::identity_errors`].
-    /// If that response also cannot normalize, the attempt is discarded and
-    /// [`EngineError::IdentityResolutionFailed`] carries the rollback changes.
+    /// A response that cannot normalize discards the attempt, and
+    /// [`EngineError::UnwritableResponse`] carries the rollback changes.
     pub async fn commit_optimistic_write(
         &mut self,
         transaction: OptimisticTransactionId,
@@ -2988,7 +2990,7 @@ impl<S: Storage> Engine<S> {
             .await
         {
             Ok(result) => result,
-            Err(EngineError::IdentityResolutionFailed(result)) => {
+            Err(EngineError::UnwritableResponse(result)) => {
                 return Ok(CommitOptimisticWriteResult::Failed(*result));
             }
             Err(error) => return Err(error),
@@ -3090,11 +3092,14 @@ impl<S: Storage> Engine<S> {
         let op = doc.operation(operation_name)?;
         let mut updates = match normalize(&self.schema, op, variables, data) {
             Ok(updates) => updates,
-            Err(error) if identity_errors.is_empty() => return Err(error.into()),
             Err(error) => {
-                // No safe authoritative write is possible. Retire this attempt
-                // rather than replaying an already successful server mutation.
-                let error = format!("{}; {error}", identity_errors.join("; "));
+                // No safe authoritative write is possible, and a retry of the
+                // same response never normalizes: the schema dropped a field
+                // a write queued under an older one selects, or the response
+                // is malformed. Retire this attempt rather than holding the
+                // queue head or replaying an already successful mutation.
+                identity_errors.push(error.to_string());
+                let error = identity_errors.join("; ");
                 let rollback = self
                     .rollback_optimistic_write_with_outcome(transaction, claim)
                     .await?;
@@ -3104,7 +3109,7 @@ impl<S: Storage> Engine<S> {
                         (result.write_result, Some(result.replacement_transaction_id))
                     }
                 };
-                return Err(EngineError::IdentityResolutionFailed(Box::new(
+                return Err(EngineError::UnwritableResponse(Box::new(
                     FailedMutationResult {
                         write_result,
                         error,

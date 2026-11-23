@@ -1701,6 +1701,60 @@ async fn queue_and_optimistic_layers_survive_preserve_reopen_in_id_order() {
 }
 
 #[wasm_bindgen_test(async)]
+async fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
+    const SCOPE: &str = "cache-wasm-unwritable-settlement";
+    let engine = fresh_engine(SCOPE).await;
+    let enqueue: serde_json::Value = from_js(
+        resolved(engine.enqueue_optimistic_mutation(
+            None,
+            "00000000-0000-4000-8000-000000000009".into(),
+            PROPERTY_MUTATION.into(),
+            Some("SetEntityProperty".into()),
+            js(mutation_variables()),
+            js(serde_json::json!({
+                "setEntityProperty": { "id": "prop-1", "displayName": "Stage" }
+            })),
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            123.0,
+            "runner".into(),
+            10.0,
+            1_000.0,
+            JsValue::UNDEFINED,
+            JsValue::UNDEFINED,
+            test_generation(&engine).await,
+        ))
+        .await,
+    );
+
+    // No retry of this response can be written, so the queue moves on.
+    let commit: serde_json::Value = from_js(
+        resolved(
+            engine.commit_optimistic_write(
+                enqueue["transactionId"].as_str().unwrap().to_owned(),
+                "runner".into(),
+                enqueue["initialClaim"]["mutation"]["leaseGeneration"]
+                    .as_str()
+                    .unwrap()
+                    .to_owned(),
+                PROPERTY_MUTATION.into(),
+                Some("SetEntityProperty".into()),
+                js(mutation_variables()),
+                js(serde_json::json!({ "setEntityProperty": "malformed" })),
+                test_generation(&engine).await,
+            ),
+        )
+        .await,
+    );
+    assert_eq!(commit["kind"], "failed");
+    let queued: serde_json::Value = from_js(resolved(engine.inspect_mutations()).await);
+    assert_eq!(queued, serde_json::json!([]));
+
+    close_and_destroy(&engine, SCOPE).await;
+}
+
+#[wasm_bindgen_test(async)]
 async fn optimistic_commit_reports_affected_ops_and_rejects_settled_or_malformed_ids() {
     const SCOPE: &str = "cache-wasm-wp07-optimistic-commit";
     let engine = fresh_engine(SCOPE).await;

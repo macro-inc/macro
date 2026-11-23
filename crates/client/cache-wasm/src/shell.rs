@@ -2756,7 +2756,12 @@ impl CacheEngine {
                 &projection_data,
             );
             let projections = write_passes(state.engine_mut()?, &response, true, projections).await;
-            let projections = state.write_passes_result(projections)?;
+            let projections = match projections {
+                // The engine retires a write whose response does not
+                // normalize; the passes have nothing to project from it.
+                Err(_) if !response.normalizes() => Vec::new(),
+                projections => state.write_passes_result(projections)?,
+            };
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_in_generation(

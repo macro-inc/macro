@@ -1105,3 +1105,46 @@ fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
     let result = write(&handle, Some("client:2"), soup_data(true), None);
     assert!(result.affected_ops.is_empty());
 }
+
+#[test]
+fn a_confirmed_response_that_does_not_normalize_retires_the_write() {
+    let handle = spawn_handle();
+    let optimistic = block_on(handle.enqueue_optimistic_mutation(
+        None,
+        "00000000-0000-4000-8000-000000000009".to_string(),
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        vec![],
+        vec![],
+        vec![],
+        0,
+        "runner".to_string(),
+        10,
+        1_000,
+        None,
+        vec![],
+    ))
+    .unwrap();
+    let InitialMutationClaimWire::Claimed { mutation: claimed } = optimistic.initial_claim else {
+        panic!("new queue head should be claimed")
+    };
+
+    // No retry of this response can be written, so the queue moves on.
+    let committed = block_on(handle.commit_optimistic_write(
+        optimistic.transaction_id,
+        "runner".to_string(),
+        claimed.lease_generation,
+        QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        serde_json::json!({"user": {"id": "user-1", "soup": "malformed"}}),
+    ))
+    .unwrap();
+    assert!(matches!(
+        committed,
+        CommitOptimisticWriteResultWire::Failed { .. }
+    ));
+    assert!(block_on(handle.inspect_mutations()).unwrap().is_empty());
+}
