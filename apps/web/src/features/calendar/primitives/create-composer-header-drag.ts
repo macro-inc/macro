@@ -174,8 +174,8 @@ export function createComposerHeaderDrag(options: {
     const boundary = options.boundary();
     const surface = options.surface();
     if (!current || !boundary || !surface) return current;
-    // Floating panels cap their body to the space below the header. Clamp the
-    // header, not the previous pinned height, so release cannot jump upward.
+    // Keep a lifted panel's header reachable during dragging. Its placement
+    // owner fits the complete floating card into the viewport after release.
     const size = {
       left: surface.left,
       top: surface.top,

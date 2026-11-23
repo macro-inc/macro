@@ -71,38 +71,45 @@ export function createCalendarPanelPlacement(options: {
     version();
     return options.dock()?.getBoundingClientRect();
   };
+  const maxHeight = () => {
+    version();
+    if (docked()) return dockRect()?.height;
+    return Math.max(0, window.innerHeight - 32);
+  };
+  const floatingAnchor = (rect: DOMRectReadOnly) => {
+    // Size against the whole viewport first, then move up. Limiting height to
+    // the space below the anchor would make bottom-of-screen cards collapse.
+    const height = Math.min(
+      options.surface()?.getBoundingClientRect().height ?? 0,
+      maxHeight() ?? 0
+    );
+    const maximumTop = Math.max(16, window.innerHeight - 16 - height);
+    return new DOMRect(
+      rect.x,
+      Math.min(maximumTop, Math.max(16, rect.y)),
+      rect.width,
+      rect.height
+    );
+  };
   const anchorRect = () => {
     version();
     const dock = dockRect();
     if (docked() && dock)
       return new DOMRect(dock.left, dock.top, 0, dock.height);
     const position = drag.position();
-    if (position) return new DOMRect(position.x - 8, position.y, 0, 0);
+    if (position) {
+      const rect = new DOMRect(position.x - 8, position.y, 0, 0);
+      // While held, keep the header under the pointer. Settle the complete card
+      // inside the viewport on release, including when dragging out of a dock.
+      return drag.state.active ? rect : floatingAnchor(rect);
+    }
     const anchor = options.anchor();
-    if (anchor) return anchor;
+    if (anchor) return floatingAnchor(anchor);
     const boundary = options.boundary()?.getBoundingClientRect();
     const left =
       (boundary?.left ?? 0) +
       Math.max(8, ((boundary?.width ?? window.innerWidth) - 384) / 2);
-    return new DOMRect(left, (boundary?.top ?? 0) + 108, 0, 0);
-  };
-  const maxHeight = () => {
-    version();
-    if (docked()) return dockRect()?.height;
-    const root = options.boundary();
-    const boundary =
-      root
-        ?.querySelector<HTMLElement>('.calendar-view-content')
-        ?.getBoundingClientRect() ?? root?.getBoundingClientRect();
-    const top = Math.max(16, boundary?.top ?? 16);
-    const bottom = Math.min(
-      window.innerHeight - 16,
-      boundary?.bottom ?? window.innerHeight - 16
-    );
-    const position = drag.position();
-    const surfaceTop =
-      position?.y ?? options.surface()?.getBoundingClientRect().top ?? top;
-    return Math.max(0, bottom - Math.max(top, surfaceTop));
+    return floatingAnchor(new DOMRect(left, (boundary?.top ?? 0) + 108, 0, 0));
   };
   return { drag, docked, dockRect, anchorRect, maxHeight };
 }
