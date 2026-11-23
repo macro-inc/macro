@@ -455,6 +455,41 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('forwards task dependency recipes to the worker', async () => {
+    const host = createWorkerCacheHost({ scope: 'task-recipes' });
+    await host.enqueueOptimisticMutation(
+      {
+        generation: TEST_AUTHORITY_GENERATION,
+        uuid: '00000000-0000-4000-8000-000000000005',
+        query:
+          'mutation SetTaskProperty { setTaskProperty { property { id } } }',
+        data: { setTaskProperty: { property: { id: 'assignment' } } },
+        taskDependencyRecipe: {
+          taskId: '00000000-0000-0000-0000-000000000001',
+          change: {
+            kind: 'dependsOn',
+            targetIds: ['00000000-0000-0000-0000-000000000002'],
+          },
+        },
+      },
+      { owner: 'runner', nowMs: 100, leaseExpiresAtMs: 1100 }
+    );
+    expect(
+      requireAdapter().requests.find(
+        (request) => request.kind === 'enqueue-optimistic-mutation'
+      )
+    ).toMatchObject({
+      taskDependencyRecipe: {
+        taskId: '00000000-0000-0000-0000-000000000001',
+        change: {
+          kind: 'dependsOn',
+          targetIds: ['00000000-0000-0000-0000-000000000002'],
+        },
+      },
+    });
+    host.dispose();
+  });
+
   it('preserves the complete CacheHost RPC surface, request ids, and call order', async () => {
     const host = createWorkerCacheHost({ scope: 'scope-1', hotCapacity: 42 });
     const claim = { owner: 'runner', generation: 'generation-1' };

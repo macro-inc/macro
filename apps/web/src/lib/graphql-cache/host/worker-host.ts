@@ -1685,6 +1685,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         variables: args.variables,
         data: args.data,
         linkPatches: args.linkPatches,
+        taskDependencyRecipe: args.taskDependencyRecipe,
         revalidations: args.revalidations,
         identityBindings: args.identityBindings,
         clientMetadata: args.clientMetadata,
