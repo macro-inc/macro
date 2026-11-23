@@ -18,7 +18,7 @@ use std::time::Duration;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ImportFromHubspot",
-    description = "Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. Status reports progress; cancel stops this import and keeps records already written."
+    description = "Import a connected HubSpot portal into the team's Macro CRM: deal pipelines become Sales pipelines with their stages, companies and contacts become CRM records, and deals become pipeline entries with stage, outcome, amount, close date and owner. Plan reads every company, contact and deal through the user's connected HubSpot account; nothing is written to HubSpot. Records belong to the team, so there is no sharing question. Present the plan immediately with PresentReview kind import, drafts [{source: hubspot}], even while it is running. Do not poll status or recreate records with other tools. Nothing is written until approval. Once the plan is ready, ask Should I kick it off? If the user says yes, approve it with DecideReview (a submit decision) using the review id. While it is still being planned, do not ask or approve: the user approves it on the card once it is ready. Status reports progress; cancel stops this import and keeps records already written."
 )]
 pub struct ImportFromHubspot {
     /// Plan, status or cancel.
@@ -100,7 +100,7 @@ fn message(action: NotionImportAction, report: &NotionImportReport) -> String {
             report.imported
         ),
         (_, Some(RunStatus::Running)) => format!(
-            "Reading HubSpot in the background. Present the review now with {present}; it fills in as planning runs. Do not wait or poll status. Ask \"Should I kick it off once it's ready?\". If they say yes, approve it with DecideReview (a submit decision); it refuses until the plan is ready."
+            "Reading HubSpot in the background. Present the review now with {present}; it fills in as planning runs, and the user can approve it on the card once it is ready. Do not wait or poll status. Do not offer to start it once it is ready, and do not call DecideReview while it is still being planned: a yes now cannot approve a plan that does not exist yet, and nothing acts on it later. If they ask you to start it before it is ready, tell them it is still being planned and that they approve it on the card, or ask you again, once it is ready."
         ),
         (_, Some(RunStatus::Ready)) => format!(
             "The HubSpot plan has {}; {} skipped, {} already in Macro. Present it with {present} if not presented yet. Nothing is written until approval. Ask \"Should I kick it off?\"; if they say yes, approve it with DecideReview (a submit decision).",
