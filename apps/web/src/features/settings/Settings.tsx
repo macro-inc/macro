@@ -23,7 +23,6 @@ import {
   useSettingsTabs,
 } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
@@ -171,34 +170,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
       );
     });
   };
-
-  // Helper to navigate to a tab by index
-  function navigateToTabIndex(index: number): boolean {
-    const tabs = navTabs();
-    if (index >= 0 && index < tabs.length) {
-      const tab = tabs[index];
-      if (tab) {
-        selectRoutedTab(tab.tab);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Register number keys 1-9 for direct tab navigation
-  for (let i = 1; i <= 9; i++) {
-    const keyNum = i;
-    function handleNumberKey() {
-      return navigateToTabIndex(keyNum - 1);
-    }
-    registerHotkey({
-      description: () => t('settingsNav.goToTab', { number: keyNum }),
-      hotkey: `${keyNum}` as ValidHotkey,
-      keyDownHandler: handleNumberKey,
-      scopeId: settingsHotkeyScope,
-      hide: true,
-    });
-  }
 
   const handleTabChange = (value: string) => {
     if (navTabs().some((tab) => tab.tab === value)) {

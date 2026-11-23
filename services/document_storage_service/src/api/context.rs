@@ -551,8 +551,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -1040,6 +1044,11 @@ pub(crate) struct ApiContext {
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
     pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
     pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    /// The Soup lists with their channels read from the primary, for pages
+    /// that ask `channelReads: PRIMARY`.
+    pub graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup<
+        <DssGraphqlSoupSchema as complete_graph::SoupSchemaService>::Service,
+    >,
     pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
     pub sql_state: DssSqlState,
