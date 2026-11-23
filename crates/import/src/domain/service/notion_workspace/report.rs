@@ -101,9 +101,7 @@ pub(in crate::domain::service) fn report(
                 ) {
                     continue;
                 }
-                if report.warnings.len() < REPORT_LIST_LIMIT {
-                    report.warnings.push(rendered);
-                }
+                add_warning(&mut report, rendered);
             }
         }
         let Some(plan) = &meta.plan else { continue };
@@ -250,6 +248,8 @@ pub(in crate::domain::service) fn report(
                 if decision == NotionDecision::Hand {
                     if report.hand_items.len() < REPORT_LIST_LIMIT {
                         report.hand_items.push(reported());
+                    } else {
+                        report.settlement_lists_truncated = true;
                     }
                 } else if decision != NotionDecision::Skip {
                     report.waiting += 1;
@@ -317,8 +317,14 @@ fn add_note(
     if let Some(details) = details {
         details.other(message.clone());
     }
+    add_warning(report, message);
+}
+
+fn add_warning(report: &mut NotionImportReport, message: String) {
     if report.warnings.len() < REPORT_LIST_LIMIT {
         report.warnings.push(message);
+    } else {
+        report.settlement_lists_truncated = true;
     }
 }
 struct CurrentPlan<'a> {

@@ -138,7 +138,11 @@ export function ImportReportDetails(props: {
       >
         <Show when={needsAttention()}>
           <Disclosure
-            label={`Needs attention · ${plural(props.failureCount || 1, 'item')}`}
+            label={
+              props.failureCount > 0
+                ? `Needs attention · ${plural(props.failureCount, 'item')}`
+                : 'Needs attention'
+            }
             failure
           >
             <Show when={props.error}>{(error) => <p>{error()}</p>}</Show>

@@ -1050,4 +1050,10 @@ pub struct NotionImportReport {
     /// Total objects that failed, including those outside the sample.
     #[serde(default)]
     pub failure_count: u32,
+    /// Whether the warning or by-hand list was bounded before settlement.
+    #[serde(skip)]
+    #[schemars(skip)]
+    #[specta(skip)]
+    #[schema(ignore)]
+    pub settlement_lists_truncated: bool,
 }

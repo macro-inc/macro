@@ -443,7 +443,7 @@ describe('import review', () => {
 
     expect(screen.getByRole('status').textContent).toContain('Import stopped');
     const disclosure = screen
-      .getByText('Needs attention · 1 item')
+      .getByText('Needs attention', { exact: true })
       .closest('details')!;
     expect(
       within(disclosure).getByText(
@@ -461,7 +461,7 @@ describe('import review', () => {
     };
     setup({ item: { status: 'completed' } });
     const disclosure = screen
-      .getByText('Needs attention · 1 item')
+      .getByText('Needs attention', { exact: true })
       .closest('details')!;
     expect(disclosure.open).toBe(true);
     expect(

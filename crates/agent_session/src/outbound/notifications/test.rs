@@ -459,6 +459,7 @@ async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool
             documents: 4,
             databases: 0,
             database_rows: 0,
+            partial_database_rows: 0,
             task_lists: 0,
             task_rows: 0,
             skipped: 0,
@@ -468,6 +469,8 @@ async fn stored_settlements_read_back_as_the_kind_they_were_written(pool: PgPool
             waiting_on_teammates: 0,
             root_folder_id: Some(Uuid::from_u128(9)),
             failures: Vec::new(),
+            failure_count: None,
+            details_truncated: false,
             hand_items: Vec::new(),
         },
     };

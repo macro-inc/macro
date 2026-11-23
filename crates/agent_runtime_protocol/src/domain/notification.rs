@@ -105,8 +105,11 @@ pub struct ImportSettlement {
     pub documents: u32,
     /// Planned databases.
     pub databases: u32,
-    /// Rows those databases hold.
+    /// Rows written, including rows from database copies that stopped.
     pub database_rows: u32,
+    /// The subset of rows from unfinished database copies.
+    #[serde(default)]
+    pub partial_database_rows: u32,
     /// Planned task lists; issues that become tasks for Linear and Jira.
     pub task_lists: u32,
     /// Tasks those task lists or issues become.
@@ -127,6 +130,12 @@ pub struct ImportSettlement {
     pub root_folder_id: Option<Uuid>,
     /// Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`].
     pub failures: Vec<ImportItem>,
+    /// Exact number of failed objects. Absent on settlements from older writers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure_count: Option<u32>,
+    /// At least one list was shortened for the settlement.
+    #[serde(default)]
+    pub details_truncated: bool,
     /// Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`].
     pub hand_items: Vec<ImportItem>,
 }

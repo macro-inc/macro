@@ -93,12 +93,17 @@ function importSettlementSummary(report: ImportSettlement) {
     .exhaustive();
   const heading = `${importLabel(report.source)} ${ending}`;
   let summary = `${heading} · ${report.imported} of ${report.planned} imported`;
-  if (report.failures.length) summary += ` · ${report.failures.length} failed`;
+  const failures = report.failureCount ?? report.failures.length;
+  if (failures) summary += ` · ${failures} failed`;
+  if (report.partialDatabaseRows) {
+    const rows = report.partialDatabaseRows;
+    summary += ` · ${rows} ${rows === 1 ? 'row' : 'rows'} from unfinished databases`;
+  }
   if (report.handItems.length)
     summary += ` · ${report.handItems.length} by hand`;
   return {
     summary,
-    failed: report.outcome === 'failed' || report.failures.length > 0,
+    failed: report.outcome === 'failed' || failures > 0,
   };
 }
 

@@ -219,6 +219,11 @@ fn settlement(
         RunStatus::Dismissed => ImportOutcome::Cancelled,
         RunStatus::Running | RunStatus::Ready | RunStatus::Importing => return None,
     };
+    let failures = items(&report.failures);
+    let hand_items = items(&report.hand_items);
+    let details_truncated = report.settlement_lists_truncated
+        || (report.failure_count as usize) > failures.len()
+        || report.hand_items.len() > hand_items.len();
     Some(ImportSettlement {
         warnings: report.warnings.clone(),
         source: workspace(source)?,
@@ -229,6 +234,10 @@ fn settlement(
         documents: report.documents,
         databases: report.databases,
         database_rows: report.database_rows,
+        partial_database_rows: report
+            .confirmed
+            .as_ref()
+            .map_or(0, |writes| writes.partial_database_rows),
         task_lists: report
             .confirmed
             .as_ref()
@@ -240,8 +249,10 @@ fn settlement(
         already_in_macro: report.already_in_macro,
         waiting_on_teammates: report.waiting_on_teammates,
         root_folder_id: root_folder,
-        failures: items(&report.failures),
-        hand_items: items(&report.hand_items),
+        failures,
+        failure_count: Some(report.failure_count),
+        details_truncated,
+        hand_items,
     })
 }
 

@@ -43,8 +43,9 @@ payloads.
 
 `domain/notification.rs` owns typed system events and their ACP metadata/XML.
 Notification-only invocations use `AgentAction::notification`; public control must
-reject caller-supplied notification metadata. Payloads contain facts, not drafts. Import settlements retain fidelity warnings
-and snapshot labels; the optional warnings array defaults empty for older events.
+reject caller-supplied notification metadata. Import settlements carry confirmed
+partial database rows, exact failure totals and a truncation flag for sampled
+details. Older events may omit these fields and the warning list.
 The fold reuses this tagged event enum for its generated TypeScript union;
 retain Specta derives on event payloads and preserve the producer wire shape.
 Allow exact `<noop/>` only before any tool call in a notification turn; prompt

@@ -1135,8 +1135,10 @@ export type ImportSettlement_Deserialize = {
 	documents: number,
 	/**  Planned databases. */
 	databases: number,
-	/**  Rows those databases hold. */
+	/**  Rows written, including rows from database copies that stopped. */
 	databaseRows: number,
+	/**  The subset of rows from unfinished database copies. */
+	partialDatabaseRows?: number,
 	/**  Planned task lists; issues that become tasks for Linear and Jira. */
 	taskLists: number,
 	/**  Tasks those task lists or issues become. */
@@ -1155,6 +1157,10 @@ export type ImportSettlement_Deserialize = {
 	rootFolderId: string | null,
 	/**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
 	failures: ImportItem_Deserialize[],
+	/**  Exact number of failed objects. Absent on settlements from older writers. */
+	failureCount?: number | null,
+	/**  At least one list was shortened for the settlement. */
+	detailsTruncated?: boolean,
 	/**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
 	handItems: ImportItem_Deserialize[],
 };
@@ -1180,8 +1186,10 @@ export type ImportSettlement_Serialize = {
 	documents: number,
 	/**  Planned databases. */
 	databases: number,
-	/**  Rows those databases hold. */
+	/**  Rows written, including rows from database copies that stopped. */
 	databaseRows: number,
+	/**  The subset of rows from unfinished database copies. */
+	partialDatabaseRows: number,
 	/**  Planned task lists; issues that become tasks for Linear and Jira. */
 	taskLists: number,
 	/**  Tasks those task lists or issues become. */
@@ -1200,6 +1208,10 @@ export type ImportSettlement_Serialize = {
 	rootFolderId?: string | null,
 	/**  Objects that could not be imported, at most [`MAX_IMPORT_ITEMS`]. */
 	failures: ImportItem_Serialize[],
+	/**  Exact number of failed objects. Absent on settlements from older writers. */
+	failureCount?: number | null,
+	/**  At least one list was shortened for the settlement. */
+	detailsTruncated: boolean,
 	/**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
 	handItems: ImportItem_Serialize[],
 };

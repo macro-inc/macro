@@ -218,6 +218,8 @@ it('reports a settled import from its counts, never its error text', () => {
             documents: 8,
             databases: 1,
             databaseRows: 20,
+            partialDatabaseRows: 9,
+            failureCount: 55,
             taskLists: 1,
             taskRows: 5,
             skipped: 2,
@@ -235,7 +237,7 @@ it('reports a settled import from its counts, never its error text', () => {
   ));
   const status = view.getByRole('status');
   expect(status.textContent).toContain(
-    'Import failed · 4 of 10 imported · 1 failed'
+    'Import failed · 4 of 10 imported · 55 failed · 9 rows from unfinished databases'
   );
   expect(status.textContent).not.toContain('Secret roadmap');
   expect(status.classList.contains('text-failure')).toBe(true);
