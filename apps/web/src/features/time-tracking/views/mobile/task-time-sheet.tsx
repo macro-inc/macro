@@ -27,7 +27,10 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
   const [open, setOpen] = createSignal(false);
   const [mode, setMode] = createSignal<Mode>({ kind: 'list' });
   const [list, setList] = createSignal<HTMLElement>();
-  const time = createTaskTime(() => props.taskId);
+  // Entries load when the panel first opens; the pill reads the total from
+  // the task.
+  const [opened, setOpened] = createSignal(false);
+  const time = createTaskTime(() => (opened() ? props.taskId : undefined));
   const today = () => localDay(new Date());
   const own = (id: string) =>
     time.entries().find((entry) => entry.id === id && entry.canEdit);
@@ -44,6 +47,7 @@ export function TaskTimeSheet(props: TaskTimeViewProps): JSX.Element {
         class="min-h-9"
         onClick={() => {
           setMode({ kind: 'list' });
+          setOpened(true);
           setOpen(true);
         }}
       />

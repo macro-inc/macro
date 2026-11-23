@@ -23,7 +23,10 @@ type Mode =
 export function TaskTimeDesktop(props: TaskTimeViewProps): JSX.Element {
   const [open, setOpen] = createSignal(false);
   const [mode, setMode] = createSignal<Mode>({ kind: 'list' });
-  const time = createTaskTime(() => props.taskId);
+  // Entries load when the panel first opens; the pill reads the total from
+  // the task.
+  const [opened, setOpened] = createSignal(false);
+  const time = createTaskTime(() => (opened() ? props.taskId : undefined));
   const today = () => localDay(new Date());
   let anchor: HTMLButtonElement | undefined;
 
@@ -69,6 +72,7 @@ export function TaskTimeDesktop(props: TaskTimeViewProps): JSX.Element {
         aria-expanded={open()}
         onClick={() => {
           setMode({ kind: 'list' });
+          setOpened(true);
           setOpen(true);
         }}
       />

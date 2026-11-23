@@ -24,17 +24,22 @@ const update = vi.fn<TaskTime['update']>(() =>
   Promise.resolve(ok({ kind: 'queued' as const }))
 );
 
+let requestedTaskId: () => string | undefined = () => undefined;
+
 vi.mock('../primitives/create-task-time', () => ({
-  createTaskTime: (): Partial<TaskTime> => ({
-    entries: () => [entry],
-    pending: () => false,
-    failed: () => false,
-    refetch: vi.fn(),
-    viewerId: () => entry.userId,
-    log: vi.fn(),
-    update,
-    remove: vi.fn(),
-  }),
+  createTaskTime: (taskId: () => string | undefined): Partial<TaskTime> => {
+    requestedTaskId = taskId;
+    return {
+      entries: () => [entry],
+      pending: () => false,
+      failed: () => false,
+      refetch: vi.fn(),
+      viewerId: () => entry.userId,
+      log: vi.fn(),
+      update,
+      remove: vi.fn(),
+    };
+  },
 }));
 
 afterEach(() => {
@@ -42,7 +47,7 @@ afterEach(() => {
   update.mockClear();
 });
 
-it('saves an edited entry after the form closes', async () => {
+it('reads entries once opened and saves an edited entry after the form closes', async () => {
   render(() => (
     <TaskTimeDesktop
       taskId="task-1"
@@ -52,7 +57,9 @@ it('saves an edited entry after the form closes', async () => {
     />
   ));
 
+  expect(requestedTaskId()).toBeUndefined();
   fireEvent.click(screen.getByRole('button', { name: /^Time logged/ }));
+  expect(requestedTaskId()).toBe('task-1');
   const menu = await screen.findByRole('button', { name: 'Entry actions' });
   fireEvent.keyDown(menu, { key: 'Enter' });
   const edit = await screen.findByRole('menuitem', { name: 'Edit entry' });
