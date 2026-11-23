@@ -746,7 +746,6 @@ export default {
       '設定が見つかりません。「署名」「テーマ」「カレンダー」などで検索してください。',
     backToSettings: '設定に戻る',
     closeSettings: '設定を閉じる',
-    goToTab: '設定タブ{{number}}に移動',
     editProfile: 'プロフィールを編集',
     logOut: 'ログアウト',
     yourAccount: 'アカウント',

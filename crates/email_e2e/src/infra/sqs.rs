@@ -52,6 +52,12 @@ const QUEUES: &[QueueSpec] = &[
         max_receive_count: 5,
     },
     QueueSpec {
+        override_env: "OVERRIDE_LINK_MAINTENANCE_QUEUE",
+        name: "link-maintenance",
+        visibility_timeout_seconds: 300,
+        max_receive_count: 5,
+    },
+    QueueSpec {
         override_env: "OVERRIDE_EMAIL_SCHEDULED_QUEUE",
         name: "scheduled",
         visibility_timeout_seconds: 30,

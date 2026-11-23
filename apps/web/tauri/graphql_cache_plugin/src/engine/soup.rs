@@ -8,10 +8,11 @@ use predicate_index::{OptimisticProjectionMutation, RecordKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations,
-    compile_current_filter_request as compile_filter_request, dirty_projection_mutations, mail,
-    notification_deletion_updates, notification_projection_updates,
-    optimistic_notification_updates, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, WritePassStep, WritePasses, WriteResponse,
+    authoritative_projection_mutations, compile_current_filter_request as compile_filter_request,
+    dirty_projection_mutations, mail, notification_deletion_updates,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations,
 };
 
 /// Same request shape as the browser host's `EntityFilterCacheArgs`.
@@ -261,6 +262,29 @@ pub(super) async fn write_projections(
     identity: Option<&str>,
     normalized: Option<&cache_core::normalize::RecordUpdates>,
 ) -> Result<Vec<ProjectionMutation>, String> {
+    let mut passes = write_passes(engine, query, operation, data, identity).await?;
+    let schema = engine.schema_snapshot();
+    let response = write_response(&schema, query, operation, variables, data, normalized);
+    loop {
+        if let WritePassStep::Done(projections) = passes
+            .step(engine, &response)
+            .await
+            .map_err(|error| error.to_string())?
+        {
+            return Ok(projections);
+        }
+    }
+}
+
+/// The projection passes of a write, after the authoritative rows its
+/// response sets. Reads storage only for the bound account.
+pub(super) async fn write_passes(
+    engine: &mut Engine<TursoStorage>,
+    query: &str,
+    operation: Option<&str>,
+    data: &Value,
+    identity: Option<&str>,
+) -> Result<WritePasses, String> {
     let projections = authoritative_projection_mutations(engine.schema(), query, operation, data)
         .map_err(|error| error.to_string())?;
     // Do not compose the new viewer's partial writes with the old viewer's
@@ -274,20 +298,25 @@ pub(super) async fn write_projections(
             .is_none_or(|bound| bound == observed),
         None => true,
     };
-    // The passes below share one normalization of the response: the engine's,
-    // when the caller normalized it for the write.
-    let schema = engine.schema_snapshot();
-    let response = match normalized {
-        Some(updates) => soup_filter_cache_adapter::WriteResponse::with_updates(
-            &schema, query, operation, variables, data, updates,
-        ),
-        None => soup_filter_cache_adapter::WriteResponse::new(
-            &schema, query, operation, variables, data,
-        ),
-    };
-    soup_filter_cache_adapter::write_passes(engine, &response, reuse_stored_identity, projections)
-        .await
-        .map_err(|error| error.to_string())
+    Ok(WritePasses::new(reuse_stored_identity, projections))
+}
+
+/// The response the projection passes read. They share one normalization of
+/// it: the engine's, when the caller normalized it for the write.
+pub(super) fn write_response<'a>(
+    schema: &'a cache_core::meta::Schema,
+    query: &'a str,
+    operation: Option<&'a str>,
+    variables: &'a Variables,
+    data: &'a Value,
+    normalized: Option<&'a cache_core::normalize::RecordUpdates>,
+) -> WriteResponse<'a> {
+    match normalized {
+        Some(updates) => {
+            WriteResponse::with_updates(schema, query, operation, variables, data, updates)
+        }
+        None => WriteResponse::new(schema, query, operation, variables, data),
+    }
 }
 
 pub(super) async fn optimistic_projections(

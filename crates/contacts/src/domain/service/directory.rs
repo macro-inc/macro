@@ -1,30 +1,41 @@
 use crate::domain::{
     models::{
         contact::{Contact, ContactId, ContactPage},
+        list::ContactList,
         page::{ContactCursor, ContactPageSize, MAX_CONTACT_PAGE_SIZE},
         query::{CONTACT_SEARCH_SCAN_BUDGET, ContactLookup, ContactSearch},
     },
-    ports::{ContactDirectory, ContactNameReader, ContactsPageService},
+    ports::{ContactDirectory, ContactListReader, ContactNameReader, ContactsPageService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::{collections::HashMap, sync::Arc};
 
-/// Enriches authorized graph reads using the viewer's name-resolution context.
-pub struct ContactsDirectoryService<P, N> {
+/// Enriches authorized directory reads with the viewer's names and lists.
+pub struct ContactsDirectoryService<P, L, N> {
     pages: Arc<P>,
+    lists: Arc<L>,
     names: N,
 }
 
-impl<P, N> ContactsDirectoryService<P, N> {
-    /// Compose graph membership and name reads; names never create membership.
-    pub fn new(pages: Arc<P>, names: N) -> Self {
-        Self { pages, names }
+impl<P, L, N> ContactsDirectoryService<P, L, N> {
+    /// Compose membership (`pages`), list (`lists`) and name reads. Names and
+    /// lists never create membership: they are read only for the ids `pages`
+    /// chose.
+    pub fn new(pages: Arc<P>, lists: Arc<L>, names: N) -> Self {
+        Self {
+            pages,
+            lists,
+            names,
+        }
     }
 }
 
-impl<P: ContactsPageService, N: ContactNameReader> ContactsDirectoryService<P, N> {
-    async fn enrich(
+impl<P: ContactsPageService, L: ContactListReader, N: ContactNameReader>
+    ContactsDirectoryService<P, L, N>
+{
+    /// Name the chosen ids, in order, without their lists.
+    async fn named(
         &self,
         viewer: MacroUserIdStr<'_>,
         ids: Vec<MacroUserIdStr<'static>>,
@@ -50,14 +61,83 @@ impl<P: ContactsPageService, N: ContactNameReader> ContactsDirectoryService<P, N
             .map(|user_id| Contact {
                 id: ContactId::for_viewer(&viewer, &user_id),
                 name: names.get(&user_id).cloned().flatten(),
+                lists: Vec::new(),
                 user_id,
             })
             .collect())
     }
+
+    /// The viewer's lists for each chosen contact, by id. Read from the
+    /// list-aware directory whichever store chose the ids, so a contact only
+    /// the legacy graph knows has none.
+    async fn lists_of(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<HashMap<MacroUserIdStr<'static>, Vec<ContactList>>, Report> {
+        let Some(lookup) = ContactLookup::new(ids) else {
+            return Err(rootcause::report!("contact list read exceeded its bound"));
+        };
+        if lookup.ids().is_empty() {
+            return Ok(HashMap::new());
+        }
+        Ok(self
+            .lists
+            .contact_lists(viewer, &lookup)
+            .await?
+            .into_iter()
+            .map(|listed| (listed.user_id, listed.lists))
+            .collect())
+    }
+
+    /// Add the viewer's lists to contacts already named.
+    async fn listed(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        contacts: Vec<Contact>,
+    ) -> Result<Vec<Contact>, Report> {
+        let lists = self
+            .lists_of(
+                viewer,
+                contacts
+                    .iter()
+                    .map(|contact| contact.user_id.clone())
+                    .collect(),
+            )
+            .await?;
+        Ok(with_lists(contacts, lists))
+    }
+
+    /// Name the chosen ids and read their lists, concurrently.
+    async fn enrich(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        ids: Vec<MacroUserIdStr<'static>>,
+    ) -> Result<Vec<Contact>, Report> {
+        let (contacts, lists) = tokio::try_join!(
+            self.named(viewer.clone(), ids.clone()),
+            self.lists_of(viewer.clone(), ids),
+        )?;
+        Ok(with_lists(contacts, lists))
+    }
 }
 
-impl<P: ContactsPageService, N: ContactNameReader> ContactDirectory
-    for ContactsDirectoryService<P, N>
+/// Legacy pages can name one canonical id twice (case variants), so each
+/// contact copies its lists rather than taking them.
+fn with_lists(
+    mut contacts: Vec<Contact>,
+    lists: HashMap<MacroUserIdStr<'static>, Vec<ContactList>>,
+) -> Vec<Contact> {
+    for contact in &mut contacts {
+        if let Some(contact_lists) = lists.get(&contact.user_id) {
+            contact.lists.clone_from(contact_lists);
+        }
+    }
+    contacts
+}
+
+impl<P: ContactsPageService, L: ContactListReader, N: ContactNameReader> ContactDirectory
+    for ContactsDirectoryService<P, L, N>
 {
     #[tracing::instrument(name = "contacts.directory.page", skip_all, fields(limit = i64::from(limit.get()), has_cursor = after.is_some()), err)]
     async fn contact_page(
@@ -129,7 +209,7 @@ impl<P: ContactsPageService, N: ContactNameReader> ContactDirectory
                 return Err(rootcause::report!("contact scan did not advance"));
             }
             let contacts = self
-                .enrich(
+                .named(
                     viewer.clone(),
                     page.contacts
                         .iter()
@@ -144,7 +224,7 @@ impl<P: ContactsPageService, N: ContactNameReader> ContactDirectory
                 matches.push(contact);
                 if matches.len() == usize::from(limit.get()) {
                     return Ok(ContactPage {
-                        contacts: matches,
+                        contacts: self.listed(viewer, matches).await?,
                         next_cursor: (index + 1 < count || page.next_cursor.is_some())
                             .then_some(row.cursor),
                     });
@@ -156,7 +236,7 @@ impl<P: ContactsPageService, N: ContactNameReader> ContactDirectory
             }
         }
         Ok(ContactPage {
-            contacts: matches,
+            contacts: self.listed(viewer, matches).await?,
             next_cursor: cursor,
         })
     }

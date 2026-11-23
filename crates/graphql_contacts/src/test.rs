@@ -3,10 +3,12 @@ use async_graphql::{Context, EmptyMutation, EmptySubscription, Object, Request, 
 use contacts::domain::{
     models::{
         contact::{Contact, ContactId, ContactPage},
+        list::ContactList,
         page::{ContactCursor, ContactPageSize},
+        people::{NamedPeopleQuery, PeopleSearchLimit, PersonMatch},
         query::{ContactLookup, ContactSearch},
     },
-    ports::ContactDirectory,
+    ports::{ContactDirectory, PeopleNamingService},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::Base64Str;
@@ -30,6 +32,34 @@ struct Reader {
     empty: bool,
     searches: Mutex<Vec<String>>,
     lookups: Mutex<Vec<Vec<String>>>,
+    /// Each named read's viewer, normalized text and limit.
+    named: Mutex<Vec<(String, String, u8)>>,
+}
+impl PeopleNamingService for Reader {
+    async fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        self.named.lock().unwrap().push((
+            viewer.to_string(),
+            query.normalized().to_owned(),
+            limit.get(),
+        ));
+        let page = self
+            .contact_page(viewer, None, ContactPageSize::DEFAULT)
+            .await?;
+        Ok(page
+            .contacts
+            .into_iter()
+            .map(|contact| PersonMatch {
+                contact,
+                is_teammate: true,
+                is_agent: false,
+            })
+            .collect())
+    }
 }
 impl ContactDirectory for Reader {
     async fn search_contacts(
@@ -87,6 +117,7 @@ impl ContactDirectory for Reader {
                     id: ContactId::for_viewer(&viewer, &user_id),
                     user_id,
                     name: Some("Person".into()),
+                    lists: vec![ContactList::Teammates, ContactList::Gmail],
                 }]
             },
             next_cursor: ContactCursor::from_position("legacy-position".into()),
@@ -98,7 +129,7 @@ impl ContactDirectory for Reader {
 async fn search_and_exact_lookups_are_validated_and_scoped_to_the_root_viewer() {
     let reader = Arc::new(Reader::default());
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
-        .data(ContactsGraphqlContext::new(reader.clone()))
+        .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
         .finish();
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     let response = schema.execute(Request::new(r#"{ user {
@@ -172,7 +203,7 @@ async fn search_and_exact_lookups_are_validated_and_scoped_to_the_root_viewer() 
 async fn reference_matching_is_additive_validated_and_delegated_to_the_domain() {
     let reader = Arc::new(Reader::default());
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
-        .data(ContactsGraphqlContext::new(reader.clone()))
+        .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
         .finish();
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     let response = schema
@@ -222,7 +253,7 @@ async fn reference_matching_is_additive_validated_and_delegated_to_the_domain() 
 async fn bounds_and_cursor_validation_precede_domain_reads() {
     let reader = Arc::new(Reader::default());
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
-        .data(ContactsGraphqlContext::new(reader.clone()))
+        .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
         .finish();
     let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
     for arguments in [
@@ -268,13 +299,15 @@ async fn enriched_rows_and_empty_pages_preserve_opaque_continuations() {
             ..Default::default()
         });
         let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
-            .data(ContactsGraphqlContext::new(reader.clone()))
+            .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
             .finish();
         let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
         let result = schema
             .execute(
-                Request::new("{ user { contacts { nodes { id userId email name } nextCursor } } }")
-                    .data(viewer.clone()),
+                Request::new(
+                    "{ user { contacts { nodes { id userId email name lists } nextCursor } } }",
+                )
+                .data(viewer.clone()),
             )
             .await;
         assert!(result.errors.is_empty(), "{:?}", result.errors);
@@ -285,6 +318,10 @@ async fn enriched_rows_and_empty_pages_preserve_opaque_continuations() {
             assert_eq!(page["nodes"][0]["email"], "person@example.com");
             assert_eq!(page["nodes"][0]["userId"], "macro|person@example.com");
             assert_eq!(page["nodes"][0]["name"], "Person");
+            assert_eq!(
+                page["nodes"][0]["lists"],
+                serde_json::json!(["teammates", "gmail"])
+            );
             assert_ne!(page["nodes"][0]["id"], page["nodes"][0]["userId"]);
         }
         let cursor = page["nextCursor"].as_str().unwrap();
@@ -319,7 +356,7 @@ async fn unauthenticated_reads_do_not_reach_the_domain_and_errors_are_sanitized(
         ..Default::default()
     });
     let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
-        .data(ContactsGraphqlContext::new(reader.clone()))
+        .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
         .finish();
     let query = "{ user { contacts { nodes { id } } } }";
     assert_eq!(schema.execute(query).await.errors.len(), 1);
@@ -334,4 +371,78 @@ async fn unauthenticated_reads_do_not_reach_the_domain_and_errors_are_sanitized(
         response.errors[0].extensions.as_ref().unwrap().get("code"),
         Some(&async_graphql::Value::from("INTERNAL_SERVER_ERROR"))
     );
+}
+
+#[tokio::test]
+async fn named_contacts_are_validated_bounded_and_read_for_the_root_viewer() {
+    let reader = Arc::new(Reader::default());
+    let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+        .data(ContactsGraphqlContext::new(reader.clone(), reader.clone()))
+        .finish();
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let response = schema
+        .execute(
+            Request::new(
+                r#"{ user {
+        named: contactsNamedBy(search: "  Tero   N ") { userId name lists }
+        capped: contactsNamedBy(search: "tero", limit: 60) { userId }
+        few: contactsNamedBy(search: "tero", limit: 3) { userId }
+    } }"#,
+            )
+            .data(viewer.clone()),
+        )
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["named"],
+        serde_json::json!([{
+            "userId": "macro|person@example.com",
+            "name": "Person",
+            "lists": ["teammates", "gmail"],
+        }])
+    );
+    assert_eq!(
+        *reader.named.lock().unwrap(),
+        [
+            (
+                "macro|viewer@example.com".to_owned(),
+                "tero n".to_owned(),
+                20
+            ),
+            ("macro|viewer@example.com".to_owned(), "tero".to_owned(), 50),
+            ("macro|viewer@example.com".to_owned(), "tero".to_owned(), 3),
+        ]
+    );
+
+    let words = (0..33)
+        .map(|n| format!("w{n}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    for (query, variables) in [
+        (
+            "query($q:String!){user{contactsNamedBy(search:$q){id}}}",
+            serde_json::json!({"q": "x".repeat(513)}),
+        ),
+        (
+            "query($q:String!){user{contactsNamedBy(search:$q){id}}}",
+            serde_json::json!({ "q": words }),
+        ),
+        (
+            "query($q:String!){user{contactsNamedBy(search:$q, limit: 0){id}}}",
+            serde_json::json!({"q": "tero"}),
+        ),
+    ] {
+        let response = schema
+            .execute(
+                Request::new(query)
+                    .variables(async_graphql::Variables::from_json(variables))
+                    .data(viewer.clone()),
+            )
+            .await;
+        assert_eq!(
+            response.errors[0].extensions.as_ref().unwrap().get("code"),
+            Some(&async_graphql::Value::from("BAD_USER_INPUT"))
+        );
+    }
+    assert_eq!(reader.named.lock().unwrap().len(), 3);
 }

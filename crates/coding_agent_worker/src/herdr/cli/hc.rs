@@ -25,7 +25,7 @@ const AGENT_LABEL: &str = "macro.agent";
 /// The herdr app's CLI; optional, so every call to it is best effort.
 const APP_BIN: &str = "herdr-app";
 /// How long a new agent may take to report it is ready for input.
-const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub(super) const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
 const AGENT_READY_POLL: Duration = Duration::from_millis(250);
 /// Polls with an unchanged screen after which an agent that never reports
 /// status counts as ready.
@@ -257,16 +257,21 @@ impl Core {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
+        // Whether the latest poll read `working`: a status that later goes
+        // away is no longer a busy agent.
+        let mut working = false;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
             let terminal = self.get(launch.name).await?;
             if terminal.state != "live" {
                 return Err(HerdrError::Ended);
             }
+            working = false;
             if let Some(status) = &terminal.status {
                 if status.state != "working" {
                     return Ok(());
                 }
+                working = true;
                 continue;
             }
             if launch.reports_status
@@ -285,7 +290,7 @@ impl Core {
             }
         }
         if launch.reports_status {
-            return Err(HerdrError::NotReady);
+            return Err(not_ready(working));
         }
         Ok(())
     }
@@ -352,4 +357,15 @@ pub(super) fn parse_terminal(command: &str, output: &str) -> Result<Terminal, He
         command: command.to_owned(),
         source,
     })
+}
+
+/// Why an agent that reports status was not ready in time: one whose latest
+/// status reads `working` is busy; one with no status is taken, as before, to
+/// be stopped on a dialog.
+pub(super) fn not_ready(working: bool) -> HerdrError {
+    if working {
+        HerdrError::Busy
+    } else {
+        HerdrError::NotReady
+    }
 }

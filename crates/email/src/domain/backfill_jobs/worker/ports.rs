@@ -210,7 +210,8 @@ pub trait BackfillEffects:
         link: &Link,
         recipients: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// Acquire a team's existing CRM write lease.
+    /// One of a team's CRM population slots if one is free now, without
+    /// waiting.
     fn acquire_crm(
         &self,
         team: Uuid,

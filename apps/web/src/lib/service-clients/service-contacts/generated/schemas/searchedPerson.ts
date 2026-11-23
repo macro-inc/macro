@@ -14,6 +14,10 @@ export interface SearchedPerson {
   isAgent: boolean;
   /** Whether the person is on the viewer's current team. */
   isTeammate: boolean;
+  /** The keys of the viewer's contact lists the person is in (`teammates`,
+`interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+for the viewer and for a contact only the legacy directory knows. */
+  lists: string[];
   /** Resolved name, as the contact directory shows it; null when unknown. */
   name?: SearchedPersonName;
   /** The person's user ID (`macro|<email>`). */
