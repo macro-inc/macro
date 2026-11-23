@@ -32,6 +32,7 @@ packages/sdk/generated/agent-harness/sdk.gen.ts
   s_aa9038102244a3::t_4eeb0b22187375 5,808-841
 packages/sdk/generated/agent-harness/types.gen.ts
   s_aa9038102244a3::t_a580fb191beeca 3445-3489,3760,3806,3844,3861,3866-3867,3888-3891,3899-3912,5984-6070
+  s_aa9038102244a3::t_f99b34ecfdb3a1 3887
 packages/sdk/specs/agent-harness.json
   s_aa9038102244a3::t_c77855f90b6a61 3983-4171,10118-10182,10516,10554,10603-10613,10653,10656-10664,10682-10692,10708,10746-10749,10761-10776
 packages/sdk/src/coverage/skipped.ts
