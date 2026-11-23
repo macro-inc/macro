@@ -1,0 +1,444 @@
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_0cc55d4013f523::t_a320c9f95d55d1 118,120-128,130-132,134,136,142-143,145-149,151-161,163-164,166,171-182,187
+  s_0cc55d4013f523::t_7f35f254019db8 183
+  s_9aaadd038e8bff::t_a1e082d6f6ccc2 54,56,193,225,227-229
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 37-39,55,105,197-218
+  s_0cc55d4013f523::t_3ca0a0d527f0f6 144,150
+  s_0cc55d4013f523::t_427292f152bd9e 219
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_0cc55d4013f523::t_5048bae160bb22 2,5,21,24-27,74-85,97-100,108,110-111,113
+  s_0cc55d4013f523::t_b42e2f922fae17 101
+  s_0cc55d4013f523::t_785616ffa8aad8 3,13-14,17-20,103-107,118-129,131,133-189
+  s_0cc55d4013f523::t_903374edbb5b4c 130,132
+apps/web/src/features/block-agent/ui/PermissionRequestCard.tsx
+  s_0cc55d4013f523::t_59f72218fc0db6 1-3,5-18,21-55,57,59-78,80-111,113-129
+  s_0cc55d4013f523::t_ce20bfc7bb1d3a 58,79
+  s_0cc55d4013f523::t_785616ffa8aad8 4,19-20,56,112
+apps/web/src/features/block-agent/component/AgentComposer.tsx
+  s_0cc55d4013f523::t_ef4a98f0122616 41,183-190,325,332-336
+  s_0cc55d4013f523::t_f06b103f2382ae 337-340
+apps/web/src/features/block-agent/component/AgentComposer.test.tsx
+  s_0cc55d4013f523::t_088d1fbb9b68ea 42,64,90,105-109,117,123-135
+  s_0cc55d4013f523::t_f3c42a8cecd729 136
+apps/web/src/features/agent-permissions/components/gated-phrases.test.ts
+  s_0cc55d4013f523::t_d83ab90890ee43 13-14,24,26,28-43,46-58
+  s_aa9038102244a3::t_2c77a4761bb72a 27
+  s_0cc55d4013f523::t_94175558ae9979 1-2,119-143,168,178,193
+  s_0cc55d4013f523::t_8a528df17341f2 3,25,44-45,77,94,97-118,144-154,156-167,169-177,179-192,194-241
+apps/web/src/features/agent-permissions/components/gated-phrases.ts
+  s_0cc55d4013f523::t_b36e69e6d79678 28,33,70-90,103-108,111,114-115,120-146,148-154
+  s_aa9038102244a3::t_5a08c0a1ce70cc 118-119
+  s_0cc55d4013f523::t_6299374be12e4c 8,10,29-32,34-67,91-93
+apps/web/src/features/agent-permissions/index.ts
+  s_0cc55d4013f523::t_d6bbe6c1d1861c 4-6
+  s_0cc55d4013f523::t_785616ffa8aad8 1
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_0cc55d4013f523::t_422a259b1e5074 108-124
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.ts
+  s_9aaadd038e8bff::t_26c0926ce121c0 65-69,75,107
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_0cc55d4013f523::t_da9db1eba8236b 75-76,78-80,82-86,93
+  s_aa9038102244a3::t_9cab9de2ccc1f9 92
+  s_0cc55d4013f523::t_785616ffa8aad8 87-90
+  s_0cc55d4013f523::t_baf2f71f0c5327 16-71
+apps/web/src/features/block-agent/state/tool-groups.test.ts
+  s_0cc55d4013f523::t_93cb757696679a 40-56,58-76
+apps/web/src/features/block-agent/component/parts/ToolCallPart.test.tsx
+  s_0cc55d4013f523::t_63b1d3e26c00c7 1678,1695-1701
+  s_0cc55d4013f523::t_c2d92ce56c4472 1702
+apps/web/src/features/block-agent/component/AgentMessage.tsx
+  s_0cc55d4013f523::t_a755fcecc8c10c 40,252-257
+apps/web/src/features/block-agent/component/parts/ToolApprovalPart.tsx
+  s_0cc55d4013f523::t_ae89f233d45d91 3-5,12,58-65
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_0cc55d4013f523::t_328a155dd76150 23-33,100
+  s_0cc55d4013f523::t_b9a0832401db93 10-16,34-36,45-46
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_0cc55d4013f523::t_64b7b8017d2ce5 12-14,33,89-90
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_0cc55d4013f523::t_4f7a2b1b5e8b93 3,116-117,121-122,125
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_0cc55d4013f523::t_465f0d08520f6e 47,49,64-65,68-72,81-84,92-96,98-111
+  s_0cc55d4013f523::t_fad8f7e594ee5c 112-134,136,148-162,274,276-279,281-282
+  s_0cc55d4013f523::t_c506e492a650dd 66-67
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 137-147
+  s_0cc55d4013f523::t_ef79f29066a071 90,97,275
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_0cc55d4013f523::t_4ba65379bfc189 2-4,557-561
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_0cc55d4013f523::t_8f6ac60443eb11 38-39,42,89,101-103
+  s_0cc55d4013f523::t_363ff06342f59b 40-41,96-99
+  s_aa9038102244a3::t_b46f20792edc82 54-55,58-59
+  s_aa9038102244a3::t_f75acb9e23db90 56-57
+crates/agent_permissions/AGENTS.md
+  s_0cc55d4013f523::t_af81ef8d8c3dc8 166-167
+  s_aa9038102244a3::t_e0b7361e594d51 122-123
+  s_dfeff50ab3a311::t_fd8891e688a5f8 55-63,65-80,128-129,131-132,209-211
+  s_aa9038102244a3::t_d7ff06245981b6 81,85-97,100-102,187
+  s_aa9038102244a3::t_090b098b09a2df 42-52,64,82-84,98-99,155,188-189
+docs/agent-guide/ai-chat.md
+  s_0cc55d4013f523::t_70d7ea00ea32dd 1835-1836,1844-1852,1859-1860,1863,1870-1871
+  s_0cc55d4013f523::t_c506e492a650dd 1861-1862
+  s_0cc55d4013f523::t_c139ce9d8be814 1840-1843
+  s_0cc55d4013f523::t_b6ad14967e6d7f 1837-1839
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_0cc55d4013f523::t_ce20bfc7bb1d3a 73-75,78-79
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_0cc55d4013f523::t_6d436bc51e31bb 3,43,53-55,58-60,62-68,86,98,109,119
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_0cc55d4013f523::t_bd28bda7ff5b3e 61-70
+apps/web/src/features/agent-permissions/components/gated-thing-phrases.ts
+  s_0cc55d4013f523::t_74971f14943625 1-112
+apps/web/src/features/agent-permissions/core/gated-operations.ts
+  s_0cc55d4013f523::t_baf2f71f0c5327 23-24,79-81
+apps/web/src/features/agent-permissions/core/gated-operations.test.ts
+  s_0cc55d4013f523::t_8a528df17341f2 47-48
+crates/macro_db_client/migrations/20261122233513_agent_permission_policy_source.sql
+  s_aa9038102244a3::t_5980b168166761 1-32
+crates/agent_permissions/src/domain/model.rs
+  s_aa9038102244a3::t_38ad08a3471550 335,653-654
+  s_aa9038102244a3::t_1ffbde7acbc8ca 254,257-258,280-281,292-301,309,314-315,321-323,329-334,336,339-341,346-352,357,364,368-370
+  s_aa9038102244a3::t_6735a480a695a9 324-328
+  s_aa9038102244a3::t_fda5ec20bbde33 221-253,255-256,259-279,282-285,289-291,302-308,310-313,316-320,337-338,342-345,353-356,358-363,365-367,371-373,1067-1076
+  s_aa9038102244a3::t_38aa83592ff9ec 286-288
+  s_aa9038102244a3::t_7340b27fd0ccde 455-481,511-519,715-737,741-747,749,753-791,794-795,799-833,840-848,851-870,903-913,1058-1062
+  s_aa9038102244a3::t_d09bf5f6e8678d 1063-1066
+  s_aa9038102244a3::t_b9558ba03e5b91 4-6,738-740,748
+  s_aa9038102244a3::t_6ab66b5ddec559 216-218,482-510,632-633,750,752,792-793,796-798,834-839,849-850,916-959
+  s_aa9038102244a3::t_1f70210e8fbe0e 960
+  s_aa9038102244a3::t_1c1241dc18a4e3 751
+crates/agent_permissions/src/outbound/pg/test/sources.rs
+  s_aa9038102244a3::t_53800235d42c53 1-14,18-206,211-249,255-307,314-316,323-348,355-371,378-381,388-394,412-419,427-504,511-533,535-562
+  s_aa9038102244a3::t_b46e1b8a86a379 563-564
+  s_aa9038102244a3::t_38aa83592ff9ec 15-17,207-210,250-254,308-313,317-322,349-354,372-377,382-387,395-411,420-426,505-510,534
+  s_aa9038102244a3::t_d7c33418901ae7 598-605,614-617,630-633,662-665
+  s_aa9038102244a3::t_728b6682fe0f06 565-597,606-613,618-629,634-661,666
+crates/agent_permissions/src/domain/resolve/chain.rs
+  s_aa9038102244a3::t_f5d18f31462e0b 307-309
+  s_aa9038102244a3::t_0f1fb99ab804b5 1-16,18-275,281-306,310-344
+  s_aa9038102244a3::t_38aa83592ff9ec 17,276-280
+crates/agent_permissions/src/domain/resolve/test.rs
+  s_aa9038102244a3::t_d3bc3d8e18a3ab 2,183,212,364,410,998,1039
+  s_aa9038102244a3::t_edaac2931b343e 1058
+  s_aa9038102244a3::t_38aa83592ff9ec 189-192,194-197,218-221,225-228,252-256,342-349,374-381,1048-1051
+crates/agent_permissions/src/inbound/toolset/test.rs
+  s_aa9038102244a3::t_7e030d4cb2b622 40-44
+  s_aa9038102244a3::t_38aa83592ff9ec 9-10
+  s_aa9038102244a3::t_b401df13a8cafc 74-103
+  s_aa9038102244a3::t_37fc198e0243b4 104-107,110-116,119-124,127-128
+  s_aa9038102244a3::t_d7c33418901ae7 108-109,117-118,125-126
+crates/agent_permissions/src/outbound/pg.rs
+  s_aa9038102244a3::t_9a70a18704aa04 3-4,7-13,28-29,31,43-46,124-136,278,281-283,288,298-300,302-310,313-314,319-321,324-327,329-335,338,341-354,364-382,384-418,420-430,434-436,438-448,450-453,455-457,461-489,497-526,685,687,697,701,703,706,716,726-728,733,771-782,784-834,836-890,920-921,927
+  s_aa9038102244a3::t_087c073a15f683 139-147,783,835,922-923,925-926
+  s_aa9038102244a3::t_38aa83592ff9ec 22,458-460
+  s_aa9038102244a3::t_6d8edd9dd5d1ee 431-433,437,449,454,490-496,924
+  s_aa9038102244a3::t_2d272cfbb03ce4 891,896-899,900,901-909,911-915,916,918-919
+  s_aa9038102244a3::t_d7c33418901ae7 296
+  s_aa9038102244a3::t_7c9a129f916bec 184-194,236-249,254-277,279-280,284-287,289-295,297,301,316-318,322-323,328,355-363,660-680,682
+  s_aa9038102244a3::t_af56952e9ce8e0 681,683
+  s_aa9038102244a3::t_3fd312d3e11163 892-895,910,917
+crates/agent_permissions/src/inbound/axum_router.rs
+  s_aa9038102244a3::t_6735a480a695a9 166,169-171
+  s_aa9038102244a3::t_51b794dc442f36 112
+  s_aa9038102244a3::t_38aa83592ff9ec 168
+  s_aa9038102244a3::t_a1509cd9f1e0a0 1-3,17,20,34,50-105,111,116-120,135,155-166,182,260-275,545-713
+  s_aa9038102244a3::t_991a005fe511e6 35
+  s_aa9038102244a3::t_37fc198e0243b4 277-281,714-821
+  s_aa9038102244a3::t_fce0ec48796b83 276
+crates/agent_permissions/src/domain/resolve/chain/test.rs
+  s_aa9038102244a3::t_60490a5ed5b3ac 1-124,129-303,308-375,380-427,432-476,482-503,505-559,566-575
+  s_86a3b382b10917::t_2fc029e956dcc5 504
+  s_aa9038102244a3::t_38aa83592ff9ec 125-128,304-307,376-379,428-431,477-481,560-565
+crates/agent_permissions/src/domain/resolve.rs
+  s_aa9038102244a3::t_26b5ffa47eaa92 43,48-49,54,65,69,87-90
+  s_aa9038102244a3::t_ffb0a34e0b2dab 16-19
+  s_aa9038102244a3::t_a5077ea32a668f 133-165,171-172,174-185,190-222,226,239
+  s_aa9038102244a3::t_ef28fb150c9d93 21,25,267-268,277,280,285,307,313,332,348,355,476-477,486-487,493-494,498-500,502-504,535,547,554-555,569
+  s_aa9038102244a3::t_1a5e758ba4fb34 35
+  s_aa9038102244a3::t_ec9a3878cfe9bf 26
+  s_aa9038102244a3::t_38aa83592ff9ec 251-254,579
+  s_aa9038102244a3::t_fa6a33ef91b6d1 358-360,589-643
+crates/agent_permissions/src/domain/service.rs
+  s_aa9038102244a3::t_9845b217f3423f 36,548-553,559,1038,1040-1044,1049-1051,1054-1057,1502-1504,1524-1525,1528-1532,1534,1536-1537,1541-1546,1561
+  s_aa9038102244a3::t_54506468382091 1538-1540
+  s_aa9038102244a3::t_38aa83592ff9ec 1045-1047
+  s_aa9038102244a3::t_b8f8571fae2b7d 25-28,42-44,95-133,276-300,305-307,554,561-578,582-584,586,593,631-634,639-649,654-674,699-712,714-726,728-731,733-734,746-748,749,768-773,775-814,967,969-980,1100-1139,1141-1264,1271-1284,1287-1291,1313-1322,1324,1326-1327,1335-1337,1340-1395,1416-1426
+  s_aa9038102244a3::t_d7c33418901ae7 521-525,615-620,727
+  s_aa9038102244a3::t_f1fce6078c99b1 22,29-30
+  s_aa9038102244a3::t_aa0b623eb4216b 33-34,172,175,182-184,189,198,322-323,327,436-440,442-454,458-520,526-536,819-820,824
+  s_aa9038102244a3::t_dff70aaeb2c336 267-275,301-304,579-581,585,587-592,594-614,621-630,635-638,650-653,675-698,713,732,735-745,750-767,774
+  s_aa9038102244a3::t_68843af58612af 134-160,537,1396-1415,1427-1493
+  s_aa9038102244a3::t_27853a74085d21 1140,1265-1270,1285-1286,1292-1312,1338-1339
+  s_aa9038102244a3::t_af1e5172c402f5 538,1494
+  s_aa9038102244a3::t_3fd312d3e11163 1323,1325,1328-1334
+crates/agent_permissions/src/outbound/pg/test.rs
+  s_aa9038102244a3::t_97ed2d657bb086 21-29,512,544-545,572-576,578
+crates/agent_permissions/src/domain/ports.rs
+  s_aa9038102244a3::t_ffb0a34e0b2dab 16,21,43-50,58-61,65,69,79,82-83,85-118,126-142
+  s_aa9038102244a3::t_abf5ba4cca75a6 12,122-123,125,180-195
+  s_aa9038102244a3::t_ed49889c98ed0d 9
+  s_aa9038102244a3::t_d7c33418901ae7 13,28-42,198-218
+  s_aa9038102244a3::t_ea465d53a337e3 219-220
+  s_aa9038102244a3::t_3fd312d3e11163 119-121,124
+crates/agent_permissions/src/domain/service/test.rs
+  s_aa9038102244a3::t_d320c2347d26ca 1499-1597,1599-1637
+  s_aa9038102244a3::t_38aa83592ff9ec 296-300,1598
+  s_aa9038102244a3::t_9c6d7ba4687456 10-11,13-14,341-342,362-404,407-429,439-471,573,1638-1976,1984-2085,2093-2101,2103-2105,2108-2109,2111,2114-2121,2131,2133-2184,2191-2240
+  s_aa9038102244a3::t_416ab9cd777796 2241
+  s_aa9038102244a3::t_d7c33418901ae7 15,509-510,563,2087-2090,2124-2127,2130,2185-2190,2377-2384,2426-2432
+  s_aa9038102244a3::t_d7be879b1ba5c3 17,62,70,111,197-216,348-361,405-406,511-555,560-562,564-569,574,1277,1327
+  s_aa9038102244a3::t_a2cf66bc54fcd6 2086,2091-2092,2122-2123,2128-2129
+  s_aa9038102244a3::t_0361305651b094 2102,2106-2107,2110,2112-2113,2132
+  s_aa9038102244a3::t_842ff88514d5e4 1977-1983,2242-2247,2255-2376,2385-2425,2433-2470
+  s_aa9038102244a3::t_3fd312d3e11163 333-340
+  s_aa9038102244a3::t_9ab82205b254c4 2248-2254
+.sqlx/query-138228fae51b9e23c2ba071fed874a7b3e1522454284728ed6b683c828767acd.json
+  s_aa9038102244a3::t_04985d31e095a8 1-2,4-21,23
+  s_aa9038102244a3::t_b884ce6f6282da 3,22
+.sqlx/query-719b0e181ca36e9737f7de563d3175c0399e1eeaf32d719f0acae8c701044666.json
+  s_aa9038102244a3::t_5f5dbaf319c8ac 1-15
+.sqlx/query-7b2be475796b819b99c5358fd3a682d3a60684e34c473b88ce3fbb23b6fd8080.json
+  s_aa9038102244a3::t_23989f5b876b51 1-23
+.sqlx/query-5909fa39e98b3c68c31072b5368dbada31c16c13f58fae21c9b069c6732deb2e.json
+  s_aa9038102244a3::t_aef687e0c36d87 1-2,4-32,38-41,43-46,48-51,53-56,58-61,63-66,68-71,73-76,78-96,98-105,107
+  s_aa9038102244a3::t_90869710c621b7 3,33-37,42,47,52,57,62,67,72,77,97,106
+.sqlx/query-baf4593f77895af4238099a8fdd977d28985cbaabb6aab1095a8a4b75268ac96.json
+  s_aa9038102244a3::t_ae927edf63aa73 1-20
+.sqlx/query-e0ededa53dfc1585c40e1d60366f4251742a8c7765083d0773f553b1782b83a9.json
+  s_aa9038102244a3::t_e3eca089179361 3,13,27
+.sqlx/query-f7055b0949260a943fc9be49d75f011239ea9e502521d767f24d28efe26588a7.json
+  s_aa9038102244a3::t_e59b31f34b2d16 1-14
+.sqlx/query-fe55a80b291d17ac0c64140bc848fb4b4122a99131dc63b37ce266eff29d7b2f.json
+  s_aa9038102244a3::t_fe859b70aab531 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_dfeff50ab3a311::t_d2dbea76dd0461 17
+  s_aa9038102244a3::t_fc466b8423c899 8,16,21-22,24
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_dfeff50ab3a311::t_6d19181f8e7a37 21
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_dfeff50ab3a311::t_0b074e21a3b44b 10472-10479
+  s_aa9038102244a3::t_43f6e2970dc19a 3842-3982,4413-4574,6292-6293,6304-6307,6326-6332,6361-6371,7514-7527,9872-9883,9961-9964,10035-10039,10418,10429-10440,10542-10553,10555-10602,10614-10652,10654-10655,10665-10681,10693-10707,10709-10735,10737-10741,10743-10745,10750-10760,10777-10796
+  s_aa9038102244a3::t_1b9d32dadab811 10736,10742
+  s_aa9038102244a3::t_8f5153c0892894 3983-4171,10118-10182,10516,10554,10603-10613,10653,10656-10664,10682-10692,10708,10746,10748-10749,10761-10776
+  s_aa9038102244a3::t_6eff4e46a088b2 10747
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_dfeff50ab3a311::t_a362f0648e3340 20899,21013
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_dfeff50ab3a311::t_5bff540434cd1d 4942-4948
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_dfeff50ab3a311::t_0e15b77d39bc93 3686,3722
+  s_aa9038102244a3::t_fe22bf8c65791d 761-765,780-785,808,1771-1781,3272-3282,3319-3323,3381-3386,3685,3694-3695,3698,3784-3805,3807-3843,3845-3860,3862-3865,3868-3886,3892-3898,3913-3931,5924-5983,6176-6238
+  s_aa9038102244a3::t_92bac3a679d76a 3887
+  s_aa9038102244a3::t_a580fb191beeca 3445-3489,3760,3806,3844,3861,3866-3867,3888-3890,3899-3912,5984-6070
+  s_aa9038102244a3::t_c34f8bce485d81 3887,3891
+packages/sdk/specs/agent-harness.json
+  s_dfeff50ab3a311::t_7bbfd76613f781 10472-10479
+  s_aa9038102244a3::t_952a3cf709181f 3842-3982,4413-4574,6292-6293,6304-6307,6326-6332,6361-6371,7514-7527,9872-9883,9961-9964,10035-10039,10418,10429-10440,10542-10553,10555-10602,10614-10652,10654-10655,10665-10681,10693-10707,10709-10735,10737-10741,10743-10745,10750-10760,10777-10796
+  s_aa9038102244a3::t_92bac3a679d76a 10736,10742
+  s_aa9038102244a3::t_c77855f90b6a61 3983-4171,10118-10182,10516,10554,10603-10613,10653,10656-10664,10682-10692,10708,10746,10748-10749,10761-10776
+  s_aa9038102244a3::t_c34f8bce485d81 10747
+crates/agent_permissions/src/inbound/axum_router/test.rs
+  s_aa9038102244a3::t_b12fd0f452e080 131-164,213-218,269-286,441-486
+  s_aa9038102244a3::t_1c29cb2b695488 487-490
+  s_aa9038102244a3::t_37fc198e0243b4 165-189,251,287-298
+crates/agent_permissions/src/inbound/toolset.rs
+  s_aa9038102244a3::t_97ed0453d2317b 165-168,173-175,178-180,183-185,266
+  s_aa9038102244a3::t_37fc198e0243b4 176-177,181-182
+.sqlx/query-f7f5e6a9d02fa51e780072d0fc1e4dd9faa30b7c21496fe83e7be9baf1bea511.json
+  s_aa9038102244a3::t_52eb7a9c02ba09 1-28
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_aa9038102244a3::t_c5b3ecc1a2fd56 98-127,129
+  s_aa9038102244a3::t_35d70b0620c50f 128,130-139,910-938,962-1054,1056-1095
+  s_aa9038102244a3::t_d7c33418901ae7 144-147,155-158,165-168
+  s_aa9038102244a3::t_5ff80b84eedcb2 939-959
+  s_aa9038102244a3::t_37fc198e0243b4 140-143,148-154,159-164,169-170
+  s_aa9038102244a3::t_81273e100057e9 960-961,1055
+services/agent_harness_service/src/api/swagger.rs
+  s_aa9038102244a3::t_7d4c59892cacd6 23,25,27-28,151-154,255-258
+  s_aa9038102244a3::t_5ff80b84eedcb2 24,155-157,259
+services/agent_harness_service/src/api/test.rs
+  s_aa9038102244a3::t_7e86ecee35c313 469-488,520-523
+  s_aa9038102244a3::t_5ff80b84eedcb2 489-503,524
+services/agent_harness_service/src/tool_permissions.rs
+  s_aa9038102244a3::t_b170e29d1547df 2-5,7,9,15-16,20-22,29-42,57-131
+  s_aa9038102244a3::t_5ff80b84eedcb2 8,10,153-215
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_aa9038102244a3::t_dc9dac333e0fce 744-773,775,782-783
+  s_aa9038102244a3::t_db0d675805d188 774,776-781,784-785
+  s_aa9038102244a3::t_d7c33418901ae7 790-793,801-804,811-814
+  s_aa9038102244a3::t_37fc198e0243b4 786-789,794-800,805-810,815-816
+services/agent_harness_service/src/lib.rs
+  s_aa9038102244a3::t_e87d5012ab9042 934-939,941
+  s_aa9038102244a3::t_5ff80b84eedcb2 942-944
+crates/agent_correlation/src/scope.rs
+  s_aa9038102244a3::t_caa367a3c9bd7f 104-105
+  s_aa9038102244a3::t_842ff88514d5e4 106-107
+crates/agent_correlation/src/scope/test.rs
+  s_aa9038102244a3::t_2845dd2f26af4b 226-227
+  s_aa9038102244a3::t_842ff88514d5e4 228-229
+services/agent_harness_service/AGENTS.md
+  s_aa9038102244a3::t_44105d83777ec3 87,90,92
+  s_aa9038102244a3::t_5684190a4bbcb5 88-89,91
+apps/web/src/lib/service-clients/service-agent-harness/generated/client.ts
+  s_aa9038102244a3::t_e996e063e31eb0 51,62,85,93,4452-4597,5063-5215
+  s_aa9038102244a3::t_16dff97856c906 88,4598-4798
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissions.ts
+  s_aa9038102244a3::t_5e22cd0e57c5eb 8,10,26-28,37-40,56
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissionsInherited.ts
+  s_aa9038102244a3::t_6ca882fb770d31 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/agentToolPermissionsSource.ts
+  s_aa9038102244a3::t_06da44b25138eb 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/detachToolPermissions.ts
+  s_aa9038102244a3::t_700f62f27accdd 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/detachToolPermissionsChanges.ts
+  s_aa9038102244a3::t_1c3ceb312e5df2 1-13
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/getAgentToolPermissionSourcesParams.ts
+  s_aa9038102244a3::t_786bf41b1ad0a2 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_aa9038102244a3::t_a269ca0730579f 110,112,230-231,300,487,495,499,524,532-537,539,541-548,550-551,554-556
+  s_aa9038102244a3::t_30f5453db8f06d 507,538,540,549,552-553
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/setToolPermissionSource.ts
+  s_aa9038102244a3::t_2ba15c06ea5e46 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResult.ts
+  s_aa9038102244a3::t_3e951c96e6d10d 8,25-27
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/showPermissionsResultFollows.ts
+  s_aa9038102244a3::t_c0df5172f5abef 1-12
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/sourceScopeQuery.ts
+  s_aa9038102244a3::t_259f515cf8b135 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorOperations.ts
+  s_aa9038102244a3::t_1e7b947625073a 10-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionErrorSource.ts
+  s_aa9038102244a3::t_375bae5e070c32 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSource.ts
+  s_aa9038102244a3::t_a3cca765a1ad1b 1-11,13-30,32-34
+  s_aa9038102244a3::t_90e9f5ce011236 12,31
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceAgent.ts
+  s_aa9038102244a3::t_8351c9d62dafdb 1-27
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceAgentAvatarUrl.ts
+  s_aa9038102244a3::t_99c4b98e8f7bda 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceAgentHandle.ts
+  s_aa9038102244a3::t_0ddbd57f77118b 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceAgentProperty.ts
+  s_aa9038102244a3::t_cb59bb213f7f47 1-10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceCandidate.ts
+  s_aa9038102244a3::t_91e7e326903d6e 1-9,12-18,20-27,29-30
+  s_aa9038102244a3::t_0049bbe1756ea0 10-11,19,28
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceCandidateUnavailable.ts
+  s_aa9038102244a3::t_f1f976b578f980 1-10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceCandidates.ts
+  s_aa9038102244a3::t_347766cbe66eee 1-9,12-16
+  s_aa9038102244a3::t_7e4200bfefac2e 10-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceKind.ts
+  s_aa9038102244a3::t_9ba3e8f0143b87 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourcePolicyId.ts
+  s_aa9038102244a3::t_f94740dd0278b6 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScope.ts
+  s_aa9038102244a3::t_52506953fe7db2 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOf.ts
+  s_aa9038102244a3::t_e5f01d97a92c7d 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOfKind.ts
+  s_aa9038102244a3::t_1dce7acc7e3a66 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOfThree.ts
+  s_aa9038102244a3::t_40e02869143021 1-7,9-15,19
+  s_aa9038102244a3::t_d16ced98437075 16
+  s_aa9038102244a3::t_52b40664a3c75b 8,17
+  s_aa9038102244a3::t_848a491a326df8 16,18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOfThreeKind.ts
+  s_aa9038102244a3::t_aeb188a7e8fb67 1-14
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeProperty.ts
+  s_aa9038102244a3::t_a5444ace4d5c9d 1-10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceStatus.ts
+  s_aa9038102244a3::t_6f14e9d16a525c 1-19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceUnavailable.ts
+  s_aa9038102244a3::t_551dcf816625ea 1-18
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceVia.ts
+  s_aa9038102244a3::t_561f61a8340852 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceViaHandle.ts
+  s_aa9038102244a3::t_72285d586b506d 1-11
+packages/sdk/generated/agent-harness/sdk.gen.ts
+  s_aa9038102244a3::t_3e247317314733 790-807,883-917
+  s_aa9038102244a3::t_4eeb0b22187375 5,808-841
+packages/sdk/src/coverage/skipped.ts
+  s_aa9038102244a3::t_801824fae22873 47-50
+  s_aa9038102244a3::t_f699ef7fe12fc7 51-53
+packages/code-mode-sdk/src/js-tools/catalog.test.ts
+  s_aa9038102244a3::t_c3b6461fb8966d 61-68,72-75,77-79
+  s_aa9038102244a3::t_506aa8cf7b29cf 69-71
+crates/agent_permissions/src/domain/model/test.rs
+  s_aa9038102244a3::t_b9558ba03e5b91 1-41,43-49,52-53,55-56
+  s_aa9038102244a3::t_1c1241dc18a4e3 42,50-51,54
+crates/macro_db_client/migrations/20261123020224_agent_permission_policy_existing_agents.sql
+  s_aa9038102244a3::t_ac5f233e8f3c28 11-12
+  s_aa9038102244a3::t_6e07a6f6b8c676 1-10,13-28
+  s_aa9038102244a3::t_5421e79e7c4efd 29-30
+.sqlx/query-1f0c706fc6f999c78c3b0cafaee00709242141bb2e269d86a8dd85c321d5fe9f.json
+  s_aa9038102244a3::t_0a4f656ed8ee3a 1-24
+.sqlx/query-a2dc520a93a24b220067582af8dca6150b2ac46d5918106f808c4546a1ffa68e.json
+  s_aa9038102244a3::t_71bd06aae02254 1-23
+.sqlx/query-43fa91dcb24f4f103752e9fb1b9860ce58d9b0ed2ed3e507eb3c1166ec4221ce.json
+  s_aa9038102244a3::t_fd6d6ff9f85022 1-22
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/teamToolPermissions.ts
+  s_aa9038102244a3::t_78c162d5749db3 1-41
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionPolicyKind.ts
+  s_aa9038102244a3::t_c33eacfc90d150 19
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceCandidateAgent.ts
+  s_aa9038102244a3::t_840b13aca3880f 1-10
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceCandidateTeam.ts
+  s_aa9038102244a3::t_6131fc8910daa9 1-9
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceScopeOneOfThreeTeamName.ts
+  s_aa9038102244a3::t_1695072565e3c2 1-11
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceTeam.ts
+  s_aa9038102244a3::t_1c017dff203a2b 1-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionSourceTeamProperty.ts
+  s_aa9038102244a3::t_9c5684d62fd4da 1-9
+packages/sdk/generated/agent-harness/index.ts
+  s_aa9038102244a3::t_4bdb4fb262aca7 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "03e4d6c67cb35bbce638dc2c200b7b09feb65370",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_aa9038102244a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8722afde-2cce-4eb5-b137-43e8230dc6d1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
