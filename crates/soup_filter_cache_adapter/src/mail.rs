@@ -961,10 +961,16 @@ async fn read_page<S: PredicateIndexStorage>(
 ) -> Result<Window, PageError<S::Error>> {
     // Unknown rows never become fabricated matches; the UI labels this cached mail.
     let result = engine.reconcile_predicate_index(query, &[]).await?;
-    let mut keys = result.value.keys;
-    let more = keys.len() > usize::from(limit);
-    keys.truncate(usize::from(limit));
-    let values = sort_values(engine, query, &keys).await?;
+    // With no baseline every key is a candidate, carrying the sort value of
+    // its effective projection.
+    let more = result.value.keys.len() > usize::from(limit);
+    let (keys, values) = result
+        .value
+        .keys
+        .into_iter()
+        .zip(result.value.sort_values)
+        .take(usize::from(limit))
+        .unzip();
     Ok(Window {
         keys,
         values,
@@ -1016,44 +1022,4 @@ async fn read_through<S: PredicateIndexStorage>(
         window.more = page.more;
         window.optimistic |= page.optimistic;
     }
-}
-
-/// View-correct sort values of `keys`, from their effective projections.
-async fn sort_values<S: PredicateIndexStorage>(
-    engine: &mut Engine<S>,
-    query: &ValidatedIndexQuery,
-    keys: &[RecordKey],
-) -> Result<Vec<i64>, PageError<S::Error>> {
-    let bases = engine
-        .storage()
-        .load_projection_states(keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let shadows = engine
-        .storage()
-        .load_optimistic_projections(keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let values = bases
-        .iter()
-        .zip(&shadows)
-        .map(|(base, shadow)| {
-            let document = match shadow.as_ref().map(|shadow| &shadow.state) {
-                Some(predicate_index::OptimisticProjectionState::Complete(doc)) => Some(doc),
-                Some(_) => None,
-                None => match base {
-                    Some(ProjectionState::Complete(doc)) => Some(doc),
-                    _ => None,
-                },
-            }
-            .ok_or_else(|| error("page has no complete sort evidence"))?;
-            document
-                .sort_facts
-                .iter()
-                .find(|fact| fact.attribute == query.as_query().sort_attribute)
-                .map(|fact| fact.value)
-                .ok_or_else(|| error("missing page sort"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(values)
 }

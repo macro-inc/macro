@@ -739,6 +739,71 @@ fn many_partitions_with_deep_predicates_stay_within_the_expression_limit() {
     });
 }
 
+/// Turso joins at most 63 tables. A shallow predicate over more distinct exact
+/// facts than that still runs in the window, testing the facts past the joined
+/// ones through `EXISTS`, and pages like the set-based plan. The owner test
+/// comes last, past the joined facts, and only even rows pass it.
+#[test]
+fn more_exact_facts_than_turso_can_join_still_run_in_the_window() {
+    fn balanced(mut terms: Vec<PredicateExpr>) -> PredicateExpr {
+        while terms.len() > 1 {
+            terms = terms
+                .chunks(2)
+                .map(|pair| match pair {
+                    [left, right] => {
+                        PredicateExpr::And(Box::new(left.clone()), Box::new(right.clone()))
+                    }
+                    [single] => single.clone(),
+                    _ => unreachable!(),
+                })
+                .collect();
+        }
+        terms.pop().unwrap()
+    }
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-joins").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..60)
+                    .map(|n| {
+                        let mut doc = document(n, i64::from(n));
+                        if n % 2 == 1 {
+                            doc.exact_facts[0].value = ExactValue::utf8("other").unwrap();
+                        }
+                        ProjectionMutation::Replace(doc)
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let connection = storage.connection();
+        for facts in [1, 16, 17, 62] {
+            let mut terms = (1..facts)
+                .map(|n| PredicateExpr::Not(Box::new(owner(&format!("x{n}")))))
+                .collect::<Vec<_>>();
+            terms.push(owner("owner"));
+            let query = query(balanced(terms), SortDirection::Desc, SortDirection::Asc);
+            let windowed = try_select(&connection, &query, &[])
+                .unwrap_or_else(|error| panic!("{facts} facts: {error:?}"))
+                .unwrap_or_else(|| panic!("{facts} facts fell back"))
+                .into_iter()
+                .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+                .collect::<Vec<_>>();
+            assert_eq!(windowed.len(), 20, "{facts} facts");
+            assert!(
+                windowed.iter().all(|(_, timestamp)| timestamp % 2 == 0),
+                "{facts} facts"
+            );
+            assert_eq!(
+                windowed,
+                reference(&connection, &query, &[]),
+                "{facts} facts"
+            );
+        }
+    });
+}
+
 fn query_with_limit(
     predicate: PredicateExpr,
     direction: SortDirection,

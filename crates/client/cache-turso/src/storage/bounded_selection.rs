@@ -209,20 +209,24 @@ fn candidate_sql(
         }
         conjunction::FactSource::Optimistic => String::new(),
     };
+    let mut joins = conjunction::ExactJoins::new(source);
     let partitions = searched_partitions(query)
         .map(|partition| {
             parameters.push(text(partition.partition.as_str()));
-            let predicate = conjunction::condition(&partition.predicate, source, &mut parameters);
+            let predicate =
+                conjunction::joined_condition(&partition.predicate, &mut parameters, &mut joins);
             format!("(d.partition = ? AND ({predicate}))")
         })
         .collect::<Vec<_>>();
     let partitions = balanced_or(&partitions);
+    let (joins, join_parameters) = joins.finish();
+    parameters.extend(join_parameters);
     // Bound BEFORE scope/predicate probes. A sparse query cannot turn this
     // speculation into a full-index walk. Ordering document_id with value lets
     // Turso walk the existing index without sorting the corpus. Record-key
     // ordering is resolved only after proving the entire cutoff tie is present.
     let sql = format!(
-        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id"
+        "WITH candidates AS MATERIALIZED (SELECT document_id, value FROM {facts} INDEXED BY {index} WHERE attribute = ?{boundary} ORDER BY value {direction}, document_id {direction} LIMIT ?) SELECT d.record_key, s.value, s.document_id, CASE WHEN d.profile = ? AND d.state = 0{shadow} AND ({partitions}) THEN 1 ELSE 0 END FROM candidates AS s CROSS JOIN {documents} AS d ON d.id = s.document_id{joins}"
     );
     (sql, parameters)
 }
