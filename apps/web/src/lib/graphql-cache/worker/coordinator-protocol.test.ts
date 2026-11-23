@@ -654,6 +654,7 @@ describe('coordinator runtime protocol', () => {
 
   it.each([
     { ...version, kind: 'registered', tabId: 'tab' },
+    { ...version, kind: 'registered', tabId: 'tab', ownerElsewhere: true },
     {
       ...version,
       kind: 'become-owner',
@@ -692,6 +693,20 @@ describe('coordinator runtime protocol', () => {
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });
+
+  it.each([false, 'yes', null])(
+    'rejects a registration whose ownerElsewhere is %s',
+    (ownerElsewhere) => {
+      expect(
+        validateCoordinatorToTabEnvelope({
+          ...version,
+          kind: 'registered',
+          tabId: 'tab',
+          ownerElsewhere,
+        }).ok
+      ).toBe(false);
+    }
+  );
 
   it.each([
     'opened-existing',
