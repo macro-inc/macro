@@ -9,7 +9,9 @@ import {
 
 const invoke = vi.hoisted(() => vi.fn());
 let setAndroidFiles: (files: PendingShareFile[]) => void;
-let onIosFilesReady: (() => void) | undefined;
+let onIosFilesReady:
+  | ((event: { payload: { filenames: string[] } }) => void)
+  | undefined;
 /** Files the Share Extension saved that the app hasn't taken yet. */
 let nativePending: string[];
 
@@ -105,13 +107,13 @@ describe('iOS share loading', () => {
     const target = renderProvider('ios');
     await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
     nativePending = ['share_first.png'];
-    onIosFilesReady?.();
+    onIosFilesReady?.({ payload: { filenames: ['share_first.png'] } });
     await vi.waitFor(() =>
       expect(pendingTokens(target)).toEqual(['share_first.png'])
     );
 
     nativePending = ['share_second.png'];
-    onIosFilesReady?.();
+    onIosFilesReady?.({ payload: { filenames: ['share_second.png'] } });
 
     await vi.waitFor(() =>
       expect(pendingTokens(target)).toEqual(['share_second.png'])
@@ -124,30 +126,46 @@ describe('iOS share loading', () => {
   it('finishes links in the order they arrived', async () => {
     const target = renderProvider('ios');
     await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
-    const firstLookup = Promise.withResolvers<string[]>();
-    const lookups = [firstLookup.promise, Promise.resolve(['share_newer.png'])];
-    const popped = vi.fn(async (args: { filenames: string[] }) =>
-      args.filenames.map((name) => ({
+    const firstPop = Promise.withResolvers<void>();
+    invoke.mockImplementation(async (command, args) => {
+      if (command !== 'pop_shared_files') return;
+      // The older link's files take longer to stage than the newer link's.
+      if (args.filenames[0] === 'share_older.png') await firstPop.promise;
+      return args.filenames.map((name: string) => ({
         token: name,
         name,
         mime_type: 'image/png',
         size: 3,
-      }))
-    );
-    invoke.mockImplementation(async (command, args) => {
-      if (command === 'get_pending_share_filenames') return lookups.shift();
-      if (command === 'pop_shared_files') return popped(args);
+      }));
     });
 
-    onIosFilesReady?.();
-    onIosFilesReady?.();
-    // The second link's lookup answers first; the first one answers late.
+    onIosFilesReady?.({ payload: { filenames: ['share_older.png'] } });
+    onIosFilesReady?.({ payload: { filenames: ['share_newer.png'] } });
     await new Promise((resolve) => setTimeout(resolve, 0));
-    firstLookup.resolve(['share_older.png']);
+    firstPop.resolve();
 
-    await vi.waitFor(() => expect(popped).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(invokedCommands('pop_shared_files')).toHaveLength(2)
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(pendingTokens(target)).toEqual(['share_newer.png']);
+  });
+
+  it('loads only the files a link names, never an older waiting share', async () => {
+    const target = renderProvider('ios');
+    await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
+    nativePending = ['share_waiting.png', 'share_linked.png'];
+
+    onIosFilesReady?.({ payload: { filenames: ['share_linked.png'] } });
+    await vi.waitFor(() =>
+      expect(pendingTokens(target)).toEqual(['share_linked.png'])
+    );
+    // The same link again finds its files gone and changes nothing.
+    onIosFilesReady?.({ payload: { filenames: ['share_linked.png'] } });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(pendingTokens(target)).toEqual(['share_linked.png']);
+    expect(nativePending).toEqual(['share_waiting.png']);
   });
 });
 
@@ -163,7 +181,7 @@ describe('share batch acknowledgement', () => {
           ]);
         } else {
           nativePending = [token];
-          onIosFilesReady?.();
+          onIosFilesReady?.({ payload: { filenames: [token] } });
         }
         await vi.waitFor(() => expect(pendingTokens(target)).toEqual([token]));
       };

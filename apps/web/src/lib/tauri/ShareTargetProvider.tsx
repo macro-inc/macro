@@ -107,8 +107,17 @@ interface ShareTargetContextValue {
   pickUpPendingShareFiles: () => Promise<void>;
 }
 
-/** A new share link replaces the open share; a pickup never does. */
-type ShareLoadTrigger = 'link' | 'pickup';
+/**
+ * A share link loads exactly the files it names and replaces the open share;
+ * a pickup loads whatever native code holds, and only when no share is open.
+ */
+type ShareLoadTrigger =
+  | { kind: 'link'; filenames: string[] }
+  | { kind: 'pickup' };
+
+interface ShareFilesReadyPayload {
+  filenames: string[];
+}
 
 const ShareTargetContext = createContext<ShareTargetContextValue | undefined>(
   undefined
@@ -156,9 +165,12 @@ export function ShareTargetProvider(props: {
   // Loads run one at a time, so two batches can't finish out of order and
   // leave the older one on screen.
   const loadPendingShareFiles = async (trigger: ShareLoadTrigger) => {
-    if (trigger === 'pickup' && pendingShareFiles().length > 0) return;
+    if (trigger.kind === 'pickup' && pendingShareFiles().length > 0) return;
     try {
-      const filenames = await getPendingShareFilenames();
+      const filenames =
+        trigger.kind === 'link'
+          ? trigger.filenames
+          : await getPendingShareFilenames();
       if (filenames.length === 0) return;
 
       const files = await popSharedFiles(filenames);
@@ -189,14 +201,22 @@ export function ShareTargetProvider(props: {
 
   const pickUpPendingShareFiles = async () => {
     if (props.os !== 'ios') return;
-    await syncPendingShareFiles('pickup');
+    await syncPendingShareFiles({ kind: 'pickup' });
   };
 
   onMount(() => {
     if (props.os !== 'ios') return;
 
-    const unlisten = listen('share-files-ready', () =>
-      fireAndForget(syncPendingShareFiles('link'), 'share-target')
+    const unlisten = listen<ShareFilesReadyPayload>(
+      'share-files-ready',
+      (event) =>
+        fireAndForget(
+          syncPendingShareFiles({
+            kind: 'link',
+            filenames: event.payload.filenames,
+          }),
+          'share-target'
+        )
     );
     onCleanup(() =>
       fireAndForget(

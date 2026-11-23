@@ -117,9 +117,10 @@ ever sees finished files. Then it opens `macro://share?files=…`. The app
 - `get_pending_share_filenames` returns the files the latest link names. When
   none of those is left, it returns the `share_*` files saved in the last 24
   hours instead (a share whose link never arrived) and deletes older ones; the
-  two are never mixed into one batch. A link replaces the open share; the share
-  sheet's pickup, on mount and on every return to the foreground, loads a
-  waiting share only when none is open. The sheet mounts only when signed in.
+  two are never mixed into one batch. A link loads exactly the files it names
+  and replaces the open share; the share sheet's pickup, on mount and on every
+  return to the foreground, asks native code and loads a waiting share only
+  when none is open. The sheet mounts only when signed in.
   Loads run one at a time; `pop_shared_files` takes what it returns out of the
   pending set.
 - The extension logs counts and outcomes (never content or names) under
