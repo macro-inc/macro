@@ -55,10 +55,14 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `src/domain/service/tests/attention.rs` → `src/outbound/pg_soup_repo/attention.rs`
   (`attention/query.sql`). Channel-thread keying applies only to
   `AttentionKeying::ThreadScoped`; keep it in step with `attention_feed`'s
-  `keying.rs`. A read of known items (`only`) under `FiledEntity` keying
-  takes its pending notifications from `attention/pending_only.sql`, by key;
-  every other read, and every probe (which empties it), takes them from
-  `attention/pending.sql`. Change both.
+  `keying.rs`. A read of known items (`only`) reads by key: pending
+  notifications from `attention/pending_only.sql` (`FiledEntity`) or
+  `attention/pending_only_thread.sql` (`ThreadScoped`), own work from
+  `attention/own_work_latest_only.sql`. A whole page reads
+  `attention/pending.sql` and `attention/own_work_latest.sql`, and a probe
+  (which empties pending) reads `pending.sql`. Change them together; the
+  `a_read_of_known_items_matches_the_whole_feed_for_every_item` test checks
+  that a read of known items returns what the whole feed has for them.
 - Find where a viewer's unread rows may be without paging a feed:
   `src/outbound/pg_soup_repo/attention_unread.rs`. It is neither gated nor
   filtered and runs for every signed-in viewer; its two reads are bounded by
@@ -90,7 +94,8 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   reads the viewer's pending notifications, so its cost stays flat however
   many they have (`a_probe_costs_the_same_however_many_notifications_are_pending`;
   past Postgres's JIT threshold a probe took hundreds of milliseconds).
-  Normal pages build byte-identical SQL (`only_a_probe_changes_the_query`).
+  A page builds exactly `query.sql` with the page fragments, and a probe
+  reads `pending.sql` emptied by `AND FALSE` (`only_a_probe_changes_the_query`).
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
@@ -221,6 +226,26 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   collected once rather than semi-joined per row; cost follows the ids passed
   in. A gate `EXISTS` also needs `PER_CANDIDATE`, or Postgres hashes it back
   into the caller's whole accessible set.
+- Postgres 14 hashes `= ANY(...)` only over a constant array. Over
+  `ARRAY(SELECT ...)` it searches the source list for each grant row it
+  filters, or, as an index condition, descends the index once per source, so
+  either way its cost per candidate grows with the viewer's sources. A plain
+  `IN (SELECT source_id FROM user_source_ids)` is a join that stale statistics
+  can drive from the sources, one `entity_access` probe per source and
+  candidate. The agent-session gate writes `ea.source_id = $1 OR ea.source_id
+  IN (...)` (`notified::SOURCE_GRANTED_SQL`): under the `OR` it is a subplan.
+  It hashes the sources only when the planner expects them to fit in
+  `work_mem`, and builds that hash each time the subplan holding it runs;
+  otherwise it compares each grant row with a materialized source list.
+  Measure any other gate on a viewer with thousands of sources before moving
+  it to that form, since the gates are shared with every page.
+- Compare a membership by the uuid column: `cp.channel_id = <uuid>`, with the
+  text id cast behind a uuid-pattern guard, in an `EXISTS` fenced with
+  `PER_CANDIDATE` (`channel_thread_gate`), and keep the text comparison as a
+  filter on the row found when callers compare the text. Written as
+  `cp.channel_id::text = ...` alone, no index can take the channel, and each
+  candidate walks the viewer's memberships until it meets its own; as a join
+  on the uuid, stale statistics can still walk them by user.
 - The initiative listing starts from the caller's access instead
   (`INITIATIVE_LISTING_ACCESS`): one `(source_id, entity_type, entity_id)`
   index descent per source returns only that source's initiative grants, and

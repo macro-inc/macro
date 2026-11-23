@@ -44,6 +44,7 @@ impl ContactDirectory for Directory {
                 id: ContactId::for_viewer(&viewer, &user_id),
                 user_id,
                 name: Some("Person".into()),
+                lists: Vec::new(),
             }],
             next_cursor: None,
         })

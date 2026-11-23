@@ -1,0 +1,38 @@
+id: tsx-connection-state-through-connectors-queries
+valid:
+  - |
+    import { useConnectors } from '@queries/connectors';
+  - |
+    import { cognitionApiServiceClient } from '@service-cognition/client';
+    const chat = await cognitionApiServiceClient.getChatPermissions({ chat_id });
+  - |
+    import type { GetChatResponse } from '@service-cognition/client';
+  - |
+    import { enableDesktopTabs } from '@core/constant/featureFlags';
+  - |
+    const id = 'macro-connection-1';
+invalid:
+  - |
+    import { isFeatureEnabled, macroConnect } from '@core/constant/featureFlags';
+  - |
+    const on = flags.isEnabled('macro-connect');
+  - |
+    const servers = await cognitionApiServiceClient.listMcpServers();
+  - |
+    await cognitionApiServiceClient.listPipedreamConnections();
+  - |
+    const all = await cognitionApiServiceClient.listConnectors();
+  - |
+    const step = await cognitionApiServiceClient.startConnect({ key });
+  - |
+    import type { PipedreamConnectionResponse } from '@service-cognition/client';
+  - |
+    import { PIPEDREAM_DISABLED } from '@service-cognition/client';
+  - |
+    import type { ConnectStep } from '@service-cognition/client';
+  - |
+    import type { ServerResponse } from '../../service-clients/service-cognition/client';
+  - |
+    import type { Connector } from '@service-cognition/generated/schemas/connector';
+  - |
+    import type { PipedreamCatalogResponse } from '@service-cognition/generated/schemas/pipedreamCatalogResponse';

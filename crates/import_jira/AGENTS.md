@@ -12,7 +12,7 @@ Read-only Jira Cloud workspace inventory. Used by the reviewed workspace importe
 ## Boundaries
 
 Provider adapters read only. Planning, authorization, approval and writes to
-Macro belong to `import`; credentials belong to `pipedream_mcp`.
+Macro belong to `import`; credentials belong to `connectors`.
 
 ## Checks
 

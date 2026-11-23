@@ -28,6 +28,8 @@ export function createPersonList(options: {
   resetKey?: Accessor<string>;
   localBudgetMs?: number;
   activity: Accessor<ReadonlyMap<string, DateValue>>;
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>;
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
 }): QuickAccessList<UserItem> {
@@ -41,6 +43,8 @@ export function createPersonList(options: {
       policy: options.policy,
       resetKey: options.resetKey,
       eligible: (user) => !options.excluded(user.id),
+      teammates: options.teammates,
+      directMessages: options.activity,
       // Menus debounce their own query. Waiting again lands people after
       // every other source and moves the rows under the highlight.
       debounceMs: untrack(options.policy).mode === 'property' ? 200 : 0,
@@ -88,9 +92,11 @@ export function createPersonList(options: {
             dm && options.policy().mode === 'command' && options.search().trim()
               ? options.conversation(dm.id)
               : undefined;
-          // The server's page is in no meaningful order, so its rows carry
-          // none and callers rank them as they rank other people.
-          const order = page.localLate ? {} : { personOrder };
+          // A server page read for a late cache is in no meaningful order
+          // unless its text named people and the list ranked them. Those
+          // rows keep their place; callers rank the others as they rank
+          // other people.
+          const order = page.localLate && !page.named ? {} : { personOrder };
           return target
             ? { ...item, commandTarget: target, ...order }
             : { ...item, ...order };
