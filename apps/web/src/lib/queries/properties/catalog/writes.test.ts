@@ -19,10 +19,12 @@ const soup = vi.hoisted(() => ({
       }
     | undefined,
   /** Whether the cache holds the definition's options on its record. */
-  definitionCached: true,
+  definitionCached: true as boolean | 'unreadable',
   settle: (_settlement: MutationSettlement) => {},
   optimistic: vi.fn(),
   reload: undefined as Partial<OperationResult> | undefined,
+  /** Answers to cache-only reads, in order; then none. */
+  cachedReads: [] as Partial<OperationResult>[],
   session: 1,
 }));
 
@@ -37,7 +39,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
       toPromise: async () =>
         context?.requestPolicy === 'network-only'
           ? (soup.reload ?? { data: undefined })
-          : { data: undefined },
+          : (soup.cachedReads.shift() ?? { data: undefined }),
     }),
   }),
   getGraphqlSoupCacheHost: () => soup.host,
@@ -79,6 +81,7 @@ beforeEach(() => {
   }));
   soup.optimistic.mockReset();
   soup.reload = undefined;
+  soup.cachedReads = [];
   soup.session = 1;
   soup.definitionCached = true;
 });
@@ -92,12 +95,16 @@ function queueingHost() {
       return () => listeners.delete(listener);
     },
     onCacheGenerationChanged: () => () => {},
-    readRecordsByKeys: async ({ keys }) => ({
-      revision: { generation: 0, sequence: 0 },
-      records: soup.definitionCached
-        ? keys.map((recordKey) => ({ recordKey, record: { options: [] } }))
-        : [],
-    }),
+    readRecordsByKeys: async ({ keys }) => {
+      if (soup.definitionCached === 'unreadable')
+        throw new Error('cache read timed out');
+      return {
+        revision: { generation: 0, sequence: 0 },
+        records: soup.definitionCached
+          ? keys.map((recordKey) => ({ recordKey, record: { options: [] } }))
+          : [],
+      };
+    },
   };
   soup.optimistic.mockImplementation(() => ({
     toPromise: async () => ({ queued: 'tx-1' }),
@@ -177,22 +184,25 @@ describe('adding an option', () => {
   });
 
   it('links through the definition only when the cache holds its options', async () => {
-    queueingHost();
-    soup.definitionCached = false;
-    // the queue never settles it here, so the test does not wait for it
-    const added = addPropertyOption('def-1', TAG).catch(
-      (error: unknown) => error
-    );
-    await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
-    const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
-    // A record link the cache cannot apply would drop every link of the add.
-    expect(
-      options.updates.some(
-        (link: { recordRoot?: unknown }) => link.recordRoot !== undefined
-      )
-    ).toBe(false);
-    expect(options.updates).toHaveLength(1);
-    expect(added).toBeInstanceOf(Promise);
+    for (const cached of [false, 'unreadable'] as const) {
+      soup.optimistic.mockReset();
+      queueingHost();
+      soup.definitionCached = cached;
+      // the queue never settles it here, so the test does not wait for it
+      const added = addPropertyOption('def-1', TAG).catch(
+        (error: unknown) => error
+      );
+      await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+      const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
+      // A record link the cache cannot apply would drop every link of the add.
+      expect(
+        options.updates.some(
+          (link: { recordRoot?: unknown }) => link.recordRoot !== undefined
+        )
+      ).toBe(false);
+      expect(options.updates).toHaveLength(1);
+      expect(added).toBeInstanceOf(Promise);
+    }
   });
 
   it('rejects a queued add the server refuses later', async () => {
@@ -323,32 +333,42 @@ describe('provisioning a tag set', () => {
     expect(ensured).toBeInstanceOf(Error);
   });
 
-  it('fails when the reloaded list does not hold the set', async () => {
-    queueingHost();
-    soup.result = {
-      data: {
-        ensureTagSet: {
-          scope: 'TEAM',
-          definition: {
-            __typename: 'GraphqlPropertyDefinition',
-            id: 'def-team',
-            owner: { scope: 'TEAM', principalId: 'team-1' },
-            displayName: 'Tags',
-            dataType: 'SELECT_STRING',
-            isMultiSelect: true,
-            specificEntityType: null,
-            isSystem: false,
-            isMetadata: false,
-            createdAt: new Date(0).toISOString(),
-            updatedAt: new Date(0).toISOString(),
-          },
-          options: [],
-        },
+  it('is ready only once the cache lists the set', async () => {
+    const provisioned = {
+      scope: 'TEAM',
+      definition: {
+        __typename: 'GraphqlPropertyDefinition',
+        id: 'def-team',
+        owner: { scope: 'TEAM', principalId: 'team-1' },
+        displayName: 'Tags',
+        dataType: 'SELECT_STRING',
+        isMultiSelect: true,
+        specificEntityType: null,
+        isSystem: false,
+        isMetadata: false,
+        createdAt: new Date(0).toISOString(),
+        updatedAt: new Date(0).toISOString(),
       },
+      options: [],
     };
-    soup.reload = { data: { user: { tagSets: [] } } };
-    const ensured = await ensureTagSet('team').catch((error: unknown) => error);
-    expect(ensured).toBeInstanceOf(Error);
+    const listing = (tagSets: unknown[]) =>
+      ({
+        data: { user: { tagSets } },
+      }) as unknown as Partial<OperationResult>;
+    for (const [afterReload, ready] of [
+      [listing([provisioned]), true],
+      // The reload answered, but its cache write did not land.
+      [listing([]), false],
+    ] as const) {
+      queueingHost();
+      soup.result = { data: { ensureTagSet: provisioned } };
+      soup.reload = listing([provisioned]);
+      soup.cachedReads = [listing([]), afterReload];
+      const ensured = await ensureTagSet('team').catch(
+        (error: unknown) => error
+      );
+      expect(ensured instanceof Error).toBe(!ready);
+    }
   });
 });
 
@@ -468,6 +488,9 @@ describe('option order', () => {
       // Two more commits while the first reload runs.
       settle({ transactionId: 'tx-b', status: 'committed' });
       settle({ transactionId: 'tx-c', status: 'committed' });
+      await Promise.resolve();
+      // The trailing reload waits for the one running.
+      expect(readers.refreshed).toHaveLength(HOLDING_DEF_1.length);
       readers.release();
       await readers.reloaded(2 * HOLDING_DEF_1.length);
       readers.release();
@@ -476,6 +499,51 @@ describe('option order', () => {
       );
     } finally {
       readers.dispose();
+    }
+  });
+
+  it('still reloads for a write that commits while a failing reload runs', async () => {
+    let fail: (error: Error) => void = () => {};
+    const reloads: string[] = [];
+    let second: () => void = () => {};
+    const secondStarted = new Promise<void>((resolve) => {
+      second = resolve;
+    });
+    const dispose = createRoot((dispose) => {
+      registerCatalogReader({
+        kind: 'options',
+        propertyDefinitionId: () => 'def-1',
+        refresh: () => {
+          reloads.push('def-1');
+          return new Promise<void>((_, reject) => {
+            fail = reject;
+          });
+        },
+      });
+      registerCatalogReader({
+        kind: 'options',
+        propertyDefinitionId: () => 'def-2',
+        refresh: async () => {
+          reloads.push('def-2');
+          second();
+        },
+      });
+      return dispose;
+    });
+    try {
+      const settle = queueingHost();
+      soup.result = { queued: 'tx-1' } as Partial<OperationResult>;
+      await updatePropertyOption('def-1', 'opt-1', { value: 'A' }, () => {});
+      soup.result = { queued: 'tx-2' } as Partial<OperationResult>;
+      await updatePropertyOption('def-2', 'opt-2', { value: 'B' }, () => {});
+      settle({ transactionId: 'tx-1', status: 'committed' });
+      await vi.waitFor(() => expect(reloads).toEqual(['def-1']));
+      settle({ transactionId: 'tx-2', status: 'committed' });
+      fail(new Error('unavailable'));
+      await secondStarted;
+      expect(reloads).toEqual(['def-1', 'def-2']);
+    } finally {
+      dispose();
     }
   });
 });

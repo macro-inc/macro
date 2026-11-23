@@ -269,9 +269,15 @@ async function reorderWaiting(): Promise<void> {
       const ids = [...reorder.waiting];
       reorder.waiting.clear();
       const holders = ids.map(holdsOptionsOf);
-      await refreshCatalogReaders(undefined, (reader) =>
-        holders.some((holds) => holds(reader))
-      );
+      try {
+        await refreshCatalogReaders(undefined, (reader) =>
+          holders.some((holds) => holds(reader))
+        );
+      } catch (error: unknown) {
+        // A failed reload leaves the cached lists on screen; the writes that
+        // committed meanwhile still get theirs.
+        console.error('Property option reload failed', error);
+      }
     }
   } finally {
     reorder.running = false;
@@ -395,12 +401,18 @@ async function cachedDefinitionOptions(
   host: CacheHost,
   propertyDefinitionId: string
 ): Promise<boolean> {
-  const { records } = await readRecordsByKeys(
-    host,
-    selectRecords(PropertyCatalogDefinitionOptionsFragmentDoc),
-    [`GraphqlPropertyDefinition:${propertyDefinitionId}`]
-  );
-  return records.length > 0;
+  try {
+    const { records } = await readRecordsByKeys(
+      host,
+      selectRecords(PropertyCatalogDefinitionOptionsFragmentDoc),
+      [`GraphqlPropertyDefinition:${propertyDefinitionId}`]
+    );
+    return records.length > 0;
+  } catch (error: unknown) {
+    // Without the record link the add still shows in the lists linked by query.
+    console.error('Reading the cached property definition failed', error);
+    return false;
+  }
 }
 
 /** Cached lists the new option belongs in; lists not in the cache are skipped. */
@@ -593,18 +605,24 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
     if (usingCache()) {
       // Provisioning fills a set the cached list holds as empty. A set that is
       // already listed with its definition has nothing to reload.
-      const cached = await client
-        .query(
-          PropertyCatalogTagSetsDocument,
-          {},
-          { requestPolicy: 'cache-only' }
-        )
-        .toPromise();
-      const listed = cached.data?.user.tagSets.some(
-        (candidate) => candidate.definition?.id === mapped.definition?.id
-      );
-      span.setAttr('property.reloaded', !listed);
-      if (!listed) {
+      const definitionId = mapped.definition.id;
+      const listed = async () => {
+        const cached = await client
+          .query(
+            PropertyCatalogTagSetsDocument,
+            {},
+            { requestPolicy: 'cache-only' }
+          )
+          .toPromise();
+        return (
+          cached.data?.user.tagSets.some(
+            (candidate) => candidate.definition?.id === definitionId
+          ) ?? false
+        );
+      };
+      const wasListed = await listed();
+      span.setAttr('property.reloaded', !wasListed);
+      if (!wasListed) {
         const reloaded = await client
           .query(
             PropertyCatalogTagSetsDocument,
@@ -615,15 +633,11 @@ export async function ensureTagSet(scope: TagScope): Promise<TagSetResponse> {
         // A tag added to a set the cache does not list would show nowhere.
         // Provisioning is idempotent, so the caller can simply try again.
         if (reloaded.error) throw errorOf(reloaded);
-        if (
-          !reloaded.data?.user.tagSets.some(
-            (candidate) => candidate.definition?.id === mapped.definition?.id
-          )
-        )
-          noData('ensureTagSet reload');
-        // The caller's next add reads the list from the cache.
+        // The caller's next add reads the list from the cache, so the set
+        // counts as ready once the cache holds it.
         const metadata = normalizedCacheResultMetadata(reloaded);
         if (metadata?.source === 'live-network') await metadata.persistence;
+        if (!(await listed())) noData('ensureTagSet reload');
       }
     }
     return mapped;
