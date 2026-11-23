@@ -304,7 +304,8 @@ impl<G: MessageRealtime, L: ChannelMessageChangeLoader, P: ChannelTimelineUpdate
         self.realtime.subscribers(parent).await
     }
 
-    /// Both deliveries run even when one fails; the first failure is returned.
+    /// Both deliveries run even when one fails. The gateway's failure takes
+    /// precedence; a publish failure is also recorded on its publish span.
     async fn send(
         &self,
         event: &MessageEvent,
