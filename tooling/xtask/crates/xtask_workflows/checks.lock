@@ -59,6 +59,8 @@ check	code_check_cloud_storage.yml	graphql-schema-compat	graphql-schema-compat
 check	code_check_conventions.yml	ast-grep	ast-grep Conventions
 check	code_check_infra.yml	biome-check	Biome Check
 check	code_check_infra.yml	check	check
+check	connectors_e2e.yml	suite	Connectors end-to-end
+check	connectors_e2e.yml	email-e2e-alert	Tell the connectors channel
 check	deploy-analytics-proxy-dev.yml	deploy	deploy
 check	deploy-observability.yml	deploy	Deploy observability
 check	deploy-pulumi-stack.yml	setup	Check whether ${{ inputs.pulumi-service-name }} ships service code
@@ -103,6 +105,7 @@ check	deploy_sync_service.yml	deploy	Deploy to Cloudflare
 check	deploy_web_app.yml	build/build	Build / Build
 check	deploy_web_app.yml	deploy	Deploy
 check	deploy_website.yml	build-deploy	Build and Deploy Website
+check	desktop-release-watch.yml	watch	Alert when a release's desktop installers are missing
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
 check	email_e2e.yml	email-e2e	Email end-to-end (${{ matrix.partition }}/3)
 check	email_e2e.yml	email-e2e-search	Email end-to-end (search)

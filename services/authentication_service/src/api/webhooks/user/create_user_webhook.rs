@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod test;
 
-use analytics_client::{MetaActionSource, MetaUserData};
+use analytics_client::MetaActionSource;
 use std::{collections::HashSet, future::Future};
 
 use crate::service::signup_policy::SignupPolicy;
@@ -17,6 +17,9 @@ use rand::Rng;
 use crate::service::user::agent_signup::AGENT_SIGNUP_DATA_KEY;
 use crate::service::user::create_user::create_user;
 use crate::service::user::email_code_signup::created_by_email_code;
+use crate::service::user::signup_meta::{
+    SignupClickIds, registration_user_data, sends_complete_registration, signup_event_id,
+};
 use crate::service::user::support_channel_welcome::{
     AuthorizedSupportChannelMessages, post_support_channel_welcome,
 };
@@ -384,15 +387,20 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     // Authoritative signup analytics: fired here so every creation path
     // (SSO, passwordless, iOS) counts exactly once, even if the user never
     // returns to the app. Meta's CompleteRegistration fires here too
-    // (Conversions API) — only a minority of new accounts ever load the web
-    // app with the `signed_up=true` marker, so the browser pixel alone
-    // misses most signups. The browser still fires the same event with the
-    // shared `signup:{user_id}` event id purely to contribute click-id
-    // cookies for attribution; Meta dedupes the pair on that id (see the
-    // web app's signupCompletion.ts). Uses the same distinct id
-    // ("macro|{email}") the app identifies with. Fire-and-forget.
+    // (Conversions API) for a real account, and nowhere else — a mobile
+    // "email me a link" submit is a Lead, not a registration. Only a minority
+    // of new accounts load the web app with the `signed_up=true` marker, so
+    // the browser pixel alone misses most signups. When that browser does
+    // load, it fires the same event with `signup:{profile id}`
+    // (`macro|{email}`, the id legacy user permissions returns) so Meta
+    // dedupes the pair (see signupCompletion.ts). Logins never reach this
+    // webhook. Fire-and-forget.
+    let environment = ctx.environment;
+    let event_user_agent = req.event.info.user_agent.clone();
+    let stored_user_data = req.event.user.data.clone();
     tokio::spawn({
         let analytics_client = ctx.analytics_client.clone();
+        let macro_cache_client = ctx.macro_cache_client.clone();
         let db = ctx.db.clone();
         let fusionauth_user_id = fusionauth_user_id.clone();
         let user_id = user_id.clone();
@@ -432,22 +440,44 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 .inspect(|_| tracing::info!("tracked PostHog sign_up event"))
                 .inspect_err(|e| tracing::warn!(error=?e, "failed to track PostHog sign_up event"));
 
-            // Ad platforms optimize toward people who sign up.
-            if is_agent {
+            // Ad platforms optimize toward people who create an account.
+            // Develop, staging, and local must not send the production pixel.
+            if !sends_complete_registration(environment, is_agent) {
                 return;
             }
 
-            let user_data = MetaUserData {
-                email: Some(email),
-                client_ip_address: Some(ip_address),
-                ..Default::default()
+            let stored_clicks = SignupClickIds::from_user_data(stored_user_data.as_ref());
+            let stashed = if stored_clicks.has_click_id() {
+                None
+            } else if let Some(user_agent) =
+                SignupClickIds::normalized_user_agent(event_user_agent.as_deref())
+            {
+                match macro_cache_client
+                    .take_signup_meta(&ip_address, &user_agent)
+                    .await
+                {
+                    Ok(json) => json.as_deref().and_then(SignupClickIds::from_json),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, "failed to read signup meta attribution");
+                        None
+                    }
+                }
+            } else {
+                None
             };
+            let user_data = registration_user_data(
+                &email,
+                &ip_address,
+                event_user_agent.as_deref(),
+                stored_user_data.as_ref(),
+                stashed,
+            );
             let _ = analytics_client
                 .track_meta(
                     "CompleteRegistration",
                     &user_data,
                     MetaActionSource::Website,
-                    Some(&format!("signup:{user_id}")),
+                    Some(&signup_event_id(&user_id)),
                     serde_json::json!({
                         // Must mirror the browser payload in the web app's
                         // signupCompletion.ts: Meta keeps whichever of the

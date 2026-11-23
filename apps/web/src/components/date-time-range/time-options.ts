@@ -11,10 +11,20 @@ const SLOT_MINUTES = 15;
  */
 const MAX_RANGE_MINUTES = minutesInDay - SLOT_MINUTES;
 
-const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
+const timeLabelFormatters = new Map<boolean | undefined, Intl.DateTimeFormat>();
+
+/** Clock labels on a 12-hour (`true`) or 24-hour (`false`) clock, else the locale's. */
+function timeLabelFormatter(hour12: boolean | undefined) {
+  const cached = timeLabelFormatters.get(hour12);
+  if (cached) return cached;
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+    ...(hour12 === undefined ? {} : { hour12 }),
+  });
+  timeLabelFormatters.set(hour12, formatter);
+  return formatter;
+}
 
 /** One selectable clock time in a time picker. */
 export interface TimeOption {
@@ -51,10 +61,13 @@ export function parseTimeValue(value: string): number | undefined {
 }
 
 /** Localized clock label for an `HH:mm` value. */
-export function formatTimeValue(value: string): string | undefined {
+export function formatTimeValue(
+  value: string,
+  hour12?: boolean
+): string | undefined {
   const minutesOfDay = parseTimeValue(value);
   if (minutesOfDay === undefined) return undefined;
-  return timeLabelFormatter.format(
+  return timeLabelFormatter(hour12).format(
     new Date(
       2000,
       0,
@@ -73,31 +86,53 @@ export function formatDuration(minutes: number): string {
   return remainder === 0 ? `${hours}h` : `${hours}h ${remainder}min`;
 }
 
-function timeOption(minutesOfDay: number, dayOffset: number, detail?: string) {
+function timeOption(
+  minutesOfDay: number,
+  dayOffset: number,
+  hour12: boolean | undefined,
+  detail?: string
+) {
   const value = timeValue(minutesOfDay);
   return {
     id: optionId(dayOffset, value),
     value,
-    label: formatTimeValue(value) ?? value,
+    label: formatTimeValue(value, hour12) ?? value,
     dayOffset,
     ...(detail ? { detail } : {}),
   };
 }
 
+function quarterHours(hour12: boolean | undefined): TimeOption[] {
+  return Array.from({ length: minutesInDay / SLOT_MINUTES }, (_, index) =>
+    timeOption(index * SLOT_MINUTES, 0, hour12)
+  );
+}
+
 /** Every quarter-hour in a day, used wherever no start anchors the choice. */
-export const DAY_TIME_OPTIONS: TimeOption[] = Array.from(
-  { length: minutesInDay / SLOT_MINUTES },
-  (_, index) => timeOption(index * SLOT_MINUTES, 0)
-);
+export const DAY_TIME_OPTIONS: TimeOption[] = quarterHours(undefined);
+
+const DAY_TIME_OPTIONS_BY_CLOCK = {
+  12: quarterHours(true),
+  24: quarterHours(false),
+};
+
+/** `DAY_TIME_OPTIONS` on a 12-hour (`true`) or 24-hour (`false`) clock. */
+export function dayTimeOptions(hour12?: boolean): TimeOption[] {
+  if (hour12 === undefined) return DAY_TIME_OPTIONS;
+  return DAY_TIME_OPTIONS_BY_CLOCK[hour12 ? 12 : 24];
+}
 
 /**
  * Quarter-hours from 15 minutes to 23h45min after `startTime`, each labelled
  * with the duration it produces. Options past midnight carry the day offset
  * they land on, so the end date follows the chosen time.
  */
-export function endTimeOptions(startTime: string): TimeOption[] {
+export function endTimeOptions(
+  startTime: string,
+  hour12?: boolean
+): TimeOption[] {
   const startMinutes = parseTimeValue(startTime);
-  if (startMinutes === undefined) return DAY_TIME_OPTIONS;
+  if (startMinutes === undefined) return dayTimeOptions(hour12);
 
   const options: TimeOption[] = [];
   for (
@@ -110,6 +145,7 @@ export function endTimeOptions(startTime: string): TimeOption[] {
       timeOption(
         total % minutesInDay,
         Math.floor(total / minutesInDay),
+        hour12,
         formatDuration(duration)
       )
     );
@@ -182,7 +218,8 @@ export function matchTypedTime(
  */
 export function typedTimeOption(
   options: TimeOption[],
-  text: string
+  text: string,
+  hour12?: boolean
 ): TimeOption | undefined {
   const matched = matchTypedTime(options, text);
   if (matched) return matched;
@@ -192,7 +229,7 @@ export function typedTimeOption(
   const [soonest] = typedTimeCandidates(text).sort(
     (left, right) => after(left) - after(right)
   );
-  return soonest === undefined ? undefined : timeOption(soonest, 0);
+  return soonest === undefined ? undefined : timeOption(soonest, 0, hour12);
 }
 
 /**

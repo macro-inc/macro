@@ -58,6 +58,14 @@ pub trait ChannelListRepo: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
 
+    /// Fetch the user's activity on each of `channels`, for the channels a
+    /// list page returns.
+    fn get_channel_activities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Activity>, rootcause::Report>> + Send;
+
     /// Fetch top-level channel messages for Soup thread rendering.
     fn get_thread_messages(
         &self,
@@ -289,11 +297,13 @@ pub trait ChannelRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CreatedChannel, Self::Err>> + Send;
 
     /// Add or reactivate a user in every auto-join channel for a team.
+    ///
+    /// Returns the channel ids whose memberships changed.
     fn auto_join_by_team_id<'a>(
         &self,
         team_id: &Uuid,
         user_id: &MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Soft-leave a user from every active channel membership for a team.
     ///
@@ -311,7 +321,9 @@ pub trait ChannelRepo: Send + Sync + 'static {
         channel_ids: &[Uuid],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Atomically find or create an exact two-member DM under a normalized pair lock.
+    /// Atomically find or create the pair's DM under a normalized pair lock: a
+    /// direct message with rows of exactly the two of them, or, for live
+    /// creation, one both are still in whose other rows are members who left.
     /// Reuse preserves all settings, roles and timestamps, including historical leavers.
     /// Historical callers must authorize reuse before writing history into the target.
     fn ensure_dm(
@@ -320,7 +332,10 @@ pub trait ChannelRepo: Send + Sync + 'static {
         creation: super::historical::DmCreation,
     ) -> impl Future<Output = Result<super::historical::EnsuredChannel, Self::Err>> + Send;
 
-    /// Fetch an existing exact two-member DM, deterministically choosing the oldest.
+    /// The DM `user_id` is still in that their get-or-create would reuse, by
+    /// the rows [`Self::ensure_dm`] counts: of several, one both are in, then one only `recipient_id`
+    /// left, then the oldest, then the lowest id. `None` when `user_id` is in
+    /// none.
     fn maybe_get_dm<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -336,13 +351,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
     /// Patch a channel.
     ///
     /// `team_id` is the channel's effective team after any requested conversion.
+    /// Returns the members that turning auto-join on added or reactivated.
     fn patch_channel(
         &self,
         channel_id: Uuid,
         user_id: String,
         team_id: Option<Uuid>,
         req: PatchChannelRequest,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Whether the user is an admin or owner of this exact team.
     fn user_is_team_admin<'a>(
@@ -420,6 +436,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         &self,
         user_id: String,
     ) -> impl Future<Output = Result<Vec<Activity>, Self::Err>> + Send;
+
+    /// When the user last viewed the channel, from their activity row:
+    /// `None` when they never did.
+    fn get_viewed_at<'a>(
+        &self,
+        user_id: MacroUserIdStr<'a>,
+        channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, Self::Err>> + Send;
 
     /// Upsert the user's activity for a channel with the given type, returning the row.
     fn set_activity(
@@ -605,6 +629,37 @@ pub trait ChannelService: Send + Sync + 'static {
             Err(ChannelMutationErr::NotFound(
                 "channel mutations are not configured".to_string(),
             ))
+        }
+    }
+
+    /// The direct message between `user_id` and `recipient_id` that
+    /// [`Self::get_or_create_dm`] by `user_id` would reuse, while `user_id` is
+    /// still in it, without creating one: `None` when they have none `user_id`
+    /// is in, or when they are the same person.
+    fn find_direct_message(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _recipient_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "find_direct_message is not configured"
+            )))
+        }
+    }
+
+    /// When `user_id` last viewed `channel_id`, whether or not they are
+    /// still in it: `None` when they never did. A viewer's own activity row
+    /// needs no access check, as the activity list needs none.
+    fn channel_viewed_at(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _channel_id: Uuid,
+    ) -> impl Future<Output = Result<Option<DateTime<Utc>>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "channel_viewed_at is not configured"
+            )))
         }
     }
 
@@ -946,6 +1001,14 @@ pub trait ChannelContactsDispatcher: Send + Sync + 'static {
     fn enqueue_contacts(
         &self,
         users: HashSet<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record that every user and every peer have interacted on Macro, so
+    /// each gains the other in their directory.
+    fn record_interactions(
+        &self,
+        users: Vec<MacroUserIdStr<'static>>,
+        peers: Vec<MacroUserIdStr<'static>>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 

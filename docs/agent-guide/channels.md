@@ -13,6 +13,13 @@ everyone. The same permission rule applies to the delete hotkey and bulk action.
 If a bulk deletion partly succeeds, confirmed deletions stay removed and only
 failed items remain in the dialog for retry.
 
+A channel you delete, create, rename, join or convert, and a DM or group chat
+you open, changes in your own channel list (the sidebar and every reader of the
+channel directory) once the write is confirmed and, except for a delete, the channel is read
+back from the primary database, before the list rereads it. Check this by renaming a
+channel and watching its row: the new name shows without a reload, and a reload
+keeps it.
+
 User mentions sent by integrations may contain only `userId`. For human user
 IDs, messages and editors resolve the current name and fall back to the email
 local part when lookup fails. Verify that these mentions remain intact when
@@ -271,10 +278,11 @@ at the same time take turns every two seconds. In a DM it is the typing row.
 A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
-Once a run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows like the session's tool rows: the label, and **Failed** or
-**Interrupted** when a step did not finish.
+Once a run closes, it folds to a `Used N tools` summary, with a caret after it
+on hover, that opens to compact rows like the session's tool rows: the label
+only. A failed or interrupted step looks like any other, and a program that
+failed or stopped without naming a step is left out of the line and the
+summary; the agent explains a failure in its reply.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
@@ -435,8 +443,8 @@ the tool's own name, without a server or workspace label, never by the harness's
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
-button that copies the whole section; a call that failed is faded, shows the
-error as its subtitle, and adds an `Error` section. Rows for a call still running
+button that copies the whole section; a call that failed shows its plain row,
+with no failure label or fade. Rows for a call still running
 show whatever has arrived so far.
 
 ## Inline image actions
@@ -650,8 +658,13 @@ so their late answer never pushes People's rows down; phones pin People rows
 above the rest of their single list.
 On a fresh load and on reopening, at desktop and phone width, no agent may show
 in a row a person then takes, and the menu must not change height as they land.
-When the people read fails (a busy cache times it out), the menu reads it again
-once by itself and shows "Couldn't load people" with Retry only if that fails too.
+The loading rows stay blank for the first half second, so an ordinary open
+shows no loading state. When the local cache has not answered within two
+seconds (a busy cache, or one changing owner across tabs), People lists the
+server's people instead and keeps them in place for that query.
+When the people read fails, the menu reads it again once by itself and shows
+"Couldn't load people" with Retry if that fails too, or if nothing has answered
+by the time the rows stop waiting. People never disappears without a message.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
@@ -1087,8 +1100,16 @@ reaction do not notify.
 
 In Home, reactions belong to the message's thread row: a top-level message uses
 its own row, and a reply uses its parent thread. Verify that an incoming reaction
-brings that row back into the inbox, displays the reaction and channel name, and
-opens the reacted-to message. Marking the row done should clear its reaction
+brings that row back into the inbox and opens the reacted-to message.
+
+Every surface lays a reaction out like Slack's Activity item: who reacted, then
+**Reacted 👍 to:** and the message, then where (`#channel`, a group chat's
+name, nothing for a DM). Check it on the inbox card (several reactions to one
+message stack as one card naming everyone and every emoji), the touch Home
+card, a desktop notification, and the push and email digest, which take it
+from `ChannelMessageReactionMetadata`'s title and body. The push and desktop
+notification cut the message at 80 characters so the channel line stays in
+view. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
 ## Marking notifications done in the channel gutter
@@ -1167,6 +1188,10 @@ toast. The same applies to a channel preview in Home; a closed channel opens nor
 In Chat, the detail uses the shared channel top bar with Messages, Attachments,
 Participants, and Calls tabs (when calls are enabled). A message target switches
 back to Messages; changing unread notifications does not restart navigation.
+With the keyboard on the conversation (the message list, after Esc leaves the
+composer), Tab, Shift+Tab and the number keys move along those tabs; in the
+composer Tab stays the composer's, and in a split beside a list (Home, New
+Home) the list's own tabs keep its keys.
 
 On desktop, switching conversations selects and mounts the cached conversation
 immediately. Messages load alongside the notification refresh. Explicit message
@@ -1332,7 +1357,9 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order.
+groups keep the source's page order. An unseen invite (being added to a channel)
+makes the channel unread, as it is in Notifications and the Chat badge, until
+Chat opens the channel and marks the invite seen.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading
@@ -1406,6 +1433,8 @@ an existing section's name and name-matching rule. Failed saves retain the draft
 A manual section's header **+** and empty **Add channels** action open an anchored searchable
 checkbox picker. The desktop picker has a full-width top search, no visible title or
 description, and a height-bounded scrollable channel list above its fixed actions.
+On a cold cache it lists the channels the directory has read so far, with
+**Loading channels…** under them, and can add any of them before the rest arrive.
 Additions retain successful writes when part of a batch fails.
 In **Edit section**, enable **Match by name** to show **Name contains** and a live
 match count with a preview list. Existing rule sections show the current pattern
@@ -1446,6 +1475,8 @@ snooze picker, rather than a separate calendar implementation. Muted sections
 offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
+While a cold cache is still filling the directory, a built-in section's mute
+control is disabled, since whether its channels are muted is not known yet.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
 the same durations under **Mute notifications**, with a muted bell for Mute and
 an ordinary bell for Unmute. Preset end dates and times align with the menu's right
@@ -1603,8 +1634,9 @@ conversation or explicitly navigating to a message must still work.
 The sidebar search action expands a field under the title. Search results replace
 the section list with compact conversation rows and preserve the selected
 channel. Closing search restores the section list and scrolls to that selection
-when available. Search merges the complete joined-channel list with authorized
-service results, deduplicates by channel ID, and retains loaded unread metadata.
+when available. Search merges the channel directory's joined channels (on a cold
+cache, those it has read so far) with authorized service results, deduplicates
+by channel ID, and retains loaded unread metadata.
 Clearing the query restores ordinary pagination.
 
 Each primary channel list and the DM panel keeps its own persisted sort:
@@ -1635,7 +1667,7 @@ Rows use the same touch highlight as Home and Email: taps retain feedback while
 opening, holds stay highlighted for the action menu, and scrolling or cancelling
 a touch clears the press highlight.
 The mobile dock Search button opens the independent Search route. Its Channels
-and People categories search the complete channel list, cached channel names,
+and People categories search the joined channels of the channel directory, cached channel names,
 and people directly; the conversation list does not constrain results. Full-text search is explicit,
 and People uses the existing channel-content scope. Closing search resets its
 session; the conversation list retains its browse pagination. See
@@ -1700,8 +1732,8 @@ mention clears when it is marked seen: opening the channel clears top-level
 mentions, and a thread mention stays counted until its thread is read. On desktop
 the count replaces the row's unread dot, including Favorites; on phones the list
 row keeps its leading dot and puts the count under the timestamp, and pinned
-favorites show the count in place of the dot. Rows from other projections, and
-the REST list, show no count. To check, have another account mention you in a
+favorites show the count in place of the dot. Rows from other projections,
+including the channel directory's, show no count. To check, have another account mention you in a
 channel you are not viewing: the row shows **1** without a reload, and opening the
 channel clears it. Then mention yourself in a thread reply, open the channel
 without the thread, and the count should stay.

@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     context::{NotificationInboxGraphqlContext, to_graphql_error},
     inputs::{
-        ClearNotificationInboxInput, MarkNotificationInboxNotificationDoneInput,
+        ClearNotificationInboxInput, MAX_INBOX_ROWS, MarkNotificationInboxNotificationDoneInput,
         MarkNotificationInboxRowsDoneInput, MarkNotificationInboxRowsSeenInput,
         UndoNotificationInboxClearInput, UndoNotificationInboxRowsDoneInput, parse_clear_id,
     },
@@ -247,9 +247,10 @@ impl<E: SoupEntityEdges> NotificationInboxMutationRoot<E> {
                 Vec::new()
             }
             None => {
-                let receipt = DoneReceipt::decode(&input.undo_token).map_err(|_| {
-                    async_graphql::Error::new("invalid notification inbox undo token")
-                })?;
+                let receipt = DoneReceipt::decode_at_most(&input.undo_token, MAX_INBOX_ROWS)
+                    .map_err(|_| {
+                        async_graphql::Error::new("invalid notification inbox undo token")
+                    })?;
                 context
                     .service
                     .undo_done(viewer, scope, receipt)

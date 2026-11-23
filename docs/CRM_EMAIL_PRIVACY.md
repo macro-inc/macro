@@ -604,6 +604,8 @@ and cleanup behavior.
 
 A deferred job goes back to the queue as a new message, after a jittered delay
 that doubles from one second up to a minute, and keeps its delivery budget. A
+job refused one of its team's four population slots is never held waiting for
+one: it goes back after 10 to 15 minutes, since the team is paused or busy. A
 policy history page (up to 100 contacts) is deferred whole: its cursor has not
 moved, so the retry scans every contact of the page again, and its writes are
 idempotent. Lock-wait contention already takes this path. Changed evidence adds

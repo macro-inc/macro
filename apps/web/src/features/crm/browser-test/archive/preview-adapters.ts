@@ -26,6 +26,9 @@ import { companyContactsPage } from '../company-contacts-page';
 export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
 export const analytics = { track() {} };
 export async function invalidateCachedCrmContacts() {}
+export async function fetchCrmContacts() {
+  return { contacts: [], nextCursor: null };
+}
 // This fixture verifies REST/UI integration; normalized-cache fencing has separate exchange tests.
 export const prepareCrmVisibilityWrite = () => ({
   isCurrent: () => true,
@@ -103,9 +106,12 @@ let contacts: CrmContactResponse[] = ['Example person', 'Second person'].map(
       : [
           `person${index + 1}@${domain}`,
           ...(params.has('several') && index === 0
-            ? [`person1@${PERSONAL_DOMAIN}`, 'person1.alt@example.org'].filter(
-                (email) => email !== `person1@${domain}`
-              )
+            ? [
+                `person1@${PERSONAL_DOMAIN}`,
+                params.has('long')
+                  ? 'person1.with.a.much.longer.mailbox.name@example.org'
+                  : 'person1.alt@example.org',
+              ].filter((email) => email !== `person1@${domain}`)
             : []),
         ];
     const full = identity(

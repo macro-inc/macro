@@ -36,7 +36,7 @@ describe('MacroToolCall failures', () => {
           id: 'call-1',
           label: 'ReadCalendarEvent',
           status: 'failed',
-          muted: true,
+          unsuccessful: true,
           stopped: false,
           trailing: 'Failed',
         }}
@@ -70,7 +70,7 @@ describe('MacroToolCall unfinished calls', () => {
           id: 'call-1',
           label: 'ReadCalendarEvent',
           status: 'running',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}
@@ -91,7 +91,7 @@ describe('MacroToolCall unfinished calls', () => {
           id: 'call-1',
           label: 'ReadCalendarEvent',
           status: 'completed',
-          muted: false,
+          unsuccessful: false,
           stopped: true,
           trailing: 'Stopped',
         }}
@@ -118,7 +118,7 @@ describe('MacroToolCall unfinished calls', () => {
           id: 'call-1',
           label: 'WebSearch',
           status: 'running',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}
@@ -141,7 +141,7 @@ describe('MacroToolCall unfinished calls', () => {
           id: 'call-1',
           label: 'ReadCalendarEvent',
           status: 'running',
-          muted: false,
+          unsuccessful: false,
           stopped: false,
           trailing: undefined,
         }}

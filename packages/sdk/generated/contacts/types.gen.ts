@@ -15,6 +15,13 @@ export type AddContactRequest = {
 };
 
 /**
+ * One list in a user's directory. A person is in the directory when they are
+ * in at least one of the owner's lists. The key (`as_ref`, parsed back with
+ * `FromStr`, and the same in serde) is what storage and clients see.
+ */
+export type ContactList = 'teammates' | 'interacted' | 'invited' | 'gmail' | 'outlook';
+
+/**
  * Response body for GET /contacts.
  */
 export type GetContactsResponse = {
@@ -25,11 +32,29 @@ export type GetContactsResponse = {
 };
 
 /**
+ * Response body for GET /contacts/lists/{list}/members.
+ */
+export type ListMembersResponse = {
+    /**
+     * The members' user IDs (`macro|<email>`), in ID order. Never the viewer.
+     */
+    members: Array<string>;
+    /**
+     * Pass back as `cursor` for the next page. Only its absence means the
+     * list is exhausted: a page may be short, or even empty, and still have one.
+     */
+    nextCursor?: string | null;
+};
+
+/**
  * Response body for GET /contacts/search.
  */
 export type SearchPeopleResponse = {
     /**
-     * Matches ranked teammates first, then prefix matches, then by name or email.
+     * Matches ranked by group, then prefix matches, then by name or email.
+     * Teammates come first. For a viewer on the list-aware directory,
+     * `interacted` and `invited` people come next, then `gmail` and
+     * `outlook` contacts.
      */
     people: Array<SearchedPerson>;
 };
@@ -46,6 +71,12 @@ export type SearchedPerson = {
      * Whether the person is on the viewer's current team.
      */
     isTeammate: boolean;
+    /**
+     * The keys of the viewer's contact lists the person is in (`teammates`,
+     * `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+     * for the viewer and for a contact only the legacy directory knows.
+     */
+    lists: Array<string>;
     /**
      * Resolved name, as the contact directory shows it; null when unknown.
      */
@@ -96,6 +127,41 @@ export type AddContactResponses = {
 };
 
 export type AddContactResponse = AddContactResponses[keyof AddContactResponses];
+
+export type ListContactListMembersData = {
+    body?: never;
+    path: {
+        /**
+         * The list's key.
+         */
+        list: ContactList;
+    };
+    query?: {
+        /**
+         * Opaque `nextCursor` from the previous page of the same list.
+         */
+        cursor?: string;
+        /**
+         * Page size: default 100; zero or over 500 is rejected.
+         */
+        limit?: number;
+    };
+    url: '/contacts/lists/{list}/members';
+};
+
+export type ListContactListMembersErrors = {
+    400: string;
+    401: string;
+    500: string;
+};
+
+export type ListContactListMembersError = ListContactListMembersErrors[keyof ListContactListMembersErrors];
+
+export type ListContactListMembersResponses = {
+    200: ListMembersResponse;
+};
+
+export type ListContactListMembersResponse = ListContactListMembersResponses[keyof ListContactListMembersResponses];
 
 export type SearchPeopleData = {
     body?: never;

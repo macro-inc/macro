@@ -94,6 +94,9 @@ export const Entity = {
 export const isTaskEntity = (entity: { type: string }) =>
   entity.type === 'task';
 
+export const isCrmCompanyEntity = (entity: { type: string }) =>
+  entity.type === 'crm_company';
+
 Object.assign(window, {
   emailPickerFixture: {
     holdNext() {

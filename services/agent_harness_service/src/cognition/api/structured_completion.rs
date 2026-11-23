@@ -190,7 +190,7 @@ pub async fn structured_completion(
     let toolset = service_tools(
         &request.toolset,
         ctx.all_tools.clone(),
-        &ctx.mcp_selector,
+        &ctx.connectors,
         &user_id,
     )
     .await;

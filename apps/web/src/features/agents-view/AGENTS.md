@@ -39,7 +39,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Partition desktop rows once: Waiting on you first, flagged Open PRs second, Conversations last; share filters and sort, and fill paging from unpinned Conversations.
 - Keep archive code/date cells pointer-transparent except their actual controls; show an empty archive only after pagination is exhausted, with loading feedback while pages can still supply matches.
 - Render desktop row ages in the interface locale as pointer-transparent hover/focus overlays using the row's hover or active surface; never let the age change title truncation or appear on phone rows.
-- Use the shared soup touch highlight and full-width square phone rows; clear it on drawer open/close and cancellation, and keep button press fills off the title-only hit target.
+- Give rows the shared touch press (`data-press-surface`, `components/app/mobile/rowPress.ts`) and keep phone rows full-width and square; a long press that opens the row's action drawer clears the press (`touchHandler`). Keep button press fills off the title-only hit target.
 - Compose menus from shared Dropdown content, groups, items, labels, and indicators without row spacing overrides; separate model-menu groups with labels and spacing, never divider lines, and keep phone choices on MobileDrawer parts.
 - Keep All models as a desktop submenu and a pushed phone page; derive both catalogs from non-Suggested IDs, including search, and omit empty provider groups. Reuse catalog search focus ownership on desktop; let ArrowDown/ArrowUp enter filtered models and ArrowLeft return to the parent menu.
 - Use shared grouped Tabs for Agents modes and preserve Home's original track tabs and below-composer settings drawer; keep the Auto gate and host mode state unchanged.
@@ -48,6 +48,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Push phone subpages into split history and derive their restored state without navigating again; let nested agent editors consume Back before leaving their list.
 - Suppress the mobile navigation dock only in active session hosts with an empty `FloatRegion` contribution; retain header/gesture Back and the shared accessory host's safe-area padding, and restore navigation on list and management pages.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
+- An agent picked from the new-conversation composer's @ menu (Agents page, Home and the phone composer, which all mount `NewChatPage`) becomes the selected agent through `rosterAgentForMention` and the picker's own `selectAgent`; never add a second selection path.
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.
 - Keep phone file inputs and overlay owners mounted on blur; add-menu, model, and repository sheets hold the composer expanded.
 - Keep the phone list composer's unfocused 46px pill vertically centered with no Send control; hide controls without unmounting their file or overlay owners.
@@ -58,6 +59,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 From `apps/web`:
 
 - `bun run test --project app src/features/agents-view`
+- New-conversation composer in a browser, backend-free (real `NewChatPage` and @ menu, mocked catalogs): `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/path/to/chrome bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`. Mention chips render empty there; the started-prompt log shows the mention markup.
 - `bun run test --project app src/lib/i18n`
 - `bun run type-check`
 

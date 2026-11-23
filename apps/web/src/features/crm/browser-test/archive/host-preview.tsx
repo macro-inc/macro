@@ -10,3 +10,6 @@ export const blockAcceptedFileExtensionSet = new Set();
 export const fileTypeToBlockName = () => 'unknown';
 export const isBlockAlias = () => false;
 export const itemToBlockName = () => 'unknown';
+export const blockNameToDefaultFile = () => 'Untitled';
+export const itemToSafeName = (item: { name?: string }) =>
+  item.name || 'Untitled';
