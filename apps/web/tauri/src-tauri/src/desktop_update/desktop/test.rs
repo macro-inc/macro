@@ -82,3 +82,29 @@ async fn older_releases_are_not_downloaded() {
     result.unwrap();
     assert_eq!(status, Status::Idle);
 }
+
+#[test]
+fn releases_for_a_newer_os_are_unsupported() {
+    let target = tauri_plugin_updater::target().unwrap();
+    let feed = |entry: serde_json::Value| serde_json::json!({ "platforms": { target.clone(): entry, "other-arch": {} } });
+    let minimum = feed(serde_json::json!({ "minimumSystemVersion": "13.0" }));
+    assert_eq!(
+        unsupported_minimum(&minimum, Some([12, 7, 6])),
+        Some("13.0".into())
+    );
+    assert_eq!(unsupported_minimum(&minimum, Some([13, 0, 0])), None);
+    assert_eq!(unsupported_minimum(&minimum, Some([26, 1, 0])), None);
+    assert_eq!(unsupported_minimum(&minimum, None), None);
+    assert_eq!(
+        unsupported_minimum(&feed(serde_json::json!({})), Some([6, 12, 0])),
+        None
+    );
+
+    for minimum in ["13.x", "13.0.0.1", ""] {
+        let feed = feed(serde_json::json!({ "minimumSystemVersion": minimum }));
+        assert_eq!(
+            unsupported_minimum(&feed, Some([26, 1, 0])),
+            Some(minimum.into())
+        );
+    }
+}

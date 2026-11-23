@@ -127,6 +127,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = [
   "NSDictionary",
   "NSEnumerator",
   "NSError",
+  "NSProcessInfo",
   "NSString",
   "NSValue",
 ] }
