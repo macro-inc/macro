@@ -424,7 +424,7 @@ export function ChannelInput(props: ChannelInputProps) {
     },
     // Pointer users keep typing; on touch, focus would raise the keyboard.
     onFinish: () => {
-      if (!isTouchDevice()) lexicalEditor().focus();
+      if (!isTouchDevice()) focusEditor();
     },
   });
   const voiceMemo: VoiceMemoController = {
@@ -812,8 +812,10 @@ export function ChannelInput(props: ChannelInputProps) {
         <Input.Layout
           ref={setLayout}
           oneLineInput={oneLineInput()}
+          // The opaque panel covers the composer. Not `invisible`: the editor
+          // shell transitions all properties, visibility included, so it
+          // would stay unfocusable for a frame after the panel closes.
           inert={recordingActive()}
-          classList={{ invisible: recordingActive() }}
         >
           <Show when={features().attachments}>
             <Input.DropOverlay />
