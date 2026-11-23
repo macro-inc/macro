@@ -369,3 +369,40 @@ mod fanout {
         );
     }
 }
+
+/// A gateway whose send finishes only once the timeline update is published.
+struct GatewayAwaitingPublish(std::sync::Arc<tokio::sync::Notify>);
+impl MessageRealtime for GatewayAwaitingPublish {
+    async fn subscribers(&self, _: &MessageParent) -> Result<HashSet<String>, rootcause::Report> {
+        Ok(HashSet::new())
+    }
+    async fn send(&self, _: &MessageEvent, _: HashSet<String>) -> Result<(), rootcause::Report> {
+        self.0.notified().await;
+        Ok(())
+    }
+}
+
+/// Signals each publish.
+struct SignalsPublish(std::sync::Arc<tokio::sync::Notify>);
+impl ChannelTimelineUpdatePublisher for SignalsPublish {
+    fn publish(&self, _: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report> {
+        self.0.notify_one();
+        Ok(())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_update_is_published_while_the_gateway_send_is_pending() {
+    let published = std::sync::Arc::new(tokio::sync::Notify::new());
+    let realtime = ChannelTimelineRealtime::new(
+        GatewayAwaitingPublish(std::sync::Arc::clone(&published)),
+        Changes::default(),
+        SignalsPublish(published),
+    );
+    let event = posted(MessageParent::Channel(CHANNEL), Some(7), ROOT, None);
+    let send = realtime.send(&event, users(&["macro|a@example.com"]));
+    tokio::time::timeout(std::time::Duration::from_secs(5), send)
+        .await
+        .expect("publishing waited for the gateway send")
+        .unwrap();
+}

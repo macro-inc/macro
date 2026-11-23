@@ -90,4 +90,4 @@ initiative = { path = "../initiative", default-features = false, features = ["po
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_uuid = { path = "../macro_uuid" }
 models_permissions = { path = "../models_permissions" }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "test-util", "time"] }
