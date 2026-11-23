@@ -79,6 +79,7 @@ function bundleStartupAttributes(startup: BundleStartup | null | undefined) {
     native_bundle_startup_read_error: startup?.readError ?? undefined,
     native_bundle_startup_dirs_found: startup?.bundleDirsFound,
     native_bundle_startup_dirs_removed: startup?.bundleDirsRemoved,
+    native_bundle_startup_check_ms: startup?.savedBundleCheckMs ?? undefined,
   };
 }
 
