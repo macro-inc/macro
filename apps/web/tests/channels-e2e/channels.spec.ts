@@ -283,37 +283,19 @@ test('CHN-08 a deleted channel leaves its owner’s Favorites too', async ({
   ada,
   people,
 }) => {
-  // Known defect on main, on some machines in every run and on others in
-  // few: the deleted channel leaves "All channels" but its row stays under
-  // Favorites, opening "Conversation unavailable", until the page is reloaded.
   const channel = await ada.createChannel({ members: [people.ben] });
   await ada.postAll(channel.id, ['a message']);
   await new ChannelView(page, channel.id).open();
   await chooseChannelAction(page, 'Favorite');
   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
 
-  // Known defect on main, in some runs: the channel's menu, opened just
-  // after the favorite, closes by itself before an entry can be chosen, and
-  // has to be opened again.
   const confirm = page.getByRole('dialog', { name: 'Delete item?' });
-  const entry = channelAction(page, 'Delete');
-  await failsSometimes(async () => {
-    await page.getByRole('button', { name: 'Channel actions' }).click();
-    await entry.click({ timeout: 5_000 });
-    await expect(confirm).toBeVisible({ timeout: 5_000 });
-  });
-  if (!(await confirm.isVisible())) {
-    if (!(await entry.isVisible())) {
-      await page.getByRole('button', { name: 'Channel actions' }).click();
-    }
-    await entry.click();
-  }
+  await page.getByRole('button', { name: 'Channel actions' }).click();
+  await channelAction(page, 'Delete').click();
   await confirm.getByRole('button', { name: 'Delete item' }).click();
 
   await expect(sidebarRow(page, channel.id)).toHaveCount(0);
-  await failsSometimes(async () => {
-    await expect(favoriteRow(page, channel.id)).toHaveCount(0);
-  });
+  await expect(favoriteRow(page, channel.id)).toHaveCount(0);
 });
 
 // If this fails, any member can delete a channel that is not theirs.
@@ -463,10 +445,8 @@ test('CHN-15 a channel deleted elsewhere closes on its owner’s open page', asy
 
   await deleteChannel('ada', channel.id);
 
-  await failsSometimes(async () => {
-    await expect(view.composer).toHaveCount(0);
-    await expect(page.getByText('soon gone')).toHaveCount(0);
-  });
+  await expect(view.composer).toHaveCount(0);
+  await expect(page.getByText('soon gone')).toHaveCount(0);
   await page.reload();
   await expect(view.composer).toHaveCount(0);
   await expect(page.getByText('soon gone')).toHaveCount(0);
