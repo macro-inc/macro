@@ -18,16 +18,21 @@ and each task's Time logged total. Served over REST by
 
 ## Scope
 
-- Owns: `time_entry`, `time_timer`, the `macro.time_entries` events, and the
-  only writes of the Time logged system property (`0x16`).
+- Owns: `time_entry`, `time_timer`, the `macro.time_entries` events, the
+  `time_logged` activity mapping (`domain/activity.rs`), the
+  `time_tracking_changed` gateway hint, and the only writes of the Time logged
+  system property (`0x16`).
 - Not here: the property's storage → `crates/system_properties`
   (`time_logged`); the guard refusing other writes of it → `crates/properties`.
 
 ## Boundaries
 
-- Depends on: `entity_access` (receipts), `system_properties` (feature
-  `outbound`), `feature_flags`, `macro_event_broker`, `macro_event_topics`.
-- Used by: `services/document_storage_service`.
+- Depends on: `entity_access` (receipts), `activity` (models only),
+  `system_properties`, `feature_flags` and `connection_gateway_client` (feature
+  `outbound`), `macro_event_broker`, `macro_event_topics`.
+- Used by: `services/document_storage_service` (the router, and the activity
+  consumer's `TimeEntryMacroEvent` arm), `crates/soup_realtime` (the events,
+  mapped to a patch on the task).
 
 ## Checks
 
@@ -47,8 +52,19 @@ and each task's Time logged total. Served over REST by
 - Writes need `enable-time-tracking` for the caller (`outbound/rollout.rs`);
   a failed flag load is off. `document_storage_service` picks
   `LocalTimeTracking` (always on) for the local environment only.
-- Events carry the task's new total and never the note. Nothing consumes the
-  topic yet.
+- Events carry the task's new total and never the note. Two grouped consumers
+  read the topic, both at `InitialOffset::Latest`: `soup_realtime` refreshes
+  the task's row on every event, and DSS's activity consumer records one
+  `time_logged` activity per `time_entry.logged` (edits and deletes record
+  none). A consumer subscribed before the topic exists in an environment gets
+  a receive error for it and keeps reading its other topics; it picks the
+  topic up when it appears.
+- Every committed write also sends `time_tracking_changed`
+  (`{ timer, taskId }`) to all of the person's open sessions through the
+  gateway: `timer` when their timer started, stopped or was discarded,
+  `taskId` for the task whose entries changed. It is a hint to read again,
+  spawned on the event broker's shutdown tracker so the response never waits;
+  replays and refusals send nothing.
 
 ## Related
 
