@@ -2552,52 +2552,64 @@ fn load_projection_states(
     connection: &Db,
     keys: &[PredicateRecordKey],
 ) -> Result<Vec<Option<ProjectionState>>, TursoStorageError> {
-    let documents = load_index_documents(connection, keys)?;
     if keys.is_empty() {
         return Ok(Vec::new());
     }
+    // One read of every requested document, complete or not; facts are then
+    // loaded for the complete ones only.
     let placeholders = sql_placeholders(keys.len());
     let rows = driver::query(
         connection,
         &format!(
-            "SELECT record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
+            "SELECT id, record_key, profile, partition, state FROM index_documents WHERE record_key IN ({placeholders})"
         ),
         keys.iter().map(|key| text(key.as_str())).collect(),
     )?;
-    let mut states = keys
-        .iter()
-        .cloned()
-        .zip(documents)
-        .map(|(key, document)| (key, document.map(ProjectionState::Complete)))
-        .collect::<HashMap<_, _>>();
+    let mut by_id = HashMap::with_capacity(rows.len());
+    let mut documents = HashMap::with_capacity(rows.len());
+    let mut incomplete = HashMap::new();
     for row in rows {
-        if row.len() != 4 {
+        if row.len() != 5 {
             return Err(invariant());
         }
+        let id = required_i64(&row, 0)?;
         let record_key =
-            PredicateRecordKey::new(required_text(&row, 0)?).map_err(|_| invariant())?;
-        let state = required_i64(&row, 3)?;
-        if state == 0 {
-            if states.get(&record_key).is_none_or(Option::is_none) {
-                return Err(invariant());
-            }
+            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
+        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
+        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
+        let state = required_i64(&row, 4)?;
+        if state != 0 {
+            incomplete.insert(
+                record_key.clone(),
+                ProjectionState::Incomplete {
+                    record_key,
+                    profile,
+                    partition,
+                    kind: projection_incomplete_kind(state)?,
+                },
+            );
             continue;
         }
-        let profile = Profile::new(Token::new(required_text(&row, 1)?).map_err(|_| invariant())?);
-        let partition = Token::new(required_text(&row, 2)?).map_err(|_| invariant())?;
-        states.insert(
+        by_id.insert(id, record_key.clone());
+        documents.insert(
             record_key.clone(),
-            Some(ProjectionState::Incomplete {
+            predicate_index::IndexDocument {
                 record_key,
                 profile,
                 partition,
-                kind: projection_incomplete_kind(state)?,
-            }),
+                exact_facts: Vec::new(),
+                integer_facts: Vec::new(),
+                sort_facts: Vec::new(),
+            },
         );
     }
+    load_index_facts(connection, &by_id, &mut documents)?;
     Ok(keys
         .iter()
-        .map(|key| states.get(key).cloned().flatten())
+        .map(|key| match incomplete.get(key) {
+            Some(state) => Some(state.clone()),
+            None => documents.get(key).cloned().map(ProjectionState::Complete),
+        })
         .collect())
 }
 
@@ -2817,56 +2829,16 @@ fn sql_placeholders(count: usize) -> String {
         .join(", ")
 }
 
-fn load_index_documents(
+/// Fills the facts of complete index documents, keyed by their row ids.
+fn load_index_facts(
     connection: &Db,
-    keys: &[PredicateRecordKey],
-) -> Result<Vec<Option<predicate_index::IndexDocument>>, TursoStorageError> {
-    if keys.is_empty() {
-        return Ok(Vec::new());
-    }
-    let placeholders = (1..=keys.len())
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let rows = driver::query(
-        connection,
-        &format!(
-            "SELECT id, record_key, profile, partition FROM index_documents WHERE state = 0 AND record_key IN ({placeholders})"
-        ),
-        keys.iter().map(|key| text(key.as_str())).collect(),
-    )?;
-    let mut by_id = HashMap::with_capacity(rows.len());
-    let mut documents = HashMap::with_capacity(rows.len());
-    for row in rows {
-        if row.len() != 4 {
-            return Err(invariant());
-        }
-        let id = required_i64(&row, 0)?;
-        let record_key =
-            PredicateRecordKey::new(required_text(&row, 1)?).map_err(|_| invariant())?;
-        let profile = Profile::new(Token::new(required_text(&row, 2)?).map_err(|_| invariant())?);
-        let partition = Token::new(required_text(&row, 3)?).map_err(|_| invariant())?;
-        by_id.insert(id, record_key.clone());
-        documents.insert(
-            record_key.clone(),
-            predicate_index::IndexDocument {
-                record_key,
-                profile,
-                partition,
-                exact_facts: Vec::new(),
-                integer_facts: Vec::new(),
-                sort_facts: Vec::new(),
-            },
-        );
-    }
+    by_id: &HashMap<i64, PredicateRecordKey>,
+    documents: &mut HashMap<PredicateRecordKey, predicate_index::IndexDocument>,
+) -> Result<(), TursoStorageError> {
     if by_id.is_empty() {
-        return Ok(vec![None; keys.len()]);
+        return Ok(());
     }
-
-    let id_placeholders = (1..=by_id.len())
-        .map(|index| format!("?{index}"))
-        .collect::<Vec<_>>()
-        .join(", ");
+    let id_placeholders = sql_placeholders(by_id.len());
     let ids = by_id.keys().copied().collect::<Vec<_>>();
     let id_parameters = || ids.iter().copied().map(Value::from_i64).collect::<Vec<_>>();
     for row in driver::query(
@@ -2926,7 +2898,7 @@ fn load_index_documents(
         document.canonicalize();
         document.validate().map_err(|_| invariant())?;
     }
-    Ok(keys.iter().map(|key| documents.get(key).cloned()).collect())
+    Ok(())
 }
 
 fn present_predicate_records(

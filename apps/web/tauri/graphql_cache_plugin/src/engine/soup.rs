@@ -274,40 +274,32 @@ pub(super) async fn write_projections(
             .is_none_or(|bound| bound == observed),
         None => true,
     };
+    // The passes below share one normalization of the response.
+    let response = soup_filter_cache_adapter::WriteResponse::new(
+        engine.schema(),
+        query,
+        operation,
+        variables,
+        data,
+    );
     if reuse_stored_identity {
         projections.extend(
-            notification_projection_updates(
-                engine.schema(),
+            soup_filter_cache_adapter::notification_projection_updates_for(
                 engine.storage(),
-                query,
-                operation,
-                variables,
-                data,
+                &response,
             )
             .await
             .map_err(|error| error.to_string())?,
         );
     }
     projections.extend(
-        mail::projection_updates_for_write(
-            engine.schema(),
-            engine.storage(),
-            query,
-            operation,
-            variables,
-            data,
-            reuse_stored_identity,
-        )
-        .await
-        .map_err(|error| error.to_string())?,
+        mail::projection_updates_for_response(engine.storage(), &response, reuse_stored_identity)
+            .await
+            .map_err(|error| error.to_string())?,
     );
-    soup_filter_cache_adapter::properties::augment_authoritative(
-        engine.schema(),
+    soup_filter_cache_adapter::properties::augment_authoritative_response(
         engine.storage(),
-        query,
-        operation,
-        variables,
-        data,
+        &response,
         reuse_stored_identity,
         projections,
     )
