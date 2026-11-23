@@ -802,9 +802,10 @@ pub fn validate_metadata(
 /// prompts, and tool responses).
 pub fn metadata_label(source: ImportSource, metadata: &serde_json::Value) -> String {
     let field = match source {
-        ImportSource::Linear | ImportSource::Jira | ImportSource::Notion | ImportSource::Hubspot => {
-            "title"
-        }
+        ImportSource::Linear
+        | ImportSource::Jira
+        | ImportSource::Notion
+        | ImportSource::Hubspot => "title",
         ImportSource::Slack => "name",
     };
     metadata

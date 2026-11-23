@@ -76,9 +76,6 @@ pub mod crm_csv;
 /// CSV imports and exports of companies and pipelines, for agents.
 #[cfg(feature = "ports")]
 pub mod crm_transfer;
-/// Companies, contacts and deal pipelines another CRM's import writes.
-#[cfg(feature = "ports")]
-pub mod record_import;
 /// Pipeline use cases addressed by record, field name and stage label.
 #[cfg(feature = "ports")]
 pub mod pipeline_workflows;
@@ -88,6 +85,9 @@ pub mod pipelines;
 /// Company and contact chip titles, read many at a time.
 #[cfg(feature = "ports")]
 pub mod previews;
+/// Companies, contacts and deal pipelines another CRM's import writes.
+#[cfg(feature = "ports")]
+pub mod record_import;
 
 /// Pipeline outcome and per-amount currency fields.
 #[cfg(feature = "ports")]

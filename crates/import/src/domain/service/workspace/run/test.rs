@@ -887,11 +887,11 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
 }
 
 mod events;
+mod hubspot;
 mod reimport;
 /// The session events the import produces, in order.
 mod root;
 mod tracker;
-mod hubspot;
 
 mod dates;
 mod folders;

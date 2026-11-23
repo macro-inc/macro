@@ -20,25 +20,56 @@ impl CrmImportWriter for Rules {
     fn supports_currency(&self, code: &str) -> bool {
         ["USD", "EUR"].contains(&code)
     }
-    async fn company_by_domain(&self, _: &MacroUserIdStr<'static>, _: &str) -> anyhow::Result<Option<Uuid>> {
+    async fn company_by_domain(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+    ) -> anyhow::Result<Option<Uuid>> {
         unimplemented!()
     }
-    async fn create_company(&self, _: &MacroUserIdStr<'static>, _: &str, _: Option<&str>) -> anyhow::Result<Uuid> {
+    async fn create_company(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: Option<&str>,
+    ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
-    async fn contact_by_email(&self, _: &MacroUserIdStr<'static>, _: &str) -> anyhow::Result<Option<Uuid>> {
+    async fn contact_by_email(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+    ) -> anyhow::Result<Option<Uuid>> {
         unimplemented!()
     }
-    async fn create_contact(&self, _: &MacroUserIdStr<'static>, _: &NewCrmContact) -> anyhow::Result<Uuid> {
+    async fn create_contact(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &NewCrmContact,
+    ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
-    async fn create_deal_pipeline(&self, _: &MacroUserIdStr<'static>, _: &str, _: &[String]) -> anyhow::Result<Uuid> {
+    async fn create_deal_pipeline(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: &[String],
+    ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
-    async fn deal_links(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<HashMap<String, Uuid>> {
+    async fn deal_links(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+    ) -> anyhow::Result<HashMap<String, Uuid>> {
         unimplemented!()
     }
-    async fn add_deal_entry(&self, _: &MacroUserIdStr<'static>, _: Uuid, _: &NewDealEntry) -> anyhow::Result<Uuid> {
+    async fn add_deal_entry(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &NewDealEntry,
+    ) -> anyhow::Result<Uuid> {
         unimplemented!()
     }
 }
@@ -127,7 +158,9 @@ fn inventory() -> Inventory {
 fn plans_keys_titles_domains_and_stage_labels() {
     let rows = plan::rows(&inventory(), &team(), &Rules).unwrap();
     assert_eq!(
-        rows.iter().map(|row| row.foreign_id.as_str()).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|row| row.foreign_id.as_str())
+            .collect::<Vec<_>>(),
         ["7:pipeline:default", "7:company:10", "7:deal:30"]
     );
     // Repeated stage labels stay distinct options.
@@ -183,7 +216,10 @@ fn the_portal_currency_covers_deals_without_one() {
     let HubspotObject::Deal(plan) = meta(&rows[2]).object else {
         panic!("deal payload lost")
     };
-    assert_eq!((plan.amount, plan.currency.as_deref()), (Some(5.0), Some("EUR")));
+    assert_eq!(
+        (plan.amount, plan.currency.as_deref()),
+        (Some(5.0), Some("EUR"))
+    );
 }
 
 #[test]

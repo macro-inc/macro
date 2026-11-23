@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use import_hubspot::domain::{
-    Company, CompanyLink, Contact, Deal, DealPipeline, HubspotConnections, HubspotError,
-    Inventory, Owner, PipelineKey, Portal, ReadProgress, RecordId, Stage,
+    Company, CompanyLink, Contact, Deal, DealPipeline, HubspotConnections, HubspotError, Inventory,
+    Owner, PipelineKey, Portal, ReadProgress, RecordId, Stage,
 };
 
 use super::*;
@@ -122,7 +122,11 @@ fn portal(owner_email: &str) -> Inventory {
             company("13", "No domain", None),
         ],
         contacts: vec![
-            contact("20", Some("ada@acme.example"), vec![link("10", true), link("13", false)]),
+            contact(
+                "20",
+                Some("ada@acme.example"),
+                vec![link("10", true), link("13", false)],
+            ),
             contact("21", None, vec![]),
             contact("22", Some("bob@acme.example"), vec![link("10", false)]),
         ],
@@ -338,7 +342,12 @@ async fn import(
     assert_eq!(planned.status, Some(RunStatus::Ready), "{planned:?}");
     let review = present(pool, &service, owner).await;
     match service
-        .start_workspace_write(owner, ImportSource::Hubspot, review, NotionWriteChoices::default())
+        .start_workspace_write(
+            owner,
+            ImportSource::Hubspot,
+            review,
+            NotionWriteChoices::default(),
+        )
         .await
     {
         Ok(_) => {}
@@ -412,7 +421,10 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
     };
     assert_eq!(by_email("ada@acme.example").company, Some(acme));
     assert_eq!(by_email("ada@acme.example").emails, ["ada@acme.example"]);
-    let unnamed: Vec<_> = contacts.iter().filter(|(_, c)| c.emails.is_empty()).collect();
+    let unnamed: Vec<_> = contacts
+        .iter()
+        .filter(|(_, c)| c.emails.is_empty())
+        .collect();
     assert_eq!(unnamed.len(), 1);
     assert_eq!(unnamed[0].1.company, None);
     assert_eq!(unnamed[0].1.name, "Person 21");
@@ -451,7 +463,12 @@ async fn writes_a_portal_into_the_crm_and_reruns_add_nothing(pool: PgPool) {
     assert!(report.failures.is_empty(), "{:?}", report.failures);
     let hubspot = report.hubspot.unwrap();
     assert_eq!(
-        (hubspot.pipelines, hubspot.companies, hubspot.contacts, hubspot.deals),
+        (
+            hubspot.pipelines,
+            hubspot.companies,
+            hubspot.contacts,
+            hubspot.deals
+        ),
         (1, 4, 3, 3)
     );
     assert_eq!((hubspot.owners, hubspot.owners_matched), (2, 1));
@@ -551,7 +568,10 @@ async fn without_crm_access_nothing_is_planned(pool: PgPool) {
     let result = service
         .prepare_workspace_import(&owner, ImportSource::Hubspot, None, Duration::from_secs(5))
         .await;
-    assert!(matches!(result, Err(ImportError::CrmAccessRequired)), "{result:?}");
+    assert!(
+        matches!(result, Err(ImportError::CrmAccessRequired)),
+        "{result:?}"
+    );
     assert!(
         PgImportRepo::new(pool)
             .list(&owner, Some(ImportSource::Hubspot), None)

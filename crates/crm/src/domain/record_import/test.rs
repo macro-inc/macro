@@ -2,7 +2,10 @@ use super::*;
 
 #[test]
 fn company_domains_are_hosts_and_never_personal_providers() {
-    assert_eq!(company_domain("Acme.example").as_deref(), Some("acme.example"));
+    assert_eq!(
+        company_domain("Acme.example").as_deref(),
+        Some("acme.example")
+    );
     assert_eq!(
         company_domain("https://www.acme.example/about").as_deref(),
         Some("acme.example")

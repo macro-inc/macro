@@ -214,7 +214,10 @@ async fn reads_a_whole_portal() {
                 first_name: Some("Grace".into()),
                 last_name: Some("Hopper".into()),
                 email: Some("grace@acme.example".into()),
-                additional_emails: vec!["g.hopper@acme-io.example".into(), "grace.home@example.net".into()],
+                additional_emails: vec![
+                    "g.hopper@acme-io.example".into(),
+                    "grace.home@example.net".into()
+                ],
                 companies: vec![
                     CompanyLink {
                         company: id("5001"),

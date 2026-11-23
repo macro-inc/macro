@@ -97,9 +97,10 @@ where
 
 fn workspace_source(source: ImportSource) -> Result<()> {
     match source {
-        ImportSource::Notion | ImportSource::Linear | ImportSource::Jira | ImportSource::Hubspot => {
-            Ok(())
-        }
+        ImportSource::Notion
+        | ImportSource::Linear
+        | ImportSource::Jira
+        | ImportSource::Hubspot => Ok(()),
         ImportSource::Slack => Err(ImportError::NotReady(
             "Slack uses channel discovery, not workspace plans.",
         )),

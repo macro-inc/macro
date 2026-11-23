@@ -220,11 +220,21 @@ where
         viewer: &Viewer,
         id: Uuid,
         entity_type: EntityType,
-    ) -> Result<Option<(EntityAccessReceipt<ViewAccessLevel>, Uuid, entity_access::domain::models::TeamRole)>, TransferError>
-    {
+    ) -> Result<
+        Option<(
+            EntityAccessReceipt<ViewAccessLevel>,
+            Uuid,
+            entity_access::domain::models::TeamRole,
+        )>,
+        TransferError,
+    > {
         let (permission, team_id, team_role) = match self
             .access
-            .get_crm_entity_permission_with_team(Some(&viewer.user_id), &id.to_string(), entity_type)
+            .get_crm_entity_permission_with_team(
+                Some(&viewer.user_id),
+                &id.to_string(),
+                entity_type,
+            )
             .await
         {
             Ok(found) => found,
@@ -262,7 +272,10 @@ where
     ) -> Result<Uuid, TransferError> {
         let primary = emails.first().map(String::as_str);
         let company = match company {
-            Some(company) => self.permission(viewer, company, EntityType::CrmCompany).await?,
+            Some(company) => {
+                self.permission(viewer, company, EntityType::CrmCompany)
+                    .await?
+            }
             None => None,
         };
         let contact = match company {
@@ -282,9 +295,10 @@ where
                 .ok_or_else(|| {
                     TransferError::Invalid("The new contact is not visible to the user.".into())
                 })?;
-            let receipt: EntityAccessReceipt<EditAccessLevel> = receipt
-                .try_into_requirement()
-                .map_err(|_| TransferError::Invalid("The user cannot edit the new contact.".into()))?;
+            let receipt: EntityAccessReceipt<EditAccessLevel> =
+                receipt.try_into_requirement().map_err(|_| {
+                    TransferError::Invalid("The user cannot edit the new contact.".into())
+                })?;
             let receipt = CrmContactReceipt::new(receipt, team_id, team_role);
             for email in &emails[1..] {
                 match self.crm.add_contact_email(&receipt, email).await {

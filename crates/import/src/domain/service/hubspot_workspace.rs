@@ -248,7 +248,10 @@ where
                         row.user_id == user.as_ref() && row.status == ImportStatus::Imported
                     })
                     .filter_map(|row| {
-                        Some((row.foreign_id.as_str(), row.entity_id.as_deref()?.parse().ok()?))
+                        Some((
+                            row.foreign_id.as_str(),
+                            row.entity_id.as_deref()?.parse().ok()?,
+                        ))
                     })
                     .collect();
                 let todo: Vec<&ImportEntity> = rows
@@ -373,7 +376,13 @@ where
             }
         };
         self.repo
-            .mark_imported(user, row.id, &id.to_string(), entity_type(row.kind), Some(team))
+            .mark_imported(
+                user,
+                row.id,
+                &id.to_string(),
+                entity_type(row.kind),
+                Some(team),
+            )
             .await?;
         Ok(())
     }
@@ -419,24 +428,25 @@ where
                 let contact = NewCrmContact {
                     name: meta.title.clone(),
                     emails: emails.clone(),
-                    company: company
-                        .as_deref()
-                        .and_then(|key| targets.get(key))
-                        .copied(),
+                    company: company.as_deref().and_then(|key| targets.get(key)).copied(),
                 };
                 Ok((writer.create_contact(user, &contact).await?, true))
             }
             HubspotObject::Deal(deal) => {
-                let pipeline = targets.get(deal.pipeline.as_str()).copied().ok_or(
-                    ImportError::NotReady(
-                        "Its pipeline has not been imported. Plan again to retry this deal.",
-                    ),
-                )?;
-                let company = targets.get(deal.company.as_str()).copied().ok_or(
-                    ImportError::NotReady(
-                        "Its company has not been imported. Plan again to retry this deal.",
-                    ),
-                )?;
+                let pipeline =
+                    targets
+                        .get(deal.pipeline.as_str())
+                        .copied()
+                        .ok_or(ImportError::NotReady(
+                            "Its pipeline has not been imported. Plan again to retry this deal.",
+                        ))?;
+                let company =
+                    targets
+                        .get(deal.company.as_str())
+                        .copied()
+                        .ok_or(ImportError::NotReady(
+                            "Its company has not been imported. Plan again to retry this deal.",
+                        ))?;
                 let known = match links.entry(pipeline) {
                     std::collections::hash_map::Entry::Occupied(known) => known.into_mut(),
                     std::collections::hash_map::Entry::Vacant(slot) => {

@@ -1327,4 +1327,3 @@ pub trait CrmImportWriter: Send + Sync + 'static {
         deal: &NewDealEntry,
     ) -> anyhow::Result<Uuid>;
 }
-

@@ -71,9 +71,7 @@ fn company_of<'a>(
 
 /// The host of a website URL, as a domain candidate.
 fn website_host(website: &str) -> Option<&str> {
-    let rest = website
-        .split_once("://")
-        .map_or(website, |(_, rest)| rest);
+    let rest = website.split_once("://").map_or(website, |(_, rest)| rest);
     let host = rest.split(['/', '?', '#']).next()?;
     let host = host.rsplit_once('@').map_or(host, |(_, host)| host);
     let host = host.split(':').next()?;
@@ -97,7 +95,12 @@ fn plan_item(decision: NotionDecision, reason: Option<&str>) -> NotionPlanItem {
     }
 }
 
-fn row(kind: ImportKind, foreign_id: String, parent: Option<String>, meta: HubspotMeta) -> Result<PlanRow> {
+fn row(
+    kind: ImportKind,
+    foreign_id: String,
+    parent: Option<String>,
+    meta: HubspotMeta,
+) -> Result<PlanRow> {
     Ok(PlanRow {
         kind,
         foreign_id,
@@ -170,7 +173,10 @@ pub(in crate::domain::service) fn rows(
             }
             by_id.insert(
                 stage.id.as_str(),
-                (unique.clone(), stage_outcome(stage.closed, stage.probability)),
+                (
+                    unique.clone(),
+                    stage_outcome(stage.closed, stage.probability),
+                ),
             );
             labels.push(unique);
         }
@@ -274,7 +280,15 @@ pub(in crate::domain::service) fn rows(
     }
 
     for deal in &inventory.deals {
-        rows.push(deal_row(inventory, deal, &stages_of, &planned, crm, &member_of, &mut named_owners)?);
+        rows.push(deal_row(
+            inventory,
+            deal,
+            &stages_of,
+            &planned,
+            crm,
+            &member_of,
+            &mut named_owners,
+        )?);
     }
 
     let summary = PlanSummary {
@@ -345,13 +359,17 @@ fn deal_row<'a>(
                 .get(deal.stage.as_ref()?.as_str())
                 .cloned()
         })
-        .map_or((None, DealOutcome::Open), |(label, outcome)| (Some(label), outcome));
+        .map_or((None, DealOutcome::Open), |(label, outcome)| {
+            (Some(label), outcome)
+        });
     let currency = deal
         .currency
         .clone()
         .or_else(|| inventory.portal.currency.clone())
         .map(|code| code.to_uppercase());
-    let supported = currency.as_deref().is_some_and(|code| crm.supports_currency(code));
+    let supported = currency
+        .as_deref()
+        .is_some_and(|code| crm.supports_currency(code));
     if deal.amount.is_some() && !supported {
         losses.push(HubspotLoss::UnsupportedCurrency);
     }
@@ -360,11 +378,17 @@ fn deal_row<'a>(
     let decision = match (&pipeline_key, &company_key) {
         (None, _) => {
             losses.push(HubspotLoss::DealWithoutPipeline);
-            (NotionDecision::Skip, Some("Its pipeline is archived or missing."))
+            (
+                NotionDecision::Skip,
+                Some("Its pipeline is archived or missing."),
+            )
         }
         (_, None) => {
             losses.push(HubspotLoss::DealWithoutCompany);
-            (NotionDecision::Skip, Some("It has no company, and Macro pipelines track companies."))
+            (
+                NotionDecision::Skip,
+                Some("It has no company, and Macro pipelines track companies."),
+            )
         }
         _ => (NotionDecision::Copy, None),
     };

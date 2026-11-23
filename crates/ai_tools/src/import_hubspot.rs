@@ -19,7 +19,11 @@ use crate::tool_context::{
 
 /// [`CrmImportWriter`] over the team CRM.
 pub struct HubspotCrmWriter {
-    records: CrmRecordImports<crate::tool_context::ToolCrmService, ToolEntityAccessService, ToolPipelineWorkflows>,
+    records: CrmRecordImports<
+        crate::tool_context::ToolCrmService,
+        ToolEntityAccessService,
+        ToolPipelineWorkflows,
+    >,
     /// The team roster owners are matched against.
     roster: Arc<ToolEntityCreator>,
     actor: BotId,
@@ -145,7 +149,10 @@ impl CrmImportWriter for HubspotCrmWriter {
         user: &MacroUserIdStr<'static>,
         pipeline: Uuid,
     ) -> anyhow::Result<std::collections::HashMap<String, Uuid>> {
-        Ok(self.records.deal_links(&self.viewer(user), pipeline).await?)
+        Ok(self
+            .records
+            .deal_links(&self.viewer(user), pipeline)
+            .await?)
     }
 
     async fn add_deal_entry(
