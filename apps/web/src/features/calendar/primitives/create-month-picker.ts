@@ -1,4 +1,4 @@
-import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
+import { parseLocalDate } from '@core/util/local-date';
 import { type Accessor, createEffect, on } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
@@ -27,12 +27,6 @@ export function createMonthPicker(options: {
     focusedYear: initial.getFullYear(),
     dateText: '',
     invalidDate: false,
-  });
-  const results = useDateSearch({
-    query: () => state.dateText,
-    baseDate: today,
-    showTimeInResults: false,
-    maxItems: 1,
   });
   createEffect(
     on(
@@ -83,12 +77,12 @@ export function createMonthPicker(options: {
       focusedMonth: today.getMonth(),
     });
   const submitDate = () => {
-    const result = state.dateText.trim() ? results()[0] : undefined;
-    if (!result) {
+    const date = parseLocalDate(state.dateText);
+    if (!date) {
       setState('invalidDate', true);
       return;
     }
-    options.onGoToDate?.(result.date);
+    options.onGoToDate?.(date);
   };
   return {
     state,

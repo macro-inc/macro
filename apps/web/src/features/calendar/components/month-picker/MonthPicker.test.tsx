@@ -164,14 +164,13 @@ it('focuses Go to date when requested and keeps invalid input open', async () =>
     );
   });
   fireEvent.click(screen.getByRole('button', { name: 'Choose month' }));
-  const input = screen.getByRole<HTMLInputElement>('textbox', {
-    name: 'Go to date',
-  });
+  const input = screen.getByLabelText<HTMLInputElement>('Go to date');
+  expect(input.type).toBe('date');
   await waitFor(() => expect(document.activeElement).toBe(input));
   fireEvent.input(input, { target: { value: 'not a date' } });
   fireEvent.keyDown(input, { key: 'Enter' });
   expect(input.getAttribute('aria-invalid')).toBe('true');
-  expect(input.value).toBe('not a date');
+  expect(input.value).toBe('');
 });
 
 it('closes from Go to date even while the year grid is open', async () => {
@@ -192,7 +191,7 @@ it('closes from Go to date even while the year grid is open', async () => {
   const trigger = screen.getByRole('button', { name: 'Choose month' });
   fireEvent.click(trigger);
   fireEvent.click(screen.getByRole('button', { name: 'Choose year' }));
-  const input = screen.getByRole('textbox', { name: 'Go to date' });
+  const input = screen.getByLabelText('Go to date');
   input.focus();
   fireEvent.keyDown(input, { key: 'Escape' });
   await waitFor(() => expect(document.activeElement).toBe(trigger));
@@ -277,9 +276,7 @@ it('keeps Tab focus inside the popover including its footer', async () => {
     screen.getByRole('button', { name: 'Today' })
   );
   await user.tab();
-  expect(document.activeElement).toBe(
-    screen.getByRole('textbox', { name: 'Go to date' })
-  );
+  expect(document.activeElement).toBe(screen.getByLabelText('Go to date'));
   await user.tab();
   expect(document.activeElement).toBe(
     screen.getByRole('button', { name: 'Choose year' })

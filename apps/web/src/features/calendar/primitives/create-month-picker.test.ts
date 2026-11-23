@@ -58,7 +58,7 @@ describe('month picker session', () => {
       dispose();
     });
   });
-  it('retains invalid search text and submits the first valid natural date', () => {
+  it('rejects incomplete or impossible dates and submits a valid local native date', () => {
     createRoot((dispose) => {
       const onGoToDate = vi.fn();
       const picker = createMonthPicker({
@@ -71,10 +71,14 @@ describe('month picker session', () => {
       picker.submitDate();
       expect(picker.state.invalidDate).toBe(true);
       expect(picker.state.dateText).toBe('not a date');
-      picker.setDateText('March 12 2031');
+      picker.setDateText('2031-02-29');
+      picker.submitDate();
+      expect(picker.state.invalidDate).toBe(true);
+      expect(onGoToDate).not.toHaveBeenCalled();
+      picker.setDateText('2032-02-29');
       picker.submitDate();
       expect(picker.state.invalidDate).toBe(false);
-      expect(onGoToDate).toHaveBeenCalledWith(new Date(2031, 2, 12));
+      expect(onGoToDate).toHaveBeenCalledWith(new Date(2032, 1, 29));
       dispose();
     });
   });

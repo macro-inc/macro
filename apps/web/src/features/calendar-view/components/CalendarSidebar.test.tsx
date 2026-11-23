@@ -193,15 +193,14 @@ describe('CalendarMiniCalendar', () => {
     ).toContain('March 2026');
     expect(gotoDate).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Choose month' }));
-    await user.type(
-      screen.getByRole('textbox', { name: 'Go to date' }),
-      'June 11 2031{Enter}'
-    );
+    const dateInput = screen.getByLabelText('Go to date');
+    fireEvent.input(dateInput, { target: { value: '2031-06-11' } });
+    fireEvent.keyDown(dateInput, { key: 'Enter' });
     expect(
       screen.getByRole('button', { name: 'Choose month' }).textContent
     ).toContain('June 2031');
     expect(gotoDate).not.toHaveBeenCalled();
-    expect(screen.queryByRole('textbox', { name: 'Go to date' })).toBeNull();
+    expect(screen.queryByLabelText('Go to date')).toBeNull();
   });
   it.each([
     {
