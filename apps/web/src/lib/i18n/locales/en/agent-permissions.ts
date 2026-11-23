@@ -108,6 +108,7 @@ export default {
   useSamePermissionsAs: 'Use same permissions as',
   setAgent: 'Set agent',
   scopePersonal: 'Personal',
+  scopeTeam: 'Team · {{team}}',
   scopeTeamOnly: 'Team',
   teamDefault: 'Team default',
   sourceDeletedBadge: 'Deleted',

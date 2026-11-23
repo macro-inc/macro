@@ -55,8 +55,7 @@ changes.
   and for following another agent's permissions `.../source`, `.../detach`,
   `/agent-tool-permissions/sources`, `/agent-tool-permissions/policies/{id}`
   and a team's default at `/agent-tool-permissions/teams/{id}`;
-  a following view carries `source` and `inherited`, which this page doesn't
-  show yet).
+  a following view carries `source` and `inherited`).
 
 ## Gotchas
 

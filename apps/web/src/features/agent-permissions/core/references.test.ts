@@ -112,8 +112,23 @@ describe('defaultCandidate', () => {
     );
   });
 
-  it('preselects nothing for a team agent until a team default is listed', () => {
+  it('preselects the team default for a team agent when listed', () => {
     expect(defaultCandidate(CANDIDATES, 'Team')).toBeUndefined();
+    expect(
+      defaultCandidate(
+        [
+          ...CANDIDATES,
+          {
+            policyId: 'policy-team',
+            kind: 'team',
+            team: { id: 'team-1', name: 'Acme' },
+            scope: { kind: 'team', team_id: 'team-1', team_name: 'Acme' },
+            current: false,
+          },
+        ],
+        'Team'
+      )?.policyId
+    ).toBe('policy-team');
   });
 });
 
