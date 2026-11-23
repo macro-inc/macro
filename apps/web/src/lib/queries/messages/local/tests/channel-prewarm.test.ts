@@ -234,7 +234,20 @@ describe('loadPrewarmChannelIds', () => {
       .mockResolvedValueOnce(['u1', 'u2'])
       .mockResolvedValueOnce(['u2', 'r1']);
 
-    expect(await loadPrewarmChannelIds(fetchIds)).toEqual(['u1', 'u2', 'r1']);
+    let runs = 0;
+    const span = {
+      run<T>(operation: () => T): T {
+        runs += 1;
+        return operation();
+      },
+    };
+    expect(await loadPrewarmChannelIds(span, fetchIds)).toEqual([
+      'u1',
+      'u2',
+      'r1',
+    ]);
+    // Each list request runs in the pass's span, after an await.
+    expect(runs).toBe(2);
     expect(fetchIds.mock.calls.map(([list]) => list.params)).toEqual([
       { limit: 40, sort_method: 'updated_at' },
       { limit: 20, sort_method: 'viewed_at' },

@@ -1,9 +1,11 @@
 import type {
   CacheRevision,
   ChannelTimelineCommitArgs,
+  ChannelTimelineCommitCacheResult,
 } from '@graphql-cache/index';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  announceEvicted,
   channelResetMark,
   holdAgainstDeletes,
   unchangedSince,
@@ -39,7 +41,7 @@ function syncHost(initial: bigint | null) {
     async channelTimelineCommit(
       args: ChannelTimelineCommitArgs,
       generation: string
-    ) {
+    ): Promise<ChannelTimelineCommitCacheResult> {
       host.commits.push(args);
       host.generations.push(generation);
       if (args.reset) host.seq = null;
@@ -361,6 +363,53 @@ describe('createChannelSyncRuntime', () => {
     await settle();
     runtime.onFrame(frame(8), true);
     await settle();
+
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID },
+      { channelId: CHANNEL_ID },
+    ]);
+  });
+
+  it('tries the sync row again when the device does not write it', async () => {
+    const { host, runtime } = setup(null);
+    const commit = host.channelTimelineCommit;
+    let refusals = 1;
+    host.channelTimelineCommit = async (args, generation) => {
+      if (refusals > 0) {
+        refusals -= 1;
+        host.commits.push(args);
+        return { kind: 'unsupported' as const };
+      }
+      return commit(args, generation);
+    };
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => host.commits.length === 1);
+    await settle();
+
+    runtime.onFrame(frame(7), true);
+    await waitFor(() => host.commits.length === 2);
+    await settle();
+    runtime.onFrame(frame(8), true);
+    await settle();
+
+    expect(host.commits).toEqual([
+      { channelId: CHANNEL_ID },
+      { channelId: CHANNEL_ID },
+    ]);
+  });
+
+  it('gives a channel evicted in another tab a sync row again', async () => {
+    const { host, runtime } = setup(null);
+    runtime.onFrame(frame(6), true);
+    await waitFor(() => host.commits.length === 1);
+    await settle();
+
+    // Another tab's prewarm removed the row with the records.
+    announceEvicted([CHANNEL_ID]);
+    await waitFor(() => {
+      runtime.onFrame(frame(7), true);
+      return host.commits.length === 2;
+    });
 
     expect(host.commits).toEqual([
       { channelId: CHANNEL_ID },

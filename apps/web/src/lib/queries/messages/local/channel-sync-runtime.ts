@@ -1,13 +1,23 @@
 import type { CacheHost } from '@graphql-cache/index';
-import { Telemetry } from '@macro-inc/observability';
+import {
+  type Span,
+  Telemetry,
+  type TraceContext,
+} from '@macro-inc/observability';
 import type { ChannelChangesQuery } from '@service-storage/graphql/generated/graphql';
+import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Exit from 'effect/Exit';
 import * as Fiber from 'effect/Fiber';
 import * as Scope from 'effect/Scope';
 import * as Semaphore from 'effect/Semaphore';
 import { channelEntryKeys } from './channel-map';
-import { noteChannelReset, whileNoFills } from './channel-resets';
+import {
+  noteChannelReset,
+  onEvictedElsewhere,
+  RESET_FENCE_WAIT_MS,
+  whileNoFills,
+} from './channel-resets';
 
 export type ChannelChangesPage = ChannelChangesQuery['user']['channelChanges'];
 
@@ -27,8 +37,6 @@ export const CATCH_UP_DEBOUNCE_MS = 250;
 export const CATCH_UP_JITTER_MS = 250;
 /** Frames held past a gap, waiting for the frames before them. */
 const MAX_HELD_FRAMES = 50;
-/** How long a reset waits for fills in other tabs before it runs anyway. */
-const RESET_FENCE_WAIT_MS = 30_000;
 
 export type ChannelSyncHost = Pick<
   CacheHost,
@@ -197,6 +205,17 @@ export function createChannelSyncRuntime(
     }
   };
 
+  const forget = (channelIds: readonly string[]) => {
+    for (const channelId of channelIds) {
+      const state = channels.get(channelId);
+      if (!state) continue;
+      forgetState(state);
+      if (state.views > 0) notifyChanged(channelId);
+    }
+  };
+  // Another tab's eviction removed these channels' sync rows too.
+  const stopEvictions = onEvictedElsewhere(forget);
+
   const run = <A>(effect: Effect.Effect<A, unknown>): Promise<A> =>
     Effect.runPromise(effect);
 
@@ -248,9 +267,11 @@ export function createChannelSyncRuntime(
   ) {
     if (state.sweepable) return;
     yield* commit(channelId, {}, generation).pipe(
-      Effect.tap(() =>
+      Effect.tap((committed) =>
         Effect.sync(() => {
-          state.sweepable = true;
+          // Only a row the device wrote: an unsupported or refused commit
+          // leaves the channel to the next frame.
+          if (committed.kind === 'committed') state.sweepable = true;
         })
       ),
       Effect.ignore
@@ -297,15 +318,42 @@ export function createChannelSyncRuntime(
     return applied;
   });
 
-  const catchUp = Effect.fn('channel.catch_up')(function* (
+  /**
+   * Catches a channel up in a `channel.catch_up` span of its own, a child of
+   * `trace` when the catch-up was asked for in one: the runtime's Effect
+   * spans reach no exporter, and its requests run in fibers that carry no
+   * Telemetry context.
+   */
+  const catchUp = (
+    channelId: string,
+    reason: 'gap' | 'reconnect' | 'open',
+    trace: TraceContext | undefined
+  ) =>
+    Effect.acquireUseRelease(
+      Effect.sync(() => {
+        const open = () => Telemetry.span('channel.catch_up');
+        return trace ? trace.run(open) : open();
+      }),
+      (span) => catchUpIn(span, channelId, reason),
+      (span, exit) =>
+        Effect.sync(() => {
+          if (Exit.isSuccess(exit))
+            span.setAttr('catch_up.outcome', exit.value);
+          else if (Cause.hasInterruptsOnly(exit.cause))
+            span.setAttr('catch_up.outcome', 'interrupted');
+          else span.error(Cause.squash(exit.cause));
+          span.end();
+        })
+    );
+
+  const catchUpIn = Effect.fn('channel.catch_up')(function* (
+    span: Span,
     channelId: string,
     reason: 'gap' | 'reconnect' | 'open'
   ) {
     const state = stateOf(channelId);
-    yield* Effect.annotateCurrentSpan({
-      'channel.id': channelId,
-      'catch_up.reason': reason,
-    });
+    span.setAttr('channel.id', channelId);
+    span.setAttr('catch_up.reason', reason);
     const epoch = socketEpoch;
     const generation = deps.generation();
     const from = yield* learnSeq(channelId, state);
@@ -317,7 +365,7 @@ export function createChannelSyncRuntime(
     let changes = 0;
     for (let page = 0; page < MAX_CHANGE_PAGES; page += 1) {
       const delta = yield* Effect.tryPromise(() =>
-        deps.fetchChanges(channelId, after.toString())
+        span.run(() => deps.fetchChanges(channelId, after.toString()))
       );
       if (delta.resetRequired) break;
       changes +=
@@ -357,10 +405,8 @@ export function createChannelSyncRuntime(
         if (state.repairFrom === repair) state.repairFrom = undefined;
         yield* applyHeld(channelId, state);
         if (epoch === socketEpoch && isConnected) state.current = true;
-        yield* Effect.annotateCurrentSpan({
-          'catch_up.pages': page + 1,
-          'catch_up.changes': changes,
-        });
+        span.setAttr('catch_up.pages', page + 1);
+        span.setAttr('catch_up.changes', changes);
         return changes > 0 || (state.seq ?? from) !== from
           ? ('applied' as const)
           : ('current' as const);
@@ -390,7 +436,8 @@ export function createChannelSyncRuntime(
 
   const lockedCatchUp = (
     channelId: string,
-    reason: 'gap' | 'reconnect' | 'open'
+    reason: 'gap' | 'reconnect' | 'open',
+    trace?: TraceContext
   ) => {
     const state = stateOf(channelId);
     return state.lock
@@ -398,7 +445,7 @@ export function createChannelSyncRuntime(
         Effect.suspend(() =>
           state.current && isConnected
             ? Effect.succeed('current' as ChannelCatchUpOutcome)
-            : catchUp(channelId, reason)
+            : catchUp(channelId, reason, trace)
         )
       )
       .pipe(
@@ -581,7 +628,8 @@ export function createChannelSyncRuntime(
     },
     ensureCurrent(channelId) {
       if (disposed) return Promise.resolve('skipped');
-      return run(lockedCatchUp(channelId, 'open'));
+      // Taken before any await: the catch-up's span is a child of the open.
+      return run(lockedCatchUp(channelId, 'open', Telemetry.captureContext()));
     },
     onChanged(channelId, listener) {
       let set = listeners.get(channelId);
@@ -596,19 +644,13 @@ export function createChannelSyncRuntime(
       };
     },
     notifyChanged,
-    forget(channelIds) {
-      for (const channelId of channelIds) {
-        const state = channels.get(channelId);
-        if (!state) continue;
-        forgetState(state);
-        if (state.views > 0) notifyChanged(channelId);
-      }
-    },
+    forget,
     forgetAll() {
       for (const state of channels.values()) forgetState(state);
     },
     dispose() {
       disposed = true;
+      stopEvictions();
       Effect.runFork(Scope.close(scope, Exit.void));
       channels.clear();
       listeners.clear();

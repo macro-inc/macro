@@ -39,7 +39,7 @@ export function useChannelPrewarm(active: Accessor<boolean>): void {
       host,
       runtime: channelSyncRuntime(host),
       touches: channelTouches(host),
-      listChannels: () => loadPrewarmChannelIds(),
+      listChannels: (span) => loadPrewarmChannelIds(span),
       idle: quiet.idle,
       online: () => onlineManager.isOnline(),
     });

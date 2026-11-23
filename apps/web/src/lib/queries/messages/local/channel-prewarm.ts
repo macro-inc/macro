@@ -19,7 +19,11 @@ import {
   type FetchChannelServerPage,
   loadChannelPage,
 } from './channel-pages';
-import { noteChannelsEvicted, whileNoFills } from './channel-resets';
+import {
+  announceEvicted,
+  noteChannelsEvicted,
+  whileNoFills,
+} from './channel-resets';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 /** Unread channels kept ready on the device, most recently active first. */
@@ -83,13 +87,15 @@ const fetchChannelListIds: FetchChannelListIds = async (list) => {
 
 /**
  * The channels to keep ready, in warming order: up to forty unread ones, most
- * recently active first, then the twenty most recently opened.
+ * recently active first, then the twenty most recently opened. Each request
+ * starts in `span`, the second after an await too.
  */
 export async function loadPrewarmChannelIds(
+  span: Pick<Span, 'run'>,
   fetchIds: FetchChannelListIds = fetchChannelListIds
 ): Promise<string[]> {
-  const unread = await fetchIds(UNREAD_CHANNELS);
-  const recent = await fetchIds(RECENT_CHANNELS);
+  const unread = await span.run(() => fetchIds(UNREAD_CHANNELS));
+  const recent = await span.run(() => fetchIds(RECENT_CHANNELS));
   return [...new Set([...unread, ...recent])];
 }
 
@@ -103,8 +109,8 @@ export interface ChannelPrewarmDeps {
     'epoch' | 'noteStoredSeq' | 'noteServerRead' | 'ensureCurrent' | 'forget'
   >;
   touches: ChannelTouches;
-  /** The channels to keep ready, in warming order. */
-  listChannels: () => Promise<string[]>;
+  /** The channels to keep ready, in warming order, asked within `span`. */
+  listChannels: (span: Span) => Promise<string[]>;
   /** Completes once the next channel may start: the person is away and the browser idle. */
   idle: Effect.Effect<void>;
   online: () => boolean;
@@ -154,7 +160,7 @@ const warmChannel = (
       if (loaded === 'unsupported') return 'unsupported' as const;
       const stored = await loaded.stored;
       // Not stored: the next pass reads it again, under the new session.
-      if (stored.kind === 'session-changed') return 'failed' as const;
+      if (stored.kind !== 'stored') return 'failed' as const;
       const seq = stored.seq;
       if (loaded.source === 'server') {
         deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
@@ -191,7 +197,7 @@ export const prewarmChannels = (
       unavailable: false,
     };
     const channelIds = yield* Effect.tryPromise({
-      try: () => deps.listChannels(),
+      try: () => deps.listChannels(span),
       catch: (error) => error,
     }).pipe(Effect.tapError((error) => Effect.sync(() => span.error(error))));
     span.setAttr('prewarm.channels', channelIds.length);
@@ -254,8 +260,10 @@ export const evictIdleChannels = (deps: {
         break;
       }
       if (result.kind === 'unsupported') break;
-      // Their sync rows are gone: a later frame must give them one again.
+      // Their sync rows are gone: a later frame must give them one again,
+      // here and in every other tab.
       deps.runtime.forget(result.channelIds);
+      announceEvicted(result.channelIds);
       evicted += result.channelIds.length;
       if (!result.hasMore) break;
     }

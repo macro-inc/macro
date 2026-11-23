@@ -1,3 +1,4 @@
+import type { CacheRevision } from '@graphql-cache/index';
 import { Telemetry } from '@macro-inc/observability';
 import { StackContextManager } from '@macro-inc/observability/web';
 import { context, trace } from '@opentelemetry/api';
@@ -8,6 +9,8 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { beforeAll, expect, it, vi } from 'vitest';
 import { type FetchChannelServerPage, loadChannelPage } from '../channel-pages';
+import { loadPrewarmChannelIds } from '../channel-prewarm';
+import { createChannelSyncRuntime } from '../channel-sync-runtime';
 import {
   type FetchChannelThreadPage,
   loadChannelThread,
@@ -128,4 +131,70 @@ it('keeps a reply send in the trace of the composer that sent it', async () => {
   const parent = spans.find((span) => span.name === 'channel.composer.send');
   const write = spans.find((span) => span.name === 'channel.write.send');
   expect(write?.parentSpanContext?.spanId).toBe(parent?.spanContext().spanId);
+});
+
+it('runs a catch-up and its requests in a span under the open that asked for it', async () => {
+  const host = {
+    channelTimeline: async () => devicePage([], { covered: true, seq: '9' }),
+    channelTimelineCommit: async () => ({
+      kind: 'committed' as const,
+      revision: '1' as CacheRevision,
+      changed: [],
+      channelSeq: '9',
+    }),
+  };
+  let requestSpan: string | undefined;
+  const runtime = createChannelSyncRuntime({
+    host,
+    fetchChanges: async () => {
+      requestSpan = trace.getActiveSpan()?.spanContext().spanId;
+      return {
+        resetRequired: false,
+        seq: '9',
+        hasMore: false,
+        removedIds: [],
+        messages: [],
+        activities: [],
+      };
+    },
+    generation: () => 'generation-1',
+    random: () => 0,
+  });
+  runtime.onConnected();
+  try {
+    await Telemetry.span('view.channel', async () => {
+      await runtime.ensureCurrent(CHANNEL_ID);
+    });
+  } finally {
+    runtime.dispose();
+  }
+
+  const spans = exporter.getFinishedSpans();
+  const view = spans.find((span) => span.name === 'view.channel');
+  const catchUp = spans.find((span) => span.name === 'channel.catch_up');
+  expect(catchUp?.parentSpanContext?.spanId).toBe(view?.spanContext().spanId);
+  expect(requestSpan).toBe(catchUp?.spanContext().spanId);
+  expect(catchUp?.attributes).toMatchObject({
+    'channel.id': CHANNEL_ID,
+    'catch_up.reason': 'open',
+    'catch_up.pages': 1,
+  });
+});
+
+it('lists the channels to prewarm in the pass span', async () => {
+  const requestSpans: (string | undefined)[] = [];
+  const fetchIds = vi.fn(async () => {
+    requestSpans.push(trace.getActiveSpan()?.spanContext().spanId);
+    return ['a'];
+  });
+  await Telemetry.span('channel.prewarm', (span) =>
+    loadPrewarmChannelIds(span, fetchIds)
+  );
+  const pass = exporter
+    .getFinishedSpans()
+    .find((span) => span.name === 'channel.prewarm');
+  expect(requestSpans).toEqual([
+    pass?.spanContext().spanId,
+    pass?.spanContext().spanId,
+  ]);
 });
