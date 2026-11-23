@@ -58,9 +58,9 @@ vi.mock('@core/component/EntityIcon', () => ({
     <span data-icon={props.targetType} />
   ),
 }));
-vi.mock('@queries/pipedream-connectors', () => ({
-  connectPipedreamApp: imports.connect,
-  usePipedreamOverlaysQuery: () => ({ isPending: true }),
+vi.mock('@queries/connectors', () => ({
+  appConnectorKey: (slug: string) => `app/${slug}`,
+  connectConnector: imports.connect,
 }));
 vi.mock('@queries/import', () => ({
   useImportQuery: () => ({
@@ -442,10 +442,7 @@ describe('import review', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
     await waitFor(() =>
-      expect(imports.connect).toHaveBeenCalledWith({
-        appSlug: 'notion',
-        serverName: 'Notion',
-      })
+      expect(imports.connect).toHaveBeenCalledWith({ key: 'app/notion' })
     );
 
     // The owner can still dismiss it, so the review does not stay pending.
@@ -457,13 +454,13 @@ describe('import review', () => {
     );
   });
 
-  it('offers to reconnect after a write lost the connection, and says when it cannot', async () => {
+  it('offers to reconnect after a write lost the connection, and says when it fails', async () => {
     imports.report = {
       ...FAILED,
       reviewId: 'review',
       errorKind: 'access_lost',
     };
-    imports.connect.mockResolvedValue('unsupported');
+    imports.connect.mockRejectedValue(new Error('refused'));
     setup({ item: { status: 'completed' } });
 
     expect(screen.getByRole('alert').textContent).toContain(
@@ -471,7 +468,7 @@ describe('import review', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
     expect(
-      await screen.findByText('Notion can’t be connected here.')
+      await screen.findByText('Notion could not be reconnected. Try again.')
     ).toBeTruthy();
   });
 
@@ -482,9 +479,7 @@ describe('import review', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect Notion' }));
     await waitFor(() => expect(imports.connect).toHaveBeenCalledTimes(1));
-    expect(
-      screen.queryByText(/could not be reconnected|can’t be connected/)
-    ).toBeNull();
+    expect(screen.queryByText(/could not be reconnected/)).toBeNull();
   });
 
   it('dismissing a failed review dismisses its run in the imports tray too', async () => {

@@ -45,9 +45,6 @@ export function ImportJobsTrayView() {
       )
       // Closed without finishing: nothing changed, nothing to say.
       .with('closed', () => undefined)
-      .with('unsupported', () =>
-        toast.failure(t('importJobs.reconnectUnsupported', { source: name }))
-      )
       .exhaustive();
   }
 

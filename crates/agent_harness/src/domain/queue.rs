@@ -37,6 +37,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use trigger_context::TriggerContext;
 
+use super::app_connections::continues_for_owner;
 use super::model::{AnnounceOrigin, HeldToolCall};
 
 #[cfg(test)]
@@ -170,13 +171,25 @@ impl From<&QueuedEntry> for QueuedControl {
 
 impl QueuedEntry {
     /// Who the turn this entry opens acts for: a system turn acts for nobody,
-    /// even when the batch names a user.
+    /// even when the batch names a user, unless it only continues the
+    /// owner's own work and was staged to act for them; then it acts as a
+    /// program does, with their access and never as their word.
     pub fn prompter_kind(&self) -> PrompterKind {
-        if matches!(&self.action, AgentAction::Prompt(prompt) if prompt.notifications.as_ref().is_some_and(|input| input.system_turn))
-        {
-            PrompterKind::System
-        } else {
-            self.prompter
+        match &self.action {
+            AgentAction::Prompt(prompt) => match prompt.notifications.as_ref() {
+                Some(input) if input.system_turn => {
+                    if self.prompter == PrompterKind::Program
+                        && self.actor.is_some()
+                        && continues_for_owner(&input.notifications)
+                    {
+                        PrompterKind::Program
+                    } else {
+                        PrompterKind::System
+                    }
+                }
+                _ => self.prompter,
+            },
+            _ => self.prompter,
         }
     }
 

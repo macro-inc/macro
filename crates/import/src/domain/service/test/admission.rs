@@ -369,25 +369,11 @@ impl ImportRepo for Repo {
     }
 }
 
-pub(in crate::domain::service) struct NoConnector;
-impl ConnectorSelect for NoConnector {
-    async fn user_toolset(&self, _: &MacroUserIdStr<'static>) -> UserMcpTools {
-        panic!("unexpected connector call")
-    }
-    async fn connector_toolset(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
-    ) -> anyhow::Result<Option<UserMcpTools>> {
-        panic!("unexpected connector call")
-    }
-    async fn connector_connected(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: mcp_select::ConnectorRef<'_>,
-    ) -> anyhow::Result<bool> {
-        panic!("unexpected connector call")
-    }
+/// Connectors for a user with no connections: these paths never read one.
+pub(in crate::domain::service) type NoConnector = connectors::Connectors;
+
+pub(in crate::domain::service) fn no_connections() -> Arc<NoConnector> {
+    Arc::new(connectors::fake::FakeConnectors::new().build())
 }
 
 #[derive(Default)]
@@ -442,7 +428,7 @@ type Service<W = NoSlackSource> = ImportServiceImpl<Repo, NoConnector, Creator, 
 fn service(admission: Arc<Admission>) -> Service {
     ImportServiceImpl::new(
         Repo::default(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Creator::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -492,7 +478,7 @@ fn notion_tools(truncated: bool) -> Arc<Tools> {
 async fn default_constructor_keeps_admission_disabled() {
     let service = ImportServiceImpl::new(
         Repo::default(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Creator::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );
@@ -597,7 +583,7 @@ async fn recording_an_import_refuses_an_entity_the_caller_cannot_see() {
     let repo = Repo::default();
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Creator {
             created: AtomicUsize::new(0),
             hidden_from_caller: true,
@@ -631,7 +617,7 @@ async fn recording_an_import_of_a_visible_entity_writes_the_row() {
     let repo = Repo::default();
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(Creator::default()),
         Arc::new(ai_usage::NoOpUsageRecorder),
     );

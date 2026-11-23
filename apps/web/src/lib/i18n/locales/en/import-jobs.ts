@@ -35,7 +35,6 @@ export default {
   viewDetails: 'View details',
   reconnected: '{{source}} is reconnected',
   reconnectedNext: 'Ask the agent to plan the import again.',
-  reconnectUnsupported: '{{source}} can’t be connected here',
   reconnectFailed: '{{source}} could not be reconnected',
   failed: 'Import failed',
   failedAccessLost: 'Failed: {{source}} access lost',

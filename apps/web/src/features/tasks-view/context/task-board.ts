@@ -31,4 +31,6 @@ export type TaskBoardData = {
   ): Promise<void>;
   definitionError: Accessor<boolean>;
   retryDefinitions(): Promise<void>;
+  /** Whether a card's due date reads as a range and edits its start too. */
+  startDatesEnabled: Accessor<boolean>;
 };

@@ -11,7 +11,7 @@ export type ImportDismissals = {
 };
 
 /** How a connect flow ended, as the app's connect flow reports it. */
-export type ReconnectOutcome = 'connected' | 'closed' | 'unsupported';
+export type ReconnectOutcome = 'connected' | 'closed';
 
 /** The user's import runs and the Slack channels being imported now. */
 export type ImportRunsSource = {

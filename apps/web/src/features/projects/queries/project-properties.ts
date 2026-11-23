@@ -17,16 +17,28 @@ export const PROJECT_PROPERTY_IDS: string[] = [
   SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
 
+/**
+ * Those properties and the Start Date, which shows only as the start of the
+ * Due Date's range, never as a pill or a default row of its own.
+ */
+const PROJECT_VALUE_IDS: string[] = [
+  SYSTEM_PROPERTY_IDS.STATUS,
+  SYSTEM_PROPERTY_IDS.PRIORITY,
+  SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  SYSTEM_PROPERTY_IDS.START_DATE,
+  SYSTEM_PROPERTY_IDS.DUE_DATE,
+];
+
 /** A project's values for those properties, in composer order. */
 export function projectProperties(properties: SoupProperty[]): Property[] {
   return properties
-    .filter((property) => PROJECT_PROPERTY_IDS.includes(property.definition.id))
+    .filter((property) => PROJECT_VALUE_IDS.includes(property.definition.id))
     .map(soupPropertyToProperty)
     .map(withProjectStatusOptions)
     .sort(
       (left, right) =>
-        PROJECT_PROPERTY_IDS.indexOf(left.propertyDefinitionId) -
-        PROJECT_PROPERTY_IDS.indexOf(right.propertyDefinitionId)
+        PROJECT_VALUE_IDS.indexOf(left.propertyDefinitionId) -
+        PROJECT_VALUE_IDS.indexOf(right.propertyDefinitionId)
     );
 }
 
