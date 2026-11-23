@@ -28,7 +28,9 @@ export function createTaskGanttQueries(options: {
 }) {
   const grouping = () => {
     const group = options.grouping();
-    return group === 'none' || group === 'date' ? undefined : group;
+    return group === 'none' || group === 'date' || group === 'start_date'
+      ? undefined
+      : group;
   };
   const tasks = createMemo(() => {
     const result = new Map<string, TaskEntityWithProperties>();
