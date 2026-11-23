@@ -7537,6 +7537,10 @@ enum GraphqlPropertyTargetEntityType {
 	"""
 	COMPANY
 	"""
+	CRM contact target.
+	"""
+	CONTACT
+	"""
 	Row of a Macro database table.
 	"""
 	DATABASE_ROW
