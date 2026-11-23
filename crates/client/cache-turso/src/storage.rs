@@ -118,6 +118,9 @@ const CREATE_SCHEMA: [&str; 29] = [
 ];
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
+const RECORD_UPSERT_PREFIX: &str = "INSERT INTO records (__typename, id, value) VALUES ";
+const RECORD_UPSERT_SUFFIX: &str =
+    " ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
 const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
 // Turso otherwise chooses the browse index's profile prefix for a direct composite-key delete.
 // Force a point lookup through the existing primary-key index, then delete by its rowid.
@@ -168,6 +171,7 @@ const QUEUE_DIAGNOSTICS_SELECT: &str = "SELECT COUNT(*), MIN(created_at_ms) FROM
 const OPTIMISTIC_INDEX_DOCUMENT_INSERT: &str = "INSERT INTO optimistic_index_documents (owner_mutation_id, record_key, profile, partition, state, incomplete_kind) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id";
 const OPTIMISTIC_INDEX_DOCUMENT_DELETE: &str =
     "DELETE FROM optimistic_index_documents WHERE record_key = ?1";
+const OPTIMISTIC_INDEX_DOCUMENT_ANY: &str = "SELECT 1 FROM optimistic_index_documents LIMIT 1";
 const OPTIMISTIC_EXACT_FACT_INSERT: &str =
     "INSERT INTO optimistic_exact_facts (document_id, attribute, value) VALUES (?1, ?2, ?3)";
 const OPTIMISTIC_INTEGER_FACT_INSERT: &str =
@@ -1199,20 +1203,20 @@ impl Storage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
-            let entries = prepare_records(entries)?;
+            let mut entries = prepare_records(entries)?;
             if entries.is_empty() {
                 return Ok(());
             }
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
+                for (index, entry) in entries.iter_mut().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut statement,
                         vec![
                             text(&entry.key.typename),
                             text(&entry.key.id),
-                            Value::from_blob(entry.value.clone()),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
                         ],
                     )?;
                     require_changed(changed, 1)?;
@@ -1229,31 +1233,18 @@ impl Storage for TursoStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
         projections: Vec<ProjectionMutation>,
     ) -> Result<(), Self::Error> {
-        self.require_healthy()?;
-        let result = (|| {
-            let entries = prepare_records(entries)?;
-            let connection = self.connection();
-            driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
-                write_derived_rows(&connection, &entries)?;
-                write_projection_mutations(&connection, projections)
-            })
-        })();
-        self.latch_result(result)
+        self.put_encoded_with_projections(|| prepare_records(entries), projections)
+    }
+
+    async fn put_records_with_projections(
+        &mut self,
+        entries: &[(EntityKey<'static>, Record)],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_encoded_with_projections(
+            || prepare_records(entries.iter().map(|(key, record)| (key, record))),
+            projections,
+        )
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
@@ -2371,12 +2362,20 @@ fn write_projection_mutations(
             .collect::<HashMap<_, _>>();
         apply_authoritative_projection_mutations(&mut states, &mutations);
         // Unchanged refreshes must not rewrite all facts while holding the lock.
+        let mut facts = PendingFacts::default();
         for (key, previous) in keys.iter().zip(previous) {
             let next = states.get(key);
             if next != previous.as_ref() {
-                write_projection_state(connection, key, previous.as_ref(), next)?;
+                write_stored_projection_state(
+                    connection,
+                    key,
+                    Stored::Loaded(previous.as_ref()),
+                    next,
+                    &mut facts,
+                )?;
             }
         }
+        facts.insert(connection)?;
         states
     };
     if !keys.is_empty() {
@@ -2393,6 +2392,13 @@ fn write_projection_mutations(
                 Ok((row.id, source))
             })
             .collect::<Result<Vec<_>, TursoStorageError>>()?;
+        // With no queued mutation there is no layer to compose and, unless an
+        // older file kept one, no shadow to delete.
+        if sources.is_empty()
+            && driver::query(connection, OPTIMISTIC_INDEX_DOCUMENT_ANY, Vec::new())?.is_empty()
+        {
+            return Ok(());
+        }
         // Index each pending contribution once per batch. A large retirement
         // page must not scan the whole queue again for each deleted key.
         let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
@@ -2452,6 +2458,35 @@ fn write_projection_state(
     previous: Option<&ProjectionState>,
     state: Option<&ProjectionState>,
 ) -> Result<(), TursoStorageError> {
+    let mut facts = PendingFacts::default();
+    let stored = previous.map_or(Stored::Unknown, |previous| Stored::Loaded(Some(previous)));
+    write_stored_projection_state(connection, record_key, stored, state, &mut facts)?;
+    facts.insert(connection)
+}
+
+/// What a transaction knows of a key's stored projection before writing it.
+#[derive(Clone, Copy)]
+enum Stored<'a> {
+    /// Not loaded: the key may have a row and facts.
+    Unknown,
+    /// Loaded in this transaction. `None`: the key has no row, so no facts.
+    Loaded(Option<&'a ProjectionState>),
+}
+
+/// Write `state` over what is stored for the key. The facts of a rewritten
+/// document go to `facts`, which the caller inserts before the transaction
+/// ends.
+fn write_stored_projection_state(
+    connection: &Db,
+    record_key: &PredicateRecordKey,
+    stored: Stored<'_>,
+    state: Option<&ProjectionState>,
+    facts: &mut PendingFacts,
+) -> Result<(), TursoStorageError> {
+    let (previous, absent) = match stored {
+        Stored::Unknown => (None, false),
+        Stored::Loaded(previous) => (previous, previous.is_none()),
+    };
     match state {
         Some(ProjectionState::Complete(document)) => {
             document.validate().map_err(|_| invariant())?;
@@ -2470,49 +2505,12 @@ fn write_projection_state(
                 &document.partition,
                 0,
             )?;
-            delete_index_facts(connection, document_id)?;
-            for fact in &document.exact_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        EXACT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_blob(fact.value.as_bytes().to_vec()),
-                        ],
-                    )?,
-                    1,
-                )?;
+            // A key with no row has no facts: deleting them dirtied nothing
+            // but cost three statements per document of a cold write.
+            if !absent {
+                delete_index_facts(connection, document_id)?;
             }
-            for fact in &document.integer_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        INTEGER_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
-            for fact in &document.sort_facts {
-                require_changed(
-                    driver::execute(
-                        connection,
-                        SORT_FACT_INSERT,
-                        vec![
-                            Value::from_i64(document_id),
-                            text(fact.attribute.as_str()),
-                            Value::from_i64(fact.value),
-                        ],
-                    )?,
-                    1,
-                )?;
-            }
+            facts.push(document_id, document);
         }
         Some(ProjectionState::Incomplete {
             profile,
@@ -2527,7 +2525,9 @@ fn write_projection_state(
                 partition,
                 projection_state_code(*kind),
             )?;
-            delete_index_facts(connection, document_id)?;
+            if !absent {
+                delete_index_facts(connection, document_id)?;
+            }
         }
         None => {
             let changed = driver::execute(
@@ -2539,6 +2539,100 @@ fn write_projection_state(
                 return Err(invariant());
             }
         }
+    }
+    Ok(())
+}
+
+/// Fact rows of fully written documents, inserted together once a write has
+/// given every document its row: a few multi-row statements in place of one
+/// statement per fact.
+#[derive(Default)]
+struct PendingFacts {
+    exact: Vec<Value>,
+    integer: Vec<Value>,
+    sort: Vec<Value>,
+}
+
+impl PendingFacts {
+    fn push(&mut self, document_id: i64, document: &predicate_index::IndexDocument) {
+        for fact in &document.exact_facts {
+            self.exact.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_blob(fact.value.as_bytes().to_vec()),
+            ]);
+        }
+        for fact in &document.integer_facts {
+            self.integer.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_i64(fact.value),
+            ]);
+        }
+        for fact in &document.sort_facts {
+            self.sort.extend([
+                Value::from_i64(document_id),
+                text(fact.attribute.as_str()),
+                Value::from_i64(fact.value),
+            ]);
+        }
+    }
+
+    fn insert(self, connection: &Db) -> Result<(), TursoStorageError> {
+        for (table, values) in [
+            ("exact_facts", self.exact),
+            ("integer_facts", self.integer),
+            ("sort_facts", self.sort),
+        ] {
+            insert_rows(
+                connection,
+                &format!("INSERT INTO {table} (document_id, attribute, value) VALUES "),
+                "",
+                3,
+                values,
+            )?;
+        }
+        Ok(())
+    }
+}
+
+/// Rows per multi-row INSERT, largest first. A batch is cut greedily into
+/// these sizes, so each table needs at most four statement texts and a batch
+/// of n rows at most n / 64 + 9 statements.
+const INSERT_BATCH_SIZES: [usize; 4] = [64, 16, 4, 1];
+
+/// The row counts `rows` rows are inserted in, largest first.
+fn insert_batches(mut rows: usize) -> impl Iterator<Item = usize> {
+    INSERT_BATCH_SIZES.into_iter().flat_map(move |size| {
+        let count = rows / size;
+        rows %= size;
+        std::iter::repeat_n(size, count)
+    })
+}
+
+/// Inserts `values`, `width` per row, with `prefix` + placeholder rows +
+/// `suffix` statements, and requires each statement to change every row it
+/// inserts.
+fn insert_rows(
+    connection: &Db,
+    prefix: &str,
+    suffix: &str,
+    width: usize,
+    values: Vec<Value>,
+) -> Result<(), TursoStorageError> {
+    if !values.len().is_multiple_of(width) {
+        return Err(invariant());
+    }
+    let row = format!("({})", vec!["?"; width].join(", "));
+    let mut values = values.into_iter();
+    for size in insert_batches(values.len() / width) {
+        let sql = format!("{prefix}{}{suffix}", vec![row.as_str(); size].join(", "));
+        let changed = driver::execute(
+            connection,
+            &sql,
+            values.by_ref().take(size * width).collect(),
+        )?;
+        require_changed(changed, i64::try_from(size).map_err(|_| invariant())?)?;
     }
     Ok(())
 }
@@ -3590,6 +3684,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
             save_search_projection_version(connection)?;
             calendar::save_projection_version(connection)?;
             page_retention::save_version(connection)?;
+            derived_sorts::save_version(connection)?;
             Ok(())
         })
         .map_err(TursoStorageError::initialization)?;
@@ -3657,6 +3752,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
     validate_queue_consistency(connection)?;
     validate_optimistic_shadow_consistency(connection)?;
     page_retention::compact_legacy_pages(connection)?;
+    derived_sorts::ensure_version(connection)?;
     ensure_search_projection_version(connection)?;
     calendar::ensure_projection_version(connection)?;
     people_sql::open(connection)?;
@@ -3746,6 +3842,7 @@ fn validate_statements(connection: &Db) -> Result<(), TursoStorageError> {
         QUEUE_DIAGNOSTICS_SELECT,
         OPTIMISTIC_INDEX_DOCUMENT_INSERT,
         OPTIMISTIC_INDEX_DOCUMENT_DELETE,
+        OPTIMISTIC_INDEX_DOCUMENT_ANY,
         OPTIMISTIC_EXACT_FACT_INSERT,
         OPTIMISTIC_INTEGER_FACT_INSERT,
         OPTIMISTIC_SORT_FACT_INSERT,
@@ -5282,18 +5379,71 @@ struct EncodedRecord {
     contact: Option<Record>,
 }
 
-fn prepare_records(
-    entries: Vec<(EntityKey<'static>, Record)>,
-) -> Result<Vec<EncodedRecord>, TursoStorageError> {
+impl TursoStorage {
+    /// Writes the records `prepare` encodes, with projection changes, in one
+    /// transaction. Encoding runs once storage is known healthy.
+    fn put_encoded_with_projections(
+        &mut self,
+        prepare: impl FnOnce() -> Result<Vec<EncodedRecord>, TursoStorageError>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), TursoStorageError> {
+        self.require_healthy()?;
+        let result = (|| {
+            let mut entries = prepare()?;
+            let connection = self.connection();
+            driver::write_transaction(&connection, || {
+                // Several records per statement: on a cold write, running one
+                // statement per record cost more than the rows it wrote.
+                let mut written = 0;
+                for size in insert_batches(entries.len()) {
+                    let mut values = Vec::with_capacity(size * 3);
+                    for entry in &mut entries[written..written + size] {
+                        values.extend([
+                            text(&entry.key.typename),
+                            text(&entry.key.id),
+                            Value::from_blob(std::mem::take(&mut entry.value)),
+                        ]);
+                    }
+                    insert_rows(
+                        &connection,
+                        RECORD_UPSERT_PREFIX,
+                        RECORD_UPSERT_SUFFIX,
+                        3,
+                        values,
+                    )?;
+                    for index in written..written + size {
+                        self.fault_after(TestFaultSite::Put, index)?;
+                    }
+                    written += size;
+                }
+                write_derived_rows(&connection, &entries)?;
+                write_projection_mutations(&connection, projections)
+            })
+        })();
+        self.latch_result(result)
+    }
+}
+
+/// Encodes records for storage. An owned batch drops each decoded record once
+/// it is encoded.
+fn prepare_records<K, R>(
+    entries: impl IntoIterator<Item = (K, R)>,
+) -> Result<Vec<EncodedRecord>, TursoStorageError>
+where
+    K: std::borrow::Borrow<EntityKey<'static>>,
+    R: std::borrow::Borrow<Record>,
+{
     entries
         .into_iter()
         .map(|(key, record)| {
-            let value = encode_record(&record);
+            let (key, record) = (key.borrow(), record.borrow());
+
+            let value = encode_record(record);
             Ok(EncodedRecord {
-                key: RecordKey::from_entity(&key)?,
-                search_documents: project_encoded_search_documents(&key, &record, &value),
+                key: RecordKey::from_entity(key)?,
+                search_documents: project_encoded_search_documents(key, record, &value),
                 value,
-                calendar_range: cache_core::calendar::project_calendar_range(&key, &record),
+                calendar_range: cache_core::calendar::project_calendar_range(key, record),
                 contact: key.as_ref().starts_with("GraphqlContact:").then(|| Record {
                     fields: record
                         .fields
@@ -5782,6 +5932,7 @@ mod bounded_selection;
 mod calendar;
 mod conjunction;
 mod contact_search;
+mod derived_sorts;
 mod integrity;
 mod migration;
 mod mutation_retry;

@@ -42,6 +42,7 @@ const EXACT_ATTRIBUTES: &[&str] = &[
     "mail-sent-message",
 ];
 const SORT_ATTRIBUTES: &[&str] = &["mail-all-ts", "mail-inbox-ts", "mail-sent-ts"];
+/// The fields of a thread update that decide which facts a patch rewrites.
 const FIELDS: &[&str] = &[
     "linkId",
     "ownerId",
@@ -56,6 +57,32 @@ const FIELDS: &[&str] = &[
     "mailDraftPreview",
     "mailSentPreview",
 ];
+
+/// Which of [`FIELDS`] an update carries, one bit each.
+struct ChangedFields(u16);
+const _: () = assert!(FIELDS.len() <= u16::BITS as usize);
+
+impl ChangedFields {
+    fn of(update: &Record) -> Self {
+        Self(
+            FIELDS
+                .iter()
+                .enumerate()
+                .filter(|(_, field)| update.fields.contains_key(**field))
+                .fold(0, |bits, (index, _)| bits | 1 << index),
+        )
+    }
+
+    /// Whether the update carries `field`, one of [`FIELDS`].
+    fn contains(&self, field: &str) -> bool {
+        debug_assert!(FIELDS.contains(&field), "{field} is not a watched field");
+        FIELDS
+            .iter()
+            .position(|watched| *watched == field)
+            .is_some_and(|index| self.0 & 1 << index != 0)
+    }
+}
+
 fn error(e: impl std::fmt::Display) -> SoupFilterCacheAdapterError {
     SoupFilterCacheAdapterError(e.to_string())
 }
@@ -187,14 +214,21 @@ fn project_with_facts(
             value: outbound,
         });
     }
-    Some(IndexDocument {
+    let mut document = IndexDocument {
         record_key: key,
         profile: vocabulary::profile(),
         partition: vocabulary::partition(),
         exact_facts: facts,
         integer_facts: times.clone(),
         sort_facts: times,
-    })
+    };
+    // The Inbox and Important views' sort keys, only on threads they can show.
+    for derivation in item_filter_index::SORT_FACT_DERIVATIONS {
+        if let Some(fact) = derivation.derive(&document) {
+            document.sort_facts.push(fact);
+        }
+    }
+    Some(document)
 }
 
 /// Compact contribution fields needed by the shared Mail projection adapter.
@@ -386,11 +420,12 @@ pub async fn projection_updates_for_response<S: DurableRead>(
             RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
         )]);
     }
+    let prefix = format!("{TYPE}:");
     let updates = response
         .updates()?
         .iter()
         .filter(|(key, record)| {
-            key.as_ref().starts_with(&format!("{TYPE}:"))
+            key.as_ref().starts_with(&prefix)
                 && FIELDS
                     .iter()
                     .any(|field| record.fields.contains_key(*field))
@@ -420,7 +455,7 @@ pub async fn projection_updates_for_response<S: DurableRead>(
             let full = FIELDS
                 .iter()
                 .all(|field| update.fields.contains_key(*field));
-            let changed = update.fields.keys().cloned().collect::<HashSet<_>>();
+            let changed = ChangedFields::of(&update);
             let mut merged = base.unwrap_or_default();
             merged.merge(update);
             let incomplete = || ProjectionMutation::MarkIncomplete {
