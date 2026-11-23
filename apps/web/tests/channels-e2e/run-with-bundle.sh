@@ -48,7 +48,7 @@ else
   commit=$(git -C "$root" rev-parse --verify "$source^{commit}")
   checkout=$cache/checkout-$commit
 fi
-settings=$(env | grep '^VITE_' | sort | sha256sum | cut -c1-12)
+settings=$({ env | grep '^VITE_' || true; } | sort | sha256sum | cut -c1-12)
 bundle=$cache/$commit-$settings
 
 if [ ! -f "$bundle/index.html" ] || [[ $commit == *-changed ]]; then
