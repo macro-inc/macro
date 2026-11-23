@@ -39,6 +39,7 @@ import settingsBilling from './en/settings-billing';
 import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
+import settingsNativeApp from './en/settings-native-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
@@ -96,6 +97,7 @@ export default {
   settingsEmail,
   runtimeSharing,
   settingsLanguage,
+  settingsNativeApp,
   settingsDownloads,
   settingsNav,
   splitMenu,

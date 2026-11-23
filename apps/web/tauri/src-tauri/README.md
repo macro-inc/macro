@@ -712,7 +712,7 @@ disabled. The download uses the updater's timeout and proxy settings. A ready up
 closing/hiding a window only installs if it actually exits the app. No network
 work is started during quit. Errors retry with backoff.
 
-The ready notification and Settings → Account offer **Restart to update**. Explicit
+The ready notification and Settings → Desktop App offer **Restart to update**. Explicit
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
 cache and excludes concurrent frontend OTA reloads. Neither update channel wipes

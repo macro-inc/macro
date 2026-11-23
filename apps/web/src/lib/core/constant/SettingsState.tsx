@@ -28,6 +28,7 @@ export type SettingsTab =
   | 'Inbox'
   | 'Shortcuts'
   | 'Downloads'
+  | 'Native App'
   | 'Agent'
   | 'Agents'
   | 'Routines'
