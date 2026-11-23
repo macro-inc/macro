@@ -264,13 +264,11 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     canonical: string;
   }>();
   let request = 0;
-  let lookingUp: string | undefined;
-  let lookUpAgain = false;
+  let applied = 0;
   let disposed = false;
   // A fallback recorded while the opening view loads joins its trace.
   const flowTrace = useFlowTrace();
-  const isCurrent = (id: string, generation: number) =>
-    !disposed && generation === request && id === threadId();
+  const isCurrent = (id: string) => !disposed && id === threadId();
 
   // While the cache cannot say whether the route is a local draft, read the
   // thread from the server.
@@ -295,45 +293,36 @@ export function createGraphqlEmailThreadQuery<TData = GraphqlEmailThreadPages>(
     setIdentity({ requested: id, canonical: id, kind: 'unknown' });
   };
 
-  // One lookup at a time per thread. A cache change during a lookup asks for
-  // one more after it instead of discarding its answer: a busy cache reports
-  // changes faster than it answers reads, so no answer would ever land.
+  // Every cache change starts a lookup, and each answer applies unless a
+  // later lookup's answer already has. A busy cache reports changes faster
+  // than it answers reads, so keeping only the newest lookup's answer would
+  // never apply one; waiting on one lookup at a time would stall behind a read
+  // the cache never answers.
   const refreshIdentity = async () => {
     const id = threadId();
-    if (lookingUp === id) {
-      lookUpAgain = true;
-      return;
-    }
     const generation = ++request;
-    lookingUp = id;
     const startedAt = performance.now();
     const deadline = setTimeout(() => {
-      if (isCurrent(id, generation)) fallBackToServer(id, 'timeout', startedAt);
+      if (isCurrent(id)) fallBackToServer(id, 'timeout', startedAt);
     }, IDENTITY_WAIT_MS);
     try {
-      do {
-        lookUpAgain = false;
-        try {
-          const result = await cachedThreadIdentity(id, untrack(identity));
-          if (!isCurrent(id, generation)) return;
-          setIdentity((previous) =>
-            previous?.requested === result.requested &&
-            previous.canonical === result.canonical &&
-            previous.kind === result.kind
-              ? previous
-              : result
-          );
-        } catch {
-          // An initially unreadable identity may still be a local draft.
-          // Preserve any known identity and policy; otherwise read from the
-          // server until the cache answers.
-          if (isCurrent(id, generation))
-            fallBackToServer(id, 'error', startedAt);
-        }
-      } while (lookUpAgain && isCurrent(id, generation));
+      const result = await cachedThreadIdentity(id, untrack(identity));
+      if (!isCurrent(id) || generation < applied) return;
+      applied = generation;
+      setIdentity((previous) =>
+        previous?.requested === result.requested &&
+        previous.canonical === result.canonical &&
+        previous.kind === result.kind
+          ? previous
+          : result
+      );
+    } catch {
+      // An initially unreadable identity may still be a local draft. Preserve
+      // any known identity and policy; otherwise read from the server until
+      // the cache answers.
+      if (isCurrent(id)) fallBackToServer(id, 'error', startedAt);
     } finally {
       clearTimeout(deadline);
-      if (generation === request) lookingUp = undefined;
     }
   };
   // The memo re-reads identity only when the id value changes, not whenever

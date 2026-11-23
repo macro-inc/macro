@@ -1010,7 +1010,7 @@ it('reads the thread from the server when the cache does not answer its identity
   }
 });
 
-it('applies an identity answer that a cache change overtook', async () => {
+it('applies identity answers that later lookups overtook, in order', async () => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   initializeClientMock.mockReset();
   executeQueryMock.mockReset();
@@ -1041,22 +1041,80 @@ it('applies an identity answer that a cache change overtook', async () => {
   try {
     await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
     // A busy cache reports changes faster than it answers the read.
-    for (let i = 0; i < 5; i++) changed();
-    expect(read).toHaveBeenCalledOnce();
+    for (let i = 0; i < 3; i++) changed();
+    expect(read).toHaveBeenCalledTimes(4);
 
     answers[0]({ revision: '1', records: [] });
     await vi.waitFor(() => expect(executeQueryMock).toHaveBeenCalledOnce());
     expect(executeQueryMock.mock.calls[0][1].requestPolicy).toBe(
       'cache-and-network'
     );
-    // The changes ask for one more read, not one each.
-    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2));
-    answers[1]({ revision: '2', records: [] });
+
+    answers[3]({
+      revision: '4',
+      records: [
+        {
+          recordKey: 'GraphqlSoupEmailThread:thread-1',
+          record: { id: 'thread-1', cacheProjection: null },
+          identity: { pending: true, mutationUuid: 'draft' },
+        },
+      ],
+    });
+    await vi.waitFor(() =>
+      expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
+        'cache-only'
+      )
+    );
+    // An older lookup answering late does not undo a newer answer.
+    const calls = executeQueryMock.mock.calls.length;
+    answers[2]({ revision: '3', records: [] });
     await vi.advanceTimersByTimeAsync(0);
-    expect(read).toHaveBeenCalledTimes(2);
-    // The lookup has ended: the next change starts a read of its own.
+    expect(executeQueryMock.mock.calls).toHaveLength(calls);
+  } finally {
+    root.dispose();
+    vi.useRealTimers();
+  }
+});
+
+it('keeps looking up an identity after a lookup the cache never answers', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+  initializeClientMock.mockReset();
+  executeQueryMock.mockReset();
+  cacheEnabledMock.mockReturnValue(true);
+  let changed = () => {};
+  const read = vi
+    .fn()
+    .mockReturnValueOnce(new Promise(() => {}))
+    .mockResolvedValue({ revision: '2', records: [] });
+  hostMock.mockReturnValue({
+    readRecordsByKeys: read,
+    onCacheChanged: (callback: () => void) => {
+      changed = callback;
+      return () => {};
+    },
+  });
+  executeQueryMock.mockImplementation(() => makeSubject().source);
+  const root = createRoot((dispose) => ({
+    dispose,
+    ...createGraphqlEmailThreadQuery(
+      () => 'thread-1',
+      () => ({ enabled: true })
+    ),
+  }));
+  try {
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
+      'network-only'
+    );
+
+    // The first read is still pending; the cache answers the next one.
     changed();
-    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() =>
+      expect(executeQueryMock.mock.calls.at(-1)?.[1].requestPolicy).toBe(
+        'cache-and-network'
+      )
+    );
+    expect(read).toHaveBeenCalledTimes(2);
   } finally {
     root.dispose();
     vi.useRealTimers();
