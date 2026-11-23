@@ -3,6 +3,7 @@ import type { Component, JSX, ParentProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatMinutes, timeTrackingHandlers } from './TimeTracking';
+import { ToolErrorContext } from './ToolRenderer';
 
 vi.mock('@core/component/ItemPreview', () => ({
   ItemPreview: (props: { id: string }) => <span>task {props.id}</span>,
@@ -90,6 +91,39 @@ describe('LogTime row', () => {
     expect(
       screen.getByText(/the task's Time logged is now 2h 15m/)
     ).toBeTruthy();
+  });
+
+  it('fails like any named tool, with its reason on request', () => {
+    const reason =
+      "Time tracking is not turned on for this person yet, so nothing was logged. Tell them time tracking isn't available to them yet; don't retry or look for the task.";
+    render(() => (
+      <ToolErrorContext.Provider value={() => ({ kind: 'failed', reason })}>
+        <Dynamic
+          component={
+            timeTrackingHandlers.LogTime.render as Component<
+              Record<string, unknown>
+            >
+          }
+          tool={{
+            name: 'LogTime',
+            data: { task_id: taskId, minutes: 30, date: '2026-11-20' },
+          }}
+          renderContext={{
+            isStreaming: false,
+            grouped: false,
+            followedBy: () => false,
+          }}
+        />
+      </ToolErrorContext.Provider>
+    ));
+
+    expect(screen.getByText('30m')).toBeTruthy();
+    expect(screen.queryByText(/total/)).toBeNull();
+    expect(screen.queryByText(reason)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+
+    expect(screen.getByText(reason)).toBeTruthy();
   });
 
   it('shows no status while the call runs', () => {
