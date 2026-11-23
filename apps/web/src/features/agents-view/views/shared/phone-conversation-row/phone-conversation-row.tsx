@@ -54,7 +54,7 @@ export function PhoneConversationRow(props: {
   return (
     <div
       data-press-surface
-      class="soup-list-entity flex h-[46px] w-full min-w-0 items-center gap-2 px-3 text-ink"
+      class="soup-list-entity flex h-[46px] w-full min-w-0 shrink-0 items-center gap-2 px-3 text-ink"
     >
       <Button
         appearance="bare"

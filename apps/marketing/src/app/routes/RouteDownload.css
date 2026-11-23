@@ -126,13 +126,6 @@
   height: 13px;
 }
 
-.downloads-page .downloads-version {
-  margin-top: 8px;
-  color: #777;
-  font-size: 12px;
-  text-align: center;
-}
-
 @media (max-width: 600px) {
   .downloads-page {
     padding: 112px 12px 76px;

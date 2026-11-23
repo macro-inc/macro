@@ -99,6 +99,7 @@ import {
   agentSetupDoneRoute,
   agentSetupRoute,
   agentSignupRoute,
+  agentsArchiveRoute,
   agentsRoute,
   agentsViewRoute,
   appRoute,
@@ -344,6 +345,11 @@ export function appRouteElements(): JSX.Element {
         />
         <Route
           definition={routinesRoute}
+          component={AgentsRouteView}
+          loading={AgentsViewSkeleton}
+        />
+        <Route
+          definition={agentsArchiveRoute}
           component={AgentsRouteView}
           loading={AgentsViewSkeleton}
         />
