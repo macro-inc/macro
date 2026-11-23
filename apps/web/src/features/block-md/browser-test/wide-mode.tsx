@@ -2,7 +2,7 @@ import '@app/index.css';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessContextProvider } from '@core/context/quickAccess/context';
 import type {
@@ -20,6 +20,7 @@ import { EntityProvider } from '@entity';
 import { createNoopLiveSyncSource } from '@macro-inc/collaboration/collab/source';
 import { markdownToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { MemoryRouter, Route } from '@solidjs/router';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -208,11 +209,13 @@ function Providers(props: ParentProps) {
             <UserContextProvider>
               <TeamContextProvider>
                 <EmailLinksContextProvider>
-                  <ChannelsContextProvider>
+                  <ChannelDirectoryProvider
+                    directory={staticChannelDirectory(() => [])}
+                  >
                     <QuickAccessContextProvider value={QUICK_ACCESS}>
                       <DragDropProvider>{props.children}</DragDropProvider>
                     </QuickAccessContextProvider>
-                  </ChannelsContextProvider>
+                  </ChannelDirectoryProvider>
                 </EmailLinksContextProvider>
               </TeamContextProvider>
             </UserContextProvider>

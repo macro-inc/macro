@@ -1,4 +1,3 @@
-import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import {
   ONBOARDING_HIDDEN_TOOLS,
   ONBOARDING_PRIORITY_TOOLS,
@@ -15,16 +14,14 @@ export function orderOnboardingTools<T extends { slug: string }>(
   const seen = new Set<string>();
   return tools
     .filter((tool) => {
-      const slug = canonicalPipedreamSlug(tool.slug);
-      if (ONBOARDING_HIDDEN_TOOLS.has(slug) || seen.has(slug)) return false;
-      seen.add(slug);
+      if (ONBOARDING_HIDDEN_TOOLS.has(tool.slug) || seen.has(tool.slug))
+        return false;
+      seen.add(tool.slug);
       return true;
     })
     .sort(
       (a, b) =>
-        (priority.get(canonicalPipedreamSlug(a.slug)) ??
-          Number.MAX_SAFE_INTEGER) -
-        (priority.get(canonicalPipedreamSlug(b.slug)) ??
-          Number.MAX_SAFE_INTEGER)
+        (priority.get(a.slug) ?? Number.MAX_SAFE_INTEGER) -
+        (priority.get(b.slug) ?? Number.MAX_SAFE_INTEGER)
     );
 }

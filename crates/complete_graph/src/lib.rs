@@ -30,8 +30,8 @@ pub use graphql_activity::{
 };
 pub use graphql_channel::{
     ChannelActivityAuthorizer, ChannelActivityMutationService, ChannelMutationRoot,
-    GraphqlChannelActivity, GraphqlChannelActivityType, NoOpChannelActivityMutationService,
-    RecordChannelActivityInput,
+    ChannelQueryContext, ChannelUserReads, GraphqlChannelActivity, GraphqlChannelActivityType,
+    GraphqlChannelUserQuery, NoOpChannelActivityMutationService, RecordChannelActivityInput,
 };
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
@@ -88,6 +88,6 @@ pub use realtime::{
 };
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,
-    SoupSchema, SoupSubscriptionRoot, build_schema, build_schema_from_arc, build_schema_from_arcs,
-    build_schema_with_service, build_schema_with_services,
+    SoupSchema, SoupSchemaService, SoupSubscriptionRoot, build_schema, build_schema_from_arc,
+    build_schema_from_arcs, build_schema_with_service, build_schema_with_services,
 };

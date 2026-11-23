@@ -1,6 +1,7 @@
 //! Canonical email facts and keyset pagination over synchronized Mail.
 use super::*;
 use crate::parsed_document::parsed_document;
+use cache_core::store::DurableRead;
 use cache_core::{
     engine::{Engine, EngineError},
     normalize::normalize,
@@ -325,7 +326,7 @@ pub enum ProjectionError<S: std::error::Error + 'static> {
 /// Compose full canonical snapshots, or bounded patches preserving completeness.
 /// Canonical preview edges are independent of the source query's view/filter.
 /// A missing v2 field cannot borrow completeness from an older projection.
-pub async fn projection_updates<S: Storage>(
+pub async fn projection_updates<S: PredicateIndexStorage>(
     schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
@@ -340,7 +341,7 @@ pub async fn projection_updates<S: Storage>(
 /// will reset cache identity. Complete incoming snapshots remain projectable;
 /// partial incoming rows remain incomplete instead of borrowing old metadata.
 /// The cache engine, not this adapter, performs the actual identity reset.
-pub async fn projection_updates_for_write<S: Storage>(
+pub async fn projection_updates_for_write<S: PredicateIndexStorage>(
     schema: &cache_core::meta::Schema,
     storage: &S,
     query: &str,
@@ -349,6 +350,18 @@ pub async fn projection_updates_for_write<S: Storage>(
     data: &Value,
     reuse_stored_identity: bool,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let response = WriteResponse::new(schema, query, operation, variables, data);
+    projection_updates_for_response(storage, &response, reuse_stored_identity).await
+}
+
+/// [`projection_updates_for_write`] over a response the other passes share.
+pub async fn projection_updates_for_response<S: DurableRead>(
+    storage: &S,
+    response: &WriteResponse<'_>,
+    reuse_stored_identity: bool,
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let (operation, variables, data) =
+        (response.operation(), response.variables(), response.data());
     // A revalidation of an absent/inaccessible thread must also revoke its
     // local membership. This includes retrying an already-committed delete,
     // whose idempotent response can no longer identify the removed thread.
@@ -373,17 +386,16 @@ pub async fn projection_updates_for_write<S: Storage>(
             RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
         )]);
     }
-    let parsed = parsed_document(query).map_err(error)?;
-    let op = parsed.operation(operation).map_err(error)?;
-    let updates = normalize(schema, op, variables, data)
-        .map_err(error)?
-        .into_iter()
+    let updates = response
+        .updates()?
+        .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with(&format!("{TYPE}:"))
                 && FIELDS
                     .iter()
                     .any(|field| record.fields.contains_key(*field))
         })
+        .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
     if updates.is_empty() {
         return Ok(vec![]);
@@ -394,7 +406,7 @@ pub async fn projection_updates_for_write<S: Storage>(
         .collect::<Vec<_>>();
     let bases = if reuse_stored_identity {
         storage
-            .get_batch(&keys)
+            .read_records(&keys)
             .await
             .map_err(ProjectionError::Storage)?
     } else {
@@ -949,10 +961,16 @@ async fn read_page<S: PredicateIndexStorage>(
 ) -> Result<Window, PageError<S::Error>> {
     // Unknown rows never become fabricated matches; the UI labels this cached mail.
     let result = engine.reconcile_predicate_index(query, &[]).await?;
-    let mut keys = result.value.keys;
-    let more = keys.len() > usize::from(limit);
-    keys.truncate(usize::from(limit));
-    let values = sort_values(engine, query, &keys).await?;
+    // With no baseline every key is a candidate, carrying the sort value of
+    // its effective projection.
+    let more = result.value.keys.len() > usize::from(limit);
+    let (keys, values) = result
+        .value
+        .keys
+        .into_iter()
+        .zip(result.value.sort_values)
+        .take(usize::from(limit))
+        .unzip();
     Ok(Window {
         keys,
         values,
@@ -1004,44 +1022,4 @@ async fn read_through<S: PredicateIndexStorage>(
         window.more = page.more;
         window.optimistic |= page.optimistic;
     }
-}
-
-/// View-correct sort values of `keys`, from their effective projections.
-async fn sort_values<S: PredicateIndexStorage>(
-    engine: &mut Engine<S>,
-    query: &ValidatedIndexQuery,
-    keys: &[RecordKey],
-) -> Result<Vec<i64>, PageError<S::Error>> {
-    let bases = engine
-        .storage()
-        .load_projection_states(keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let shadows = engine
-        .storage()
-        .load_optimistic_projections(keys)
-        .await
-        .map_err(EngineError::Storage)?;
-    let values = bases
-        .iter()
-        .zip(&shadows)
-        .map(|(base, shadow)| {
-            let document = match shadow.as_ref().map(|shadow| &shadow.state) {
-                Some(predicate_index::OptimisticProjectionState::Complete(doc)) => Some(doc),
-                Some(_) => None,
-                None => match base {
-                    Some(ProjectionState::Complete(doc)) => Some(doc),
-                    _ => None,
-                },
-            }
-            .ok_or_else(|| error("page has no complete sort evidence"))?;
-            document
-                .sort_facts
-                .iter()
-                .find(|fact| fact.attribute == query.as_query().sort_attribute)
-                .map(|fact| fact.value)
-                .ok_or_else(|| error("missing page sort"))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    Ok(values)
 }
