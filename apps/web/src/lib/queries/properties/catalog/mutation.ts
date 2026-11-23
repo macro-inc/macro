@@ -44,6 +44,8 @@ export function createCatalogMutation<TVars, TData>(
   callbacks?: CatalogMutationCallbacks<TData, TVars>
 ): CatalogMutation<TData, TVars> {
   const [pending, setPending] = createSignal(0);
+  // Failures of the write itself, which onError has already been given.
+  const reported = new WeakSet<Error>();
   let disposed = false;
   if (getOwner()) onCleanup(() => (disposed = true));
   // Runs one callback on each layer in order. Disposal is checked before the
@@ -72,6 +74,7 @@ export function createCatalogMutation<TVars, TData>(
         data = await run(vars);
       } catch (cause) {
         const error = asError(cause);
+        reported.add(error);
         await eachLayer(call, parent, (layer) => layer.onError?.(error, vars));
         await eachLayer(call, parent, (layer) =>
           layer.onSettled?.(undefined, error, vars)
@@ -88,15 +91,16 @@ export function createCatalogMutation<TVars, TData>(
     }
   };
 
-  // A failure is reported through onError, so mutate drops it.
+  // mutate drops a failed write, which onError reported; a callback that
+  // fails still reaches fireAndForget's report.
   const executeReported = async (
     vars: TVars,
     call?: CatalogMutationCallbacks<TData, TVars>
   ): Promise<void> => {
     try {
       await execute(vars, call);
-    } catch {
-      // Reported through onError.
+    } catch (error: unknown) {
+      if (!(error instanceof Error && reported.has(error))) throw error;
     }
   };
 
