@@ -56,6 +56,8 @@ export function TableNavigation(props: {
   onDelete?: (tableId: string) => void;
   /** What else deleting a table removes, e.g. the forms writing to it. */
   deleteConsequence?: (tableId: string) => string | undefined;
+  /** The tab list, for a host that binds keys to the tables. */
+  tabsRef?: (element: HTMLElement) => void;
 }) {
   const [deleting, setDeleting] = createSignal<{ id: string; name: string }>();
   const [open, setOpen] = createSignal(false);
@@ -229,7 +231,13 @@ export function TableNavigation(props: {
               activationMode="manual"
               class="min-w-0"
             >
-              <TabSelector.List ref={setTabRail} aria-label="Database tables">
+              <TabSelector.List
+                ref={(element: HTMLDivElement) => {
+                  setTabRail(element);
+                  props.tabsRef?.(element);
+                }}
+                aria-label="Database tables"
+              >
                 <Key
                   each={props.tables.filter(
                     (table) => table.id !== createdTableId()

@@ -1,5 +1,6 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Key } from '@solid-primitives/keyed';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Scroll } from '@ui/components/Scroll';
 import {
   type Accessor,
@@ -11,6 +12,7 @@ import {
   type JSX,
   on,
   onCleanup,
+  onMount,
   Show,
   useContext,
 } from 'solid-js';
@@ -306,6 +308,90 @@ function Columns(props: {
   const columnsById = createMemo(
     () => new Map(board.columns().map((column) => [column.id, column]))
   );
+  // Lanes are 21rem, so their width follows the root font size. Every lane is
+  // as wide as the last one measured, which places unvisited lanes and sizes
+  // the scroll range correctly before they mount.
+  let columnWidth = 336;
+  // The viewport width as of the last layout, before a resize in this one.
+  let viewportWidth = 0;
+  function setColumnWidth(width: number, shown: number) {
+    if (width <= 0 || width === columnWidth) return;
+    // Every lane moves but the viewport keeps its pixel offset. Keep the lane
+    // at the left edge there, or the end in view when scrolled to it, and the
+    // control holding focus in view. Read items before `measure()`, which
+    // rewrites them in place.
+    const offset = virtualizer.scrollOffset ?? 0;
+    const visible = viewport?.clientWidth ?? 0;
+    // At the end as the viewport was: it may narrow in the same layout.
+    const atEnd =
+      offset > 0 &&
+      offset + (shown || visible) >= virtualizer.getTotalSize() - 1;
+    const item = virtualizer.getVirtualItemForOffset(offset);
+    const lane = item
+      ? item.index + (offset - item.start) / (item.size + 16)
+      : 0;
+    const end = Math.max(
+      0,
+      16 + virtualizer.options.count * (width + 16) - visible
+    );
+    let target = offset <= 16 ? offset : 16 + lane * (width + 16);
+    if (atEnd) target = end;
+    // The lanes have their new width but not yet their new place, so the
+    // focused control's offset inside its lane is already the new one. Keep
+    // it in view, from its left edge when it is wider than the viewport, when
+    // its lane was in view (overscan keeps lanes out of view mounted too) in
+    // the viewport as it was, which may narrow in the same layout.
+    const active = document.activeElement;
+    const slot = viewport?.contains(active)
+      ? active?.closest<HTMLElement>('[data-kanban-board-column]')
+      : null;
+    const slotKey = slot?.getAttribute('data-kanban-board-column');
+    const focused = virtualizer
+      .getVirtualItems()
+      .find((candidate) => String(candidate.key) === slotKey);
+    if (
+      active &&
+      slot &&
+      focused &&
+      focused.start < offset + (shown || visible) &&
+      focused.end > offset
+    ) {
+      const box = active.getBoundingClientRect();
+      const left =
+        16 +
+        focused.index * (width + 16) +
+        box.left -
+        slot.getBoundingClientRect().left;
+      target = Math.min(left, Math.max(left + box.width - visible, target));
+    }
+    target = Math.max(0, Math.min(end, target));
+    // Lanes render from the new offset, so the ones in view stay mounted and
+    // keep focus and unsaved input.
+    virtualizer.scrollOffset = target;
+    columnWidth = width;
+    virtualizer.measure();
+    if (!viewport) return;
+    viewport.scrollLeft = target;
+    // The virtualizer's scroll-end timer, still pending after a scroll just
+    // before, would put back the offset that scroll read and unmount the lanes
+    // in view. A scroll event now makes it read this one, also when the
+    // browser already clamped the offset to the target while re-measuring.
+    viewport.dispatchEvent(new Event('scroll'));
+  }
+  // One observer for the viewport and every lane slot. Not
+  // `createResizeObserver`: it rounds widths and drops a change of less than a
+  // pixel, which would leave every lane at a width none of them has.
+  const sizes = makeResizeObserver((entries) => {
+    const shown = viewportWidth;
+    for (const entry of entries) {
+      if (entry.target === viewport) viewportWidth = entry.contentRect.width;
+    }
+    for (const entry of entries) {
+      if (entry.target !== viewport) {
+        setColumnWidth(entry.contentRect.width, shown);
+      }
+    }
+  });
   const virtualizer = createKanbanVirtualizer({
     direction: 'horizontal',
     keys: () => {
@@ -320,7 +406,7 @@ function Columns(props: {
       return keys;
     },
     getScrollElement: () => viewport,
-    estimateSize: 336,
+    estimateSize: () => columnWidth,
     gap: 16,
     overscan: 1,
     paddingStart: 16,
@@ -349,7 +435,12 @@ function Columns(props: {
       scrollRef={(element) => {
         releaseViewport?.();
         viewport = element;
-        releaseViewport = board.attachViewport(element);
+        const release = board.attachViewport(element);
+        sizes.observe(element);
+        releaseViewport = () => {
+          sizes.unobserve(element);
+          release();
+        };
       }}
       onWheel={wheel.onWheel}
       class="ph-no-capture min-h-0 min-w-0 w-full flex-1"
@@ -370,14 +461,18 @@ function Columns(props: {
         <Key each={virtualItems()} by="key">
           {(item) => {
             const key = item().key;
+            let slot!: HTMLDivElement;
+            onMount(() => {
+              sizes.observe(slot);
+              onCleanup(() => sizes.unobserve(slot));
+            });
+
             return (
               <div
-                class="absolute top-0 h-full"
+                ref={slot}
+                class="absolute top-0 h-full w-84"
                 data-kanban-board-column={key}
-                style={{
-                  left: `${item().start}px`,
-                  width: `${item().size}px`,
-                }}
+                style={{ left: `${item().start}px` }}
               >
                 <Show when={key === END_COLUMN_KEY}>{props.endColumn?.()}</Show>
                 <Show when={columnsById().get(String(key))}>
@@ -425,7 +520,7 @@ function Column(props: {
         canReorder={props.canReorder}
         onKeyDown={props.onKeyDown}
         aria-labelledby={headerId}
-        class="max-h-full min-h-0 w-84"
+        class="max-h-full min-h-0 w-full"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
       >

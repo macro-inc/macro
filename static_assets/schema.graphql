@@ -4511,13 +4511,19 @@ input GraphqlDateLiteral @oneOf {
 }
 
 """
-A date-time property value.
+A date property value.
 """
 type GraphqlDatePropertyValue {
 	"""
-	The stored date-time formatted as RFC 3339.
+	The stored instant formatted as RFC 3339.
 	"""
 	value: String!
+	"""
+	Whether its time of day was set. Without one the value stands for a
+	whole day, shown as the day its instant falls on in the viewer's time
+	zone.
+	"""
+	hasTime: Boolean!
 }
 
 """
@@ -8182,9 +8188,14 @@ input GraphqlSetPropertyValue @oneOf {
 	"""
 	boolean: Boolean
 	"""
-	An RFC 3339 date-time value.
+	An RFC 3339 date-time value standing for a whole day, shown as the day
+	it falls on in the viewer's time zone.
 	"""
 	date: String
+	"""
+	An RFC 3339 date-time whose time of day was set.
+	"""
+	dateWithTime: String
 	"""
 	A span from a start date-time to an end one.
 	"""
@@ -11049,6 +11060,27 @@ type GraphqlUser {
 		Email addresses normalized by the user-ID parser; empty input returns no contacts.
 		"""
 		emails: [String!]!
+	): [GraphqlContact!]!
+	"""
+	The viewer's contacts whom the text names, across the whole directory:
+	their whole name, or for one word their first name, equals it, or each
+	typed word starts a word of the name they are shown with (their Macro
+	profile name, else the viewer's address-book label, else their
+	address's local part). Ranked by contact list (interacted or invited,
+	then teammates, then connected inboxes, then anyone else; teammates,
+	then anyone else, for a directory without lists), then exact names,
+	then user ID. There is no continuation. An address or user ID names
+	nobody: look it up with `contactsByEmails` or `contactsByUserIds`.
+	"""
+	contactsNamedBy(
+		"""
+		Typed text, at most 512 UTF-8 bytes and 32 words.
+		"""
+		search: String!,
+		"""
+		Maximum contacts, at least 1; defaults to 20 and is capped at 50.
+		"""
+		limit: Int
 	): [GraphqlContact!]!
 	"""
 	Read one page of the viewer's personal contacts with resolved names.
