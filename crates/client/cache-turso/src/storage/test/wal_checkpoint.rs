@@ -418,3 +418,54 @@ fn an_owned_checkpoint_keeps_the_page_cache() {
     assert_holds(&storage, last);
     assert_eq!(io.reads(), copied, "the checkpoint dropped cached pages");
 }
+
+#[test]
+fn a_close_right_after_an_owned_copy_still_empties_the_file() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-close-after-copy.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    let last = write_until(&mut storage, 0, driver::OWNED_CHECKPOINT_DUE_FRAMES);
+    assert!(storage.checkpoint_if_due().unwrap().ran);
+    assert_eq!(wal_frames(&storage), 0);
+    assert_eq!(
+        storage.try_close().unwrap(),
+        TursoStorageCloseOutcome::Healthy
+    );
+    // The restart left the old frames in the file; an open would read them
+    // back unless the close emptied it.
+    let reopened = open(&io, "owned-close-after-copy.db", false);
+    let frames = wal_frames(&reopened);
+    assert!(frames < 10, "the close left {frames} frames to read back");
+    assert_holds(&reopened, last);
+}
+
+#[test]
+fn a_read_never_retries_a_failed_cap_copy() {
+    let io = FaultIo::new();
+    let mut storage = open_owned(&io, "owned-cap-read.db");
+    block_on(storage.put_batch(vec![(key(SENTINEL), sentinel())])).unwrap();
+    // Writes up to the cap; the copy after the one that reaches it fails to
+    // sync the database file.
+    let last = write_until(
+        &mut storage,
+        0,
+        driver::CHECKPOINT_CAP_FRAMES - 4 * RECORDS as u64,
+    );
+    io.arm(IoFault::DatabaseSync);
+    let mut next = last;
+    while !io.is_clear() {
+        next += 1;
+        write(&mut storage, next).unwrap();
+        assert!(next < last + 20, "the cap copy never ran");
+    }
+    let frames = wal_frames(&storage);
+    assert!(frames >= driver::CHECKPOINT_CAP_FRAMES, "{frames} frames");
+
+    let reads = io.reads();
+    assert_holds(&storage, next);
+    assert_eq!(wal_frames(&storage), frames, "a read copied the WAL");
+    assert!(io.reads() - reads < 100, "a read copied the WAL");
+    // The next write copies it.
+    write(&mut storage, AFTER).unwrap();
+    assert_eq!(wal_frames(&storage), 0);
+}

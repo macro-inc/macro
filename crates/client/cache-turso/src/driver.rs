@@ -5,8 +5,8 @@ use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use turso_core::{
-    CheckpointMode, Connection, IOExt, LimboError, Row, Statement, StepResult, Value,
-    WalAutoActions,
+    CheckpointMode, CheckpointResult, Connection, IOExt, LimboError, Row, Statement, StepResult,
+    Value, WalAutoActions,
 };
 
 pub(crate) type Values = Vec<Value>;
@@ -163,28 +163,6 @@ impl Db {
     /// one that copied frames and then failed to sync would let the next
     /// write overwrite frames the file may not hold.
     pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
-        self.copy_wal(frames, CheckpointMode::Restart)
-    }
-
-    /// On a connection that [owns its checkpoints](Self::owns_checkpoints),
-    /// copies the WAL and empties its file, as Turso does on close when its
-    /// own checkpoint is on, so the next open has no log to read back.
-    pub(crate) fn checkpoint_before_close(&self) {
-        if self.owns_checkpoints() {
-            let _ = self.copy_wal(
-                1,
-                CheckpointMode::Truncate {
-                    upper_bound_inclusive: None,
-                },
-            );
-        }
-    }
-
-    fn copy_wal(
-        &self,
-        frames: u64,
-        start_over: CheckpointMode,
-    ) -> Result<WalCheckpoint, TursoStorageError> {
         let wal = self
             .connection
             .wal_state()
@@ -207,17 +185,7 @@ impl Db {
         // COMMIT runs it. `Connection::checkpoint` clears the whole cache
         // afterwards, so the next requests read back every page they touch.
         // The pages it copies are the ones the cache already holds.
-        let pager = self.connection.get_pager();
-        let run = |mode| {
-            let checkpoint = pager
-                .io
-                .block(|| pager.checkpoint(mode, self.connection.get_sync_mode(), false));
-            if checkpoint.is_err() {
-                pager.cleanup_after_checkpoint_failure();
-            }
-            checkpoint
-        };
-        match run(CheckpointMode::Passive {
+        match self.run_checkpoint(CheckpointMode::Passive {
             upper_bound_inclusive: None,
         }) {
             Ok(copied) => {
@@ -235,7 +203,10 @@ impl Db {
                 // The copy stands whether or not the log starts over: a busy
                 // or failed restart leaves a log that is all in the file, and
                 // the next due copy restarts it.
-                if complete && self.owns_checkpoints() && run(start_over).is_ok() {
+                if complete
+                    && self.owns_checkpoints()
+                    && self.run_checkpoint(CheckpointMode::Restart).is_ok()
+                {
                     *copied_wal = None;
                 }
                 outcome.ran = true;
@@ -245,6 +216,51 @@ impl Db {
             Err(LimboError::Busy | LimboError::BusySnapshot) => Ok(outcome),
             Err(_) => Err(TursoStorageError::Database),
         }
+    }
+
+    /// On a connection that [owns its checkpoints](Self::owns_checkpoints),
+    /// copies what is left of the WAL and empties its file, as Turso does on
+    /// close when its own checkpoint is on, so the next open has no log to
+    /// read back. The file is emptied even when the log was just started
+    /// over: a restart leaves the old frames in the file.
+    pub(crate) fn checkpoint_before_close(&self) {
+        if !self.owns_checkpoints() {
+            return;
+        }
+        let copied = self
+            .run_checkpoint(CheckpointMode::Passive {
+                upper_bound_inclusive: None,
+            })
+            .is_ok_and(|copied| copied.everything_backfilled());
+        if copied {
+            let _ = self.run_checkpoint(CheckpointMode::Truncate {
+                upper_bound_inclusive: None,
+            });
+        }
+    }
+
+    /// The pager's checkpoint with the page cache kept, as Turso's own COMMIT
+    /// runs it.
+    fn run_checkpoint(&self, mode: CheckpointMode) -> Result<CheckpointResult, LimboError> {
+        let pager = self.connection.get_pager();
+        let checkpoint = pager
+            .io
+            .block(|| pager.checkpoint(mode, self.connection.get_sync_mode(), false));
+        if checkpoint.is_err() {
+            pager.cleanup_after_checkpoint_failure();
+        }
+        checkpoint
+    }
+
+    /// Where this connection's WAL ends, when it [owns its
+    /// checkpoints](Self::owns_checkpoints): no other connection writes to
+    /// its file, so its own view is current.
+    fn owned_wal_end(&self) -> Option<(u32, u64)> {
+        if !self.owns_checkpoints() {
+            return None;
+        }
+        let wal = self.connection.wal_state().ok()?;
+        Some((wal.checkpoint_seq_no, wal.max_frame))
     }
 
     /// The end of the WAL. A read first moves this connection's view to the
@@ -691,6 +707,7 @@ fn transaction<T>(
     begin_sql: &str,
     operation: impl FnOnce() -> Result<T, TursoStorageError>,
 ) -> Result<T, TursoStorageError> {
+    let wal_end = connection.owned_wal_end();
     let begin = execute_control(connection, begin_sql, TestControlPhase::Begin);
     if let Err(failure) = begin {
         if failure.execution_completed && failure.cleanup_failed {
@@ -702,10 +719,11 @@ fn transaction<T>(
     match operation() {
         Ok(value) => match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
             Ok(_) => {
-                if connection.owns_checkpoints() {
-                    // Turso's own checkpoint would have run here at 1,000
-                    // frames. As with that one, the write stands whether or
-                    // not the copy runs; a failed copy leaves the WAL whole.
+                // Turso's own checkpoint would have run here at 1,000 frames.
+                // As with that one, the write stands whether or not the copy
+                // runs; a failed copy leaves the WAL whole. Only a transaction
+                // that wrote copies, so a read never retries a failed copy.
+                if wal_end.is_some() && connection.owned_wal_end() != wal_end {
                     let _ = connection.checkpoint_over(CHECKPOINT_CAP_FRAMES);
                 }
                 Ok(value)
