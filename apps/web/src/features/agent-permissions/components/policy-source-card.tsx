@@ -17,6 +17,7 @@ import { policyName, scopeLabel } from './source-labels';
 export function PolicySourceCard(props: {
   kind?: ToolPermissionPolicyKind | null;
   agent?: ToolPermissionSourceAgent | null;
+  team?: { name: string } | null;
   scope?: ToolPermissionSourceScope | null;
   /** "Use same permissions as", over the identity. */
   title?: string;
@@ -42,7 +43,7 @@ export function PolicySourceCard(props: {
             </p>
             <p class="truncate text-xs text-ink-muted">
               {[
-                scopeLabel(props.scope),
+                scopeLabel(props),
                 props.agent?.deleted
                   ? t('agentPermissions.sourceDeletedBadge')
                   : undefined,

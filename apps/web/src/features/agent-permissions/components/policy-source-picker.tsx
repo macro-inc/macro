@@ -60,7 +60,7 @@ export function PolicySourcePicker(props: {
                       </Show>
                     </span>
                     <span class="truncate text-xs text-ink-extra-muted">
-                      {scopeLabel(candidate.scope)}
+                      {scopeLabel(candidate)}
                     </span>
                   </span>
                   <SingleSelectCheck

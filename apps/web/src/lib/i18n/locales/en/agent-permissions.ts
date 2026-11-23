@@ -111,6 +111,7 @@ export default {
   scopeTeam: 'Team · {{team}}',
   scopeTeamOnly: 'Team',
   teamDefault: 'Team default',
+  teamDefaultMention: 'the team default',
   sourceDeletedBadge: 'Deleted',
   sourceWouldLoop: 'Would follow itself',
   sourceTooDeep: 'Too many agents in a row',

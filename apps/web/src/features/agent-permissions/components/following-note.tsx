@@ -12,7 +12,10 @@ export function sourceMention(source: {
   kind?: string | null;
 }) {
   const handle = policyIdentity(source).handle;
-  return handle ? `@${handle}` : policyName(source);
+  if (handle) return `@${handle}`;
+  return source.kind === 'team'
+    ? t('agentPermissions.teamDefaultMention')
+    : policyName(source);
 }
 
 /**
@@ -37,6 +40,7 @@ export function FollowingNote(props: {
         <PolicySourceCard
           kind={props.source.kind}
           agent={props.source.agent}
+          team={props.source.team}
           scope={props.source.scope}
           title={props.title}
           action={props.action}
