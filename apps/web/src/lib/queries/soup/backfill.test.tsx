@@ -359,7 +359,7 @@ describe('runSoupBackfills', () => {
         'user-1',
         mockCacheHost,
         { ...lane('core-entities', fetchPage), createFetchPage },
-        vi.fn()
+        { onCheckpoint: vi.fn() }
       )
     );
     await vi.waitFor(() => expect(creation).toBeDefined());
@@ -1910,6 +1910,69 @@ describe('soup backfill checkpoint locks', () => {
     expect(initiativesFetch).not.toHaveBeenCalled();
     await coreTab.release();
     await initiativesTab.release();
+  });
+
+  it('leaves the failure mark to a tab that saved the lane after its last attempt', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    onTestFinished(() => warn.mockRestore());
+    let otherTab: ReturnType<typeof hold> | undefined;
+    const failing = vi.fn(async (_input: FetchInput) => {
+      if (failing.mock.calls.length === 6) {
+        // Another tab asks for the lane during the last attempt, gets it
+        // when that attempt lets go and saves its pass start, all before
+        // this tab reports the failure.
+        const tab = hold(key(lane('core-entities', failing)));
+        otherTab = tab;
+        mockCacheHost.currentStorageGeneration.mockImplementationOnce(
+          async () => {
+            await tab.granted;
+            localStorage.setItem(
+              key(lane('core-entities', failing)),
+              JSON.stringify({
+                ...initialSoupBackfillCheckpoint('user-1', 'storage-1'),
+                scanStartedAt: '2026-09-03T00:00:00.000Z',
+              })
+            );
+            return 'storage-1';
+          }
+        );
+      }
+      throw new Error('failed lane');
+    });
+    const run = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', failing),
+      ])
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+    await run;
+    expect(failing).toHaveBeenCalledTimes(6);
+    expect(
+      soupBackfillLaneFailed('user-1', testLane('core-entities'), 'storage-1')
+    ).toBe(false);
+    await otherTab?.release();
+  });
+
+  it('marks a lane that gave up when no other tab took it', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    onTestFinished(() => warn.mockRestore());
+    const failing = vi.fn(async (_input: FetchInput) => {
+      throw new Error('failed lane');
+    });
+    const run = Effect.runPromise(
+      runSoupBackfills('user-1', mockCacheHost, [
+        lane('core-entities', failing),
+      ])
+    );
+
+    await vi.advanceTimersByTimeAsync(31_000);
+    await run;
+    expect(
+      soupBackfillLaneFailed('user-1', testLane('core-entities'), 'storage-1')
+    ).toBe(true);
   });
 
   it('ends the suite when the lane holding the turn throws, instead of waiting on the other left lanes', async () => {

@@ -855,6 +855,8 @@ const runTrackedSoupBackfill = (
     let started = false;
     let pagesFetched = 0;
     let lockWaitMs: number | undefined;
+    // The lane's stored checkpoint when the last attempt failed.
+    let leftStored: string | null = null;
     // Kept across the attempts of a lane whose retries can resume.
     const retry: SoupBackfillRetry | undefined = lane.resumesAfter
       ? {}
@@ -895,6 +897,9 @@ const runTrackedSoupBackfill = (
     }).pipe(
       Effect.tapError((error) =>
         Effect.sync(() => {
+          // The attempt has let go of the lane's locks, but no other tab can
+          // have taken them and saved yet.
+          leftStored = readSoupBackfillCheckpoint(userId, lane).stored;
           if (retry && !lane.resumesAfter?.(thrownBy(error))) {
             retry.pageFetcher = undefined;
           }
@@ -915,8 +920,14 @@ const runTrackedSoupBackfill = (
               host.currentStorageGeneration()
             ).pipe(Effect.orElseSucceed(() => checkpoint.storageGeneration));
             record('failed', checkpoint.pagesFetched);
-            // Readers waiting for the lane to finish stop waiting.
-            if (generation !== null) {
+            // Readers waiting for the lane to finish stop waiting, unless
+            // another tab has saved the lane since this one's last attempt:
+            // it took the lane and reports its own outcome, and a mark now
+            // would send readers to the network while it makes progress.
+            if (
+              generation !== null &&
+              readSoupBackfillCheckpoint(userId, lane).stored === leftStored
+            ) {
               markSoupBackfillLaneFailed(userId, lane, generation);
             }
             console.warn('[graphql-soup-backfill] lane failed after retries', {

@@ -13,6 +13,7 @@ import {
   soupBackfillLaneFailed,
   watchSoupBackfillCheckpoint,
 } from './backfill-checkpoint';
+import { soupBackfillCheckpointKey } from './backfill-contract';
 
 const USER = 'macro|viewer@example.com';
 const LANE = CHANNEL_DIRECTORY_LANE;
@@ -71,6 +72,39 @@ it('keeps what storage refused for this tab to read', () => {
   expect(soupBackfillLaneCompleted(USER, LANE, 'g1')).toBe(false);
   expect(soupBackfillLaneFailed(USER, LANE, 'g2')).toBe(false);
   expect(loadSoupBackfillCheckpoint(USER, LANE).storageGeneration).toBe('g2');
+});
+
+it('drops what storage refused once another tab stores the lane', () => {
+  const setItem = vi
+    .spyOn(Storage.prototype, 'setItem')
+    .mockImplementation(() => {
+      throw new DOMException('full', 'QuotaExceededError');
+    });
+  try {
+    saveSoupBackfillCheckpoint(
+      { ...initialSoupBackfillCheckpoint(USER, 'g1'), nextCursor: 'p2' },
+      LANE
+    );
+    markSoupBackfillLaneFailed(USER, LANE, 'g1');
+  } finally {
+    setItem.mockRestore();
+  }
+  expect(loadSoupBackfillCheckpoint(USER, LANE).nextCursor).toBe('p2');
+  expect(soupBackfillLaneFailed(USER, LANE, 'g1')).toBe(true);
+
+  // Another tab took the lane and finished the pass.
+  localStorage.setItem(
+    soupBackfillCheckpointKey(USER, LANE),
+    JSON.stringify({
+      ...initialSoupBackfillCheckpoint(USER, 'g1'),
+      completed: true,
+      completedAt: '2026-11-20T00:00:00Z',
+    })
+  );
+
+  expect(soupBackfillLaneCompleted(USER, LANE, 'g1')).toBe(true);
+  expect(loadSoupBackfillCheckpoint(USER, LANE).nextCursor).toBeNull();
+  expect(soupBackfillLaneFailed(USER, LANE, 'g1')).toBe(false);
 });
 
 it("tells the lane's watchers, in this tab and in others", () => {
