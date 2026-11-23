@@ -738,7 +738,6 @@ export default {
     searchNoResults: 'ไม่พบการตั้งค่า ลองค้นหา “ลายเซ็น” “ธีม” หรือ “ปฏิทิน”',
     backToSettings: 'กลับไปที่การตั้งค่า',
     closeSettings: 'ปิดการตั้งค่า',
-    goToTab: 'ไปที่แท็บการตั้งค่า {{number}}',
     editProfile: 'แก้ไขโปรไฟล์',
     logOut: 'ออกจากระบบ',
     yourAccount: 'บัญชีของคุณ',

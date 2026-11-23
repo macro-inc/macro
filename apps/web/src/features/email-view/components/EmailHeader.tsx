@@ -1,5 +1,6 @@
 import {
   useViewControlHotkeys,
+  useViewTabHotkeys,
   ViewBreadcrumbs,
   ViewSwitchTrigger,
 } from '@app/components/view-shell';
@@ -25,6 +26,7 @@ import {
 } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
+import type { EmailTab } from '../tabs';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
 import {
@@ -124,6 +126,17 @@ export function EmailHeader(props: EmailHeaderProps) {
       value: id,
       label: EMAIL_TAB_LABELS[id],
     }));
+  const [inboxTabsElement, setInboxTabsElement] = createSignal<HTMLElement>();
+
+  useViewTabHotkeys<EmailTab>({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    tabs: inboxTabsElement,
+    ids: () => inboxTabs().map((tab) => tab.value),
+    activeId: () => state.tab,
+    setActiveId: setTab,
+    label: (id) => EMAIL_TAB_LABELS[id],
+  });
   const selectedTabLabel = () =>
     savedViewTitle() ??
     tagViewTitle() ??
@@ -189,7 +202,10 @@ export function EmailHeader(props: EmailHeaderProps) {
           </Show>
           <Show when={inboxSelected()}>
             <Tabs
-              ref={tourTarget(EMAIL_TOUR.signalNoise)}
+              ref={(element) => {
+                setInboxTabsElement(element);
+                tourTarget(EMAIL_TOUR.signalNoise)(element);
+              }}
               aria-label="Inbox view"
               size="md"
               class="shrink-0"

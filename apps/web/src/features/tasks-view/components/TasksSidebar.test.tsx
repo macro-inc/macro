@@ -1,8 +1,7 @@
-import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
+import { useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { setActiveScope } from '@core/hotkey/state';
 import { registerScope, removeScope } from '@core/hotkey/utils';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { TasksTab } from '../types';
 
@@ -11,8 +10,6 @@ const fixtures = vi.hoisted(() => ({
   setTab: vi.fn(),
   selectProjectScope: vi.fn(),
   tab: 'my-tasks' as TasksTab,
-  projectId: (() => undefined) as () => string | undefined,
-  selectedTask: (() => undefined) as () => { id: string } | undefined,
 }));
 
 vi.mock('@app/features/projects/context/project-saved-views-context', () => ({
@@ -35,14 +32,6 @@ vi.mock('@app/features/favorites/FavoriteContextMenu', () => ({
 }));
 vi.mock('@app/features/favorites/FavoriteIcon', () => ({
   FavoriteIcon: () => null,
-}));
-vi.mock('@app/lib/split-router', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
-  useParams: () => ({
-    get projectId() {
-      return fixtures.projectId();
-    },
-  }),
 }));
 vi.mock('@app/util/favorites', () => ({
   favoriteSplitContent: vi.fn(),
@@ -71,7 +60,6 @@ vi.mock('../tasks-view-context', () => ({
     },
     setState: vi.fn(),
     setTab: fixtures.setTab,
-    selectedTask: () => fixtures.selectedTask(),
     isSidebarSectionOpen: () => true,
     setSidebarSectionOpen: vi.fn(),
   }),
@@ -84,8 +72,6 @@ import { TasksSidebar } from './TasksSidebar';
 
 beforeEach(() => {
   fixtures.tab = 'my-tasks';
-  fixtures.projectId = () => undefined;
-  fixtures.selectedTask = () => undefined;
   registerScope({
     parentScopeId: 'global',
     scopeId: fixtures.scopeId,
@@ -101,69 +87,29 @@ afterEach(() => {
   removeScope(fixtures.scopeId);
 });
 
-const pressTab = (shiftKey = false) => {
+const press = (key: string, shiftKey = false) => {
   const keydown = new KeyboardEvent('keydown', {
-    key: 'Tab',
+    key,
     shiftKey,
     bubbles: true,
     cancelable: true,
   });
   document.dispatchEvent(keydown);
   document.dispatchEvent(
-    new KeyboardEvent('keyup', { key: 'Tab', shiftKey, bubbles: true })
+    new KeyboardEvent('keyup', { key, shiftKey, bubbles: true })
   );
   return keydown;
 };
 
-it('leaves Tab to focus order while a project or task is open, mounted after its override', () => {
-  const [projectId, setProjectId] = createSignal<string>();
-  const [selectedTask, setSelectedTask] = createSignal<{ id: string }>();
-  fixtures.projectId = projectId;
-  fixtures.selectedTask = selectedTask;
-
-  // A pane's own override can't help: the sidebar remounts after it whenever
-  // the view crosses the layout breakpoint, and the newest command wins.
-  createRoot(() =>
-    registerHotkey({
-      hotkey: ['tab', 'shift+tab'],
-      scopeId: fixtures.scopeId,
-      description: 'Move focus within document',
-      keyDownHandler: () => false,
-    })
-  );
+it('leaves Tab and the number keys to the browser: its views are not tabs', () => {
   render(() => {
     useHotKeyRoot();
     return <TasksSidebar />;
   });
 
-  expect(pressTab().defaultPrevented).toBe(true);
-  expect(fixtures.setTab).toHaveBeenCalledExactlyOnceWith('team-tasks');
-  fixtures.setTab.mockClear();
-
-  setProjectId('launch');
-  expect(pressTab().defaultPrevented).toBe(false);
-  expect(pressTab(true).defaultPrevented).toBe(false);
-  setProjectId(undefined);
-
-  setSelectedTask({ id: 'launch-plan' });
-  expect(pressTab().defaultPrevented).toBe(false);
-  expect(pressTab(true).defaultPrevented).toBe(false);
+  expect(press('Tab').defaultPrevented).toBe(false);
+  expect(press('Tab', true).defaultPrevented).toBe(false);
+  expect(press('2').defaultPrevented).toBe(false);
   expect(fixtures.setTab).not.toHaveBeenCalled();
-  setSelectedTask(undefined);
-
-  expect(pressTab().defaultPrevented).toBe(true);
-  expect(fixtures.setTab).toHaveBeenCalledExactlyOnceWith('team-tasks');
-});
-
-it('clears a saved project view when a hotkey selects a built-in project tab', () => {
-  fixtures.tab = 'created-by-me';
-  render(() => {
-    useHotKeyRoot();
-    return <TasksSidebar />;
-  });
-  expect(pressTab().defaultPrevented).toBe(true);
-  expect(fixtures.selectProjectScope).toHaveBeenCalledExactlyOnceWith(
-    'assigned-to-me'
-  );
-  expect(fixtures.setTab).not.toHaveBeenCalled();
+  expect(fixtures.selectProjectScope).not.toHaveBeenCalled();
 });
