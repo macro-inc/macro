@@ -11,8 +11,9 @@ Set-StrictMode -Version Latest
 # workload identity this job's GitHub OIDC token stands for, so CI holds no
 # signing secret, only the non-secret ids in repository variables.
 #
-# The tooling is always prepared, so a pull request build proves it still
-# works; signing is configured only on a release tag with every variable set.
+# The dlib and SignTool are found on every build, so a pull request build
+# proves they still are; signing (and its .NET check) is configured only on a
+# release tag with every variable set.
 # Outputs: signed (the installer will be signed) and publish (it may reach the
 # release, the update feed and the download pages).
 
@@ -38,12 +39,6 @@ $signtool = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\
   Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
 if (-not $signtool) { throw 'No x64 signtool.exe in the Windows SDK' }
 
-# The dlib is .NET; without a runtime SignTool fails only once it first signs.
-$runtimes = & dotnet --list-runtimes 2>$null
-if (-not ($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App (\d+)\.' -and [int]$Matches[1] -ge 8 })) {
-  throw 'The Artifact Signing dlib needs the .NET 8 (or newer) runtime'
-}
-
 $signed = $false
 $publish = $false
 $config = Join-Path $env:RUNNER_TEMP 'tauri.signing.json'
@@ -57,6 +52,12 @@ if ($env:SIGN -ne 'true') {
 } elseif ($missing.Count -gt 0) {
   Write-Output "::warning::Windows signing is not configured (empty: $($missing -join ', ')). The unsigned installer stays a workflow artifact."
 } else {
+  # The dlib is .NET; without a runtime SignTool fails only once it first signs.
+  # Checked only here: unsigned builds never load it.
+  $runtimes = if (Get-Command dotnet -ErrorAction SilentlyContinue) { & dotnet --list-runtimes } else { @() }
+  if (-not ($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App (\d+)\.' -and [int]$Matches[1] -ge 8 })) {
+    throw 'The Artifact Signing dlib needs the .NET 8 (or newer) runtime'
+  }
   $metadata = Join-Path $tools 'metadata.json'
   # Only the workload identity may sign: no fallback to whatever else the
   # runner happens to be signed in as.

@@ -145,8 +145,9 @@ jobs:
           # workload identity this job's GitHub OIDC token stands for, so CI holds no
           # signing secret, only the non-secret ids in repository variables.
           #
-          # The tooling is always prepared, so a pull request build proves it still
-          # works; signing is configured only on a release tag with every variable set.
+          # The dlib and SignTool are found on every build, so a pull request build
+          # proves they still are; signing (and its .NET check) is configured only on a
+          # release tag with every variable set.
           # Outputs: signed (the installer will be signed) and publish (it may reach the
           # release, the update feed and the download pages).
 
@@ -172,12 +173,6 @@ jobs:
             Sort-Object { [version]$_.Directory.Parent.Name } | Select-Object -Last 1
           if (-not $signtool) { throw 'No x64 signtool.exe in the Windows SDK' }
 
-          # The dlib is .NET; without a runtime SignTool fails only once it first signs.
-          $runtimes = & dotnet --list-runtimes 2>$null
-          if (-not ($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App (\d+)\.' -and [int]$Matches[1] -ge 8 })) {
-            throw 'The Artifact Signing dlib needs the .NET 8 (or newer) runtime'
-          }
-
           $signed = $false
           $publish = $false
           $config = Join-Path $env:RUNNER_TEMP 'tauri.signing.json'
@@ -191,6 +186,12 @@ jobs:
           } elseif ($missing.Count -gt 0) {
             Write-Output "::warning::Windows signing is not configured (empty: $($missing -join ', ')). The unsigned installer stays a workflow artifact."
           } else {
+            # The dlib is .NET; without a runtime SignTool fails only once it first signs.
+            # Checked only here: unsigned builds never load it.
+            $runtimes = if (Get-Command dotnet -ErrorAction SilentlyContinue) { & dotnet --list-runtimes } else { @() }
+            if (-not ($runtimes | Where-Object { $_ -match '^Microsoft\.NETCore\.App (\d+)\.' -and [int]$Matches[1] -ge 8 })) {
+              throw 'The Artifact Signing dlib needs the .NET 8 (or newer) runtime'
+            }
             $metadata = Join-Path $tools 'metadata.json'
             # Only the workload identity may sign: no fallback to whatever else the
             # runner happens to be signed in as.
@@ -289,7 +290,10 @@ jobs:
 
           # The same tauri-cli release nixpkgs bundles the AppImage with.
           cargo install tauri-cli --version "=$TAURI_CLI_VERSION" --locked --root "$RUNNER_TEMP/tauri-cli"
-          export PATH="$RUNNER_TEMP/tauri-cli/bin:$PATH"
+          # RUNNER_TEMP is a Windows path (D:\a\_temp), whose drive colon would split
+          # a bash PATH entry; cargo then finds no `tauri` subcommand.
+          PATH="$(cygpath -u "$RUNNER_TEMP")/tauri-cli/bin:$PATH"
+          export PATH
 
           release_config=$(cygpath -w "$PWD/windows-input/tauri.release.json")
           (
@@ -401,8 +405,12 @@ jobs:
                 # Skip events; only our reply carries our id.
                 if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
               }
-              $result = $reply.result.result.value | ConvertFrom-Json
-              if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
+              # An error reply (the page navigating or reloading mid-evaluation) has no
+              # value; try again.
+              if ($reply.PSObject.Properties['result'] -and $reply.result.result.PSObject.Properties['value']) {
+                $result = $reply.result.result.value | ConvertFrom-Json
+                if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
+              }
               Start-Sleep -Seconds 2
             }
             if (-not $result -or $result.text -eq 0) { throw "Macro's page rendered nothing: $($result | ConvertTo-Json -Compress)" }

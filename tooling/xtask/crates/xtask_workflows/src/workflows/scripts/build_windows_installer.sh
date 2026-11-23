@@ -20,7 +20,10 @@ cp "target/$target/release/macrod.exe" "$app/binaries/macrod-$target.exe"
 
 # The same tauri-cli release nixpkgs bundles the AppImage with.
 cargo install tauri-cli --version "=$TAURI_CLI_VERSION" --locked --root "$RUNNER_TEMP/tauri-cli"
-export PATH="$RUNNER_TEMP/tauri-cli/bin:$PATH"
+# RUNNER_TEMP is a Windows path (D:\a\_temp), whose drive colon would split
+# a bash PATH entry; cargo then finds no `tauri` subcommand.
+PATH="$(cygpath -u "$RUNNER_TEMP")/tauri-cli/bin:$PATH"
+export PATH
 
 release_config=$(cygpath -w "$PWD/windows-input/tauri.release.json")
 (

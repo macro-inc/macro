@@ -6,7 +6,9 @@
 //! installer is Authenticode-signed when the signing variables are set (see
 //! [`vars::WINDOWS_SIGNING_AZURE_TENANT_ID`]) and published only when
 //! [`vars::WINDOWS_DESKTOP_RELEASE`] also allows it. A Windows failure never
-//! holds back the macOS and Linux release.
+//! holds back the macOS and Linux release, but the release waits for the
+//! Windows job to end, so keep the signing environment free of required
+//! reviewers and wait timers.
 //!
 //! `Desktop Windows smoke` builds the same installer unsigned for pull requests
 //! that touch the app, installs it silently, launches it and checks its page

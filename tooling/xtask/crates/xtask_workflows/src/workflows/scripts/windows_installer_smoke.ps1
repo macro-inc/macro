@@ -83,8 +83,12 @@ try {
       # Skip events; only our reply carries our id.
       if ($frame.PSObject.Properties['id'] -and $frame.id -eq $id) { $reply = $frame }
     }
-    $result = $reply.result.result.value | ConvertFrom-Json
-    if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
+    # An error reply (the page navigating or reloading mid-evaluation) has no
+    # value; try again.
+    if ($reply.PSObject.Properties['result'] -and $reply.result.result.PSObject.Properties['value']) {
+      $result = $reply.result.result.value | ConvertFrom-Json
+      if ($result.state -eq 'complete' -and $result.text -gt 0) { break }
+    }
     Start-Sleep -Seconds 2
   }
   if (-not $result -or $result.text -eq 0) { throw "Macro's page rendered nothing: $($result | ConvertTo-Json -Compress)" }

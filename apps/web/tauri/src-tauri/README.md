@@ -619,7 +619,9 @@ Release builds come from `Build Desktop on Tag` (`xtask_workflows`'
 and the installer with MSVC and the pinned `tauri-cli`, installs it silently,
 checks the `macro://` handler, launches it, checks its page over the WebView2
 DevTools protocol and uninstalls it. A Windows failure leaves the macOS and
-Linux release alone; Windows users stay on their version.
+Linux release alone; Windows users stay on their version. The release does
+wait for the Windows job to end, so keep the `desktop-windows-signing`
+environment free of required reviewers and wait timers.
 
 Signing uses Azure Artifact Signing (formerly Trusted Signing). The bundler
 signs `Macro.exe`, `macrod.exe`, the uninstaller and the installer through
