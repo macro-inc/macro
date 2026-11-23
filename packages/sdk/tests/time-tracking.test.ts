@@ -128,6 +128,12 @@ describe('task.logTime', () => {
     await expect(
       task.logTime({ minutes: 30, date: '20/11/2026' }),
     ).rejects.toThrow('as YYYY-MM-DD');
+    await expect(
+      task.logTime({ minutes: 30, date: '2026-02-30' }),
+    ).rejects.toThrow('as YYYY-MM-DD');
+    await expect(
+      TimeEntry.byId(macro()._client, entryId).edit({ date: '2026-13-01' }),
+    ).rejects.toThrow('as YYYY-MM-DD');
     expect(requests).toHaveLength(0);
   });
 

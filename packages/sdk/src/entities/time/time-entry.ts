@@ -46,9 +46,20 @@ function spanChanges(changes: TimeEntryChanges): {
   };
 }
 
-/** @internal Throws unless `date` is a `YYYY-MM-DD` day. */
+/** Whether a `YYYY-MM-DD` string names a day on the calendar (not February 30). */
+function isCalendarDay(date: string): boolean {
+  const [year, month, day] = date.split('-').map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+/** @internal Throws unless `date` is a `YYYY-MM-DD` day on the calendar. */
 export function checkDay(method: string, date: unknown): void {
-  if (typeof date !== 'string' || !DAY.test(date))
+  if (typeof date !== 'string' || !DAY.test(date) || !isCalendarDay(date))
     throw new MacroError(
       `${method}: \`date\` is the day the work was done, as YYYY-MM-DD, not ${String(date)}.`,
     );

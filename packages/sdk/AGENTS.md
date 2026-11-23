@@ -95,7 +95,8 @@ enforced by the ordinary backend APIs.
   returned them, and `TimeEntry.byId` only edits or removes. A 403
   `not_author` is `NotTimeEntryAuthorError`, not `MacroForbiddenError`, since
   no access request lets someone change another person's entry; a 409
-  `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve.
+  `timer_over_limit` is `TimerOverLimitError` carrying the timer to resolve
+  when the refusal names one; check `timer` before using it.
 - `users.search(nameOrEmail)` is one `GET /contacts/search`: the server
   ranks the caller's contacts and current team (teammates first, then, for a
   caller on the list-aware directory, `interacted`/`invited` and then email
