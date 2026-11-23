@@ -43,12 +43,12 @@ graphql	GraphqlSoupEmailThread.mailDraftState	both		crates/complete_graph/src/ed
 graphql	GraphqlSoupEmailThread.mailSentPreview	both		crates/complete_graph/src/edges.rs:677
 graphql	GraphqlSoupEmailThread.messages	both		crates/complete_graph/src/edges.rs:690
 graphql	GraphqlSoupEmailThread.reminderReturnedAt	both		crates/complete_graph/src/edges.rs:594
-graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1123
+graphql	GraphqlUser.emailFocus	both		crates/complete_graph/src/schema.rs:1144
 graphql	GraphqlUser.emailLabels	both		crates/graphql_email/src/user_query.rs:45
 graphql	GraphqlUser.emailLinks	both		crates/graphql_email/src/user_query.rs:62
-graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1084
-graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1095
-graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1073
+graphql	GraphqlUser.emailSendAttempt	both		crates/complete_graph/src/schema.rs:1105
+graphql	GraphqlUser.emailThread	both		crates/complete_graph/src/schema.rs:1116
+graphql	GraphqlUser.pendingEmailSends	both		crates/complete_graph/src/schema.rs:1094
 http	DELETE /email/backfill/gmail	gmail		services/email_service/src/api/email/backfill.rs:12
 http	DELETE /email/drafts/scheduled/{message_id}	both		services/email_service/src/api/email/drafts/scheduled.rs:10
 http	DELETE /email/drafts/{id}	both		services/email_service/src/api/email/drafts.rs:24
@@ -157,16 +157,17 @@ loop	crm_enrichment_worker::run	both		services/email_service/src/crm_enrichment_
 loop	email_policy_worker::run	both		services/email_service/src/email_policy_worker.rs:5
 loop	email_policy_worker::run_previews	both		services/email_service/src/email_policy_worker.rs:25
 loop	mailbox_sync_worker::run	both		services/email_service/src/mailbox_sync_worker.rs:26
-loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:237
-loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:221
+loop	mailbox_sync_worker::run_attachment_cleanup	both		services/email_service/src/mailbox_sync_worker.rs:309
+loop	mailbox_sync_worker::run_commands	both		services/email_service/src/mailbox_sync_worker.rs:293
 loop	mailbox_sync_worker::run_contacts	both		services/email_service/src/mailbox_sync_worker.rs:153
 loop	mailbox_sync_worker::run_drafts	both		services/email_service/src/mailbox_sync_worker.rs:180
 loop	mailbox_sync_worker::run_health	both		services/email_service/src/mailbox_sync_worker.rs:88
 loop	mailbox_sync_worker::run_lifecycle	both		services/email_service/src/mailbox_sync_worker.rs:126
-loop	mailbox_sync_worker::run_projections	both		services/email_service/src/mailbox_sync_worker.rs:197
-loop	mailbox_sync_worker::run_settings	both		services/email_service/src/mailbox_sync_worker.rs:259
-loop	mailbox_sync_worker::run_transfers	both		services/email_service/src/mailbox_sync_worker.rs:290
-loop	mailbox_sync_worker::run_watches	both		services/email_service/src/mailbox_sync_worker.rs:274
+loop	mailbox_sync_worker::run_projection_recovery	both		services/email_service/src/mailbox_sync_worker.rs:197
+loop	mailbox_sync_worker::run_projections	both		services/email_service/src/mailbox_sync_worker.rs:253
+loop	mailbox_sync_worker::run_settings	both		services/email_service/src/mailbox_sync_worker.rs:331
+loop	mailbox_sync_worker::run_transfers	both		services/email_service/src/mailbox_sync_worker.rs:362
+loop	mailbox_sync_worker::run_watches	both		services/email_service/src/mailbox_sync_worker.rs:346
 loop	outlook_flags::run	outlook		services/email_service/src/outlook_flags.rs:72
 provider	gmail:calendarList.list	gmail		crates/gmail_emulator/src/fault.rs:131
 provider	gmail:channels.stop	gmail		crates/gmail_emulator/src/fault.rs:158

@@ -360,3 +360,6 @@ F-170	ai_tools outlook_agent_reports_spam_and_takes_it_back
 F-176	crm outlook_a_correspondent_leaves_the_crm_with_their_mail
 F-198	imap imap_connect_receive_isolate_and_send
 F-199	imap imap_connect_receive_isolate_and_send
+
+# Simulated old-binary activation; real worker sweep and exactly-once Kafka outcome.
+F-017	sync_projection_recovery outlook_legacy_activation_recovers_a_parked_message_once
