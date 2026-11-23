@@ -145,7 +145,6 @@ export function FeaturePageSection(props: {
       style={
         props.aura && {
           '--page-aura-primary': wallpapers[props.aura].colors[1],
-          '--page-aura-secondary': wallpapers[props.aura].colors[2],
         }
       }
       aria-labelledby={`${props.id}-title`}
