@@ -65,8 +65,15 @@ export const EVENTS_METHODS = [
 
 type EventsMethod = (typeof EVENTS_METHODS)[number];
 
-/** Tells the public MCP server to answer in the draft ChatGPT follows and deliver to it as such. Grants nothing. */
-export const EVENTS_PROFILE_HEADER = 'x-macro-events-profile';
+/**
+ * The events methods are forwarded under this prefix
+ * (`com.macro/chatgpt/events/subscribe`), which tells the public MCP server
+ * to answer in the draft ChatGPT follows and deliver to it as such. It grants
+ * nothing. A server from before ChatGPT's profile has no such methods and
+ * answers method-not-found, so it never stores a subscription that would
+ * deliver unredacted.
+ */
+export const EVENTS_METHOD_PREFIX = 'com.macro/chatgpt/';
 
 /** The MCP revision whose events methods the public MCP server serves. */
 const EVENTS_PROTOCOL_VERSION = '2026-07-28';
@@ -84,9 +91,8 @@ const EVENTS_REQUEST_META = {
 };
 
 /**
- * Where the public MCP server names the profile it answered under. A server
- * from before profiles ignores the header and answers as MCP's, and its
- * subscriptions would deliver unredacted, so an answer without it is refused.
+ * Where the public MCP server names the profile it answered under. An answer
+ * without it is refused, as a second guard behind the method prefix.
  */
 const EVENTS_PROFILE_META = 'com.macro/eventsProfile';
 
@@ -427,6 +433,7 @@ export function createHandler(config: Config) {
           );
         throw error;
       }
+      const forwardedMethod = `${EVENTS_METHOD_PREFIX}${method}`;
       const headers: Record<string, string> = {
         authorization: `Bearer ${token}`,
         'content-type': 'application/json',
@@ -435,11 +442,10 @@ export function createHandler(config: Config) {
         // The 2026-07-28 HTTP transport routes by these, and refuses a
         // request without Mcp-Method or with an Mcp-Name that isn't the
         // body's name.
-        'mcp-method': method,
+        'mcp-method': forwardedMethod,
         ...(typeof params?.name === 'string'
           ? { 'mcp-name': params.name }
           : {}),
-        [EVENTS_PROFILE_HEADER]: 'chatgpt',
       };
       span.injectTraceHeaders(headers);
       const response = await fetch(eventsUrl, {
@@ -448,7 +454,7 @@ export function createHandler(config: Config) {
         body: JSON.stringify({
           jsonrpc: '2.0',
           id: 1,
-          method,
+          method: forwardedMethod,
           params: revealed,
         }),
       });

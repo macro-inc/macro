@@ -409,7 +409,7 @@ describe('createHandler', () => {
       expect((await response.json()).result.id).toBe('sub-1');
       const sent = seen.find(({ url }) => url === 'https://auth.test/mcp');
       expect(sent?.body).toMatchObject({
-        method: 'events/subscribe',
+        method: 'com.macro/chatgpt/events/subscribe',
         params: { arguments: { actor: 'macro|someone@example.com' } },
       });
     });
@@ -492,16 +492,15 @@ describe('MCP Events', () => {
     expect(forwarded).toHaveLength(1);
     const { headers, body } = forwarded[0] ?? {};
     expect(headers?.get('authorization')).toBe('Bearer user-token');
-    expect(headers?.get('x-macro-events-profile')).toBe('chatgpt');
     expect(headers?.get('mcp-protocol-version')).toBe('2026-07-28');
-    expect(headers?.get('mcp-method')).toBe('events/list');
+    expect(headers?.get('mcp-method')).toBe('com.macro/chatgpt/events/list');
     expect(headers?.has('mcp-name')).toBe(false);
     // ChatGPT's own _meta stays here; the request carries the 2026-07-28
     // metadata the public MCP server requires in place of initialize.
     expect(body).toEqual({
       jsonrpc: '2.0',
       id: 1,
-      method: 'events/list',
+      method: 'com.macro/chatgpt/events/list',
       params: {
         _meta: {
           'io.modelcontextprotocol/protocolVersion': '2026-07-28',
@@ -571,13 +570,15 @@ describe('MCP Events', () => {
 
     expect((await response.json()).result).toEqual({});
     const { headers } = forwarded[0] ?? {};
-    expect(headers?.get('mcp-method')).toBe('events/unsubscribe');
+    expect(headers?.get('mcp-method')).toBe(
+      'com.macro/chatgpt/events/unsubscribe'
+    );
     expect(headers?.get('mcp-name')).toBe('message.posted');
   });
 
   test('an answer without the ChatGPT profile is refused, not relayed', async () => {
-    // A public MCP server from before profiles ignores the header and would
-    // store a subscription that delivers unredacted.
+    // The second guard: an answer that does not name ChatGPT's profile is
+    // not relayed, whatever answered it.
     stubPublicMcp(() =>
       Response.json({
         jsonrpc: '2.0',
