@@ -525,3 +525,67 @@ fn a_storage_12_cache_upgrades_and_sorts_its_records_against_the_hint() {
         storage.try_close().unwrap();
     });
 }
+
+/// [`OLD`] with a calendar, whose records the calendar's derived rows read.
+const CALENDARS: &str = "type Query { thing: Thing note: Note calendar: GraphqlCalendar } type Mutation { rename(id: ID!): Thing edit(id: ID!): Note } type Thing { id: ID! value: String } type Note { id: ID! value: String } type GraphqlCalendar { id: ID! name: String }";
+
+/// Stores a calendar range and the coverage that says it holds the span.
+fn cover_calendar(storage: &TursoStorage) {
+    raw_execute(
+        storage,
+        "INSERT INTO calendar_ranges (record_key, event_key, link_id, kind, start, end, long) VALUES ('GraphqlCalendarOccurrence:1', 'GraphqlCalendarEvent:1', 'link', 0, 1, 2, 0)",
+        Vec::new(),
+    );
+    raw_execute(
+        storage,
+        "INSERT INTO calendar_coverage (kind, start, end) VALUES (0, 0, 10)",
+        Vec::new(),
+    );
+}
+
+fn calendar_rows(storage: &TursoStorage) -> i64 {
+    count(storage, "SELECT count(*) FROM calendar_ranges")
+        + count(storage, "SELECT count(*) FROM calendar_coverage")
+}
+
+#[test]
+fn a_store_derived_from_a_dropped_type_empties_with_its_coverage() {
+    // Coverage that outlived its rows would read as complete and empty, and
+    // the span would never be fetched again.
+    let storage = TursoStorage::open_in_memory("scope").unwrap();
+    assert_eq!(
+        adopt(&storage, CALENDARS, &ProjectionInputs::none()).change,
+        None
+    );
+    cover_calendar(&storage);
+
+    // A change to a type no store derives from leaves the calendar whole.
+    let unrelated = CALENDARS.replace(
+        "type Thing { id: ID! value: String }",
+        "type Thing { id: ID! value: Int }",
+    );
+    let adoption = adopt(&storage, &unrelated, &ProjectionInputs::none());
+    assert_eq!(adoption.change, types(&["Thing"], false));
+    assert_eq!(calendar_rows(&storage), 2);
+
+    let retyped = unrelated.replace("name: String", "name: Int");
+    let adoption = adopt(&storage, &retyped, &ProjectionInputs::none());
+    let Some(Tier::Types { changed, .. }) = &adoption.change else {
+        panic!("{:?}", adoption.change);
+    };
+    assert!(
+        changed.contains(cache_core::calendar::CALENDAR_TYPENAME),
+        "{changed:?}"
+    );
+    assert_eq!(calendar_rows(&storage), 0);
+
+    cover_calendar(&storage);
+    let roots = retyped.replace(
+        "type Query {",
+        "schema { query: Root mutation: Mutation } type Root {",
+    );
+    let adoption = adopt(&storage, &roots, &ProjectionInputs::none());
+    assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Roots)));
+    assert_eq!(calendar_rows(&storage), 0);
+    storage.try_close().unwrap();
+}

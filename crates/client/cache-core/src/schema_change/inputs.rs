@@ -117,7 +117,9 @@ impl ProjectionInputs {
 
 /// The fields the rows storage derives from records read, by record type:
 /// Quick Access search rows, calendar ranges and people rows. Dropping a
-/// type's records drops its rows, so they make no document incomplete.
+/// type's records drops its rows, so they make no document incomplete. A new
+/// store of derived rows lists what its rows read here, and itself in
+/// cache-turso's `DERIVED_STORES`, which empties it when its types change.
 fn derived<'a>() -> impl Iterator<Item = (&'a str, &'a str)> {
     crate::search::QUICK_ACCESS_INPUTS
         .iter()

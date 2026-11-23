@@ -70,8 +70,8 @@ const DOCUMENTS_KEEPING_FACTS: &str =
 /// they came.
 const KEPT_FACTS_PREFIX: &str = "schema_change_kept_";
 
-/// The tables derived from records, besides the calendar's, facts before
-/// the documents their foreign keys name.
+/// The index's tables derived from records, facts before the documents
+/// their foreign keys name; [`DERIVED_STORES`] lists the others.
 const DERIVED_TABLES: [&str; 5] = [
     "exact_facts",
     "integer_facts",
@@ -96,9 +96,29 @@ const RECORD_COUNT: &str = "SELECT COUNT(*) FROM records";
 /// A table's SQL and its indexes', as the file stores them, the table first.
 const TABLE_SQL: &str = "SELECT sql FROM sqlite_schema WHERE tbl_name = ?1 AND sql IS NOT NULL ORDER BY type DESC, name ASC";
 
-/// The calendar's record types: its range rows, coverage and sync state
-/// describe them together, so dropping any of them drops all of it.
-const CALENDAR_TYPENAMES: [&str; 3] = [OCCURRENCE_TYPENAME, EVENT_TYPENAME, CALENDAR_TYPENAME];
+/// A store of rows derived from records of some types, beside the index:
+/// its tables, and how to empty them with the sync state that says what they
+/// hold. Dropping any of its types' records empties all of it in the same
+/// transaction, since coverage that outlived its rows would read as complete
+/// and empty and never refetch. A new store adds itself to
+/// [`DERIVED_STORES`], and the fields its rows read to
+/// `cache_core::schema_change::ProjectionInputs`' derived inputs.
+struct DerivedStore {
+    /// The record types its rows derive from.
+    typenames: &'static [&'static str],
+    /// Its tables, those that name a table before it.
+    tables: &'static [&'static str],
+    /// Empties its tables and drops its sync state.
+    clear: fn(&Db) -> Result<(), TursoStorageError>,
+}
+
+/// Every [`DerivedStore`]. The calendar's range rows, coverage and sync
+/// state describe its three types together.
+const DERIVED_STORES: [DerivedStore; 1] = [DerivedStore {
+    typenames: &[OCCURRENCE_TYPENAME, EVENT_TYPENAME, CALENDAR_TYPENAME],
+    tables: &calendar::TABLES,
+    clear: calendar::clear,
+}];
 
 /// What opening a cache with a build's schema did to it.
 #[derive(Clone, Debug)]
@@ -263,11 +283,13 @@ fn drop_types(connection: &Db, changed: &BTreeSet<String>) -> Result<u64, TursoS
             vec![text(&format!("{typename}:")), text(&format!("{typename};"))],
         )?;
     }
-    if changed
-        .iter()
-        .any(|typename| CALENDAR_TYPENAMES.contains(&typename.as_str()))
-    {
-        calendar::clear(connection)?;
+    for store in &DERIVED_STORES {
+        if changed
+            .iter()
+            .any(|typename| store.typenames.contains(&typename.as_str()))
+        {
+            (store.clear)(connection)?;
+        }
     }
     Ok(dropped)
 }
@@ -379,14 +401,20 @@ fn clear_records(connection: &Db) -> Result<u64, TursoStorageError> {
     let kept = driver::query(connection, KEPT_RECORDS, Vec::new())?;
     let tables = DERIVED_TABLES
         .into_iter()
-        .chain(calendar::TABLES)
+        .chain(
+            DERIVED_STORES
+                .iter()
+                .flat_map(|store| store.tables.iter().copied()),
+        )
         .chain(["records"])
         .collect::<Vec<_>>();
     recreate_tables(connection, &tables)?;
     for row in &kept {
         driver::execute(connection, RECORD_UPSERT, row.clone())?;
     }
-    calendar::clear(connection)?;
+    for store in &DERIVED_STORES {
+        (store.clear)(connection)?;
+    }
     count
         .checked_sub(u64::try_from(kept.len()).map_err(|_| invariant())?)
         .ok_or_else(invariant)

@@ -32,7 +32,6 @@ use predicate_index::{
     ValidatedIndexQuery,
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap};
-#[cfg(not(target_arch = "wasm32"))]
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Numeric, Value};
@@ -971,7 +970,9 @@ impl TursoStorage {
     pub fn upgraded_from_storage_version(&self) -> Option<u32> {
         self.storage_upgraded_from
     }
+}
 
+impl TursoStorage {
     /// Brings the stored records and queued writes to `incoming`, this
     /// build's GraphQL schema, whose index projections read `inputs`, and
     /// returns the schema an engine over this storage runs with
