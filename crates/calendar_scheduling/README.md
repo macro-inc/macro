@@ -25,7 +25,7 @@ sync, or a failure past that window refuses availability. A calendar with Busy
 off never blocks booking, whatever its sync state. A personal link can name one of the host's
 connected inboxes (`emailLinkId`): its bookings are created on that inbox's primary calendar, so the
 invitation comes from that address, and the link offers no time while that calendar cannot take a
-booking (removed, read-only, or needing reauthorization). It never falls back to another inbox. A
+booking (removed, read-only, failing permanently or needing reauthorization). It never falls back to another inbox. A
 link without one books on the primary inbox, as before; team links always do, on each host's. Each
 booking pins its calendar, so changing a link's account moves only later bookings. Busy time comes from every connected calendar
 the host has not turned off (the Busy switch in Settings → Calendar, stored in

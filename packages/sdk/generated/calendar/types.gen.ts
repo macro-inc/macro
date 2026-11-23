@@ -145,6 +145,11 @@ export type BookingAccount = {
      * Connected inbox identity, set as a link's `emailLinkId`.
      */
     emailLinkId: string;
+    /**
+     * Whether its calendar adds a video meeting to a booking that asks for
+     * one (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook.
+     */
+    videoMeetings: boolean;
 };
 
 /**
@@ -373,7 +378,7 @@ export type BookingLinkEvent = {
      * whose primary calendar takes this link's bookings and sends their
      * invitations from its address. Omit to book on the host's primary
      * account. Personal links only; team links book on each host's primary
-     * account. Google Meet needs a Google account.
+     * account. `googleMeet` needs an account whose `videoMeetings` is true.
      */
     emailLinkId?: string | null;
     /**

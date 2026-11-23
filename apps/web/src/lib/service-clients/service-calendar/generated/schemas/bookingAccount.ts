@@ -14,4 +14,7 @@ export interface BookingAccount {
   emailAddress: string;
   /** Connected inbox identity, set as a link's `emailLinkId`. */
   emailLinkId: string;
+  /** Whether its calendar adds a video meeting to a booking that asks for
+one (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook. */
+  videoMeetings: boolean;
 }

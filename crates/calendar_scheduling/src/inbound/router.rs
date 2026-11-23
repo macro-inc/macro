@@ -258,7 +258,12 @@ pub async fn settings<R: Repository, C: Calendars, D: Directory, A: MacroAuthori
 }
 /// Save booking settings at the revision they were read with.
 #[utoipa::path(put, path = "/scheduling/settings", operation_id = "save_booking_settings", params(Scope), request_body = Profile, responses((status = 200, body = ProfileResponse), (status = 400), (status = 403), (status = 409)), tag = "scheduling")]
-pub async fn save<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+pub async fn save<
+    R: Repository,
+    C: Calendars + BookingAccounts,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<Scope>,

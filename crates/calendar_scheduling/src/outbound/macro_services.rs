@@ -587,6 +587,7 @@ async fn booking_accounts<O: CalendarOccurrenceService>(
         accounts.push(BookingAccount {
             email_link_id: calendar.email_link_id,
             email_address: calendar.email_address,
+            video_meetings: calendar.capabilities.conference_provider.is_some(),
         });
     }
     Ok(accounts)

@@ -39,7 +39,7 @@ export interface BookingLinkEvent {
 whose primary calendar takes this link's bookings and sends their
 invitations from its address. Omit to book on the host's primary
 account. Personal links only; team links book on each host's primary
-account. Google Meet needs a Google account. */
+account. `googleMeet` needs an account whose `videoMeetings` is true. */
   emailLinkId?: BookingLinkEventEmailLinkId;
   /** Whether new bookings are accepted. */
   enabled: boolean;

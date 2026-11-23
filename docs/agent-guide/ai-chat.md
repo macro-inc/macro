@@ -2676,10 +2676,14 @@ the caret after them, waiting for what to change.
 Ask the AI to find or reuse an existing booking link before creating another.
 `ListBookingLinks` returns personal links, current team IDs, full settings and
 shareable URLs (including paused links). It also supplies the revision used to
-protect edits from concurrent settings changes.
+protect edits from concurrent settings changes, and the connected accounts a
+personal link can book on: a draft's `emailLinkId` puts its bookings on that
+account's calendar, with invitations from its address, and saving refuses an
+account you can't book on or Google Meet on one that can't add a video meeting.
 
 Booking links are confirmed in conversation, with no special booking form. The AI
-first explains the proposed meeting details, ownership and named hosts, time zone,
+first explains the proposed meeting details, ownership and named hosts, the
+calendar account when it is not the primary one, time zone,
 availability and date exceptions, booking rules, guest questions and whether the
 link accepts bookings. It asks whether to proceed and waits for your reply before
 calling `CreateBookingLink` or `EditBookingLink`. An initial request to create a

@@ -821,10 +821,12 @@ async fn a_link_on_a_second_inbox_books_on_that_inbox_primary_calendar() {
             BookingAccount {
                 email_link_id: LINK,
                 email_address: HOST_EMAIL.to_owned(),
+                video_meetings: true,
             },
             BookingAccount {
                 email_link_id: WORK_LINK,
                 email_address: WORK_EMAIL.to_owned(),
+                video_meetings: true,
             },
         ],
         "one account per inbox with a primary calendar the host can write"

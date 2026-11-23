@@ -1,9 +1,6 @@
 use super::*;
 use crate::domain::booking_links::BookingLinks;
 
-/// Another connected inbox the host could move the link to.
-const SIDE_INBOX: Uuid = Uuid::from_u128(0x8);
-
 #[tokio::test]
 async fn a_link_on_another_account_books_there_and_its_bookings_stay_after_a_change() {
     let calendar = Arc::new(Calendar::default());
@@ -64,7 +61,7 @@ async fn only_personal_links_choose_an_account() {
     ));
 
     let personal = service.list_links("admin", None, None).await.unwrap();
-    assert_eq!(personal.accounts.len(), 1);
+    assert_eq!(personal.accounts.len(), 2);
     assert_eq!(personal.accounts[0].email_link_id, WORK_INBOX);
     assert!(
         service
@@ -74,4 +71,38 @@ async fn only_personal_links_choose_an_account() {
             .accounts
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn a_link_books_only_on_an_account_that_can_take_its_bookings() {
+    let memory = Arc::new(Memory::default());
+    let service = TestService::new(memory.clone(), Arc::new(Calendar::default()), Members);
+    let removed = Uuid::from_u128(0x9);
+    let mut p = profile(None);
+    p.event_types[0].email_link_id = Some(removed);
+    assert!(matches!(
+        service.save("admin", None, p.clone()).await,
+        Err(Error::Invalid(_))
+    ));
+
+    p.event_types[0].email_link_id = Some(SIDE_INBOX);
+    p.event_types[0].google_meet = true;
+    assert!(
+        matches!(
+            service.save("admin", None, p.clone()).await,
+            Err(Error::Invalid(message)) if message.contains("side@example.com")
+        ),
+        "a video meeting needs an account that can add one"
+    );
+    p.event_types[0].google_meet = false;
+    service.save("admin", None, p).await.unwrap();
+
+    // An account removed after it was chosen does not block saving the
+    // profile's other changes; the link just takes no bookings.
+    for owned in memory.profiles.lock().unwrap().values_mut() {
+        owned.profile.event_types[0].email_link_id = Some(removed);
+    }
+    let mut renamed = service.settings("admin", None).await.unwrap();
+    renamed.name = "Renamed".into();
+    assert!(service.save("admin", None, renamed).await.is_ok());
 }

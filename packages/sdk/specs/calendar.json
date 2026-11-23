@@ -1663,7 +1663,7 @@
       "BookingAccount": {
         "type": "object",
         "description": "A connected account whose primary calendar the host can write, so a\npersonal link can book on it.",
-        "required": ["emailLinkId", "emailAddress"],
+        "required": ["emailLinkId", "emailAddress", "videoMeetings"],
         "properties": {
           "emailAddress": {
             "type": "string",
@@ -1673,6 +1673,10 @@
             "type": "string",
             "format": "uuid",
             "description": "Connected inbox identity, set as a link's `emailLinkId`."
+          },
+          "videoMeetings": {
+            "type": "boolean",
+            "description": "Whether its calendar adds a video meeting to a booking that asks for\none (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook."
           }
         },
         "additionalProperties": false
@@ -2024,7 +2028,7 @@
           "emailLinkId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The connected account, an `emailLinkId` from the listing's `accounts`,\nwhose primary calendar takes this link's bookings and sends their\ninvitations from its address. Omit to book on the host's primary\naccount. Personal links only; team links book on each host's primary\naccount. Google Meet needs a Google account."
+            "description": "The connected account, an `emailLinkId` from the listing's `accounts`,\nwhose primary calendar takes this link's bookings and sends their\ninvitations from its address. Omit to book on the host's primary\naccount. Personal links only; team links book on each host's primary\naccount. `googleMeet` needs an account whose `videoMeetings` is true."
           },
           "enabled": {
             "type": "boolean",

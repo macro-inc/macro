@@ -143,7 +143,10 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         user: &str,
         team: Option<Uuid>,
         profile: Profile,
-    ) -> Result<Profile, Error> {
+    ) -> Result<Profile, Error>
+    where
+        C: BookingAccounts,
+    {
         if profile.id != Self::profile_id(user, team) {
             return Err(Error::Forbidden);
         }
@@ -156,7 +159,58 @@ impl<R: Repository, C, D: Directory> Service<R, C, D> {
         self.authorize(user, &owner, false).await?;
         let previous = self.repository.profile(owner.profile.id).await?;
         self.validate_hosts(&owner, previous.as_ref()).await?;
+        self.validate_accounts(&owner, previous.as_ref()).await?;
         self.repository.save_profile(owner).await
+    }
+    /// A personal link books only on a connected account its host can write,
+    /// and a video meeting needs an account that can add one. Only a changed
+    /// choice is checked, so a link whose account was removed since does not
+    /// block saving the profile's other links; it takes no bookings until
+    /// its owner picks another.
+    async fn validate_accounts(
+        &self,
+        owner: &OwnedProfile,
+        previous: Option<&OwnedProfile>,
+    ) -> Result<(), Error>
+    where
+        C: BookingAccounts,
+    {
+        let changed = owner
+            .profile
+            .event_types
+            .iter()
+            .filter(|event| {
+                let old =
+                    previous.and_then(|p| p.profile.event_types.iter().find(|e| e.id == event.id));
+                event.email_link_id.is_some()
+                    && !old.is_some_and(|old| {
+                        old.email_link_id == event.email_link_id
+                            && old.google_meet == event.google_meet
+                    })
+            })
+            .collect::<Vec<_>>();
+        if changed.is_empty() {
+            return Ok(());
+        }
+        let host = owner.user_id.as_deref().ok_or(Error::Forbidden)?;
+        let accounts = self.calendars.booking_accounts(host).await?;
+        for event in changed {
+            let account = accounts
+                .iter()
+                .find(|account| Some(account.email_link_id) == event.email_link_id)
+                .ok_or_else(|| {
+                    Error::Invalid(
+                        "Choose one of your connected accounts for this booking link".into(),
+                    )
+                })?;
+            if event.google_meet && !account.video_meetings {
+                return Err(Error::Invalid(format!(
+                    "{} can't add video meetings. Choose a Macro call or a custom location.",
+                    account.email_address
+                )));
+            }
+        }
+        Ok(())
     }
     async fn validate_hosts(
         &self,

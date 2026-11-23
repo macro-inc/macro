@@ -11975,7 +11975,11 @@ export const ListBookingLinksResult = z.object({
   ),
   accounts: z.array(
     z
-      .object({ emailLinkId: z.string().uuid(), emailAddress: z.string() })
+      .object({
+        emailLinkId: z.string().uuid(),
+        emailAddress: z.string(),
+        videoMeetings: z.boolean(),
+      })
       .strict()
   ),
   links: z.array(

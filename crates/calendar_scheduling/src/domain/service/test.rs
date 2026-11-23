@@ -1700,14 +1700,24 @@ impl BookingAccounts for Arc<Calendar> {
         &self,
         _: &str,
     ) -> Result<Vec<crate::domain::booking_link_models::BookingAccount>, Error> {
-        Ok(vec![crate::domain::booking_link_models::BookingAccount {
-            email_link_id: WORK_INBOX,
-            email_address: "work@example.com".into(),
-        }])
+        Ok(vec![
+            crate::domain::booking_link_models::BookingAccount {
+                email_link_id: WORK_INBOX,
+                email_address: "work@example.com".into(),
+                video_meetings: true,
+            },
+            crate::domain::booking_link_models::BookingAccount {
+                email_link_id: SIDE_INBOX,
+                email_address: "side@example.com".into(),
+                video_meetings: false,
+            },
+        ])
     }
 }
 /// A connected inbox other than the host's primary one.
 const WORK_INBOX: Uuid = Uuid::from_u128(0x7);
+/// Another connected inbox, whose calendar cannot add video meetings.
+const SIDE_INBOX: Uuid = Uuid::from_u128(0x8);
 mod booking_account;
 mod booking_links;
 

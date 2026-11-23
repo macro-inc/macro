@@ -32,7 +32,7 @@ pub struct BookingLinkEvent {
     /// whose primary calendar takes this link's bookings and sends their
     /// invitations from its address. Omit to book on the host's primary
     /// account. Personal links only; team links book on each host's primary
-    /// account. Google Meet needs a Google account.
+    /// account. `googleMeet` needs an account whose `videoMeetings` is true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email_link_id: Option<Uuid>,
     /// Whether new bookings are accepted.
@@ -139,6 +139,9 @@ pub struct BookingAccount {
     pub email_link_id: Uuid,
     /// The account's address, which invitations for its bookings come from.
     pub email_address: String,
+    /// Whether its calendar adds a video meeting to a booking that asks for
+    /// one (`googleMeet`): Google Meet on Google, Microsoft Teams on Outlook.
+    pub video_meetings: bool,
 }
 
 fn is_false(value: &bool) -> bool {
