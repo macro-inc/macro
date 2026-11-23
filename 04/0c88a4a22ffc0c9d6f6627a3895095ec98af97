@@ -1,0 +1,31 @@
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionError.ts
+  s_dfeff50ab3a311::t_d2dbea76dd0461 15-16
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/toolPermissionOrigin.ts
+  s_dfeff50ab3a311::t_6d19181f8e7a37 21
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_dfeff50ab3a311::t_0b074e21a3b44b 9803,9846-9853
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_dfeff50ab3a311::t_a362f0648e3340 20899,21013
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_dfeff50ab3a311::t_5bff540434cd1d 4942-4948
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_dfeff50ab3a311::t_0e15b77d39bc93 3595-3596,3630
+packages/sdk/specs/agent-harness.json
+  s_dfeff50ab3a311::t_7bbfd76613f781 9803,9846-9853
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "040c88a4a22ffc0c9d6f6627a3895095ec98af97",
+  "prompts": {},
+  "sessions": {
+    "s_dfeff50ab3a311": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "31e166a2-a818-480e-ab2c-3772bc01fc33",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
