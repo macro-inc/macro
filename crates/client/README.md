@@ -43,19 +43,17 @@ not fall back to the old initialization command; it runs uncached and asks for
 an app update instead.
 
 An engine owns a validated schema snapshot; there is no mutable global schema.
-Compatible additions are merged under the native engine lock, including when an
-OTA reload leaves the process alive. Validated fragment caches include schema
-identity in their keys. Native `graphql-cache/schema.json` retains the compatible
-superset across restarts and rollbacks, so older windows and pending mutations can
-still reference earlier definitions. Schema installation neither resets records
-nor discards queued mutations or changes the durable storage generation.
-
-Persisted metadata format/compatibility epochs must be supported by the installed engine.
-Conflicting field shapes, root types, or entity identities are rejected before
-publishing metadata or opening storage. These changes need an explicit migration;
-a native rebuild alone does not migrate the persisted metadata. Removed definitions
-are deliberately retained. Schema-driven normalization can accept new types, but
-handwritten search/filter projections and new IPC commands still need native code.
+Validated fragment caches include schema identity in their keys. The cache file
+stores the schema its records were written under, and an open with another
+schema first brings the records to it ([schema changes](#schema-changes)). When
+an OTA reload leaves the native process alive, the new webview's schema is
+merged under the engine lock and recorded in storage, so older windows and
+pending mutations can still reference earlier definitions; that merge refuses a
+changed field shape, root type or entity identity, which waits for the next
+open. Installing a schema neither discards queued mutations nor changes the
+durable storage generation. Schema-driven normalization accepts new types, but
+handwritten search/filter projections and new IPC commands still need native
+code.
 
 ## Startup and integrity checks
 
@@ -127,6 +125,62 @@ Browser database names embed the storage version, so a browser build with a new
 storage version still opens a new database and backfills, leaving the older one
 for any tab still running the older bundle. A browser open never runs a step:
 an older version found under the current name resets, as before steps existed.
+
+## Schema changes
+
+A cache stores the GraphQL schema its records were written under, deflated, in
+the `cache_schema` table (storage schema 13). An open with another schema calls
+`TursoStorage::adopt_schema` before anything reads, and
+`cache_core::schema_change` sorts the change into one of three tiers, by record
+type:
+
+- **Compatible**: additions, widenings, new union members, and removed fields
+  or types no projection reads. Every stored value means what it did, so only
+  the stored schema is rewritten.
+- **Types**: some types changed kind, identity or a field's shape, lost a union
+  member, or lost a field a projection reads; a type holding a changed type's
+  values inline changes with it. Their records go, with their index documents,
+  facts, Quick Access rows and derived stores (`DERIVED_STORES` in
+  `cache-turso/src/storage/schema_store.rs`), and every other type stays warm.
+  When documents keyed by other records read a changed type, every document is
+  marked incomplete.
+- **Reset**: an operation root was renamed, the stored schema cannot be read
+  (another compatibility epoch or artifact format), or the schema to store
+  would not validate. Every refetchable row goes.
+
+Every tier keeps the cache's identity, authority and queued mutations. Types
+and Reset drop the storage generation record, so the backfill starts over and
+refetches what went. A queued write's optimistic overlay that no longer fits is retired:
+the mutation is still sent, but its overlay adds no records. The stored schema
+is the incoming one plus the definitions it removed that kept records may still
+hold, so a later build that adds a field back with another shape drops the old
+values instead of reading them as the new type. A cache stored before schema 13
+is read as written under `cache-core/src/schema_change/unrecorded.schema`, the
+schema the last builds without a stored copy shipped. It does not change once
+it ships, and an epoch bump retires it. A removed enum value or a changed
+argument or default is not visible in the schema and leaves stale values, as a
+server change without a schema change would.
+
+Both hosts pass `soup_filter_cache_adapter::projection_inputs()`, the record
+fields their index projections read, and storage adds the fields its own
+derived rows read (`ProjectionInputs`' derived list in
+`cache-core/src/schema_change/inputs.rs`). Removing a field no projection reads
+is free; removing one a projection reads changes its type. A new store of rows
+derived from records lists its tables in `DERIVED_STORES` and the fields it
+reads in that derived list.
+
+Natively, `open_cache` adopts the bundle's schema on every open, and a cache
+that cannot take it is replaced and opened empty; `graphql_cache.native.adopt_schema`
+records the tier, counts and duration. The browser worker adopts its built-in
+schema on open and records the same as `cache.schema.*` attributes on the open
+span. Types and Reset delete rows one at a time, so they cost about in
+proportion to the rows dropped; a type holding more than half of the documents
+instead keeps the other documents' facts and recreates the fact tables. On a
+320 MB cache-bench database (256k records), a compatible open took 7–9 ms
+natively and 15–72 ms in browsers, a Types change 0.5–4.2 s natively and
+0.9–6.3 s in browsers, and a Reset 2.0–2.7 s natively and 0.3–1.6 s in browsers.
+The ignored `schema_cost` tests in `soup_filter_cache_adapter` (native) and
+`cache-wasm` (browser) measure each tier on a database you supply.
 
 ## Network refreshes
 

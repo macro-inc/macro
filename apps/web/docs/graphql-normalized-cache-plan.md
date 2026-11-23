@@ -97,12 +97,15 @@ entire cache in browser memory. With 10s of thousands of cached objects
     write cannot be bypassed by a timeout. Login waits for all logout wipes and teardown, not just
     normalized-cache clearing. A post-write identity check cannot
     undo a native mutation already dispatched.
-    Additive GraphQL schema changes retain existing normalized records;
-    fragment reads can continue projecting fields already present. Manually
-    bump the schema compatibility epoch when identity, field storage shape, or
-    other schema-derived cache semantics become incompatible. Discard records
-    on compatibility-epoch/format mismatch (cache is disposable, rebuild from
-    network).
+    A cache stores the GraphQL schema its records were written under. An
+    open under another schema keeps every record it can still read: additive
+    changes keep all of them, a changed type drops only its own records and
+    rows derived from them, and a renamed operation root drops every record
+    (`crates/client/README.md#schema-changes`). Manually bump the schema
+    compatibility epoch only for cache semantics the schema cannot show.
+    Discard records on compatibility-epoch/format mismatch (cache is
+    disposable, rebuild from network). Every schema change keeps queued
+    mutations.
 
     **Key policy — presence-of-id convention**: no client-side key config.
     An output object type with `id: ID!` is keyed by `__typename:id`; no

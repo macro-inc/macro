@@ -58,6 +58,7 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
 ## Checks
 
 - `cargo test -p soup-filter-cache-adapter` (`SQLX_OFFLINE` unset).
+- `CACHE_SCHEMA_DB=<storage-12 or 13 bench database> cargo test --release -p soup-filter-cache-adapter --lib schema_change_cost_on_a_retained_cache -- --ignored --nocapture`: time each schema change tier, with CPU and run-queue wait, against a physical reset, on copies of the database (`CACHE_SCHEMA_CASE` filters cases, `CACHE_SCHEMA_RUNS` sets runs, `CACHE_SCHEMA_OUT` keeps the storage-13 copy for the browser test in `cache-wasm`).
 
 ## Gotchas
 
