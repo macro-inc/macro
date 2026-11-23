@@ -37,7 +37,7 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo {
   color: var(--nav-ink);
   box-shadow: inset 0 1px 0 #fff, inset 0 -1px 1px #00000006;
 }
-html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
+html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-demo)::after {
   background: linear-gradient(135deg, #ffffffcc 0%, #00000006 45%, #00000018 100%);
 }
 .macro-homepage .site-menu-mark { width: 27px; height: 27px; }
@@ -116,7 +116,8 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
 .macro-homepage .macro-home-hero > .macro-home-tagline { width: min(640px, 100%); margin: 0; color: #a8a8a8; font: 370 17.5px/1.65 'Inter Variable', Inter, sans-serif; letter-spacing: normal; text-wrap: balance; }
 .macro-home-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 32px; }
 .macro-home-actions .homepage-hero-cta { width: auto; min-width: 140px; padding-inline: 24px; }
-.macro-home-demo { display: inline-flex; align-items: center; justify-content: center; min-width: 140px; min-height: 40px; padding: 0 24px; border-radius: 999px; background: #141415; color: #fff; box-shadow: inset 0 0 0 1px #ffffff1f, inset 0 1px 0 #ffffff10; font: 500 14px/24px 'Inter Variable', Inter, sans-serif; text-decoration: none; white-space: nowrap; transition: opacity 150ms; }
+.macro-home-demo { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 140px; min-height: 40px; padding: 0 24px; border-radius: 999px; background: #141415; color: #fff; font: 500 14px/24px 'Inter Variable', Inter, sans-serif; text-decoration: none; white-space: nowrap; transition: opacity 150ms; }
+.macro-home-demo::after { opacity: .75; }
 .macro-home-demo:hover { opacity: .85; }
 .macro-homepage .homepage-open-source-badges { margin-top: 40px; }
 @media (max-width: 699px) {

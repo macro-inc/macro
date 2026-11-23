@@ -41,6 +41,9 @@ in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
 homepage aura at 25% of the shared gradient and the grain at 1.2% opacity.
+Give each homepage section a stronger radial gradient from its tutorial wallpaper
+and fade it out at the section boundaries. Pricing uses the Home palette and
+open source uses the GitHub palette.
 The first-paint scripts and `sitePalette.ts` must apply the same palette policy
 before and after hydration.
 

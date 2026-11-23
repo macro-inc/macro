@@ -1,4 +1,20 @@
 /* Homepage product sections: the feature-page chapter layout with a captured app window. */
+.macro-homepage .feature-page-section { isolation: isolate; }
+.macro-homepage .feature-page-section::after {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  pointer-events: none;
+  inset-block: 0;
+  left: 50%;
+  width: min(1250px, 100vw);
+  transform: translateX(-50%);
+  background:
+    radial-gradient(ellipse 55% 62% at 30% 48%, color-mix(in srgb, var(--page-aura-primary) 30%, transparent), transparent 80%),
+    radial-gradient(ellipse 50% 55% at 75% 59%, color-mix(in srgb, var(--page-aura-secondary) 26%, transparent), transparent 80%);
+  mask-image: linear-gradient(transparent, black 22%, black 78%, transparent);
+}
+
 .macro-homepage .product-feature-intro h2 {
   white-space: normal;
   text-wrap: pretty;

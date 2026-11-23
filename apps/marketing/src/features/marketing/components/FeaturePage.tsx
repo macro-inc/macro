@@ -104,6 +104,7 @@ export function FeaturePageCta(props: { name: string; label?: string }) {
 
 export function FeaturePageSection(props: {
   id: string;
+  aura?: TutorialVideoId;
   title: string | readonly string[];
   description: string;
   /** A real app screen; product pages use these instead of drawn demos. Children follow it. */
@@ -141,6 +142,12 @@ export function FeaturePageSection(props: {
     <section
       class="feature-page-section"
       id={props.id}
+      style={
+        props.aura && {
+          '--page-aura-primary': wallpapers[props.aura].colors[1],
+          '--page-aura-secondary': wallpapers[props.aura].colors[2],
+        }
+      }
       aria-labelledby={`${props.id}-title`}
     >
       <header class="product-feature-intro">

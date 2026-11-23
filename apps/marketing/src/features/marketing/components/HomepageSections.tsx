@@ -260,6 +260,7 @@ export function HomepageSections() {
         {(section) => (
           <FeaturePageSection
             id={section.id}
+            aura={section.tutorial}
             title={section.title}
             description={section.description}
             more={
@@ -284,6 +285,7 @@ export function HomepageSections() {
       </For>
       <FeaturePageSection
         id="pricing"
+        aura="home"
         title="One plan for all your work."
         description="Start free. Upgrade for more AI usage and storage."
         more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
@@ -300,6 +302,7 @@ export function HomepageSections() {
       </FeaturePageSection>
       <FeaturePageSection
         id="open-source"
+        aura="github"
         title="Fully open source. Not open core."
         description="Macro is fully open source under the AGPLv3. You can read and fork the code or run the workspace yourself."
       >
