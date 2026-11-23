@@ -230,6 +230,7 @@ function fixture(team = { canEdit: true, canManageBookings: true }) {
           { id: 'team', name: 'Design', teamId: 'team', ...team },
         ],
         members: () => [],
+        bookingAccounts: () => [],
         userId: () => 'user',
         createSource,
         copyLink: async () => {},

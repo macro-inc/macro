@@ -1347,6 +1347,7 @@ dependencies = [
  "system_properties",
  "teams",
  "thiserror 2.0.18",
+ "time_tracking",
  "tokio",
  "tokio-util",
  "tracing",
@@ -21479,6 +21480,7 @@ name = "time_tracking"
 version = "0.1.0"
 dependencies = [
  "activity",
+ "ai_toolset",
  "anyhow",
  "async-trait",
  "axum",
@@ -21497,6 +21499,7 @@ dependencies = [
  "model-error-response",
  "model_user",
  "rootcause",
+ "schemars 1.2.1",
  "serde",
  "serde_json",
  "serde_with",

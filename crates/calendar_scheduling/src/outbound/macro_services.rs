@@ -1,7 +1,8 @@
 //! Reuses calendar writes, sync projections, and current team membership.
 use crate::domain::{
+    booking_link_models::BookingAccount,
     models::*,
-    ports::{Calendars, Directory},
+    ports::{BookingAccounts, Calendars, Directory},
 };
 use calendar_events::domain::{
     labels::{CalendarLabels, attends_meeting},
@@ -58,11 +59,13 @@ impl<O, M, L> MacroCalendars<O, M, L> {
 }
 impl<O: CalendarSyncHealthReader, M, L> MacroCalendars<O, M, L> {
     /// Check that `calendars`, the host's, are current enough to offer their
-    /// free time.
+    /// free time, and that one can take the booking (`inbox`'s, when the link
+    /// books on a chosen connected inbox).
     async fn check_availability(
         &self,
         host: &str,
         calendars: &[VisibleCalendar],
+        inbox: Option<Uuid>,
     ) -> Result<sync_health::Served, Error> {
         let health = self
             .occurrences
@@ -73,7 +76,7 @@ impl<O: CalendarSyncHealthReader, M, L> MacroCalendars<O, M, L> {
             calendars,
             health: &health,
         }
-        .check_availability(Utc::now())
+        .check_availability(Utc::now(), inbox)
         .map_err(|refusal| {
             let span = tracing::Span::current();
             span.record("outcome", "refused");
@@ -147,7 +150,17 @@ where
     M: CalendarCreationRecoveryService,
     L: MeetingLinkProvider,
 {
-    async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
+    #[tracing::instrument(
+        name = "scheduling.creation_calendar",
+        skip_all,
+        fields(
+            email_link_id = tracing::field::Empty,
+            calendar_id = tracing::field::Empty,
+            outcome = tracing::field::Empty,
+        ),
+        err(level = tracing::Level::DEBUG)
+    )]
+    async fn creation_calendar(&self, host: &str, inbox: Option<Uuid>) -> Result<Uuid, Error> {
         let calendars = self
             .mutations
             .list_visible_calendars(host)
@@ -162,11 +175,21 @@ where
             calendars: &calendars,
             health: &health,
         };
-        calendars
+        let span = tracing::Span::current();
+        let Some(calendar) = calendars
             .iter()
-            .find(|c| host_calendars.can_take_bookings(c))
-            .map(|c| c.id)
-            .ok_or(Error::CalendarUnavailable)
+            .find(|c| host_calendars.can_take_bookings(c, inbox))
+        else {
+            span.record("outcome", "refused");
+            return Err(Error::CalendarUnavailable);
+        };
+        span.record(
+            "email_link_id",
+            tracing::field::display(calendar.email_link_id),
+        );
+        span.record("calendar_id", tracing::field::display(calendar.id));
+        span.record("outcome", "chosen");
+        Ok(calendar.id)
     }
     #[tracing::instrument(
         name = "scheduling.busy_time",
@@ -184,6 +207,7 @@ where
         start: DateTime<Utc>,
         end: DateTime<Utc>,
         exclude_event: Option<Uuid>,
+        inbox: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
         let mut events = vec![];
         let mut served = sync_health::Served::Current;
@@ -196,7 +220,8 @@ where
                 .list_visible_calendars(host)
                 .await
                 .map_err(|_| Error::CalendarUnavailable)?;
-            if self.check_availability(host, &calendars).await? == sync_health::Served::WithinWindow
+            if self.check_availability(host, &calendars, inbox).await?
+                == sync_health::Served::WithinWindow
             {
                 served = sync_health::Served::WithinWindow;
             }
@@ -509,16 +534,63 @@ where
         ),
         err(level = tracing::Level::DEBUG)
     )]
-    async fn ready(&self, host: &str) -> Result<(), Error> {
+    async fn ready(&self, host: &str, inbox: Option<Uuid>) -> Result<(), Error> {
         let calendars = self
             .mutations
             .list_visible_calendars(host)
             .await
             .map_err(|_| Error::CalendarUnavailable)?;
-        let served = self.check_availability(host, &calendars).await?;
+        let served = self.check_availability(host, &calendars, inbox).await?;
         tracing::Span::current().record("outcome", served.as_str());
         Ok(())
     }
+}
+
+impl<O: CalendarOccurrenceService, M: Send + Sync + 'static, L: Send + Sync + 'static>
+    BookingAccounts for MacroCalendars<O, M, L>
+{
+    async fn booking_accounts(&self, host: &str) -> Result<Vec<BookingAccount>, Error> {
+        booking_accounts(&*self.occurrences, host).await
+    }
+}
+
+/// The connected accounts a host's personal links can book on, for settings
+/// surfaces that make no calendar writes.
+pub struct MacroBookingAccounts<O>(pub Arc<O>);
+
+impl<O: CalendarOccurrenceService> BookingAccounts for MacroBookingAccounts<O> {
+    async fn booking_accounts(&self, host: &str) -> Result<Vec<BookingAccount>, Error> {
+        booking_accounts(&*self.0, host).await
+    }
+}
+
+/// One account per connected inbox whose primary calendar the host can
+/// write, in the listing's order: the primary inbox first.
+async fn booking_accounts<O: CalendarOccurrenceService>(
+    occurrences: &O,
+    host: &str,
+) -> Result<Vec<BookingAccount>, Error> {
+    let calendars = occurrences
+        .list_visible_calendars(host)
+        .await
+        .map_err(|_| Error::CalendarUnavailable)?;
+    let mut accounts: Vec<BookingAccount> = Vec::new();
+    for calendar in calendars {
+        if !calendar.is_primary
+            || !calendar.is_writable
+            || accounts
+                .iter()
+                .any(|account| account.email_link_id == calendar.email_link_id)
+        {
+            continue;
+        }
+        accounts.push(BookingAccount {
+            email_link_id: calendar.email_link_id,
+            email_address: calendar.email_address,
+            video_meetings: calendar.capabilities.conference_provider.is_some(),
+        });
+    }
+    Ok(accounts)
 }
 
 /// Whether an occurrence takes the host's time: a calendar holding it counts

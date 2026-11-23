@@ -649,7 +649,7 @@ export default {
     more: '更多',
     moreOptions: '更多選項',
     create: '建立',
-    getMobileApp: '取得行動應用程式',
+    downloads: '下載',
     signedInAs: '已登入為 {{name}}',
     customizeSidebar: '自訂側邊欄',
     customizeSidebarDescription:
@@ -712,8 +712,7 @@ export default {
     tabShortcuts: '鍵盤快速鍵',
     tabUsage: '用量',
     tabBilling: '帳單',
-    tabDesktopApp: '桌面應用程式',
-    tabMobileApp: '行動應用程式',
+    tabDownloads: '下載',
     tabTags: '標籤',
     tabIntegrations: '整合',
     tabRuntimes: '機器',

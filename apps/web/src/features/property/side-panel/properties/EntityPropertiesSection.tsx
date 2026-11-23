@@ -178,6 +178,11 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       if (tagDefinitionIds().has(property.propertyDefinitionId)) {
         return false;
       }
+      // Time logged is the sum of a task's entries: the Time pill shows and
+      // changes it, never a generic number row.
+      if (property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.TIME_LOGGED) {
+        return false;
+      }
       if (props.propertyFilter && !props.propertyFilter(property)) {
         return false;
       }
