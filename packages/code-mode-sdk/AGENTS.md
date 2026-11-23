@@ -19,7 +19,8 @@ HTML worker belong to `packages/sdk-docs`.
   the 16 KiB reference size, such as `EditOp`, lists its members, each read as
   `EditOp.<discriminator>`.
 - `scripts/catalog.ts`: the entity directories agents discover, one topic per
-  directory except tasks and task templates, which share the tasks topic.
+  directory except tasks, task templates and time tracking (`time`), which
+  share the tasks topic.
   Jev routes the catalog in parallel 32-question calls, so its size is not capped.
 - Each entity's description is its one `@routing` sentence ("Use when …; not
   …") and its `guide` every `@agent` block, both from the SDK's TSDoc and

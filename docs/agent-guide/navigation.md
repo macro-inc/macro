@@ -772,6 +772,12 @@ chat agents, and the composer stays on one line. In Code it lists coding agents
 only, the composer opens expanded with the repository drawer below it, and the
 greeting reads "What should we build?". New sessions use the selected agent's
 default model and the URL for its kind. Home keeps its usual agent composer.
+On the Agents page, Home, and the phone composer, picking an agent from the
+composer's `@` menu selects it, switching to its mode (Chat or Code, also from
+Auto); the mention stays in the prompt and the last agent picked wins. Mentioning
+the agent already selected keeps its model pick, and a mention made while the
+agent list loads applies once it arrives. An unavailable agent blocks Send with
+its reason.
 Opening an existing row restores its own kind and URL.
 Right-click a conversation for Rename, Favorite, Copy link, Share, Delete, and
 the other entity actions used on Home.
@@ -1804,9 +1810,10 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Quick Access merges the complete channel list with
-cached channels, so known channels remain searchable before cache hydration and
-outside its recent page. Cached metadata wins for duplicate channels while newer
+another pagination attempt. Quick Access merges the joined channels of the
+channel directory with cached channels, so known channels remain searchable
+outside its recent page; on a cold cache the directory fills as the channel
+backfill runs. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;

@@ -50,7 +50,7 @@ async fn a_personal_replacement_never_claims_or_shares_the_deleted_team_copy(poo
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -182,7 +182,7 @@ async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinatio
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -268,7 +268,7 @@ async fn a_deleted_linked_task_folder_requires_a_fresh_plan_instead_of_a_databas
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -325,7 +325,7 @@ async fn one_deleted_finished_page_is_reported_without_stopping_other_pages(pool
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -399,7 +399,7 @@ async fn a_deleted_finished_link_is_reported_instead_of_staying_already_imported
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )

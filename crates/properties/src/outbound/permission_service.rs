@@ -133,6 +133,7 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             | AccessEntityType::Initiative
             | AccessEntityType::Channel
             | AccessEntityType::CrmCompany
+            | AccessEntityType::CrmContact
             | AccessEntityType::User
             | AccessEntityType::EmailThread => {}
             _ => {

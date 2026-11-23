@@ -270,7 +270,7 @@ describe('deterministic spreadsheet worker runtime', () => {
       storage.commit(revision(), new Uint8Array([1, 2]), signal())
     ).rejects.toMatchObject({ status: 409 });
     expect(fetcher.mock.calls[0][0]).toBe(
-      'https://sync.example/document/document-id/state'
+      'https://sync.example/document/document-id/state?shallow=true'
     );
     expect(fetcher.mock.calls[1][0]).toBe(
       'https://sync.example/document/document-id/update'

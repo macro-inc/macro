@@ -3,14 +3,13 @@ import {
   IntegrationRow,
   SettingsSurface,
 } from '@app/features/settings/primitives';
+import { requestConnectApp } from '@core/connectors/pendingConnect';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import { requestConnectApp } from '@core/pipedream/pendingConnect';
-import { SLACK_CONNECT_SLUG } from '@core/pipedream/slugs';
 import { holdAutomaticReload } from '@core/util/reloadForNewerBuild';
 import SlackIcon from '@icon/slack-color.svg';
-import { invalidateListChannels } from '@queries/channel/channels';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { revalidateChannelLists } from '@queries/soup/graphql/channel-list-revalidation';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
@@ -75,17 +74,16 @@ function SlackImportSettings(props: {
   trigger?: ImportDialogTrigger;
   historyOnly?: boolean;
 }): JSX.Element {
-  // A second query handle here would hold its own copy of the channel list.
-  const { channelsById } = useChannelsContext();
+  const directory = useChannelDirectory();
   const userId = useUserId();
   const client = getGraphqlSoupClient();
   const { openSettings } = useSettingsState();
   const connectSlack = () => {
-    requestConnectApp(SLACK_CONNECT_SLUG, 'import-slack-channels');
+    requestConnectApp('slack', 'import-slack-channels');
     openSettings('Connected');
   };
   function channelHref(id: string): string | undefined {
-    if (!channelsById()[id]) return undefined;
+    if (directory.lookup(id).status !== 'loaded') return undefined;
     return `/app/channel/${encodeURIComponent(id)}`;
   }
   async function onCompleted(job: ImportJob): Promise<void> {
@@ -100,7 +98,7 @@ function SlackImportSettings(props: {
     }
     invalidateAllSoup();
     await Promise.all([
-      invalidateListChannels(),
+      refreshChannelDirectory(),
       revalidateChannelLists(client),
     ]);
   }

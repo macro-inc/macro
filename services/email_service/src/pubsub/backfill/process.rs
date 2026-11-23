@@ -4,20 +4,48 @@ use email::domain::backfill_jobs::worker::BackfillDisposition;
 use models_email::service::backfill::BackfillPubsubMessage;
 use sqs_worker::cleanup_message;
 use std::time::Duration;
+use tracing::Instrument as _;
 
-// Process a single message from the backfill queue
-#[tracing::instrument(name = "email.backfill.process", skip_all, err)]
+#[cfg(test)]
+mod test;
+
+/// Processes one message from the backfill queue.
 pub(crate) async fn process_message(
     ctx: BackfillContext,
     message: &aws_sdk_sqs::types::Message,
 ) -> anyhow::Result<()> {
+    in_job_span(message, process(ctx, message)).await
+}
+
+/// Runs `work` in the message's `email.backfill.process` span, parented on the
+/// trace that queued the job when the message carries one. The span is built by
+/// hand because its parent must be set before it is first entered.
+async fn in_job_span(
+    message: &aws_sdk_sqs::types::Message,
+    work: impl Future<Output = anyhow::Result<()>>,
+) -> anyhow::Result<()> {
+    let span = tracing::info_span!(
+        parent: None,
+        "email.backfill.process",
+        message_id = message.message_id(),
+        receive_count = sqs_worker::receive_count(message).map(i64::from),
+    );
     sqs_client::email::trace_context::adopt(
-        &tracing::Span::current(),
+        &span,
         message
             .message_attributes()
             .and_then(|attributes| attributes.get(sqs_client::email::trace_context::ATTRIBUTE))
             .and_then(|attribute| attribute.string_value()),
     );
+    work.instrument(span.clone()).await.inspect_err(|error| {
+        span.in_scope(|| tracing::error!(error = ?error, "backfill message failed"));
+    })
+}
+
+async fn process(
+    ctx: BackfillContext,
+    message: &aws_sdk_sqs::types::Message,
+) -> anyhow::Result<()> {
     // Malformed JSON is NOT retryable.
     let data = match ctx.service.decode(extract_backfill_message(message)) {
         Ok(data) => data,

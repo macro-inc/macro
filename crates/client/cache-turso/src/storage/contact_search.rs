@@ -1,14 +1,13 @@
 //! Covering contact-record reads within the existing normalized cache schema.
-use super::{compatibility, driver, required_i64, required_text, validate_primary_index};
+use super::{Db, compatibility, driver, required_i64, required_text, validate_primary_index};
 use crate::TursoStorageError;
-use std::sync::Arc;
-use turso_core::{Connection, Value};
+use turso_core::Value;
 
 pub(super) const INDEX: &str = "records_contacts_cover_idx";
 pub(super) const CREATE_INDEX: &str = "CREATE INDEX records_contacts_cover_idx ON records (__typename, id, value) WHERE __typename = 'GraphqlContact'";
 pub(super) const LOAD: &str = include_str!("contact_search.sql");
 
-pub(super) fn validate_indexes(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn validate_indexes(connection: &Db) -> Result<(), TursoStorageError> {
     let indexes = driver::query(connection, "PRAGMA index_list('records')", vec![])
         .map_err(TursoStorageError::initialization)?;
     if indexes.len() != 2 {

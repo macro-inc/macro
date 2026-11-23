@@ -69,14 +69,13 @@ tool list. Expand the discovery row to see the results. An app name alone does
 not establish that the requested action is supported.
 
 For a suitable unconnected app, the assistant offers **Connect <app>**. Clicking
-it opens the hosted authorization flow over the agent transcript on web. For an
-overlaid app (one with its own MCP server, see Settings → Integrations) it
-opens that server's OAuth consent in a new tab instead, and the session
-continues once the server is authorized; the agent then reaches the app
-through that server rather than Pipedream. In
+it asks the server how to connect (`POST /connectors/app/{slug}/connect`) and
+follows the answer: the embedded connect dialog over the agent transcript on
+web, or a consent page in a new tab, and the session continues once the server
+records the connection. In
 native apps, consent opens in the system browser, which returns to Macro on its
 own after authorization (**Return to Macro** is the fallback link). The waiting
-dialog's **Done** checks Pipedream for an account the flow created, and callbacks
+dialog's **Done** asks the server to record an account the flow created, and callbacks
 from canceled or expired attempts cannot resume the agent. After the
 backend verifies and registers the connection, the agent session sends a visible
 continuation message in the same conversation. Before that message reaches the
@@ -420,7 +419,8 @@ attachment in the attachment grid, not as message markdown.
 
 ## Ask AI entry points
 
-**Ask AI** in desktop search (including Tab) and the command menu opens
+**Ask AI** in desktop search (its button, or Cmd+Enter, Ctrl+Enter
+elsewhere, even from the search field) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
 session is ready. With the Agents workspace enabled, an empty search replaces its
 split with the Agents workspace's new-conversation composer; otherwise it opens an
@@ -547,6 +547,9 @@ the shimmer.
   combines Type, Status, and Pull request filters; choices within a category are
   ORed and categories are ANDed. Sort and filters are remembered per user;
   previously saved grouping is ignored by the redesigned desktop list.
+  The phone list's **Group conversations** offers Status (default) and None:
+  Needs you and Working show counts above an uncounted Recent, a list that is
+  all Recent has no heading, and Archived shows no count.
   With `enable-agent-updates`, **Open PRs** remains between Waiting on you and
   Conversations, showing non-waiting active coding sessions with open or draft
   PRs. Each session appears in only one section; disabling Open PRs returns its
@@ -1392,8 +1395,7 @@ results are presented with `execution.views.present`. The legacy
 chat and workspace SDK namespaces are excluded from agent documentation. Methods
 routed through the SDK are absent from direct schemas, `SearchTools`, and `LoadTools`;
 they remain discoverable through `DescribeCodeTools`. User-review
-tools, `AskUser`, connector discovery, tool loading for connected apps,
-and explicit provider code execution retain their direct lifecycle. Connected
+tools, `AskUser`, connector discovery, and tool loading for connected apps retain their direct lifecycle. Connected
 third-party MCP tools remain available.
 
 Sessions without a user owner can't run in-process turns at all.
@@ -2276,6 +2278,18 @@ unsent notes persist per session in localStorage. A fresh capture expands files
 with at most 40 changed lines (additions + deletions) and collapses larger files,
 on desktop and phones. File toggles and **Collapse all / Expand all** override
 these defaults; selecting a file in the tree expands it.
+
+An agent's references to changed files in its reply are links: markdown links
+(`[pane.tsx:12](apps/web/src/pane.tsx#L12)`) and inline code that names a changed
+file (`apps/web/src/pane.tsx:12-14`, an absolute checkout path, or a path from a
+subdirectory that only one changed file ends in). Clicking one opens the Changes
+pane, expands and scrolls to the file, lights the referenced lines on the head side
+(old side for a deleted file), and scrolls the first referenced line into view; a
+line outside the diff's hunks lights nothing and leaves the file header in view.
+`file://` links and bare names with a line (`package.json:5`) work too. A relative
+link to an unchanged file opens it on GitHub at the capture's head commit; an
+absolute one, or one climbing out with `..`, shows a toast. Bare identifiers in code (`pane`) never link, and
+sessions without changes keep links as before.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.

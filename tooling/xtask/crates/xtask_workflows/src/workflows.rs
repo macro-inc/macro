@@ -47,6 +47,7 @@ mod code_check_cloud_storage;
 mod code_check_conventions;
 mod code_check_infra;
 pub mod composite;
+mod connectors_e2e;
 mod deploy_ai_editing_worker;
 mod deploy_all_services;
 mod deploy_analytics_proxy_dev;
@@ -165,6 +166,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "connectors_e2e",
+        file_name: "connectors_e2e.yml",
+        render_yaml: || render_gh_workflow(connectors_e2e::connectors_e2e)(),
     },
     WorkflowFile {
         slug: "channels_e2e",
