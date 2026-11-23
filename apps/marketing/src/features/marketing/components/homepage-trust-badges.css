@@ -9,6 +9,7 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   width: min(660px, calc(100% - 24px));
+  padding-block: 10px 30px;
   gap: 0;
   align-items: stretch;
   text-align: center;

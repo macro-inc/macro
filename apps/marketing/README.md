@@ -18,8 +18,8 @@ The homepage uses the feature-page hero with the live site's headline and subhea
 Break the H1 after “The unified workspace” and keep the supporting H2 “Macro
 replaces 27+ apps with one connected system designed for humans and agents.”
 balanced below it. Center the hero on desktop and left-align it below 700px,
-with Get Macro (signup) beside Book a demo. `HomepageTour` follows in a 720px
-maximum desktop frame at 16:9, sized like the Email hero demo. Each module
+with Get Macro (signup) beside Book a demo. `HomepageTour` follows in an 800px
+maximum desktop frame at 16:9. Each module
 (Home, Mail, Chat, Tasks, Calendar, Docs, CRM, Calls) has a tab showing its
 captured app window on a `TutorialWallpaper`. The tour advances every five
 seconds until the visitor picks a tab, uses the arrow keys or the Next button,
@@ -29,8 +29,8 @@ continue. Below the tour, two faded vertical rules separate the backing, securit
 and GitHub badges. The GitHub badge links to the repository and refreshes its
 star count on mount above the August trending caption. `HomepageSections`
 then gives each product one
-`FeaturePageSection` in the feature pages' 640px reading column with an 800px
-graphic. Use the product page's hero heading and two or three sentences above
+`FeaturePageSection` in the feature pages' 640px reading column with a centered
+graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and two or three sentences above
 the capture, with a “Learn about [feature] →” link where the product has a page.
 Let the heading wrap at its normal size. Follow each capture with two short
 sentences in the same type as the introduction. Draw on the founder's letter,

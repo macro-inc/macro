@@ -78,7 +78,7 @@ const SECTIONS: readonly Section[] = [
   },
   {
     id: 'tasks',
-    title: 'Tasks for people and agents.',
+    title: 'Turn conversations into tasks.',
     description:
       'Create tasks from email and team chat. Assign people or agents, and keep task status in sync with linked pull requests.',
     caption: [

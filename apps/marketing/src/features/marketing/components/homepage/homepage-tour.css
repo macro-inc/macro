@@ -1,9 +1,9 @@
-/* Match the desktop footprint of the Email hero demo. */
+/* Give the interactive tour the widest frame on the homepage. */
 .homepage-tour {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  width: min(100% - 48px, 720px);
+  width: min(100% - 48px, 800px);
   aspect-ratio: 16 / 9;
   margin: 0 auto;
   padding: 24px 32px 0;
