@@ -125,19 +125,16 @@ pub trait ChannelTimelineAudience: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Self::Err>> + Send;
 }
 
-/// The users in `users` with a valid user id. Realtime delivery addresses
-/// users by plain id; an id that does not parse names no subscriber.
+/// The users in `users` who can subscribe. Realtime delivery addresses
+/// participants by plain id, bots included; an id that is not a user id,
+/// such as a bot's, has no subscription, so it is dropped without a warning.
 fn recipients(users: impl IntoIterator<Item = String>) -> Vec<MacroUserIdStr<'static>> {
     users
         .into_iter()
         .filter_map(|user| {
             MacroUserIdStr::parse_from_str(&user)
-                .map(|user| user.into_owned())
-                // The id is personal data, so it stays out of the log.
-                .inspect_err(|_| {
-                    tracing::warn!("skipping live update recipient with an invalid id")
-                })
                 .ok()
+                .map(|user| user.into_owned())
         })
         .collect()
 }

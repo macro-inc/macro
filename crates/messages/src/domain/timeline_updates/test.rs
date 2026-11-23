@@ -159,7 +159,12 @@ async fn sequenced_reply_is_hydrated_once_with_its_root_and_addressed_to_the_del
     realtime
         .send(
             &posted(MessageParent::Channel(CHANNEL), Some(42), REPLY, Some(ROOT)),
-            users(&["macro|a@example.com", "macro|b@example.com"]),
+            // An agent DM's bot is a participant with no subscription.
+            users(&[
+                "macro|a@example.com",
+                "macro|b@example.com",
+                "bot|00000000-0000-0000-0000-00000000b07a",
+            ]),
         )
         .await
         .unwrap();
