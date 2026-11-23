@@ -38,7 +38,7 @@ pub use calendar::Calendar;
 /// Dates and times, for calendar scenarios.
 pub use chrono;
 pub use email_tools::EmailTools;
-pub use focus::FocusClassifier;
+pub use focus::{FocusClassifier, ModelRequest};
 /// The Gmail emulator's own API, for what the inbox methods do not cover.
 pub use gmail_emulator;
 pub use host::raise_open_file_limit;

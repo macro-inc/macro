@@ -300,6 +300,7 @@ dependencies = [
  "reqwest",
  "rootcause",
  "rustls-platform-verifier",
+ "semver",
  "serde",
  "serde_json",
  "serde_qs",
@@ -1035,6 +1036,7 @@ dependencies = [
  "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru",
  "macro_user_id",
  "maybe_send",
@@ -1065,6 +1067,7 @@ name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "item-filter-index",
  "maybe_send",
  "predicate-index",
  "thiserror 2.0.21",

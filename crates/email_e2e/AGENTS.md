@@ -170,7 +170,11 @@ async fn new_mail_arrives_through_push() -> Result<(), Report> {
   renewal")`; `due_on_when_mail_contains` sets the day the harness reads
   as due and `event_on_when_mail_contains` the day of the meeting it is
   about, and `times_asked_about(text)` tells whether mail reached the
-  model at all; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
+  model at all; `bill_tokens_per_call(tokens)` sets what each answer bills,
+  `rate_limit_for(period)` turns every question away with 429 for a while,
+  and `requests_about(text)` lists every question with when it came, what it
+  billed and whether it was turned away, for scenarios on the worker's token
+  budget; `stack.focus_worker_log()` is what the worker logged. The questions and their order are the product's: the
   stand-in answers yes only to the first, "would the owner want this in
   Focus", and, for text named with `ask_the_owner_when_mail_contains`, to
   whether the latest message asks the owner something they haven't answered. The worker classifies an inbox only while its owner, or a user it

@@ -125,17 +125,23 @@ export function taskDueDateBucket(
   return 'later';
 }
 
-/** Presentation urgency for an open task, based on viewer-local calendar days. */
+/**
+ * Presentation urgency for an open task, based on viewer-local calendar days.
+ * A due date with a time of day is overdue from that moment, not from the
+ * next day.
+ */
 export function taskDueDateUrgency(
   value: string | undefined,
   closed: boolean,
-  calendar: DateBucketBoundaries
+  calendar: DateBucketBoundaries,
+  timed?: { now: number }
 ): 'danger' | 'warning' | undefined {
   if (closed || !value) return;
   const due = Date.parse(value);
   if (!Number.isFinite(due)) return;
   const b = calendar.boundaries;
   if (due < Date.parse(b.today)) return 'danger';
+  if (timed && due < timed.now) return 'danger';
   if (due < Date.parse(b.day_two)) return 'warning';
 }
 

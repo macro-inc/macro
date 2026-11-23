@@ -278,10 +278,11 @@ at the same time take turns every two seconds. In a DM it is the typing row.
 A channel mention's reply in its thread is one message, so the line sits in
 it, and reads `Thinking` whenever the turn is running with no open run, before
 the first step or while the agent writes after one.
-Once a run closes, it folds to a `Used N tools` summary (with
-`· N failed` when a step failed), with a caret after it on hover, that opens
-to compact rows like the session's tool rows: the label, and **Failed** or
-**Interrupted** when a step did not finish.
+Once a run closes, it folds to a `Used N tools` summary, with a caret after it
+on hover, that opens to compact rows like the session's tool rows: the label
+only. A failed or interrupted step looks like any other, and a program that
+failed or stopped without naming a step is left out of the line and the
+summary; the agent explains a failure in its reply.
 Documents, sessions, pull requests, and contacts an agent's reply mentions are
 set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
@@ -442,8 +443,8 @@ the tool's own name, without a server or workspace label, never by the harness's
 (`mcp`). Clicking the row expands the exchange: a `Request` section with the
 tool's own arguments and a `Response` section with what it returned, both as
 syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
-button that copies the whole section; a call that failed is faded, shows the
-error as its subtitle, and adds an `Error` section. Rows for a call still running
+button that copies the whole section; a call that failed shows its plain row,
+with no failure label or fade. Rows for a call still running
 show whatever has arrived so far.
 
 ## Inline image actions
@@ -1099,8 +1100,16 @@ reaction do not notify.
 
 In Home, reactions belong to the message's thread row: a top-level message uses
 its own row, and a reply uses its parent thread. Verify that an incoming reaction
-brings that row back into the inbox, displays the reaction and channel name, and
-opens the reacted-to message. Marking the row done should clear its reaction
+brings that row back into the inbox and opens the reacted-to message.
+
+Every surface lays a reaction out like Slack's Activity item: who reacted, then
+**Reacted 👍 to:** and the message, then where (`#channel`, a group chat's
+name, nothing for a DM). Check it on the inbox card (several reactions to one
+message stack as one card naming everyone and every emoji), the touch Home
+card, a desktop notification, and the push and email digest, which take it
+from `ChannelMessageReactionMetadata`'s title and body. The push and desktop
+notification cut the message at 80 characters so the channel line stays in
+view. Marking the row done should clear its reaction
 notifications along with the other notifications for that thread.
 
 ## Marking notifications done in the channel gutter
@@ -1348,7 +1357,9 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order.
+groups keep the source's page order. An unseen invite (being added to a channel)
+makes the channel unread, as it is in Notifications and the Chat badge, until
+Chat opens the channel and marks the invite seen.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading

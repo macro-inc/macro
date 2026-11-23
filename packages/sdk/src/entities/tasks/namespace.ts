@@ -12,12 +12,18 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * Creating a task needs only what the request states; don't research what it
  * describes unless asked.
  *
- * @routing Use when creating, assigning or updating tasks, reporting on open or overdue tasks, or managing reusable task templates; not reminders, which are routines.
+ * @routing Use when creating, assigning or updating tasks, logging time on a task or running a timer, reporting on open or overdue tasks, or managing reusable task templates; not reminders, which are routines.
  *
  * @agent
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
  * When changing both of a task's dates, set the Due Date before the Start Date:
  * a start after the current due date is saved as that due date.
+ * A time of day a person gives for a task's dates is in their time zone (the
+ * one your context's current time names) unless they name another: write it
+ * with that zone's UTC offset on that date, which daylight saving time can
+ * change, and mark it as timed (`withTimes`, or `has_time: true` on a date
+ * value). When the context says the time zone is unknown, it is UTC: say which
+ * zone you used.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
@@ -49,6 +55,17 @@ export class TaskNamespace {
      * `dueDate` is saved as the due date.
      */
     startDate?: Date;
+    /**
+     * Keeps the time of day of `startDate` and `dueDate`, making each an
+     * exact moment (a 2 to 4 PM block) instead of a whole day. A time the
+     * person gives is in their time zone (the one your context's current time
+     * names) unless they name another: build the Date from a timestamp with
+     * that zone's UTC offset on that date, which daylight saving time can make
+     * different from today's (3 PM on a winter day in New York is
+     * `new Date('2026-11-30T15:00:00-05:00')`). When the context says the time
+     * zone is unknown, it is UTC: say which zone you used.
+     */
+    withTimes?: boolean;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
     /** Defaults to team sharing, or private when the session cannot share. */

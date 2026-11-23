@@ -196,6 +196,7 @@ export const BulkSetEntityPropertyOptions = z.object({
         'call',
         'user',
         'company',
+        'contact',
         'chat',
       ]),
       entity_id: z.string(),
@@ -11034,6 +11035,7 @@ export const GetEntityProperties = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
 });
@@ -19269,6 +19271,7 @@ export const SetEntityProperty = z.object({
     'call',
     'user',
     'company',
+    'contact',
     'chat',
   ]),
   property_definition_id: z.string().uuid(),
@@ -19276,6 +19279,7 @@ export const SetEntityProperty = z.object({
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  date_has_time: z.union([z.boolean(), z.null()]).optional(),
   date_range_value: z
     .union([
       z.object({

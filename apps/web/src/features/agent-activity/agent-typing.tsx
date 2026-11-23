@@ -118,6 +118,11 @@ function AgentTypingEntry(props: {
     () => run()?.index,
     () => run()?.rows ?? [phaseRow(props.phase)]
   );
+  // A run whose only step was left out still says what the turn is doing.
+  const shownRows = () => {
+    const current = rows();
+    return current.length > 0 ? current : [phaseRow(props.phase)];
+  };
   // A held tool call is answered from the session, not here: a turn the
   // owner prompts, as every DM turn is, is never held for them.
   const pending = () =>
@@ -162,7 +167,7 @@ function AgentTypingEntry(props: {
           size="md"
         />
       }
-      rows={rows()}
+      rows={shownRows()}
       onStop={
         canEdit() && reply()
           ? () => fireAndForget(stop(), 'agent-activity')
@@ -185,6 +190,7 @@ function AgentTypingEntry(props: {
                 request={request()}
                 controller={interactions}
                 tool={toolFor(request().toolCall)}
+                agentName={name()}
               />
             )}
           </Key>
