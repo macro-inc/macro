@@ -13,6 +13,9 @@ const TRACEPARENT: &str = "traceparent";
 /// `00-` + 32 hex trace id + `-` + 16 hex span id + `-` + 2 hex flags.
 const VERSION_00_LEN: usize = 55;
 const FLAGS_AT: usize = 53;
+/// Where version 00 puts its `-` separators: after the version, the trace
+/// id and the parent id.
+const SEPARATORS_AT: [usize; 3] = [2, 35, FLAGS_AT - 1];
 const SAMPLED: u8 = 0x01;
 
 /// `TraceContextPropagator`, except that a version-00 `traceparent` with
@@ -68,9 +71,9 @@ enum Traceparent {
     AsSent,
     /// A version-00 header with its flags narrowed to `sampled`.
     Narrowed(String),
-    /// A version-00 header of the wrong length, or whose flags are not two
-    /// lowercase hex digits, which the SDK would read leniently (`+1` or
-    /// `1` as sampled): none at all.
+    /// A version-00 header not shaped as version 00 requires (32, 16 and 2
+    /// lowercase hex digits between its separators), which the SDK would
+    /// read leniently (flags `+1`, `1` or `001` as sampled): none at all.
     Refused,
 }
 
@@ -80,27 +83,32 @@ fn known_flags_only(value: &str) -> Traceparent {
     if !value.starts_with("00-") {
         return Traceparent::AsSent;
     }
-    // Version 00 has exactly one length; the SDK also takes a shorter or
-    // longer flags field (`1`, `001`).
-    if value.len() != VERSION_00_LEN {
+    // The SDK splits on `-` and parses each field leniently, so a short id
+    // can leave room for three flag digits, and `from_str_radix` takes `+1`.
+    if !is_version_00_shaped(value) {
         return Traceparent::Refused;
     }
     let Some((prefix, flags)) = value.split_at_checked(FLAGS_AT) else {
         return Traceparent::Refused;
     };
-    // Two lowercase hex digits, as the header requires; `from_str_radix`
-    // alone would also take `+3`.
-    if !flags
-        .bytes()
-        .all(|digit| matches!(digit, b'0'..=b'9' | b'a'..=b'f'))
-    {
-        return Traceparent::Refused;
-    }
     match u8::from_str_radix(flags, 16) {
         Ok(flags) if flags & !SAMPLED == 0 => Traceparent::AsSent,
         Ok(flags) => Traceparent::Narrowed(format!("{prefix}{:02x}", flags & SAMPLED)),
         Err(_) => Traceparent::Refused,
     }
+}
+
+/// Whether `value` is exactly version 00's shape: `-` at each separator and
+/// a lowercase hex digit everywhere else.
+fn is_version_00_shaped(value: &str) -> bool {
+    value.len() == VERSION_00_LEN
+        && value.bytes().enumerate().all(|(at, byte)| {
+            if SEPARATORS_AT.contains(&at) {
+                byte == b'-'
+            } else {
+                matches!(byte, b'0'..=b'9' | b'a'..=b'f')
+            }
+        })
 }
 
 impl Extractor for KnownFlags<'_> {

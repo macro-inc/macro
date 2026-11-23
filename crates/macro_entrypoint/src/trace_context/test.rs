@@ -67,6 +67,8 @@ fn malformed_traceparents_are_still_refused() {
         format!("00-{TRACE_ID}-{SPAN_ID}-1"),
         format!("00-{TRACE_ID}-{SPAN_ID}-001"),
         format!("00-{TRACE_ID}-{SPAN_ID}-01-"),
+        format!("00-{}-{SPAN_ID}-001", &TRACE_ID[1..]),
+        format!("00-{}-{SPAN_ID}-01", TRACE_ID.to_uppercase()),
         format!("00-00000000000000000000000000000000-{SPAN_ID}-03"),
         format!("00-{TRACE_ID}-0000000000000000-03"),
         "03".to_owned(),
@@ -115,6 +117,9 @@ fn flags_of_the_wrong_length_are_refused() {
     for traceparent in [
         format!("00-{TRACE_ID}-{SPAN_ID}-1"),
         format!("00-{TRACE_ID}-{SPAN_ID}-001"),
+        // 55 bytes in all: a 31-digit trace id leaves room for three flag
+        // digits.
+        format!("00-{}-{SPAN_ID}-001", &TRACE_ID[1..]),
     ] {
         let headers = HashMap::from([(TRACEPARENT.to_owned(), traceparent.clone())]);
         assert!(
