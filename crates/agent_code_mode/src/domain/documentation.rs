@@ -336,7 +336,7 @@ pub async fn select_documentation(
 ) -> String {
     let docs = sdk_documentation();
     let mut output = String::from(
-        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here.\nAvailable entities:\n",
+        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here, and after ReadCodeDocs answers a symbol unknown; never guess.\nAvailable entities:\n",
     );
     for doc in docs {
         output.push_str(&format!("{}: {}\n", doc.name, doc.description));
@@ -488,20 +488,42 @@ pub struct SymbolReferences {
     /// Requested symbols no index or reference names.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub unknown: Vec<String>,
+    /// For each unknown symbol something real is near, what to read instead.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<SymbolSuggestion>,
+}
+
+/// What to read instead of a symbol that doesn't exist.
+#[derive(Clone, Serialize, JsonSchema)]
+pub struct SymbolSuggestion {
+    /// The unknown symbol as requested.
+    pub symbol: String,
+    /// The nearest symbols that exist, nearest first; read them with ReadCodeDocs.
+    pub did_you_mean: Vec<String>,
+    /// The entities whose index lists them; fetch one with DescribeCodeTools.
+    pub entities: Vec<String>,
 }
 
 /// The references for `symbols`, in order, until they fill the budget.
-#[tracing::instrument(name = "code_mode.read_symbols", skip_all, fields(requested = symbols.len(), read = tracing::field::Empty, unknown = tracing::field::Empty, bytes = tracing::field::Empty))]
+#[tracing::instrument(name = "code_mode.read_symbols", skip_all, fields(requested = symbols.len(), read = tracing::field::Empty, unknown = tracing::field::Empty, suggested = tracing::field::Empty, bytes = tracing::field::Empty))]
 pub fn read_symbols(symbols: &[String]) -> SymbolReferences {
     let mut bytes = 0;
     let mut result = SymbolReferences {
         references: Vec::new(),
         omitted: Vec::new(),
         unknown: Vec::new(),
+        suggestions: Vec::new(),
     };
     for symbol in symbols {
         let Some(reference) = symbol_reference(symbol.trim()) else {
             result.unknown.push(symbol.clone());
+            if !result
+                .suggestions
+                .iter()
+                .any(|suggestion| suggestion.symbol == symbol.trim())
+            {
+                result.suggestions.extend(suggest(symbol.trim()));
+            }
             continue;
         };
         // The first reference is always returned; none is larger than the budget.
@@ -518,8 +540,130 @@ pub fn read_symbols(symbols: &[String]) -> SymbolReferences {
     let span = tracing::Span::current();
     span.record("read", result.references.len());
     span.record("unknown", result.unknown.len());
+    span.record("suggested", result.suggestions.len());
     span.record("bytes", bytes);
     result
+}
+
+/// The namespaced symbols that are `symbol` with a namespace in front, such
+/// as `properties.SetPropertyValue` and `storage.SetPropertyValue` for
+/// `SetPropertyValue`, in order.
+fn namespaced(symbol: &str) -> Vec<&'static str> {
+    let mut found: Vec<&'static str> = GENERATED
+        .symbols
+        .keys()
+        .filter(|key| {
+            key.split_once('.').is_some_and(|(namespace, rest)| {
+                rest == symbol && namespace.starts_with(|c: char| c.is_ascii_lowercase())
+            })
+        })
+        .map(String::as_str)
+        .collect();
+    found.sort_unstable();
+    found
+}
+
+/// The most symbols one suggestion names.
+const SUGGESTIONS: usize = 3;
+
+/// What to read instead of `symbol`, which names nothing: symbols that are
+/// it with a namespace in front, then the symbols a few edits away, such as
+/// `PropertiesNamespace.create` for `PropertyNamespace.create`. None when
+/// nothing is near.
+fn suggest(symbol: &str) -> Option<SymbolSuggestion> {
+    let wanted = symbol.to_ascii_lowercase();
+    // A plural, a dropped letter or a wrong case is near; a different word is not.
+    let near = (wanted.len() / 5).max(2);
+    let mut close: Vec<(usize, &'static str)> = GENERATED
+        .symbols
+        .keys()
+        .filter(|key| key.len().abs_diff(wanted.len()) <= near)
+        .filter_map(|key| {
+            let distance = edit_distance(&wanted, &key.to_ascii_lowercase());
+            (distance <= near).then_some((distance, key.as_str()))
+        })
+        .collect();
+    // Among equally near symbols, the one that shares the longest start with
+    // what was asked for: `PropertiesNamespace` before `ProjectNamespace`.
+    close.sort_unstable_by_key(|&(distance, key)| {
+        (distance, std::cmp::Reverse(shared_start(&wanted, key)), key)
+    });
+    let mut did_you_mean = namespaced(symbol);
+    for (_, key) in close {
+        if !did_you_mean.contains(&key) {
+            did_you_mean.push(key);
+        }
+    }
+    did_you_mean.truncate(SUGGESTIONS);
+    if did_you_mean.is_empty() {
+        return None;
+    }
+    let mut entities = Vec::new();
+    for name in did_you_mean.iter().filter_map(|key| entity_listing(key)) {
+        if !entities.contains(&name) {
+            entities.push(name);
+        }
+    }
+    Some(SymbolSuggestion {
+        symbol: symbol.to_owned(),
+        did_you_mean: did_you_mean.into_iter().map(str::to_owned).collect(),
+        entities: entities.into_iter().map(str::to_owned).collect(),
+    })
+}
+
+/// The entity that declares `symbol`: the one named for its namespace
+/// (`properties` for `properties.SetPropertyValue`) or whose index has a
+/// section for its class, else the first whose index lists it, as another
+/// entity's index may cross-reference it.
+fn entity_listing(symbol: &str) -> Option<&'static str> {
+    let class = symbol.split('.').next().unwrap_or(symbol);
+    let header = format!("### {class}");
+    let header_with_alias = format!("{header} ");
+    let listed = format!("`{symbol}`");
+    let docs = sdk_documentation();
+    docs.iter()
+        .find(|doc| {
+            doc.name == class
+                || doc.index.as_deref().is_some_and(|index| {
+                    index
+                        .lines()
+                        .any(|line| line == header || line.starts_with(&header_with_alias))
+                })
+        })
+        .or_else(|| {
+            docs.iter().find(|doc| {
+                doc.index
+                    .as_deref()
+                    .is_some_and(|index| index.contains(&listed))
+            })
+        })
+        .map(|doc| doc.name.as_str())
+}
+
+/// How many leading characters `wanted` (lowercase) and `key` share, ignoring case.
+fn shared_start(wanted: &str, key: &str) -> usize {
+    wanted
+        .chars()
+        .zip(key.chars())
+        .take_while(|(a, b)| *a == b.to_ascii_lowercase())
+        .count()
+}
+
+/// The Levenshtein distance between two strings, by character.
+fn edit_distance(from: &str, to: &str) -> usize {
+    let to: Vec<char> = to.chars().collect();
+    let mut previous: Vec<usize> = (0..=to.len()).collect();
+    for (row, from_char) in from.chars().enumerate() {
+        let mut current = vec![row + 1; to.len() + 1];
+        for (column, to_char) in to.iter().enumerate() {
+            let substitution = previous[column] + usize::from(from_char != *to_char);
+            current[column + 1] = substitution
+                .min(previous[column + 1] + 1)
+                .min(current[column] + 1);
+        }
+        previous = current;
+    }
+    previous[to.len()]
 }
 
 #[cfg(test)]

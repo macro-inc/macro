@@ -821,6 +821,9 @@ mod code_mode {
         assert!(code_mode_instructions.contains("ExecuteCode"));
         assert!(code_mode_instructions.contains("DescribeCodeTools"));
         assert!(code_mode_instructions.contains("Never guess an SDK method"));
+        assert!(code_mode_instructions.contains("When ReadCodeDocs answers a symbol unknown"));
+        assert!(code_mode_instructions.contains("Never inspect the SDK at runtime"));
+        assert!(code_mode_instructions.contains("Never choose who can see or own"));
         for leaked in [
             "NameSearch",
             "ReadContent",

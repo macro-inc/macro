@@ -16455,7 +16455,7 @@ export interface WebSearchResult {
   content?: string | null;
 }
 /**
- * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
+ * Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Call it after ReadCodeDocs answers a symbol unknown, for the entity it suggests. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog.
  */
 export interface DescribeCodeTools {
   /**
@@ -16548,7 +16548,7 @@ export interface CodeGuide {
  *
  * Prefer ExecuteCode for supported Macro work, including a single precise call. Entity indexes in context list each method with its signature. Before writing a program, read the symbols it needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides, requesting entities together (e.g. documents, email, ai, core).
  *
- * Never guess an SDK method, its arguments or its result's fields. Use only what this description, an index or a reference in context shows; read anything else first, an entity's index with DescribeCodeTools and a symbol's reference with ReadCodeDocs. Never wrap a call in try/catch or call it optionally (item.title?.()) to find out whether it exists.
+ * Never guess an SDK method, its arguments or its result's fields. Use only what this description, an index or a reference in context shows; read anything else first, an entity's index with DescribeCodeTools and a symbol's reference with ReadCodeDocs. Before a write, read the method's reference and every type its options take, such as an enum or tagged union for a data type, scope or value. When ReadCodeDocs answers a symbol unknown, read the symbols it suggests or call DescribeCodeTools for that entity next, never a program that guesses. Never wrap a call in try/catch or call it optionally (item.title?.()) to find out whether it exists. Never inspect the SDK at runtime to learn it: no toString() on its members, prototype or property-name listings, serialized handles, error stacks read for file paths, or reads of the bundle. Never choose who can see or own what you create, such as user or team scope, unless the user asked or the SDK documents a default; otherwise use the personal scope or ask, and say which scope you used in your answer.
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. To show the user what the program made, changed or found, present a view with await execution.views.present(view). It is checked and drawn at once, while main continues; nothing is saved and nothing comes back. When to present a view, and its format, are in the PresentView schema at the end of this description. Direct human-interactive tools and unsupported SDK operations remain available. Never sleep, call setTimeout or poll inside ExecuteCode to wait for something. To check back later, create a routine with a once trigger due shortly, macro.routines.create({trigger: {type: "once", at}, ...}), whose prompt says what to check and where to report, then finish; it runs within about a second of at.
  *
@@ -16635,7 +16635,7 @@ export interface ModelImage {
   data: string;
 }
 /**
- * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way.
+ * Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way. An unknown symbol comes back with the nearest symbols that exist and the entities whose index lists them: read those, never guess.
  */
 export interface ReadCodeDocs {
   /**
@@ -16659,6 +16659,10 @@ export interface SymbolReferences {
    * Requested symbols no index or reference names.
    */
   unknown: string[];
+  /**
+   * For each unknown symbol something real is near, what to read instead.
+   */
+  suggestions: SymbolSuggestion[];
 }
 /**
  * One symbol's reference.
@@ -16672,6 +16676,23 @@ export interface SymbolReference {
    * Its TypeDoc reference; symbols it names in backticks can be read too.
    */
   reference: string;
+}
+/**
+ * What to read instead of a symbol that doesn't exist.
+ */
+export interface SymbolSuggestion {
+  /**
+   * The unknown symbol as requested.
+   */
+  symbol: string;
+  /**
+   * The nearest symbols that exist, nearest first; read them with ReadCodeDocs.
+   */
+  did_you_mean: string[];
+  /**
+   * The entities whose index lists them; fetch one with DescribeCodeTools.
+   */
+  entities: string[];
 }
 /**
  * Retrieve a chat thread's message history by its ID. Returns the conversation title and messages with their roles, content, and attachment references.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import type {
   AddPropertyOptionData,
+  CreatePropertyDefinitionData,
   EnsureTagSetData,
   PropertyOption as PropertyOptionRecord,
   TagSetResponse,
@@ -130,5 +131,66 @@ describe('PropertiesNamespace.createTag', () => {
 
     expect(ensured).toEqual([{ scope: 'user' }]);
     expect(tag.definitionId).toBe('personal-tags');
+  });
+});
+
+describe('PropertiesNamespace.create', () => {
+  function propertiesClient() {
+    const created: CreatePropertyDefinitionData['body'][] = [];
+    const client = {
+      properties: {
+        createPropertyDefinition: async (
+          options: Pick<CreatePropertyDefinitionData, 'body'>,
+        ) => {
+          created.push(options.body);
+          return { data: { id: 'property-1' } };
+        },
+      },
+    } as unknown as MacroClient;
+    return { client, created };
+  }
+
+  test('a property created without a scope is the user’s own', async () => {
+    const { client, created } = propertiesClient();
+
+    const property = await new PropertiesNamespace(client).create({
+      displayName: 'Hours Spent',
+      dataType: { type: 'number' },
+    });
+
+    expect(property.id).toBe('property-1');
+    expect(created).toEqual([
+      {
+        display_name: 'Hours Spent',
+        scope: 'user',
+        data_type: { type: 'number' },
+      },
+    ]);
+  });
+
+  test('a team property is created only when asked for', async () => {
+    const { client, created } = propertiesClient();
+
+    await new PropertiesNamespace(client).create({
+      displayName: 'Hours Spent',
+      dataType: { type: 'number' },
+      scope: 'team',
+    });
+
+    expect(created[0]?.scope).toBe('team');
+  });
+
+  test('a misspelled option throws instead of making a personal property', async () => {
+    const { client, created } = propertiesClient();
+    const options = {
+      displayName: 'Hours Spent',
+      dataType: { type: 'number' },
+      scpoe: 'team',
+    } as unknown as Parameters<PropertiesNamespace['create']>[0];
+
+    await expect(
+      new PropertiesNamespace(client).create(options),
+    ).rejects.toThrow('properties.create does not take `scpoe`');
+    expect(created).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@ import type {
 } from '../../../generated/properties/types.gen';
 import { Lazy, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { rejectUnknownOptions } from '../../utils/options';
 import type { CreatePropertyScope, PropertyDataType } from './namespace';
 import {
   PropertyOption,
@@ -44,15 +45,23 @@ export class PropertyDefinition {
     client: MacroClient,
     opts: {
       displayName: string;
-      scope: CreatePropertyScope;
+      /** `user` (the default) for the user's own property; `team` shares it with the whole team, only when the user asks. */
+      scope?: CreatePropertyScope;
       dataType: PropertyDataType;
     },
   ): Promise<PropertyDefinition> {
+    // A misspelled `scope` would otherwise make a personal property silently.
+    rejectUnknownOptions('properties.create', opts, {
+      displayName: true,
+      scope: true,
+      dataType: true,
+    });
+
     const record = unwrap(
       await client.properties.createPropertyDefinition({
         body: {
           display_name: opts.displayName,
-          scope: opts.scope,
+          scope: opts.scope ?? 'user',
           data_type: opts.dataType,
         },
       }),

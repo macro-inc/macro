@@ -75,7 +75,8 @@ export class PropertiesNamespace {
    */
   create(opts: {
     displayName: string;
-    scope: CreatePropertyScope;
+    /** `user` (the default) for the user's own property; `team` shares it with the whole team, only when the user asks. */
+    scope?: CreatePropertyScope;
     dataType: PropertyDataType;
   }): Promise<PropertyDefinition> {
     return PropertyDefinition.create(this.client, opts);

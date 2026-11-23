@@ -251,6 +251,8 @@ fn an_unseen_turn_reads_its_own_short_prompt() {
 
     assert!(text.starts_with(unseen::PROMPT));
     assert!(text.contains("Never guess a method"));
+    assert!(text.contains("When `ReadCodeDocs` answers a symbol unknown"));
+    assert!(text.contains("Never choose who can see or own"));
     assert!(!text.contains(TOOLS));
     assert!(!text.contains(&prompt::agent_session::PROMPT.to_string()));
     assert!(!text.contains("<agent_session>"));

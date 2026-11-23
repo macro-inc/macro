@@ -20831,6 +20831,13 @@ export const SymbolReferences = z.object({
   references: z.array(z.object({ symbol: z.string(), reference: z.string() })),
   omitted: z.array(z.string()),
   unknown: z.array(z.string()),
+  suggestions: z.array(
+    z.object({
+      symbol: z.string(),
+      did_you_mean: z.array(z.string()),
+      entities: z.array(z.string()),
+    })
+  ),
 });
 
 export const ReadChat = z.object({ chatId: z.string() });

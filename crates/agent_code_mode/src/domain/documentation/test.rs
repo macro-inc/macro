@@ -115,6 +115,7 @@ async fn errors_and_absent_provider_retain_catalog() {
         fallback
     );
     assert!(fallback.ends_with("</macro_sdk>\n"));
+    assert!(fallback.contains("after ReadCodeDocs answers a symbol unknown; never guess"));
 }
 #[tokio::test]
 async fn deadline_and_cancellation_fall_back_without_waiting_for_provider() {
