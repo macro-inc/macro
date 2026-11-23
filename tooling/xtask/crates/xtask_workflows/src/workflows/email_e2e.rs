@@ -231,7 +231,7 @@ fn prepare(job: Job) -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
-        .add_step(raise_connection_limit())
+        .add_step(raise_connection_limit(600))
         .add_step(code_check_cloud_storage::configure_postgres())
         .add_step(build_services())
 }
@@ -424,9 +424,10 @@ pub(crate) fn kafka_service() -> Container {
 }
 
 /// Room for every scenario's connection pools.
-pub(crate) fn raise_connection_limit() -> Step<Run> {
+pub(crate) fn raise_connection_limit(max_connections: u32) -> Step<Run> {
     Step::new("raise the postgres connection limit")
         .run(include_str!("scripts/email_e2e_postgres.sh"))
+        .add_env(("POSTGRES_MAX_CONNECTIONS", max_connections.to_string()))
 }
 
 /// Build what the scenarios start. Every job builds for itself; the compiler

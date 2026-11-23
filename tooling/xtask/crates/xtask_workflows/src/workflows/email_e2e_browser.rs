@@ -63,6 +63,10 @@ const RECORDED: xtask_paths::RuntimePath<'static> =
 /// tests, behind five of building; raise this when a shard passes fifteen.
 const SHARDS: u32 = 3;
 
+/// A shard can run 12 stacks (eight active and four warm) at about 50 sessions each.
+/// Budget 60 per stack and leave 40% of the slots free at that load.
+const POSTGRES_MAX_CONNECTIONS: u32 = 1_200;
+
 /// The job that runs a shard of the suite.
 const SUITE_JOB: JobHandle<()> = JobHandle::new("email-e2e-browser", ());
 
@@ -135,7 +139,7 @@ fn suite() -> Job {
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
         .add_step(steps::start_sccache_server())
         .add_step(steps::code_mode_assets())
-        .add_step(email_e2e::raise_connection_limit())
+        .add_step(email_e2e::raise_connection_limit(POSTGRES_MAX_CONNECTIONS))
         .add_step(code_check_cloud_storage::configure_postgres())
         .add_step(run_suite())
         .add_step(known_bugs())
