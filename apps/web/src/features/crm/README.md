@@ -114,12 +114,19 @@ Only admins/owners can change visibility. Company archive cascades to all people
 and disables email syncing; company restore explicitly confirms restoring every
 person, including individually archived people, while email syncing stays off.
 A person under an archived company routes to that company before restoration.
-Both information panels start with Record details and References, then
-Properties, with no duplicate visibility toggle. A company's Properties pin
+Both information panels take their order from `RECORD_PANEL_ORDER`
+(`core/record.ts`): Record details, Properties, the company-only Lists and Email
+sharing, then References last, so Properties sit ahead of References as in the
+app's other side panels; neither has a duplicate visibility toggle. Record
+details rows use the side panel's label/value grid
+(`SidePanel.Grid`/`SidePanel.Row`), so their labels and values share the
+Properties rows' text size, muted label style and label column; long names and
+domains wrap. The References empty and error states are muted lines at the
+section's text edge, like the Lists section's. A company's Properties pin
 Stage, Owner and Revenue before the team's custom properties; a contact's list
 only custom properties (a phone number, a LinkedIn link), since the built-in CRM
-properties are company-only. Company-only Lists and Email sharing follow.
-Both use the shared `EntityPropertiesSection` and the same edit rule.
+properties are company-only. Both use the shared `EntityPropertiesSection` and
+the same edit rule.
 
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style

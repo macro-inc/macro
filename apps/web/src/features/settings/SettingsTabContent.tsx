@@ -17,6 +17,7 @@ import { Bots } from './Bots';
 import { Downloads } from './Downloads';
 import { EmailSettings } from './email-settings';
 import { IntegrationsPage } from './IntegrationsPage';
+import { NativeApp } from './NativeApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
 import { Tags } from './Tags';
@@ -95,6 +96,9 @@ export function SettingsTabContent(props: {
       </Show>
       <Show when={isCurrentTab('Downloads')}>
         <Downloads />
+      </Show>
+      <Show when={isCurrentTab('Native App')}>
+        <NativeApp />
       </Show>
       <Show when={isCurrentTab('Agent')}>
         <Agent />

@@ -2,7 +2,6 @@ import {
   SearchBar,
   useViewTabHotkeys,
   ViewShell,
-  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -170,10 +169,23 @@ export function RoutinesList(props: {
               {props.mobileHeader?.(() => focusSearch?.())}
             </Show>
             <ViewShell.Header>
-              <div class="mb-3 flex min-w-0 items-center gap-2">
-                <ViewSidebar.Toggle action="expand" presentation="pill" />
-                {tabs()}
-              </div>
+              <Show when={props.showTitle !== false}>
+                <div class="mb-3 flex items-baseline gap-2">
+                  <h1 class="text-xl/6.5 font-semibold">
+                    {t('agentWork.routines')}
+                  </h1>
+                  <Show
+                    when={
+                      !props.loading && !props.error && props.rows.length > 0
+                    }
+                  >
+                    <span class="text-[15px]/5 text-ink-extra-muted tabular-nums">
+                      {props.rows.length}
+                    </span>
+                  </Show>
+                </div>
+              </Show>
+              <div class="mb-3">{tabs()}</div>
               <div class="flex min-w-0 items-center justify-between gap-3">
                 <SearchBar
                   ref={(input) => {

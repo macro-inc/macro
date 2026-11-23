@@ -449,8 +449,8 @@ popover opens again (even if dismissed) with **Reload**; there is no blocking
 alert. Touch layouts have no rail, so a newer web build shows a **Reload** toast
 there instead.
 
-On desktop release builds, **Account → Desktop app update** shows native update
-progress. While preparing to restart, the popover can't be dismissed and its
+On desktop release builds, **Desktop App → Updates → Desktop app update** shows native update
+progress, with **Restart to update** once an update is ready. While preparing to restart, the popover can't be dismissed and its
 action is disabled. Restart waits for pending canvas/PDF saves and
 local persistence; active calls, uploads, and imports must finish first. A ready
 update also installs on normal app quit. Closing a window only triggers
@@ -479,25 +479,43 @@ Left nav (feature and platform gates still apply):
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
   sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Downloads.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Downloads, then the native app page (**iOS App**, **Android App** or **Desktop App**) inside the native apps.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
-**Downloads** (`/app/settings/downloads`; the old `/app/settings/mobile-app`
-and `/app/settings/desktop-app` links land on it) gets Macro onto other
-devices. In a desktop browser its **Desktop app (Alpha)** section offers
+**Downloads** (`/app/settings/downloads`; in a browser the old
+`/app/settings/mobile-app` and `/app/settings/desktop-app` links land on it)
+gets Macro onto other devices. In a desktop browser its **Desktop app (Alpha)** section offers
 **Download for macOS** and **Download for Linux**: the one for the browser's
 computer is primary and listed first, with that installer's system
 requirement under the row. On a computer with no installer (Windows, ChromeOS) both are secondary
-under "Available for macOS and Linux." The links point at the newest stable
-GitHub release that carries each installer (the same lookup as the marketing
-`/download` page), with pinned installers until GitHub answers or when it
-can't be reached. A click sends the PostHog event `desktop_download_clicked`
+under "Available for macOS and Linux." The links are the website's stable
+installer links, `https://macro.com/download/mac` and `/download/linux`
+(the same ones as the marketing `/download` page), which redirect to the
+current release's installers. A click sends the PostHog event `desktop_download_clicked`
 with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
 **Mobile app** section has an **iPhone** / **Android** switch for the App
 Store or Google Play QR code, with **Copy link** for that store's URL. Inside
 the desktop app the page shows only the Mobile app section. Phones, tablets and
 the iOS and Android apps have no Downloads page.
+
+The native app page (`/app/settings/app`; inside the native apps the old
+`/app/settings/mobile-app` and `/app/settings/desktop-app` links land on it)
+is titled for the app: **iOS App**, **Android App** or **Desktop App**. The
+browser has no such page. **About** lists **Version** (the installed release),
+**Build** (the native build number), **Build date** (when the installed binary
+was built) and **Bundle date** (when the downloaded web bundle was built, or
+**Built into the app** while the bundled one runs). **Updates** holds one row
+with a read-only status and the one action that applies now; there are no
+update preferences. In the iOS and Android apps it is **App update**, the
+over-the-air bundle: **Check for updates**, **Retry**, **Download**,
+**Download anyway** (off Wi-Fi), **Update** or **Reload**. In the desktop app
+it is **Desktop app update** (above), shown only on release builds. The PostHog
+flag `disable-auto-update-ui` hides **Bundle date** and the mobile **Updates**
+section. Check the page over mocked native commands at desktop and phone
+widths with
+`bunx playwright test --config src/features/settings/browser-test/native-app/playwright.config.ts`
+from `apps/web`.
 
 The sidebar rail's **Downloads** button (a download glyph in the same accent
 circle as the update button, without its comet) opens this page; Shift-click

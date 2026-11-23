@@ -28,6 +28,7 @@ function outcomeAttributes(outcome: Outcome): Attributes {
       native_update_target_version: downloaded.target_version,
       native_update_download_ms: downloaded.download_ms,
       native_update_download_bytes: downloaded.download_bytes,
+      native_update_resumed_bytes: downloaded.resumed_bytes,
     }))
     .with({ kind: 'check_failed' }, (failed) => ({
       ...failureAttributes(failed.failure),

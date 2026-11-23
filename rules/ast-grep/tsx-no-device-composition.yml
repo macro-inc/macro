@@ -223,7 +223,6 @@ ignores:
   - apps/web/src/features/scheduling/views/booking-workspace-view.tsx
   - apps/web/src/features/scheduling/views/event-details-view.tsx
   - apps/web/src/features/scheduling/views/scheduling-mobile-header.tsx
-  - apps/web/src/features/settings/MobileApp.tsx
   - apps/web/src/features/settings/Settings.tsx
   - apps/web/src/features/settings/components/runtime-options.tsx
   - apps/web/src/features/settings/computers/components/computer-actions-menu.tsx

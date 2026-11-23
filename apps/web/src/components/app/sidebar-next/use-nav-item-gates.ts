@@ -1,5 +1,4 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
-import { useNewHomeMode } from '@app/features/new-home/use-new-home-mode';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -22,7 +21,6 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
   const notifications = useUnifiedNotificationsFlag();
-  const homeMode = useNewHomeMode();
   const suggestions = useSuggestionsFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
@@ -33,7 +31,6 @@ export function useNavItemGates(): Accessor<NavItemGates> {
 
   return createMemo(() => ({
     showNotifications: notifications(),
-    homeMode: homeMode(),
     showForYou: suggestions(),
     showCustomers: crmAccessAllowed(),
     showCalls: ENABLE_CALLS,

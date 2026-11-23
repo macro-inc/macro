@@ -18,12 +18,12 @@ import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
+import dictation from './en/dictation';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
 import githubConnect from './en/github-connect';
-import home from './en/home';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -39,6 +39,7 @@ import settingsBilling from './en/settings-billing';
 import settingsDownloads from './en/settings-downloads';
 import settingsEmail from './en/settings-email';
 import settingsLanguage from './en/settings-language';
+import settingsNativeApp from './en/settings-native-app';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
 import subRoutines from './en/sub-routines';
@@ -76,11 +77,11 @@ export default {
   create,
   crm,
   databaseAnswers,
+  dictation,
   emailThread,
   emailViews,
   entityActions,
   entityIcons,
-  home,
   importJobs,
   suggestions,
   localRuntime,
@@ -96,6 +97,7 @@ export default {
   settingsEmail,
   runtimeSharing,
   settingsLanguage,
+  settingsNativeApp,
   settingsDownloads,
   settingsNav,
   splitMenu,

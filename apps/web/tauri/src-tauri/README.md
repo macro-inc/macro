@@ -79,13 +79,27 @@ you fetch.
 
 ## OTA bundle storage
 
-On iOS, the bundle updater stores downloads and their persistence markers in
+Both mobile platforms can delete cache files when storage runs low, and they can
+take some of a bundle's files while leaving the rest. On iOS the bundle updater
+therefore stores downloads and their persistence markers in
 `Library/Application Support/<bundle-identifier>/bundle-updates`, not the
-purgeable `Library/Caches` directory. The directory is excluded from backup
-because the server can supply the bundles again. The updater deliberately
-ignores legacy cache contents: the first launch uses embedded assets and checks
-for a fresh download. Other platforms retain their existing cache location.
-This storage change requires a native app release.
+purgeable `Library/Caches` directory, excluded from backup because the server
+can supply the bundles again. On Android it stores them in the app's data
+directory (`/data/data/<package>/bundle-updates`), not its cache directory;
+the manifest's backup rules already exclude app data from backups. On both, the
+updater deliberately ignores legacy cache contents: the first launch uses
+embedded assets and checks for a fresh download. Desktop platforms retain their
+existing cache location. A storage change requires a native app release.
+
+Each extraction also writes a completion record beside the bundle directory
+(`<n>.complete`) that lists every extracted file and its size, except the
+downloaded archive. Before startup serves a saved or completed bundle, and
+before a download is reused, the updater checks that every listed file is still
+there at that size; otherwise it falls back to the embedded bundle (rejection
+`files_missing`) and downloads again. Without this check, a bundle that lost a
+startup chunk still has its `index.html`, so the document loads, its scripts
+404, and the app shows a blank screen with no telemetry. Records written before
+the file list hold only the bundle build and are trusted as before.
 
 ## File saving and sharing
 
@@ -187,12 +201,15 @@ held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
 `PermissionDenied`), and `native_bundle_startup_dirs_found` /
 `native_bundle_startup_dirs_removed` (numbered bundle directories before and
-after startup cleanup). A user who was on an OTA bundle and starts a new launch
-on the embedded one without a reload dispatch lost it at startup: `none` with
-no directories means bundle storage was emptied, `unreadable` means the files
-were there but could not be read, and a rejection names the failed check. On
-iOS, the first launch of the release that moved bundles out of `Library/Caches`
-also reports `none`, because it ignores the old location. An older
+after startup cleanup), and `native_bundle_startup_check_ms` (time spent
+checking a saved OTA bundle, including its file list). A user who was on an OTA
+bundle and starts a new launch on the embedded one without a reload dispatch
+lost it at startup: `none` with no directories means bundle storage was
+emptied, `unreadable` means the files were there but could not be read, and a
+rejection names the failed check (`files_missing`: a listed file was gone or
+had changed size). On iOS and Android, the first launch of the release that
+moved bundles out of the cache directory also reports `none`, because it
+ignores the old location. An older
 release's embedded bundle predates these fields, but the record lives for the
 whole launch, so the document an update reload brings up reports it. Missing
 fields mean an older binary or a build with automatic updates disabled.
@@ -676,13 +693,26 @@ it from the startup config if it no longer exists (`src/desktop/main_window.rs`)
 ## Desktop native updates
 
 Release builds for macOS Apple Silicon and Linux AppImage check for native updates
-after startup and every six hours. Downloads are verified with Tauri's updater
-signature before becoming eligible for installation. A ready update installs on
-normal app quit; closing/hiding a window only installs if it actually exits the
-app. Force-killing loses the in-memory download and the next launch checks again.
-No network work is started during quit. Errors retry with backoff.
+after startup and every six hours. The download streams into
+`native-update/` under the app's local data directory (Application Support on
+macOS, never a purgeable cache): `download.partial` while it arrives,
+`download.bin` once complete, and `download.json` naming the version and
+signature they belong to. A quit, crash or failed attempt keeps what arrived;
+the next attempt or launch, offered the same update, resumes with an HTTP
+`Range` request (a server that answers with the whole file replaces the saved
+bytes), and a complete file is reused without downloading. A different
+offered update, a release that needs a newer OS, or a feed that offers none,
+deletes the saved files. The whole
+file is verified with Tauri's updater signature (the updater's own
+`minisign-verify` check, `desktop_update/desktop/download.rs`) before it becomes
+eligible for installation, and read and verified again just before installing;
+bytes that fail are deleted, so the next check downloads afresh. A successful
+install deletes them too. Without an app data directory native updates stay
+disabled. The download uses the updater's timeout and proxy settings. A ready update installs on normal app quit;
+closing/hiding a window only installs if it actually exits the app. No network
+work is started during quit. Errors retry with backoff.
 
-The ready notification and Settings → Account offer **Restart to update**. Explicit
+The ready notification and Settings → Desktop App offer **Restart to update**. Explicit
 restart waits for registered canvas/PDF saves and local query persistence, and is
 blocked during calls, uploads and imports. Native installation closes the native
 cache and excludes concurrent frontend OTA reloads. Neither update channel wipes
@@ -728,6 +758,39 @@ exist. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
+Promotion waits for the `QA macOS release app` job: it mounts the notarized DMG
+the release built, checks it against the build's `macro-dmg-SHA256SUMS` and its
+stapled Gatekeeper verdict, and launches the app from it on the macOS runner's
+GUI session with the smoke suite of `apps/web/tests/macos/qa.mjs` (window,
+screenshot, soak, crash report, clean quit, app log). A launch that shows no
+window or screenshot is retried once; a crash, crash report, panic or a second
+failed launch fails the job, so `desktop-stable` and its download links keep the
+previous version, and `Alert native build failures` says so in its post. The
+versioned release still gets the installers `publish-installers` attaches, but
+not the update signatures `publish-release` makes, so `Desktop Release Watch`
+reports those missing 4 hours later unless a re-run has promoted the release.
+The release app embeds the production PostHog key, so the job blocks the
+analytics proxy host (read from `src/lib/analytics/analytics.ts`) in
+`/etc/hosts` before the launch. The job's `macos-qa-release-*` artifact holds
+`summary.md`, screenshots and logs. After a flake, re-run the failed jobs:
+`qa-macos` reruns, then `publish-release` promotes. `Desktop QA macOS` (workflow
+dispatch, any ref) runs the same harness on an unsigned build; its `full` suite
+adds the src-tauri `cargo test`, linked with the DMG build's Apple linker
+(`.#tauri-desktop-apple-linker`) because Nix's cctools `ld` crashes on it.
+
+Public download links never name a version. While `desktop-stable` serves a
+release's `latest.json`, the next step of the same job copies that release's
+installers onto `desktop-stable` as `Macro-macos-arm64.dmg` and
+`Macro-linux-x86_64.AppImage`, so they always match what auto-update installs. Each
+copy is uploaded under a staging name and then renamed over the old one, so the
+link is never missing for the length of an upload; an installer whose bytes are
+already there is skipped, and reruns of an older tag change nothing. Customers
+use `https://macro.com/download/mac` and `/download/linux`, which the website's
+edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
+the hosting can move without changing the links. A new platform (Intel Mac,
+Windows) adds a fixed name in `publish_desktop_download_links.sh` and a redirect
+in that manifest.
+
 Failed releases post to the Macro Alerts channel. `Alert native build failures`
 posts when any job of `Build Desktop on Tag` fails or times out, or when a tag's
 run is cancelled without a newer run for the tag replacing it, and names the tag,
@@ -754,9 +817,11 @@ The coordinator queues up to 32 reports (`desktop_update/report.rs`) and emits
 when it mounts and after each emit, so each report goes out once. A check
 reports `up_to_date`, `needs_newer_os` (a newer release whose
 `minimumSystemVersion` this Mac is below, with that minimum; not downloaded),
-`update_found` then `downloaded`, `check_failed` or `download_failed` (span
-`native.update.check`, timed by the host, with a `native.update.download`
-child; `update_found` is a PostHog event only). Failures
+`update_found` then `downloaded` (with `resumed_bytes`, the bytes kept from an
+earlier launch or attempt; equal to `download_bytes` when a saved download was
+reused whole), `check_failed` or `download_failed` (span `native.update.check`,
+timed by the host, with a `native.update.download` child; `update_found` is a
+PostHog event only). Failures
 carry `consecutive_failures`. Installs run as the app quits, so before
 installing the app writes `native-update/pending-install.json` under the app's
 local data directory, adding the failure if `install()` returns one. The next
@@ -779,10 +844,33 @@ types (`generated/native-update.ts`, same command as above).
 
 The Rust coordinator tests exercise the pinned updater against a local HTTP
 server with a test-only public key and signed fixture (the test private key is
-discarded), including corrupt signatures and older versions. Release metadata tests
+discarded), including corrupt signatures, older versions, resumed and reused
+saved downloads, servers that ignore `Range`, and saved bytes changed before install. Release metadata tests
 run from `apps/web` with `bunx vitest run --project scripts scripts/desktop-release.test.ts scripts/desktop-signing.test.ts`.
 Frontend preparation tests are in the web `tauri` Vitest project. Native replacement/notarization still
 requires platform release testing; mocked HTTP tests never replace the test runner.
+
+## Unit tests in PR CI
+
+`PR CI` builds the desktop app on Linux and runs the library tests of `app` and
+`macro_bundle_updater_plugin` (`Desktop app / Test on Linux`,
+`desktop_check.yml`) when a pull request changes `apps/web/tauri/`, a
+root-workspace crate it builds (such as `crates/client/cache-core`) or the root
+`Cargo.toml`, the generated wire types in
+`apps/web/src/observability/generated/`, or the Nix shell. A new path dependency
+needs its crate in that workflow's `PATHS` (`desktop_check.rs`); its test fails
+otherwise. The job stubs the frontend build as `desktop_qa_macos.yml` does. Locally,
+from the repository root:
+
+```sh
+mkdir -p apps/web/dist && echo '<!doctype html>' > apps/web/dist/index.html
+echo development > apps/web/tauri/src-tauri/.macro-tauri-env
+nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml --locked -p app -p macro_bundle_updater_plugin --lib
+```
+
+The Linux notification tests start a private `dbus-daemon` with their own
+configuration, so they need no session bus or `/etc/dbus-1`. The macOS-only
+code (the `cef` feature, Apple APIs) compiles only in the macOS builds.
 
 ## Automated offline tests (Linux)
 

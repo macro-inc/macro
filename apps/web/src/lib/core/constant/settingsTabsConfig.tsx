@@ -7,6 +7,8 @@ import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import CpuIcon from '@icon/system/regular/cpu.svg';
 import CreditCardIcon from '@icon/system/regular/credit-card.svg';
+import DesktopIcon from '@icon/system/regular/desktop.svg';
+import MobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import GaugeIcon from '@icon/system/regular/gauge.svg';
@@ -23,10 +25,12 @@ import UserGearIcon from '@icon/system/regular/user-gear.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import UsersThreeIcon from '@icon/system/regular/users-three.svg';
 import { type Component, createMemo } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
+import { getPlatform, isPlatform } from '../util/platform';
 import { DEV_MODE_ENV, ENABLE_EMAIL } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -88,6 +92,43 @@ function tabItem(
     },
   };
 }
+
+/** The native app page is named for the app it describes. */
+function nativeAppLabelKey(): SettingsNavMessage {
+  return match(getPlatform())
+    .with('ios', () => 'tabIosApp' as const)
+    .with('android', () => 'tabAndroidApp' as const)
+    .with('desktop', 'web', () => 'tabDesktopApp' as const)
+    .exhaustive();
+}
+
+/**
+ * The installed app's version, build dates and updates. Its label and icon
+ * follow the platform, so they are getters like `tabItem`'s label.
+ */
+export const NATIVE_APP_TAB_ITEM: SettingsTabItem = {
+  tab: 'Native App',
+  keywords: [
+    'about',
+    'version',
+    'build',
+    'bundle',
+    'update',
+    'upgrade',
+    'ota',
+    'release',
+    'restart',
+  ],
+  get icon() {
+    return isPlatform('desktop') ? DesktopIcon : MobileIcon;
+  },
+  get label() {
+    return t(`settingsNav.${nativeAppLabelKey()}`);
+  },
+  get englishLabel() {
+    return settingsNavMessages[nativeAppLabelKey()];
+  },
+};
 
 /**
  * Single source of truth for the settings categories: ordering, labels, icons
@@ -212,6 +253,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'app',
         ],
       }),
+      NATIVE_APP_TAB_ITEM,
     ],
   },
   {
@@ -313,6 +355,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Inbox: 'inbox',
   Shortcuts: 'shortcuts',
   Downloads: 'downloads',
+  'Native App': 'app',
   Agent: 'mcp-server',
   Agents: 'agents',
   Routines: 'routines',
@@ -341,9 +384,12 @@ SETTINGS_SLUG_TO_TAB.set('connections', 'Connected');
 SETTINGS_SLUG_TO_TAB.set('agent-connections', 'Connected');
 // Team connections (Slack export, GitHub App) moved into Integrations.
 SETTINGS_SLUG_TO_TAB.set('team-connections', 'Connected');
-// Downloads replaced the Mobile App and Desktop App pages.
-SETTINGS_SLUG_TO_TAB.set('mobile-app', 'Downloads');
-SETTINGS_SLUG_TO_TAB.set('desktop-app', 'Downloads');
+
+/**
+ * The old Mobile App and Desktop App pages: their installed-version details
+ * live on the native app page, and their downloads on Downloads.
+ */
+const LEGACY_APP_SLUGS = new Set(['mobile-app', 'desktop-app']);
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -352,8 +398,13 @@ export const settingsTabToSlug = (tab: SettingsTab): string =>
 /** Resolve a URL slug back to its settings tab, or `undefined` if unknown. */
 export const settingsSlugToTab = (
   slug: string | null | undefined
-): SettingsTab | undefined =>
-  slug ? SETTINGS_SLUG_TO_TAB.get(slug) : undefined;
+): SettingsTab | undefined => {
+  if (!slug) return undefined;
+  if (LEGACY_APP_SLUGS.has(slug)) {
+    return isPlatform('web') ? 'Downloads' : 'Native App';
+  }
+  return SETTINGS_SLUG_TO_TAB.get(slug);
+};
 
 /**
  * Returns a predicate gating which settings tabs are available given feature
@@ -397,6 +448,9 @@ export const useSettingsTabAvailable = () => {
       // screen.
       case 'Downloads':
         return !isNativeMobilePlatform() && !isTouchDevice();
+      // Only an installed app has a version, build and updates of its own.
+      case 'Native App':
+        return !isPlatform('web');
       case 'Agent':
         return !isNativeMobilePlatform();
       case 'Harness':

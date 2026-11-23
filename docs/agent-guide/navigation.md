@@ -267,6 +267,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/tasks` | Tasks table |
 | `/app/tasks/<uuid>` | Tasks with a task document opened inline |
 | `/app/agents` | AI chats / agents list |
+| `/app/agents/archive` | Archived conversations; direct links and reloads preserve the archive route, and Back/Forward return between it and the Agents list |
 | `/app/tasks/projects` | Projects collection inside Tasks |
 | `/app/tasks/projects/<uuid>/overview` | Project detail in Tasks, with breadcrumbs, properties, description, and discussions; replace `overview` with `tasks` for the task list |
 | `/app/component/project-compose` | Native project composer, sharing the task composer layout and property controls |
