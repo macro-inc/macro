@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import type {
   LinkProperty,
   Property,
@@ -50,9 +50,11 @@ const OTHER_CONTACT: PropertyEditorEntity = {
 
 function setup(
   target: Property | PropertyDefinitionDomain,
-  entities: PropertyEditorEntity[] = [CONTACT]
+  entities: PropertyEditorEntity[] = [CONTACT],
+  draftProperties?: Property[]
 ) {
   const onSave = vi.fn();
+  const onClose = vi.fn();
   render(() => (
     <PropertyEditorDialog
       isOpen
@@ -63,12 +65,13 @@ function setup(
       }}
       onModeChange={() => {}}
       onTargetChange={() => {}}
-      onClose={() => {}}
+      onClose={onClose}
       onSave={onSave}
+      properties={draftProperties}
     />
   ));
   const field = screen.getByRole<HTMLInputElement>('textbox');
-  return { onSave, field };
+  return { onSave, onClose, field };
 }
 
 function type(field: HTMLInputElement, value: string) {
@@ -79,6 +82,10 @@ function savedValues(onSave: ReturnType<typeof vi.fn>) {
   expect(onSave).toHaveBeenCalledOnce();
   return onSave.mock.calls[0]![1];
 }
+
+beforeAll(() => {
+  Element.prototype.scrollIntoView = vi.fn();
+});
 
 afterEach(cleanup);
 
@@ -166,6 +173,66 @@ describe('link property editor', () => {
     fireEvent.keyDown(field, { key: 'Enter' });
 
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('leaves the links alone when Enter is pressed with nothing typed', () => {
+    const { onSave, field } = setup({
+      ...LINKEDIN,
+      value: ['https://linkedin.com/in/old'],
+    });
+
+    fireEvent.keyDown(field, { key: 'Enter' });
+    type(field, 'x');
+    type(field, '');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('removes the link the user moved to with the arrow keys', () => {
+    const { onSave, field } = setup({
+      ...LINKEDIN,
+      isMultiSelect: true,
+      value: ['https://example.com/one', 'https://example.com/two'],
+    });
+
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'ArrowDown' });
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/one'],
+    });
+  });
+
+  it('closes after a save even with Shift held, so no stale links are edited', () => {
+    const { onClose, field } = setup({
+      ...LINKEDIN,
+      isMultiSelect: true,
+      value: ['https://example.com/one'],
+    });
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter', shiftKey: true });
+
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it('adds to the links a draft already holds', () => {
+    const { onSave, field } = setup(
+      { ...NEW_LINKEDIN, isMultiSelect: true },
+      [],
+      [{ ...LINKEDIN, isMultiSelect: true, value: ['https://example.com/one'] }]
+    );
+
+    type(field, 'example.com/two');
+    fireEvent.keyDown(field, { key: 'Enter' });
+
+    expect(savedValues(onSave)).toEqual({
+      valueType: 'LINK',
+      values: ['https://example.com/one', 'https://example.com/two'],
+    });
   });
 
   it('sets one link on every selected item', () => {

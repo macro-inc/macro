@@ -11,6 +11,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   Match,
   on,
   type Setter,
@@ -66,9 +67,21 @@ export function LinkPropertyEditor(props: {
     props.setPlaceholder(`Enter URL for ${props.property.displayName}`);
   });
 
+  // With nothing typed every row removes a link, so none is highlighted until
+  // the user moves to one: Enter on an empty field must not delete a link.
+  const [movedToRow, setMovedToRow] = createSignal(false);
   createEffect(
-    on(props.searchValue, () => props.setSelectedIndex(0), { defer: true })
+    on(
+      props.searchValue,
+      () => {
+        setMovedToRow(false);
+        props.setSelectedIndex(0);
+      },
+      { defer: true }
+    )
   );
+  const highlightedIndex = () =>
+    props.searchValue().trim() || movedToRow() ? props.selectedIndex() : -1;
 
   const rows = createMemo((): LinkPropertyRow[] => {
     const typed = props.searchValue().trim();
@@ -88,28 +101,24 @@ export function LinkPropertyEditor(props: {
     return nextRows;
   });
 
-  const saveLinks = (
-    values: string[] | null,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
-    props.onSave({ valueType: 'LINK', values }, event);
+  // Every save closes the editor, as the text editor's do: the links listed
+  // come from the property, which a save only updates once it lands.
+  const saveLinks = (values: string[] | null) => {
+    props.onSave({ valueType: 'LINK', values });
   };
 
-  const selectRow = (
-    row: LinkPropertyRow,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
+  const selectRow = (row: LinkPropertyRow) => {
     if (row.type === 'set') {
-      if (row.next.isOk()) saveLinks(row.next.value, event);
+      if (row.next.isOk()) saveLinks(row.next.value);
       return;
     }
 
     if (row.type === 'link') {
-      saveLinks(removeLinkValue(links(), row.url), event);
+      saveLinks(removeLinkValue(links(), row.url));
       return;
     }
 
-    saveLinks(null, event);
+    saveLinks(null);
   };
 
   const listController = createCommandListController({
@@ -119,14 +128,20 @@ export function LinkPropertyEditor(props: {
   });
 
   props.setKeybindings({
-    select: (event) => {
-      const row = rows()[props.selectedIndex()];
-      if (row) selectRow(row, event);
+    select: () => {
+      const row = rows()[highlightedIndex()];
+      if (row) selectRow(row);
     },
     next: () => {
+      if (highlightedIndex() === -1) {
+        setMovedToRow(true);
+        props.setSelectedIndex(0);
+        return;
+      }
       listController.selectNext();
     },
     previous: () => {
+      setMovedToRow(true);
       listController.selectPrevious();
     },
   });
@@ -142,14 +157,15 @@ export function LinkPropertyEditor(props: {
     >
       <CommandMenuList
         items={rows()}
-        selectedIndex={props.selectedIndex()}
+        selectedIndex={highlightedIndex()}
         scrollSelectedIntoView={listController.shouldScrollSelectedIntoView()}
         itemId={(_, index) => `property-value-option-${index}`}
         itemDisabled={(row) => row.type === 'set' && row.next.isErr()}
-        onSelect={(row, _, event) => selectRow(row, event)}
-        onItemMouseMove={(index) =>
-          listController.setSelectedIndexFromPointer(index)
-        }
+        onSelect={(row) => selectRow(row)}
+        onItemMouseMove={(index) => {
+          setMovedToRow(true);
+          listController.setSelectedIndexFromPointer(index);
+        }}
       >
         {(row) => (
           <Switch>

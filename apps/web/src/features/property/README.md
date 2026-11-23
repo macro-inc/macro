@@ -114,7 +114,10 @@ writes to its draft without one.
 A Link property takes its URL in the editor's search field
 (`editor/link-property-editor.tsx`): Enter sets it, or adds it when the
 property holds several links, and the item's links are listed below to remove
-one at a time, with **Clear all** once there are two. It validates and saves
+one at a time, with **Clear all** once there are two. With nothing typed no row
+is highlighted, so Enter removes nothing until the arrow keys or the pointer
+pick a link, and every save closes the editor (Shift does not keep it open, as
+the listed links would be stale until the save lands). It validates and saves
 exactly as the property row's link editor does (`utils/linkValues.ts`). With
 several items selected no links are listed, and a URL replaces each item's
 value.
