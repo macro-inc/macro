@@ -318,7 +318,7 @@ export function createTagPickerSession(props: {
     try {
       if (!(await persistSelection())) return;
 
-      const provisioned = await ensureTagSet.mutateAsync({ scope });
+      const provisioned = await ensureTagSet.mutateAsync({ scope, session });
       if (!provisioned.definition) return;
 
       const created = await addOption.mutateAsync({
@@ -333,6 +333,8 @@ export function createTagPickerSession(props: {
           },
         },
       });
+      // A tag made under the login that left is not applied under the next.
+      if (queryAccountSession() !== session) return;
       await props.docTags.applyTag(scope, created.id);
       props.onClose();
     } catch (error) {

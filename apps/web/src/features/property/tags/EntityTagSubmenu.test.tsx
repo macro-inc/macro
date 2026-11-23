@@ -21,6 +21,10 @@ const mocks = vi.hoisted(() => ({
   ensure: vi.fn(),
   apply: vi.fn(),
   openWithSplit: vi.fn(),
+  session: 1,
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  queryAccountSession: () => mocks.session,
 }));
 vi.mock('./useDocTags', () => ({ useDocTags: mocks.source }));
 vi.mock('@queries/team/teams', () => ({
@@ -80,6 +84,7 @@ const scrollIntoView = Object.getOwnPropertyDescriptor(
 );
 let style: HTMLStyleElement;
 beforeEach(() => {
+  mocks.session = 1;
   mocks.save.mockReset().mockResolvedValue(undefined);
   mocks.add.mockReset().mockResolvedValue({ id: 'created-tag' });
   mocks.ensure.mockReset().mockResolvedValue({
@@ -332,6 +337,28 @@ it('goes back through creation steps without losing the name or chosen color', a
       option: { value: 'Renamed tag', display_order: 2, color: '#46A758' },
     },
   });
+});
+
+it('does not apply a tag created under a login that has since left', async () => {
+  const created = Promise.withResolvers<{ id: string }>();
+  mocks.add.mockReturnValue(created.promise);
+  setup();
+  const search = await openTags();
+  fireEvent.input(search, { target: { value: 'New tag' } });
+  fireEvent.click(screen.getByText('Create new tag "New tag"'));
+  fireEvent.click(screen.getByText('Green', { exact: true }));
+  fireEvent.click(screen.getByText('Personal', { exact: true }));
+  await waitFor(() =>
+    expect(mocks.add).toHaveBeenCalledWith(
+      expect.objectContaining({ session: 1 })
+    )
+  );
+  expect(mocks.ensure).toHaveBeenCalledWith({ scope: 'user', session: 1 });
+  mocks.session = 2;
+  created.resolve({ id: 'created-tag' });
+  // The picker's continuation was queued on the add first, so it has run.
+  await created.promise;
+  expect(mocks.apply).not.toHaveBeenCalled();
 });
 
 it('dismisses the parent menu when navigating to tagged items', async () => {

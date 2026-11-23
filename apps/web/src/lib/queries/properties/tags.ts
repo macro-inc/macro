@@ -97,7 +97,11 @@ export function parseTagNameConflict(
     : null;
 }
 
-type EnsureTagSetParams = { scope: EnsureTagSetRequest['scope'] };
+type EnsureTagSetParams = {
+  scope: EnsureTagSetRequest['scope'];
+  /** The login session a longer flow (creating a tag) began in. */
+  session?: number;
+};
 
 const quietEnsureFailure = (error: unknown) =>
   ['UNAUTHORIZED', 'UNAUTHENTICATED', 'FORBIDDEN'].some((code) =>
@@ -108,15 +112,20 @@ const quietEnsureFailure = (error: unknown) =>
  * Provision (get-or-create) the caller's tag definition for a scope. A set the
  * cache already holds as provisioned answers at once, offline included.
  */
-async function provisionTagSet(scope: EnsureTagSetParams['scope']) {
-  return (await cachedTagSet(scope)) ?? (await ensureTagSet(scope));
+async function provisionTagSet(
+  scope: EnsureTagSetParams['scope'],
+  session?: number
+) {
+  return (
+    (await cachedTagSet(scope)) ?? (await ensureTagSet(scope, { session }))
+  );
 }
 
 export function useEnsureTagSetMutation(
   callbacks?: CatalogMutationCallbacks<TagSetResponse, EnsureTagSetParams>
 ) {
   return createCatalogMutation(
-    (vars: EnsureTagSetParams) => provisionTagSet(vars.scope),
+    (vars: EnsureTagSetParams) => provisionTagSet(vars.scope, vars.session),
     {
       onError(error) {
         if (quietEnsureFailure(error)) return;
@@ -190,7 +199,7 @@ export async function createTag(
   vars: CreateTagParams
 ): Promise<CreateTagResult> {
   const session = queryAccountSession();
-  const tagSet = await provisionTagSet(vars.scope);
+  const tagSet = await provisionTagSet(vars.scope, session);
   const definition = tagSet.definition;
   if (!definition) {
     throw new Error(`Tag set for scope "${vars.scope}" has no definition`);
