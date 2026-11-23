@@ -436,3 +436,99 @@ async fn task_effects_include_neighbors_removed_between_pre_read_and_write() {
     assert!(ids.contains(&removed.to_string().as_str()));
     assert!(ids.contains(&task.to_string().as_str()));
 }
+
+struct RejectingCompletionWriter {
+    blocked: bool,
+}
+
+impl EntityPropertyWriter for RejectingCompletionWriter {
+    async fn delete_entity_property(
+        &self,
+        _entity_type: model_entity::EntityType,
+        _entity_id: String,
+        _entity_property_id: Uuid,
+    ) -> Result<(), rootcause::Report> {
+        Err(rootcause::report!("unexpected deletion"))
+    }
+
+    async fn set_entity_property(
+        &self,
+        _entity_type: model_entity::EntityType,
+        _entity_id: String,
+        _property_definition_id: Uuid,
+        _value: Option<SetPropertyValue>,
+    ) -> Result<EntityPropertyWithDefinition, rootcause::Report> {
+        Err(rootcause::report!("unexpected assignment write"))
+    }
+
+    async fn set_task_property(
+        &self,
+        _task_id: Uuid,
+        _property_definition_id: Uuid,
+        _value: Option<SetPropertyValue>,
+    ) -> Result<properties::domain::model::EntityPropertyMutation, rootcause::Report> {
+        use properties::domain::error::PropertiesErr;
+        let error = if self.blocked {
+            PropertiesErr::TaskCompletionBlocked
+        } else {
+            PropertiesErr::Validation("Task is blocked".into())
+        };
+        Err(rootcause::report!(error)
+            .context("task property write failed")
+            .into())
+    }
+
+    async fn update_entity_property_options(
+        &self,
+        _entity_type: model_entity::EntityType,
+        _entity_id: String,
+        _updates: Vec<EntityPropertyOptionDelta>,
+    ) -> Result<Vec<EntityPropertyWithDefinition>, rootcause::Report> {
+        Err(rootcause::report!("unexpected option write"))
+    }
+}
+
+#[tokio::test]
+async fn task_completion_rejection_preserves_typed_code_through_wrapped_writer_report() {
+    let task = Uuid::from_u128(1);
+    let definition = system_properties::SystemPropertyKey::STATUS_UUID;
+    let completed = system_properties::StatusOption::Completed.uuid();
+    for blocked in [true, false] {
+        let loader = crate::task_dependencies::task_dependency_loader(
+            MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
+            EffectReader,
+        );
+        let schema = Schema::build(
+            QueryRoot,
+            PropertiesMutationRoot::<RejectingCompletionWriter>::new(),
+            EmptySubscription,
+        )
+        .data(RejectingCompletionWriter { blocked })
+        .data(loader)
+        .finish();
+        let response = schema
+            .execute(format!(
+                r#"mutation {{ setTaskProperty(input: {{
+                    entityType: DOCUMENT, entityId: "{task}",
+                    propertyDefinitionId: "{definition}",
+                    value: {{ selectOption: "{completed}" }}
+                }}) {{ effectsComplete }} }}"#
+            ))
+            .await;
+        assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+        let extensions = response.errors[0].extensions.as_ref();
+        if blocked {
+            let extensions = extensions.expect("blocked completion recovery extensions");
+            assert_eq!(
+                extensions.get("code"),
+                Some(&async_graphql::value!("TASK_BLOCKED"))
+            );
+            assert_eq!(
+                extensions.get("taskId"),
+                Some(&async_graphql::value!(task.to_string()))
+            );
+        } else {
+            assert!(extensions.is_none());
+        }
+    }
+}

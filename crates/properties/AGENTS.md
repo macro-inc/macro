@@ -24,6 +24,7 @@ events to the `macro.properties` Kafka topic.
 - Property cleanup captures surviving dependency snapshots under the graph lock and returns receipts only after commit. New writes cap both endpoints at 1000 references; oversized existing snapshots remain clearable.
 - Use `set_entity_property_with_effects` when a caller needs the write transaction's exact reciprocal task IDs; the ordinary setter preserves its existing response contract.
 - `src/domain/task_dependency_state.rs` + `src/outbound/task_dependency_state.rs`: receipt-gated, indexed dependency batches; project per-blocker completion facts with `visible_state` and preserve the full aggregate Blocked flag. The storage completion guard applies the team policy atomically to every Status writer.
+- Preserve `PropertiesErr::TaskCompletionBlocked` when atomic completion admission rejects a write; transport adapters map the typed variant, not its display text.
 
 ## Scope
 

@@ -4,7 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/solid-query';
-import type { Client } from '@urql/core';
+import { type Client, CombinedError } from '@urql/core';
 import { err, ok } from 'neverthrow';
 import { type Accessor, createMemo, createSignal, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -44,6 +44,7 @@ const initiativePropertyDeleteMock = vi.hoisted(() =>
 );
 
 vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlCacheHost: () => ({}),
   getGraphqlSoupClient: () => ({
     query: initiativePropertyQueryMock,
     mutation: initiativePropertyDeleteMock,
@@ -66,6 +67,10 @@ vi.mock('../soup/property-queries', () => ({
 const refreshCrmListsMock = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../soup/crm-association', () => ({
   refreshCrmAssociatedSoupQueries: refreshCrmListsMock,
+}));
+const readFirstOpenBlockerMock = vi.hoisted(() => vi.fn(async () => undefined));
+vi.mock('./graphql/task-dependencies', () => ({
+  readFirstOpenBlocker: readFirstOpenBlockerMock,
 }));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
@@ -666,6 +671,42 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('detects blocked completion by code even when the message changes', async () => {
+    const error = new CombinedError({
+      graphQLErrors: [
+        {
+          message: 'wrapped completion rejection',
+          extensions: { code: 'TASK_BLOCKED', taskId: 'rejected-task' },
+        },
+      ],
+    });
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
+      kind: 'permanently-failed',
+      error,
+    });
+
+    await expect(mutation.mutateAsync(variables)).rejects.toBe(error);
+
+    expect(readFirstOpenBlockerMock).toHaveBeenCalledWith({}, 'rejected-task');
+    expect(toastFailureMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ actions: expect.any(Array) })
+    );
+  });
+
+  it('does not treat matching message text as a blocked completion code', async () => {
+    const error = new CombinedError({ graphQLErrors: ['Task is blocked'] });
+    graphqlEntityPropertyMutationMock.mockResolvedValue({
+      kind: 'permanently-failed',
+      error,
+    });
+
+    await expect(mutation.mutateAsync(variables)).rejects.toBe(error);
+
+    expect(readFirstOpenBlockerMock).not.toHaveBeenCalled();
+    expect(toastFailureMock).toHaveBeenCalledWith('Failed to save properties');
   });
 
   it('invalidates GraphQL permanent failures without snapshot rollback', async () => {

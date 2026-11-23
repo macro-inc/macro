@@ -843,7 +843,7 @@ where
             .map_err(|error| {
                 let error = anyhow::Error::from(error);
                 if error.is::<super::error::TaskCompletionBlocked>() {
-                    return PropertiesErr::Validation("Task is blocked".into());
+                    return PropertiesErr::TaskCompletionBlocked;
                 }
                 PropertiesErr::Repo(error)
             })?;

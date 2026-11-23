@@ -260,6 +260,7 @@ impl<P: ProjectAgentInheritance, I: ProjectMemberships, A: ProjectAssignmentAcce
             }
             Err(
                 error @ (PropertiesErr::Validation(_)
+                | PropertiesErr::TaskCompletionBlocked
                 | PropertiesErr::PermissionDenied
                 | PropertiesErr::NotFound
                 | PropertiesErr::OptionNotFound

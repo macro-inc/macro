@@ -66,6 +66,7 @@ session that results.
   since Jev reads text only.
 - A new trigger variant must also be taught to `crates/webhook` ingestion
   and the SSE fan-out, or it will be silently dropped end to end.
+- Treat project-inheritance validation and blocked-completion refusals as terminal; propagate infrastructure failures for retry.
 - Attributed bot messages (`MessagePostedMetadata::invoking_user`) trigger
   exactly like human ones: explicit, reply-target and inferred. The agent hop
   limit (`messages::domain::agent_hops`) is the loop guard and runs before any

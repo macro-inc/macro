@@ -279,13 +279,16 @@ pub async fn load_task_dependencies(
 }
 
 /// Attach a stable recovery code and opaque task identifier to completion rejection.
-pub(crate) fn task_property_error(
-    error: impl std::fmt::Display,
-    task_id: Uuid,
-) -> async_graphql::Error {
+pub(crate) fn task_property_error(error: rootcause::Report, task_id: Uuid) -> async_graphql::Error {
     use async_graphql::ErrorExtensions;
     let message = error.to_string();
-    if message == "Task is blocked" {
+    let blocked = error.iter_reports().any(|report| {
+        matches!(
+            report.downcast_current_context::<properties::domain::error::PropertiesErr>(),
+            Some(properties::domain::error::PropertiesErr::TaskCompletionBlocked)
+        )
+    });
+    if blocked {
         return async_graphql::Error::new(message).extend_with(|_, extensions| {
             extensions.set("code", "TASK_BLOCKED");
             extensions.set("taskId", task_id.to_string());

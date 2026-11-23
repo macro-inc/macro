@@ -15,6 +15,10 @@ pub(crate) struct TaskCompletionBlocked;
 /// Domain error type for property operations.
 #[derive(Debug, Error)]
 pub enum PropertiesErr {
+    /// Atomic storage admission rejected a blocked task's completion.
+    #[error("Task is blocked")]
+    TaskCompletionBlocked,
+
     /// Validation errors (includes property not found) - maps to 400
     #[error("{0}")]
     Validation(String),

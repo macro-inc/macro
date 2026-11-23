@@ -4856,3 +4856,33 @@ async fn get_or_create_option_rejects_unowned_definition() {
         .await;
     assert!(matches!(result, Err(PropertiesErr::NotFound)));
 }
+
+#[tokio::test]
+async fn blocked_completion_preserves_typed_storage_rejection_without_publishing() {
+    let definition_id = SystemPropertyKey::STATUS_UUID;
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(|_, _, _, _| {
+            Box::pin(async {
+                Err(
+                    anyhow::Error::new(crate::domain::error::TaskCompletionBlocked)
+                        .context("atomic completion admission failed"),
+                )
+            })
+        });
+    let broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, broker.clone());
+    let result = service
+        .set_entity_property_with_effects(
+            &edit_receipt("doc1", EntityType::Document),
+            definition_id,
+            None,
+            None,
+        )
+        .await;
+    assert!(matches!(result, Err(PropertiesErr::TaskCompletionBlocked)));
+    assert!(broker.events().is_empty());
+}

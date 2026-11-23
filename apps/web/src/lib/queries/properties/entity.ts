@@ -687,7 +687,13 @@ async function reportBulkPropertySaveFailure(
   variables: BulkSaveEntityPropertiesParams
 ): Promise<void> {
   Telemetry.error(error, { surface: 'task-properties' });
-  if (!error.message.includes('Task is blocked')) {
+  const blockedError =
+    error instanceof CombinedError
+      ? error.graphQLErrors.find(
+          (error) => error.extensions.code === 'TASK_BLOCKED'
+        )
+      : undefined;
+  if (!blockedError) {
     toast.failure('Failed to save properties');
     return;
   }
@@ -695,12 +701,7 @@ async function reportBulkPropertySaveFailure(
     (item) =>
       getPropertyDefinitionId(item.property) === SYSTEM_PROPERTY_IDS.STATUS
   );
-  const rejectedId =
-    error instanceof CombinedError
-      ? error.graphQLErrors.find(
-          (error) => error.extensions.code === 'TASK_BLOCKED'
-        )?.extensions.taskId
-      : undefined;
+  const rejectedId = blockedError.extensions.taskId;
   const taskId = typeof rejectedId === 'string' ? rejectedId : item?.entityId;
   const blockerId = taskId
     ? await readFirstOpenBlocker(getGraphqlCacheHost(), taskId)
