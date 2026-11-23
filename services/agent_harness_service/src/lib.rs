@@ -939,6 +939,9 @@ pub async fn run() -> anyhow::Result<()> {
                     ),
                     PgBotsRepo::new(pool.clone()),
                 ),
+                tool_permissions::RepoTeamDirectory(
+                    teams::outbound::team_repo::TeamRepositoryImpl::new(pool.clone()),
+                ),
                 tool_permissions::RepoSessionDirectory(session_repo.clone()),
                 code_mode::PermissionsFlag(feature_flags.clone()),
                 Arc::new(agent_permissions::outbound::registry::registry_catalog()),

@@ -783,6 +783,37 @@ impl agent_permissions::domain::service::AgentPermissions for Unrestricted {
     > {
         Err(agent_permissions::domain::model::PermissionError::NotFound)
     }
+    async fn view_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn set_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+        _: Vec<agent_permissions::domain::model::Change>,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
+    async fn reset_team(
+        &self,
+        _: &agent_permissions::domain::model::Caller,
+        _: macro_uuid::Uuid,
+    ) -> Result<
+        agent_permissions::domain::model::TeamPermissionsView,
+        agent_permissions::domain::model::PermissionError,
+    > {
+        Err(agent_permissions::domain::model::PermissionError::NotFound)
+    }
     async fn resolve_calls(
         &self,
         _: &agent_permissions::domain::model::SessionPolicy,

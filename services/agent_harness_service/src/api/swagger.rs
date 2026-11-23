@@ -21,7 +21,7 @@ use agent_harness::inbound::tool_approvals::{
     ToolApprovalStatusDto,
 };
 use agent_permissions::domain::model::{
-    PermissionsView, SourceCandidates, Tightened, ToolPermissionCatalog,
+    PermissionsView, SourceCandidates, TeamPermissionsView, Tightened, ToolPermissionCatalog,
 };
 use agent_permissions::inbound::axum_router::{
     self as tool_permissions_router, DetachToolPermissions, SetToolPermissionSource,
@@ -152,6 +152,9 @@ impl Modify for SecurityAddon {
         tool_permissions_router::detach_handler,
         tool_permissions_router::get_sources_handler,
         tool_permissions_router::get_policy_handler,
+        tool_permissions_router::get_team_handler,
+        tool_permissions_router::set_team_handler,
+        tool_permissions_router::reset_team_handler,
         app_connections::app_connected_handler,
         crate::computers::claude::claude_sign_in_handler,
         crate::computers::claude::claude_sign_in_complete_handler,
@@ -253,6 +256,7 @@ impl Modify for SecurityAddon {
         DetachToolPermissions,
         SourceScopeQuery,
         SourceCandidates,
+        TeamPermissionsView,
         ToolPermissionError,
         ToolPermissionCatalog,
         PermissionsView,

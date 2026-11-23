@@ -5,9 +5,9 @@
 //! other.
 
 use agent_permissions::domain::model::{
-    AgentAccess, AgentFacts, AgentOwner, AgentScope, SessionFacts,
+    AgentAccess, AgentFacts, AgentOwner, AgentScope, SessionFacts, TeamFacts, TeamRole,
 };
-use agent_permissions::domain::ports::{AgentDirectory, SessionDirectory};
+use agent_permissions::domain::ports::{AgentDirectory, SessionDirectory, TeamDirectory};
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSessionId, session_owner_user};
 use agent_session::domain::ports::AgentSessionRepo;
@@ -148,5 +148,68 @@ impl<Repo: AgentSessionRepo> SessionDirectory for RepoSessionDirectory<Repo> {
             agent: session.bot_id,
             owner: session_owner_user(&session.owner_id)?,
         }))
+    }
+}
+
+/// [`TeamDirectory`] over the teams repository: a person's role, their teams
+/// and a team's name.
+pub struct RepoTeamDirectory<Teams>(pub Teams);
+
+/// The teams repository could not tell.
+#[derive(Debug, thiserror::Error)]
+#[error("could not look up the team: {0}")]
+pub struct TeamLookupError(String);
+
+fn team_lookup(error: teams::domain::model::TeamError) -> TeamLookupError {
+    TeamLookupError(error.to_string())
+}
+
+impl<Teams> TeamDirectory for RepoTeamDirectory<Teams>
+where
+    Teams: teams::domain::team_repo::TeamRepository,
+{
+    type Err = TeamLookupError;
+
+    async fn role(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        team: macro_uuid::Uuid,
+    ) -> Result<Option<TeamRole>, TeamLookupError> {
+        use teams::domain::model::TeamRole as Role;
+        Ok(self
+            .0
+            .get_team_role(&team, user)
+            .await
+            .map_err(team_lookup)?
+            .map(|role| match role {
+                Role::Member => TeamRole::Member,
+                Role::Admin => TeamRole::Admin,
+                Role::Owner => TeamRole::Owner,
+            }))
+    }
+
+    async fn teams(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<TeamFacts>, TeamLookupError> {
+        Ok(self
+            .0
+            .get_user_teams(user)
+            .await
+            .map_err(team_lookup)?
+            .iter()
+            .map(|team| TeamFacts {
+                id: *team.id(),
+                name: team.name().to_owned(),
+            })
+            .collect())
+    }
+
+    async fn team(&self, team: macro_uuid::Uuid) -> Result<Option<TeamFacts>, TeamLookupError> {
+        match self.0.get_team_name(&team).await {
+            Ok(name) => Ok(Some(TeamFacts { id: team, name })),
+            Err(teams::domain::model::TeamError::TeamDoesNotExist) => Ok(None),
+            Err(error) => Err(team_lookup(error)),
+        }
     }
 }

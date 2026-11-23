@@ -487,6 +487,21 @@ fn the_openapi_document_serves_agent_tool_permissions() {
             "get_agent_tool_permission_policy",
         ),
         (
+            "/agent-tool-permissions/teams/{team_id}",
+            "get",
+            "get_team_tool_permissions",
+        ),
+        (
+            "/agent-tool-permissions/teams/{team_id}",
+            "put",
+            "set_team_tool_permissions",
+        ),
+        (
+            "/agent-tool-permissions/teams/{team_id}",
+            "delete",
+            "reset_team_tool_permissions",
+        ),
+        (
             "/agent-sessions/{session_id}/tool-permissions",
             "get",
             "get_agent_session_tool_permissions",
@@ -506,6 +521,7 @@ fn the_openapi_document_serves_agent_tool_permissions() {
         "DetachToolPermissions",
         "ToolPermissionSourceCandidates",
         "ToolPermissionSource",
+        "TeamToolPermissions",
     ] {
         assert!(schemas.contains_key(schema), "{schema}");
     }
