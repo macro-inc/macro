@@ -94,7 +94,7 @@ impl SoupEntityEdges for TestSoupEdges {
     type InitiativeEdges = TestInitiativeEdges;
     type DocumentEdges = TestEmailThreadEdges;
 
-    fn document_edges(_document_id: uuid::Uuid) -> Self::DocumentEdges {
+    fn document_edges(_document_id: uuid::Uuid, _is_task: bool) -> Self::DocumentEdges {
         TestEmailThreadEdges { available: true }
     }
 

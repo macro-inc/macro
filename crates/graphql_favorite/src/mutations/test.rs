@@ -48,7 +48,7 @@ impl SoupEntityEdges for TestSoupEdges {
     type AgentSessionEdges = TestAgentSessionEdges;
     type DocumentEdges = TestEmailEdges;
 
-    fn document_edges(_document_id: uuid::Uuid) -> Self::DocumentEdges {
+    fn document_edges(_document_id: uuid::Uuid, _is_task: bool) -> Self::DocumentEdges {
         TestEmailEdges { available: true }
     }
 

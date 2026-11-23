@@ -7,7 +7,6 @@ use async_graphql::{
     dataloader::{DataLoader, Loader},
 };
 use chrono::NaiveDate;
-use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use time_tracking::domain::models::{TimeEntryCursor, TimeEntryPage, TimeEntryPageRequest};
 use tracing::Instrument;
@@ -17,9 +16,6 @@ use crate::{
     GraphqlTimeEntry, GraphqlTimeEntryPage, TimeTrackingGraphqlContext, graphql_error,
     inputs::{encode_cursor, page_request},
 };
-
-/// Bound concurrent domain reads; the domain reads one task's entries at a time.
-const MAX_CONCURRENT_READS: usize = 16;
 
 /// One page of one task's entries.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,7 +34,7 @@ impl TimeEntriesKey {
     }
 }
 
-/// Viewer-scoped entries reader; each task's read mints its own view receipt.
+/// Viewer-scoped entries reader; one access check covers a batch's tasks.
 pub struct TimeEntriesLoader {
     context: TimeTrackingGraphqlContext,
     user: MacroUserIdStr<'static>,
@@ -57,19 +53,26 @@ impl Loader<TimeEntriesKey> for TimeEntriesLoader {
         &self,
         keys: &[TimeEntriesKey],
     ) -> Result<HashMap<TimeEntriesKey, Self::Value>, Self::Error> {
-        Ok(stream::iter(keys.iter().cloned().map(|key| async move {
-            let page = self
-                .context
-                .0
-                .entries(self.user.clone(), key.task_id.clone(), key.page())
-                .await
-                .map(Arc::new)
-                .map_err(graphql_error);
-            (key, page)
-        }))
-        .buffer_unordered(MAX_CONCURRENT_READS)
-        .collect()
-        .await)
+        let requests = keys
+            .iter()
+            .map(|key| (key.task_id.clone(), key.page()))
+            .collect();
+        let pages = match self
+            .context
+            .0
+            .entry_pages(self.user.clone(), requests)
+            .await
+        {
+            Ok(pages) => pages
+                .into_iter()
+                .map(|page| page.map(Arc::new).map_err(graphql_error))
+                .collect(),
+            Err(failure) => {
+                let error = graphql_error(failure);
+                keys.iter().map(|_| Err(error.clone())).collect::<Vec<_>>()
+            }
+        };
+        Ok(keys.iter().cloned().zip(pages).collect())
     }
 }
 

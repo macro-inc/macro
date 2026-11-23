@@ -15,6 +15,18 @@ const TASK_ID: Uuid = Uuid::from_u128(0x7a5c);
 const ENTRY_ID: Uuid = Uuid::from_u128(0xe17);
 const TIMER_ID: Uuid = Uuid::from_u128(0x71e);
 
+fn soup_task(id: Uuid) -> SoupItem<()> {
+    match soup_document(id) {
+        SoupItem::Document(mut document) => {
+            document.sub_type = Some(models_soup::document::SoupDocumentSubType::Task {
+                is_completed: false,
+            });
+            SoupItem::Document(document)
+        }
+        other => other,
+    }
+}
+
 fn noon() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc
         .with_ymd_and_hms(2026, 11, 20, 12, 0, 0)
@@ -163,7 +175,7 @@ async fn a_task_lists_its_entries_and_the_viewer_reads_their_timer_with_its_task
     let harness = harness();
     harness
         .primary_soup_service
-        .set_raw_response(vec![soup_document(TASK_ID)]);
+        .set_raw_response(vec![soup_task(TASK_ID)]);
 
     let response = execute_time_query(
         &harness,
@@ -221,7 +233,7 @@ async fn logging_time_replies_with_the_task_read_from_the_primary() {
     harness.soup_service.set_raw_response(Vec::new());
     harness
         .primary_soup_service
-        .set_raw_response(vec![soup_document(TASK_ID)]);
+        .set_raw_response(vec![soup_task(TASK_ID)]);
     let logged = Uuid::from_u128(0xe18);
 
     let response = execute_time_query(
@@ -248,5 +260,32 @@ async fn logging_time_replies_with_the_task_read_from_the_primary() {
                 "timeEntries": { "entries": [{ "id": ENTRY_ID.to_string() }] },
             },
         } })
+    );
+}
+
+#[tokio::test]
+async fn a_document_that_is_not_a_task_has_no_entries_and_reads_none() {
+    let harness = harness();
+    let note = Uuid::from_u128(0x2073);
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(note)]);
+
+    // `OneTaskTime` asserts every list it serves is the task's: a read for
+    // the note would fail the request.
+    let response = execute_time_query(
+        &harness,
+        &format!(
+            r#"{{ user {{ soupEntity(input: {{ entityType: DOCUMENT, entityId: "{note}" }}) {{
+                __typename id ... on GraphqlSoupDocument {{ timeEntries {{ entries {{ id }} nextCursor }} }}
+            }} }} }}"#
+        ),
+    )
+    .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data.into_json().unwrap()["user"]["soupEntity"]["timeEntries"],
+        serde_json::json!({ "entries": [], "nextCursor": null })
     );
 }

@@ -1,6 +1,6 @@
 //! Request capabilities supplied by the application composition root.
 
-use std::{future::Future, pin::Pin, sync::Arc};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use entity_access::domain::{
     models::{
@@ -9,6 +9,7 @@ use entity_access::domain::{
     },
     ports::EntityAccessService,
 };
+use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
 use time_tracking::domain::{
     models::{
@@ -42,14 +43,21 @@ impl From<TimeTrackingError> for TimeTrackingFailure {
 pub(crate) type ApiFuture<'a, T> =
     Pin<Box<dyn Future<Output = Result<T, TimeTrackingFailure>> + Send + 'a>>;
 
+/// Bound concurrent page reads; the domain reads one task's entries at a time.
+const MAX_CONCURRENT_READS: usize = 16;
+
+/// One page of one task's entries.
+pub(crate) type EntryPageRequest = (String, TimeEntryPageRequest);
+
 /// Transport-facing service bundle; implementations mint receipts and delegate policy.
 pub(crate) trait TimeTrackingApi: Send + Sync {
-    fn entries(
+    /// Pages of several tasks' entries, in request order, after one access
+    /// check for every task; a task the viewer cannot see answers not found.
+    fn entry_pages(
         &self,
         user: MacroUserIdStr<'static>,
-        task_id: String,
-        page: TimeEntryPageRequest,
-    ) -> ApiFuture<'_, TimeEntryPage>;
+        requests: Vec<EntryPageRequest>,
+    ) -> ApiFuture<'_, Vec<Result<TimeEntryPage, TimeTrackingFailure>>>;
     fn log(
         &self,
         user: MacroUserIdStr<'static>,
@@ -89,6 +97,35 @@ pub trait TimeTrackingAuthorizer: Send + Sync + 'static {
         user: &MacroUserIdStr<'static>,
         task_id: &str,
     ) -> impl Future<Output = Result<EntityAccessReceipt<T>, AccessError>> + Send;
+
+    /// View receipts for the task documents the viewer can see, keyed by id;
+    /// the rest are left out. One check per task unless overridden.
+    fn authorize_views(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_ids: &[String],
+    ) -> impl Future<
+        Output = Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError>,
+    > + Send {
+        async move {
+            let mut receipts = HashMap::with_capacity(task_ids.len());
+            for task_id in task_ids {
+                match self.authorize::<ViewAccessLevel>(user, task_id).await {
+                    Ok(receipt) => {
+                        receipts.insert(task_id.clone(), receipt);
+                    }
+                    Err(
+                        AccessError::Unauthorized
+                        | AccessError::UnauthorizedWithMessage(_)
+                        | AccessError::NotFound(_)
+                        | AccessError::BadRequest(_),
+                    ) => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Ok(receipts)
+        }
+    }
 }
 
 impl<A: EntityAccessService> TimeTrackingAuthorizer for A {
@@ -98,6 +135,15 @@ impl<A: EntityAccessService> TimeTrackingAuthorizer for A {
         task_id: &str,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
         self.generate_entity_access_receipt::<T>(user, None, task_id, EntityType::Document)
+            .await
+    }
+
+    async fn authorize_views(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_ids: &[String],
+    ) -> Result<HashMap<String, EntityAccessReceipt<ViewAccessLevel>>, AccessError> {
+        self.generate_document_view_access_receipts(user, task_ids)
             .await
     }
 }
@@ -121,18 +167,30 @@ struct TimeTrackingApiAdapter<S, A> {
 impl<S: TimeTrackingService, A: TimeTrackingAuthorizer> TimeTrackingApi
     for TimeTrackingApiAdapter<S, A>
 {
-    fn entries(
+    fn entry_pages(
         &self,
         user: MacroUserIdStr<'static>,
-        task_id: String,
-        page: TimeEntryPageRequest,
-    ) -> ApiFuture<'_, TimeEntryPage> {
+        requests: Vec<EntryPageRequest>,
+    ) -> ApiFuture<'_, Vec<Result<TimeEntryPage, TimeTrackingFailure>>> {
         Box::pin(async move {
-            let receipt = self
-                .access
-                .authorize::<ViewAccessLevel>(&user, &task_id)
-                .await?;
-            Ok(self.service.list_entries(&receipt, page).await?)
+            let mut task_ids: Vec<String> = requests
+                .iter()
+                .map(|(task_id, _)| task_id.clone())
+                .collect();
+            task_ids.sort_unstable();
+            task_ids.dedup();
+            let receipts = self.access.authorize_views(&user, &task_ids).await?;
+            let receipts = &receipts;
+            Ok(stream::iter(requests)
+                .map(|(task_id, page)| async move {
+                    let receipt = receipts.get(&task_id).ok_or(TimeTrackingFailure::Domain(
+                        TimeTrackingError::NotFound("task"),
+                    ))?;
+                    Ok(self.service.list_entries(receipt, page).await?)
+                })
+                .buffered(MAX_CONCURRENT_READS)
+                .collect()
+                .await)
         })
     }
 

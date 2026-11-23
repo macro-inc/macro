@@ -110,7 +110,7 @@ impl GraphqlTimeEntry {
 }
 
 /// A page of a task's time entries, newest day first.
-#[derive(SimpleObject)]
+#[derive(Default, SimpleObject)]
 pub struct GraphqlTimeEntryPage {
     /// Entries of this page.
     pub entries: Vec<GraphqlTimeEntry>,

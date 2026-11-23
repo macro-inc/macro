@@ -30,6 +30,7 @@ use crate::{
 const AUTHOR: &str = "macro|author@example.com";
 const VIEWER: &str = "macro|viewer@example.com";
 const TASK: &str = "00000000-0000-0000-0000-0000000000a1";
+const HIDDEN_TASK: &str = "00000000-0000-0000-0000-0000000000a2";
 const ENTRY: &str = "0196a000-0000-7000-8000-000000000001";
 const OTHER_ENTRY: &str = "0196a000-0000-7000-8000-000000000002";
 const TIMER: &str = "0196a000-0000-7000-8000-0000000000f1";
@@ -66,6 +67,9 @@ fn timer() -> RunningTimer {
     }
 }
 
+/// A domain refusal the script answers with; built per call, as errors do not clone.
+type Refusal = fn() -> TimeTrackingError;
+
 /// What the scripted domain answers.
 #[derive(Default)]
 struct Script {
@@ -73,7 +77,7 @@ struct Script {
     timer: Option<RunningTimer>,
     /// The page request the last list received.
     listed: Option<TimeEntryPageRequest>,
-    delete: Option<fn() -> TimeTrackingError>,
+    delete: Option<Refusal>,
     start_over_limit: bool,
 }
 
@@ -195,7 +199,8 @@ impl TimeTrackingService for ScriptedService {
     }
 }
 
-/// Gives the author edit access to the task and everyone else view access.
+/// Gives the author edit access to the task and everyone else view access;
+/// nobody sees the hidden task.
 struct AuthorEdits;
 
 impl TimeTrackingAuthorizer for AuthorEdits {
@@ -204,6 +209,9 @@ impl TimeTrackingAuthorizer for AuthorEdits {
         user: &MacroUserIdStr<'static>,
         task_id: &str,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
+        if task_id == HIDDEN_TASK {
+            return Err(AccessError::NotFound("task"));
+        }
         let access_level = if user.as_ref() == AUTHOR {
             AccessLevel::Edit
         } else {
@@ -240,7 +248,7 @@ impl SoupEntityEdges for TestEdges {
         Self { available: true }
     }
 
-    fn document_edges(_: Uuid) -> Self::DocumentEdges {
+    fn document_edges(_: Uuid, _: bool) -> Self::DocumentEdges {
         Self { available: true }
     }
 
@@ -316,10 +324,12 @@ impl QueryRoot {
     async fn time_entries(
         &self,
         ctx: &Context<'_>,
+        task_id: Option<String>,
         limit: Option<i32>,
         after: Option<String>,
     ) -> async_graphql::Result<GraphqlTimeEntryPage> {
-        load_time_entries(ctx, TASK.parse().unwrap(), limit, after).await
+        let task_id = task_id.as_deref().unwrap_or(TASK).parse().unwrap();
+        load_time_entries(ctx, task_id, limit, after).await
     }
 }
 
@@ -402,6 +412,30 @@ async fn entries_say_which_the_viewer_may_change_and_page_by_an_opaque_cursor() 
     );
 }
 
+#[tokio::test]
+async fn one_batch_answers_each_task_and_refuses_only_the_hidden_one() {
+    let service = ScriptedService::default();
+    service.0.lock().unwrap().entries = vec![entry(ENTRY, VIEWER, 30)];
+
+    let response = execute(
+        &service,
+        VIEWER,
+        &format!(
+            r#"{{
+                visible: timeEntries {{ entries {{ id }} }}
+                hidden: timeEntries(taskId: "{HIDDEN_TASK}") {{ entries {{ id }} }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    assert_eq!(error_code(&response), Some(Value::from("NOT_FOUND")));
+    assert_eq!(
+        response.data.into_json().unwrap()["visible"],
+        serde_json::json!({ "entries": [{ "id": ENTRY }] })
+    );
+}
+
 const LOG: &str = r#"mutation {
     logTime(input: {
         id: "0196a000-0000-7000-8000-000000000001",
@@ -451,7 +485,7 @@ async fn deleting_an_entry_that_is_already_gone_settles_as_deleted() {
 
 #[tokio::test]
 async fn deleting_keeps_every_other_refusal() {
-    let cases: [(fn() -> TimeTrackingError, &str); 3] = [
+    let cases: [(Refusal, &str); 3] = [
         (|| TimeTrackingError::NotAuthor, "NOT_AUTHOR"),
         (|| TimeTrackingError::NotFound("time tracking"), "NOT_FOUND"),
         (|| TimeTrackingError::Busy, "UNAVAILABLE"),

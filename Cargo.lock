@@ -10097,7 +10097,6 @@ dependencies = [
  "graphql_soup",
  "macro_user_id",
  "model-entity",
- "rootcause",
  "serde_json",
  "time_tracking",
  "tokio",

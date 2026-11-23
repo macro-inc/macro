@@ -142,8 +142,11 @@ where
         SoupInitiativeEdges { initiative_id }
     }
 
-    fn document_edges(document_id: Uuid) -> Self::DocumentEdges {
-        SoupDocumentEdges { document_id }
+    fn document_edges(document_id: Uuid, is_task: bool) -> Self::DocumentEdges {
+        SoupDocumentEdges {
+            document_id,
+            is_task,
+        }
     }
 
     fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
@@ -771,6 +774,8 @@ impl SoupInitiativeEdges {
 pub struct SoupDocumentEdges {
     /// The document whose fields are requested.
     document_id: Uuid,
+    /// Whether the document is a task; only tasks have time logged.
+    is_task: bool,
 }
 
 #[Object]
@@ -784,6 +789,9 @@ impl SoupDocumentEdges {
         limit: Option<i32>,
         after: Option<String>,
     ) -> async_graphql::Result<GraphqlTimeEntryPage> {
+        if !self.is_task {
+            return Ok(GraphqlTimeEntryPage::default());
+        }
         load_time_entries(ctx, self.document_id, limit, after).await
     }
 }
