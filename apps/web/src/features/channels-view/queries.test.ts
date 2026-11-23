@@ -787,6 +787,24 @@ describe('channel list failures', () => {
     useSoupAstItemsQuery.mockReset();
   });
 
+  it('keeps a cached empty page empty, not failed, when its refresh fails', () => {
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      ...failedQuery([]),
+      hasPageData: true,
+    }));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeUndefined();
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
   it('keeps a shared-list seed and offers Retry when the first Soup page fails', () => {
     useSoupAstItemsQuery.mockImplementation(() => failedQuery([]));
     const dispose = createRoot((dispose) => {
