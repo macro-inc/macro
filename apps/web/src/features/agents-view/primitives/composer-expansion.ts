@@ -19,6 +19,10 @@ export function createComposerExpansion(
     hasFocused,
     collapsed,
     focus,
-    blur: () => setFocused(false),
+    // Portaled controls are still a composer interaction. Preserve logical
+    // focus until they close, so their final focus handoff cannot hide the anchor.
+    blur: () => {
+      if (!controlsOpen()) setFocused(false);
+    },
   };
 }

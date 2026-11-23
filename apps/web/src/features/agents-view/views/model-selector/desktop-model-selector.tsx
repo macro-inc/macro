@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
@@ -11,16 +12,23 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 
 export function DesktopModelSelector() {
   const state = useUnifiedModelSelector();
-  const nav = createModelSelectorNavigation(state.onOpenChange);
+  let trigger: HTMLButtonElement | undefined;
+  const nav = createModelSelectorNavigation(state.onOpenChange, () => trigger);
+  createCloseOnNavigation({
+    open: nav.open,
+    close: () => nav.changeOpen(false),
+  });
   let content: HTMLDivElement | undefined;
   const backToCard = () => {
     nav.setPage('card');
     queueMicrotask(() =>
-      content?.querySelector<HTMLButtonElement>('button')?.focus()
+      content?.querySelector<HTMLButtonElement>('button')?.focus({
+        preventScroll: true,
+      })
     );
   };
   const goBack = () => {
-    if (nav.page() === 'list') backToCard();
+    if (nav.page() === 'list' || nav.page() === 'agentModels') backToCard();
     else nav.back();
   };
   return (
@@ -33,6 +41,7 @@ export function DesktopModelSelector() {
     >
       <UnifiedModelTrigger menuOpen={nav.open()}>
         <Popover.Trigger
+          ref={trigger}
           as={Button}
           variant="ghost"
           size="md"
@@ -53,7 +62,14 @@ export function DesktopModelSelector() {
           }}
           style={{
             'box-shadow':
-              'inset 0 0 0 1px var(--color-edge-muted), 0 16px 40px #00000040',
+              'inset 0 0 0 1px var(--color-edge-muted), var(--shadow-menu)',
+          }}
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            const target = nav.page() === 'card' ? 'button' : 'input';
+            content
+              ?.querySelector<HTMLElement>(target)
+              ?.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={state.onCloseAutoFocus}
           onEscapeKeyDown={(event) => {
@@ -76,7 +92,10 @@ export function DesktopModelSelector() {
               />
             }
           >
-            <ModelSelectorCard onSelect={() => nav.setPage('list')} />
+            <ModelSelectorCard
+              onSelect={() => nav.setPage('list')}
+              onModels={() => nav.setPage('agentModels')}
+            />
           </Show>
         </Popover.Content>
       </Popover.Portal>

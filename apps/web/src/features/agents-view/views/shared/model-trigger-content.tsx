@@ -1,6 +1,7 @@
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import Bolt from '@icon/system/fill/lightning-fill.svg';
+import PinFill from '@icon/system/fill/push-pin-fill.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
 import Rocket from '@icon/system/regular/rocket.svg';
 import { Show } from 'solid-js';
@@ -15,11 +16,11 @@ export function UnifiedModelTriggerContent() {
   const model = () =>
     state.models.find((option) => option.id === state.model)?.label ??
     catalogModelLabel(state.model, state.models);
-  const label = () => {
-    if (!custom()) return model();
-    if (state.showModelLabel) return `${state.agent?.name} · ${model()}`;
-    return state.agent?.name;
-  };
+  const label = () => (custom() ? state.agent?.name : model());
+  const showModel = () =>
+    custom() &&
+    state.model &&
+    (state.showModelLabel || state.model !== state.agent?.defaultModel);
   const thinking = () => {
     const effort = state.effort;
     if (!effort || effort.options.length < 2) return;
@@ -33,21 +34,28 @@ export function UnifiedModelTriggerContent() {
   };
   return (
     <>
-      <Show
-        when={custom()}
-        fallback={<ModelIcon model={state.model} class="size-4 shrink-0" />}
-      >
-        <span class="flex size-4 shrink-0 items-center justify-center rounded-[5px] bg-ink/5">
-          <AgentIcon agent={state.agent!} class="size-3.5" />
-        </span>
+      <span class="flex min-w-0 items-center gap-1">
+        <Show
+          when={custom()}
+          fallback={<ModelIcon model={state.model} class="size-4 shrink-0" />}
+        >
+          <span class="flex size-4 shrink-0 items-center justify-center rounded-[5px] bg-ink-extra-muted text-surface">
+            <AgentIcon agent={state.agent!} class="size-3.5" />
+          </span>
+        </Show>
+        <span class="min-w-0 truncate text-ink-muted">{label()}</span>
+      </span>
+      <Show when={showModel()}>
+        <span class="shrink-0 text-ink-extra-muted">{model()}</span>
+        <Show when={state.modelKept}>
+          <PinFill class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
       </Show>
-      <span class="min-w-0 truncate text-ink-muted">{label()}</span>
-      <Show when={!custom() && thinking()}>
+      <Show when={thinking()}>
         <span class="shrink-0 text-ink-extra-muted">{thinking()}</span>
       </Show>
       <Show
         when={
-          !custom() &&
           speedTier(state.speedValue) !== 'standard' &&
           speedChoices(state.speeds ?? []).some(
             (choice) =>
@@ -64,7 +72,7 @@ export function UnifiedModelTriggerContent() {
           </Show>
         </span>
       </Show>
-      <CaretDown class="size-3.5 shrink-0 opacity-70" />
+      <CaretDown class="size-3.5 shrink-0 text-ink-extra-muted" />
     </>
   );
 }

@@ -4,26 +4,27 @@ import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { ThinkingSlider } from '../../components/unified-model-selector/thinking-slider';
+import { speedChoices } from '../../core/model-selection';
 import { MACRO_PERSONA_ID } from '../../core/roster';
 import { ModelSelectorIdentity } from './model-selector-identity';
+import { ModelSelectorModelRow } from './model-selector-model-row';
 import { SpeedButton } from './speed-button';
 
 export function ModelSelectorCard(props: {
   mobile?: boolean;
   onSelect: () => void;
+  onModels: () => void;
 }) {
   const state = useUnifiedModelSelector();
-  const controls = () =>
-    (!state.agent || state.agent.id === MACRO_PERSONA_ID) &&
-    state.model?.toLowerCase() !== 'auto';
+  const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
+  const controls = () => state.model?.toLowerCase() !== 'auto';
+  const thinking = () =>
+    controls() && (!custom() || (state.effort?.options.length ?? 0) > 1);
+  const speed = () => controls() && speedChoices(state.speeds ?? []).length > 1;
   return (
     <div
-      class="flex flex-col py-2"
-      classList={{
-        'px-2': !props.mobile,
-        'gap-2.5': !props.mobile && controls(),
-        'gap-3.5 px-3': Boolean(props.mobile),
-      }}
+      class="flex flex-col gap-2"
+      classList={{ 'p-2': !props.mobile, 'p-3': Boolean(props.mobile) }}
     >
       <div
         class="flex items-center justify-between gap-2"
@@ -34,10 +35,10 @@ export function ModelSelectorCard(props: {
           appearance="bare"
           onClick={props.onSelect}
           class={cn(
-            'min-w-0 rounded-full not-touch:hover:bg-ink/12 active:bg-ink/12 text-ink font-medium',
+            'min-w-0 rounded-full not-touch:hover:bg-hover active:bg-active text-ink font-medium',
             props.mobile
               ? 'h-11 min-h-11 pl-2.5 pr-3 gap-2.5 text-base leading-[22px]'
-              : 'h-7 min-h-7 px-1.5 gap-2 text-sm'
+              : 'h-7 min-h-7 pl-1.5 pr-2.5 gap-2 text-sm'
           )}
         >
           <ModelSelectorIdentity mobile={props.mobile} />
@@ -49,14 +50,18 @@ export function ModelSelectorCard(props: {
             }
           />
         </Button>
-        <Show when={controls()}>
-          <div classList={{ 'pr-1.5': Boolean(props.mobile) }}>
-            <SpeedButton mobile={props.mobile} />
-          </div>
+        <Show when={speed()}>
+          <SpeedButton mobile={props.mobile} />
         </Show>
       </div>
-      <Show when={controls()}>
-        <div classList={{ 'px-2.5': Boolean(props.mobile) }}>
+      <Show when={custom() && state.model}>
+        <ModelSelectorModelRow
+          mobile={props.mobile}
+          onModels={props.onModels}
+        />
+      </Show>
+      <Show when={thinking()}>
+        <div>
           <ThinkingSlider
             effort={state.effort}
             value={state.effortValue}

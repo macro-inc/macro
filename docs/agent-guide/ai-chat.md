@@ -298,7 +298,7 @@ unified diff with **Back to conversation**; returning preserves the unsent draft
 
 The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
-draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent (Suggested before any picks), and More models. More models pushes a complete provider catalog in the same sheet. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection flow.
+draft, attachments, agent, model, repository, and branch. Tap the model pill to open its card. Thinking and Speed change there without dismissal; tap the name to open the agent/model sheet. The sheet lists recent agent bubbles, Auto, Recent, Suggested, and More models. Suggested excludes Auto and Recent and appears only for matching frontier models. More models pushes a complete provider catalog in the same sheet. An agent card has a Model row that opens its runtime's models without changing the agent. Picking closes the sheet; Back returns to the card. Search filters all available models and agent names. Unavailable agents retain their existing connection action.
 
 The floating mobile composer appears only on **Agents**; Home and other views
 keep their New action or their own reply/comment composer.
@@ -637,9 +637,10 @@ the shimmer.
   row. Focusing a session input on a phone also expands it. Height changes animate
   over 200ms, with reduced-motion preferences respected. **Agent** and **Send**
   sit inside the input on the right.
-  The unified trigger shows its provider or agent icon and name, a Thinking level only when it differs from the model default, and an accent speed glyph for Fast or Ultrafast. Routine configuration retains its model override label.
-- Tap the model trigger to open its card. On desktop the card and model menu open 6px below the trigger, end-aligned, and flip above only when space requires it. Phone popovers and sheets retain their existing placement. Tap the name to reach search, recent agent bubbles, Auto, Recent models, and More models. Before any model picks, Suggested shows the runtime's frontier list. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet, including Suggested models. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns directly to the card, then dismisses it. On desktop, picking returns to the card; on phone it closes the sheet. A custom agent keeps a name-only card and its model overrides remain available in the selection list.
-  The popover is the card surface, without a second padded frame, on desktop and phone. Its content matches the selection menu's insets: 8px on desktop; 12px horizontally and 8px vertically on phone. The model-name button is a fully rounded pill. Desktop selection pages have their own 400px width and content-driven height capped at 40rem or the available viewport, with internal scrolling; they do not inherit the compact card's size. See all is a text-only link-style Button with a trailing right arrow; hovering changes its color without adding an underline. The phone selection sheet keeps its independent sizing and navigation.
+  The unified trigger shows its provider or agent icon and name, a Thinking level only when it differs from the model default, and an accent speed glyph for Fast or Ultrafast. An agent's non-default model appears separately in muted text, followed by a pin when kept. Routine configuration always retains its model label.
+- Tap the model trigger to open its card. On desktop the card and model menu open 6px below the trigger, end-aligned, and flip above only when space requires it. Phone popovers and sheets retain their existing placement. Tap the name to reach search, recent agent bubbles, Auto, Recent models, Suggested, and More models. Suggested uses only fixed frontier matches, excludes Auto and Recent, shows at most five models, and hides when empty. Recent remembers five unique models per signed-in user. See all opens the full existing agent groups. More models opens an in-place complete provider page on desktop and the same pushed page inside the phone sheet. Search covers the full catalog. Desktop search takes focus; ArrowDown/ArrowUp enter matching rows. Escape returns directly to the card, then dismisses it. On desktop, picking returns to the card; on phone it closes the sheet. An agent's Model row opens a separate provider-grouped page without changing the agent; a single-model runtime keeps a fixed row.
+  The popover is the card surface, without a second padded frame. Card content has 8px padding on desktop and 12px on phone, with 8px between the name row and fields. Model and Thinking label rows have an additional 6px horizontal inset on desktop and 10px on phone; the slider track spans the content edges without extra wrapper padding. The phone thumb retains an invisible 44px hit target. Provider logos sit one spacing step closer to names than Thinking levels, and names and Thinking values share their type size. Desktop selection pages use 400px width and a content-sized, capped scroll region.
+  Empty search shows a centered search icon, **No matches for “query”**, and a **Clear search** pill on every selection page. The pill clears the query and restores field focus; ArrowDown reaches it and Enter activates it. The phone card unmounts while its sheet is open, so keyboard viewport changes cannot reposition a hidden card. Navigation, hidden or detached triggers, outside taps, and Escape dismiss the selector; its portals retain the list composer's expanded interaction state.
   The in-memory catalog leads with **Auto**, where automatic routing sorts each
   turn's prompt: hard prompts run on **Opus 5.5**, simple ones on **Gemini 3.8
   Flash**, and the rest on **GPT-6.1 Sol**. It then offers the closed Anthropic and OpenAI chat
@@ -664,9 +665,10 @@ the shimmer.
   The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
   Tap the trigger to open the card, then its name to select an agent or model.
-  See all opens the complete grouped agent list. Selecting an agent uses its
-  default and clears a previous model override. A selected multi-model agent
-  retains a Model group in the selection list for one-shot overrides.
+  See all opens the complete grouped agent list. Selecting an agent restores its
+  kept model, or its default when no model is kept. The card's Model row opens
+  that agent's runtime catalog; choosing from Recent, Suggested, or All models
+  instead returns to Macro's runtime.
   A check identifies the selected model, including a configured default.
   Escape returns directly to the card, then dismisses it.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Machines.
@@ -751,9 +753,12 @@ the shimmer.
   and cannot be changed for local sessions. The native Claude/Codex TUI remains
   interactive in Herdr, and local turns appear in the Macro transcript.
 - Sending starts a session with the chosen agent's configured default model;
-  a model selected from its selection list overrides that default for the next send
-  only. Sending or choosing another agent clears the override. This does not
-  update the saved agent; configure persistent defaults in the agent editor.
+  a model selected from its Model row overrides that default for one send.
+  Press the pin beside **Model** to keep a non-default choice across sends and
+  composer mounts, or press it again to restore one-shot behavior. A new choice
+  stays kept while pinned; picking the agent default clears the pin. Kept choices
+  are browser-local per account and agent, do not sync across devices, and never
+  update the shared agent. Confirmed catalog removal clears an unavailable choice.
   Inline and standalone sessions use the same card-first agent/model selector as
   Home and new conversations. The session host applies model and effort changes;
   new-chat preferences do not overwrite existing session configuration.
@@ -762,9 +767,11 @@ the shimmer.
 - **Thinking** uses an accent slider in the card. Pointer choices commit on release;
   arrow keys, Home, and End commit immediately. Models with at most one effort
   option retain a disabled-looking slot labeled **Not available for this model**.
-  Agent and Auto cards contain only the name row. **Speed** opens a small menu
-  above its button, not a sheet; Standard is ghost, Fast shows a bolt, and
-  Ultrafast shows a rocket only when advertised by the selected model.
+  Agent cards show Thinking and Speed only when the runtime advertises them;
+  Auto has no settings. Thinking labels and track ends share the card's content
+  inset on desktop and phone. **Speed** opens a small menu above its button,
+  not a sheet; Standard is ghost, Fast shows a bolt, and Ultrafast shows a rocket
+  only when advertised by the selected model.
 - On desktop, chat agents' empty input shows the static hint **Type @ to mention
   docs, people, or channels, / for skills** immediately, without typing or cycling
   through other hints. Clearing a draft restores the same hint.

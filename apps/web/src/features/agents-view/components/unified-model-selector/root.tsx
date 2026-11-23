@@ -16,6 +16,8 @@ export type UnifiedModelSelectorState = {
   suggestedDisabled?: boolean;
   suggestedSelected?: boolean;
   agent?: RosterAgent;
+  modelKept?: boolean;
+  onKeepModel?: (keep: boolean) => void;
   agents?: RosterAgent[];
   /** Model-only target editors show the override alongside the selected agent. */
   showModelLabel?: boolean;

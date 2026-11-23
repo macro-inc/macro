@@ -10,6 +10,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { createRoot, createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ComposerMode } from '../core/mode';
@@ -331,10 +332,13 @@ async function selectAgent(name: RegExp) {
     expect(trigger.getAttribute('aria-expanded')).toBe('false')
   );
 }
-async function hoverAgent(name: string) {
+async function openAgentModels(name: string) {
   await selectAgent(new RegExp(`^${name}`));
-  openAgents();
-  return within(screen.getByRole('group', { name: 'Model' }));
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose an agent or model' })
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
+  return within(screen.getByRole('dialog'));
 }
 
 describe('agent-led new conversation', () => {
@@ -385,12 +389,11 @@ describe('agent-led new conversation', () => {
     fireEvent.input(screen.getByRole('textbox', { name: 'Draft' }), {
       target: { value: 'Phone draft' },
     });
-    openAgents();
     fireEvent.click(
-      within(screen.getByRole('group', { name: 'Model' })).getByRole('button', {
-        name: 'GPT-5',
-      })
+      screen.getByRole('button', { name: 'Choose an agent or model' })
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GPT-5' }));
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -441,8 +444,8 @@ describe('agent-led new conversation', () => {
     const content = name.parentElement?.parentElement;
     expect(content?.parentElement).toBe(card);
     expect(content?.className).not.toMatch(/m-2|bg-ink\/8|rounded-/);
-    expect(content?.classList.contains('px-3')).toBe(true);
-    expect(content?.classList.contains('py-2')).toBe(true);
+    expect(content?.classList.contains('p-3')).toBe(true);
+    expect(content?.classList.contains('gap-2')).toBe(true);
     expect(name.classList.contains('rounded-full')).toBe(true);
     fireEvent.click(name);
     expect(
@@ -708,12 +711,11 @@ describe('agent-led new conversation', () => {
   it('keeps a model picked for the agent an @mention names again', async () => {
     mocks.touch = true;
     const send = page(true, [], false, [], 'code');
-    openAgents();
     fireEvent.click(
-      within(screen.getByRole('group', { name: 'Model' })).getByRole('button', {
-        name: 'GPT-5',
-      })
+      screen.getByRole('button', { name: 'Choose an agent or model' })
     );
+    fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
+    fireEvent.click(screen.getByRole('button', { name: 'GPT-5' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'Mention' }), {
       target: { value: `bot|${CURSOR_BOT_ID}` },
     });
@@ -1522,24 +1524,88 @@ describe('agent-led new conversation', () => {
       );
     }
   );
-  it('focuses the shared search and filters the selected agent catalog', async () => {
+  it('checks custom-agent models only in their dedicated page', () => {
     page(true, [], false, [], 'code');
     openAgents();
-    const search = screen.getByRole('textbox', {
-      name: /Search (agents and )?models/,
-    });
+    fireEvent.input(
+      screen.getByRole('textbox', { name: 'Search agents and models' }),
+      { target: { value: 'Cursor Default' } }
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'Cursor Default' })
+        .querySelector('[data-macro-icon="check"]')
+    ).toBeNull();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
+    expect(
+      screen
+        .getByRole('button', { name: 'Cursor Default' })
+        .querySelector('[data-macro-icon="check"]')
+    ).not.toBeNull();
+  });
+
+  it.each([
+    ['list', false],
+    ['all', false],
+    ['agents', false],
+    ['agentModels', false],
+    ['list', true],
+    ['all', true],
+    ['agents', true],
+    ['agentModels', true],
+  ] as const)(
+    'clears empty search and restores focus on %s (touch: %s)',
+    async (target, touch) => {
+      mocks.touch = touch;
+      const user = userEvent.setup();
+      page(true, [], false, [], 'code');
+      if (target === 'agentModels') await openAgentModels('Cursor');
+      else {
+        openAgents();
+        if (target === 'all')
+          fireEvent.click(screen.getByRole('button', { name: 'More models' }));
+        if (target === 'agents')
+          fireEvent.click(screen.getByRole('button', { name: 'See all' }));
+      }
+      const search = screen.getByRole('textbox', {
+        name:
+          target === 'agentModels'
+            ? 'Search models'
+            : 'Search agents and models',
+      });
+      if (touch) search.focus({ preventScroll: true });
+      else await waitFor(() => expect(document.activeElement).toBe(search));
+      fireEvent.input(search, { target: { value: 'no-such-choice' } });
+      const menu = within(search.closest('[role="dialog"]')!);
+      expect(menu.getByRole('status').textContent).toBe(
+        'No matches for “no-such-choice”'
+      );
+      const clear = menu.getByRole('button', { name: 'Clear search' });
+      await user.keyboard('{ArrowDown}');
+      expect(document.activeElement).toBe(clear);
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect((search as HTMLInputElement).value).toBe(''));
+      await waitFor(() => expect(document.activeElement).toBe(search));
+      expect(menu.queryByRole('status')).toBeNull();
+    }
+  );
+
+  it('focuses the shared search and filters the selected agent catalog', async () => {
+    page(true, [], false, [], 'code');
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Cursor Default' }));
+    const search = screen.getByRole('textbox', { name: 'Search models' });
     await waitFor(() => expect(document.activeElement).toBe(search));
     fireEvent.input(search, { target: { value: 'GPT' } });
-    expect(
-      within(screen.getByRole('group', { name: 'Model' })).getByRole('button', {
-        name: 'GPT-5',
-      })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'GPT-5' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Cursor Default' })).toBeNull();
   });
   it('retains custom-agent model overrides for one send', async () => {
     const send = page(true, [], false, [], 'code');
-    const models = await hoverAgent('Cursor');
+    const models = await openAgentModels('Cursor');
     expect(
       models
         .getByRole('button', { name: /Cursor Default/ })
@@ -1550,9 +1616,9 @@ describe('agent-led new conversation', () => {
       screen.getByRole('button', { name: 'Choose an agent or model' })
         .textContent
     ).toContain('Cursor');
-    openAgents();
+    fireEvent.click(screen.getByRole('button', { name: 'GPT-5' }));
     expect(
-      within(screen.getByRole('group', { name: 'Model' }))
+      within(screen.getByRole('dialog'))
         .getByRole('button', { name: 'GPT-5' })
         .querySelector('.text-accent')
     ).toBeTruthy();
@@ -1565,6 +1631,167 @@ describe('agent-led new conversation', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send.mock.calls[1][0]).not.toHaveProperty('modelOverride');
+  });
+  it.each([false, true])(
+    'pins and unpins a picked agent model without changing the agent (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      const send = page(true, [], false, [], 'code');
+      const models = await openAgentModels('Cursor');
+      fireEvent.click(models.getByRole('button', { name: 'GPT-5' }));
+      const trigger = screen.getByRole('button', {
+        name: 'Choose an agent or model',
+      });
+      if (touch) fireEvent.click(trigger);
+      fireEvent.click(
+        await screen.findByRole('button', { name: 'Keep GPT-5 for Cursor' })
+      );
+      expect(
+        screen
+          .getByRole('button', { name: 'Stop keeping GPT-5' })
+          .getAttribute('aria-pressed')
+      ).toBe('true');
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send.mock.lastCall?.[0]).toMatchObject({
+        botId: CURSOR_BOT_ID,
+        modelOverride: 'gpt-5',
+      });
+      fireEvent.click(trigger);
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Stop keeping GPT-5' })
+      );
+      fireEvent.click(trigger);
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send.mock.lastCall?.[0]).not.toHaveProperty('modelOverride');
+    }
+  );
+  it.each([false, true])(
+    'keeps an agent model across sends and remounts (touch: %s)',
+    (touch) => {
+      mocks.touch = touch;
+      localStorage.setItem(
+        'agents-view-kept-model-v1:user',
+        JSON.stringify({
+          [CURSOR_BOT_ID]: 'gpt-5',
+        })
+      );
+      const send = page(true, [], false, [], 'code');
+      expect(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+          .textContent
+      ).toContain('GPT-5');
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      for (const [request] of send.mock.calls) {
+        expect(request).toMatchObject({
+          botId: CURSOR_BOT_ID,
+          modelOverride: 'gpt-5',
+        });
+      }
+      cleanup();
+      const remountedSend = page(true, [], false, [], 'code');
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(remountedSend).toHaveBeenCalledWith(
+        expect.objectContaining({ modelOverride: 'gpt-5' })
+      );
+    }
+  );
+
+  it('isolates kept models across account changes without leaking one-shot choices', () => {
+    const [identity, setIdentity] = createSignal<string | undefined>('user-a');
+    mocks.userId = identity;
+    localStorage.setItem(
+      'agents-view-kept-model-v1:user-a',
+      JSON.stringify({
+        [CURSOR_BOT_ID]: 'gpt-5',
+      })
+    );
+    const send = page(true, [], false, [], 'code');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelOverride: 'gpt-5' })
+    );
+    setIdentity('user-b');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.lastCall?.[0]).not.toHaveProperty('modelOverride');
+    setIdentity('user-a');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelOverride: 'gpt-5' })
+    );
+  });
+
+  it('sends a kept in-memory model while its catalog is pending', () => {
+    mocks.modelsPending = true;
+    mocks.recentIds = ['saved-agent'];
+    localStorage.setItem(
+      'agents-view-kept-model-v1:user',
+      JSON.stringify({ 'saved-agent': 'openai/gpt-5.6' })
+    );
+    const send = page(
+      true,
+      [
+        {
+          bot: { id: 'saved-agent', name: 'Reviewer', handle: 'reviewer' },
+          harness: 'in-memory',
+          default_model: 'chat-default',
+        },
+      ],
+      false,
+      [],
+      'chat'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        botId: 'saved-agent',
+        modelOverride: 'openai/gpt-5.6',
+      })
+    );
+    expect(send.mock.lastCall?.[0]).not.toHaveProperty('modelFallback');
+  });
+
+  it('forgets retired kept models only after a complete catalog arrives', () => {
+    mocks.modelsPending = true;
+    localStorage.setItem(
+      'agents-view-kept-model-v1:user',
+      JSON.stringify({
+        [CURSOR_BOT_ID]: 'retired-model',
+      })
+    );
+    page(true, [], false, [], 'code');
+    expect(
+      JSON.parse(localStorage.getItem('agents-view-kept-model-v1:user')!)[
+        CURSOR_BOT_ID
+      ]
+    ).toBe('retired-model');
+    cleanup();
+    mocks.modelsPending = false;
+    const send = page(true, [], false, [], 'code');
+    expect(
+      JSON.parse(localStorage.getItem('agents-view-kept-model-v1:user')!)[
+        CURSOR_BOT_ID
+      ]
+    ).toBeUndefined();
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send.mock.lastCall?.[0]).not.toHaveProperty('modelOverride');
+  });
+
+  it('clears a kept choice when it becomes the agent default', () => {
+    localStorage.setItem(
+      'agents-view-kept-model-v1:user',
+      JSON.stringify({
+        [CURSOR_BOT_ID]: 'cursor-default',
+      })
+    );
+    page(true, [], false, [], 'code');
+    expect(
+      JSON.parse(localStorage.getItem('agents-view-kept-model-v1:user')!)[
+        CURSOR_BOT_ID
+      ]
+    ).toBeUndefined();
   });
   it('clears a temporary model choice when switching to Code', async () => {
     page();
@@ -1740,7 +1967,7 @@ describe('agent-led new conversation', () => {
       mocks.tier = tier;
       mocks.currentEffort = 'ultra';
       const send = page(true, [], false, [], 'code');
-      const models = await hoverAgent('Cursor');
+      const models = await openAgentModels('Cursor');
       fireEvent.click(models.getByRole('button', { name: /^GPT-5/ }));
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
       fireEvent.click(screen.getByRole('button', { name: 'Send' }));

@@ -168,12 +168,11 @@ async function expectClosed(trigger: HTMLElement) {
   // The card remains the focus target when a choice returns to it.
   expect(document.activeElement?.tagName).toBe('BUTTON');
 }
-function openModels(name: string) {
+function openModels(name: string, currentModel: string) {
   const trigger = openAgents();
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
-  fireEvent.click(within(screen.getByRole('dialog')).getAllByRole('button')[0]);
-  const menu = screen.getByRole('group', { name: 'Model' });
-  return { trigger, menu: within(menu) };
+  fireEvent.click(screen.getByRole('button', { name: currentModel }));
+  return { trigger, menu: within(screen.getByRole('dialog')) };
 }
 
 let styles: HTMLStyleElement;
@@ -255,13 +254,19 @@ describe('routine execution picker', () => {
   );
 
   it.each([
-    ['Researcher', managedId, 'Other model', 'other-model'],
-    ['Local worker', externalId, 'Custom model', 'vendor/custom-model'],
+    ['Researcher', managedId, 'Other model', 'other-model', 'Chat model'],
+    [
+      'Local worker',
+      externalId,
+      'Custom model',
+      'vendor/custom-model',
+      'Local default',
+    ],
   ])(
     'selects runtime-specific nested models for %s',
-    async (name, agentId, label, model) => {
+    async (name, agentId, label, model, currentModel) => {
       const { selection } = mount({ kind: 'model', model: 'chat-model' });
-      const { trigger, menu } = await openModels(name);
+      const { trigger, menu } = openModels(name, currentModel);
       const item = menu.getByRole('button', { name: label });
       item.focus();
       fireEvent.click(item);
@@ -270,6 +275,9 @@ describe('routine execution picker', () => {
         agentId,
         modelOverride: model,
       });
+      expect(
+        screen.queryByRole('button', { name: /^(Keep|Stop keeping) / })
+      ).toBeNull();
       await expectClosed(trigger);
     }
   );

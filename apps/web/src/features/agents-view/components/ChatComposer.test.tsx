@@ -5,7 +5,7 @@ import type { RestoreFocusDefault } from '@core/component/LexicalMarkdown/plugin
 import { hapticImpact } from '@core/mobile/haptics';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -18,8 +18,10 @@ import {
 import { createSignal, onMount } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { MobileModelSelector } from '../views/mobile/model-selector';
 import { RepositoryPicker } from '../views/RepositoryPicker';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
+import { UnifiedModelSelectorRoot } from './unified-model-selector/root';
 
 vi.mock('@core/mobile/haptics', () => ({ hapticImpact: vi.fn() }));
 
@@ -993,6 +995,94 @@ it.each(['Repository', 'Branch'])(
     expect(screen.getByTestId('editor')).toBe(input);
   }
 );
+
+it('keeps the list composer expanded across model selection and dismisses an orphaned card', async () => {
+  vi.mocked(isTouchDevice).mockReturnValue(true);
+  const computedStyle = window.getComputedStyle;
+  vi.stubGlobal('getComputedStyle', (element: Element) => {
+    const style = computedStyle(element);
+    style.transitionDuration ||= '0s';
+    style.animationName ||= 'none';
+    return style;
+  });
+  onTestFinished(() => {
+    vi.unstubAllGlobals();
+  });
+  const [open, setOpen] = createSignal(false);
+  const [model, setModel] = createSignal('openai/gpt-5.6');
+  const [hidden, setHidden] = createSignal(false);
+  const models = [
+    { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+    { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
+  ];
+  const { container } = render(() => (
+    <div hidden={hidden()}>
+      <ChatComposer
+        collapseOnBlur
+        phoneLayout
+        controlsOpen={open()}
+        draft="Keep the list draft"
+        onDraftChange={() => {}}
+        onSend={() => {}}
+        selector={
+          <UnifiedModelSelectorRoot
+            state={{
+              get model() {
+                return model();
+              },
+              models,
+              suggestedModels: models,
+              onModel: (id) => {
+                setModel(id);
+              },
+              onEffort: () => {},
+              onSpeed: () => {},
+              onOpenChange: setOpen,
+              onCloseAutoFocus: (event) => event.preventDefault(),
+            }}
+          >
+            <MobileModelSelector />
+          </UnifiedModelSelectorRoot>
+        }
+      />
+    </div>
+  ));
+  const input = screen.getByTestId('editor');
+  const surface = container.querySelector('[data-agent-composer]')!;
+  fireEvent.focusIn(input);
+  const trigger = screen.getByRole('button', {
+    name: 'Choose an agent or model',
+  });
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
+  const search = await screen.findByRole('textbox');
+  fireEvent.focusOut(input, { relatedTarget: search });
+  fireEvent.pointerDown(search);
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
+  await waitFor(() => expect(open()).toBe(false));
+  expect(model()).toBe('anthropic/claude-sonnet-5-5');
+  await waitFor(() => expect(screen.queryByRole('textbox')).toBeNull());
+  expect(surface.hasAttribute('data-composer-expanded')).toBe(true);
+  expect(screen.getByTestId('editor')).toBe(input);
+
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  await waitFor(() => expect(open()).toBe(false));
+
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  setHidden(true);
+  await waitFor(() => expect(open()).toBe(false));
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+  setHidden(false);
+
+  fireEvent.click(trigger);
+  await screen.findByRole('dialog');
+  fireEvent.click(document.querySelector('[data-model-selector-overlay]')!);
+  await waitFor(() => expect(open()).toBe(false));
+});
 
 it('blocks existing images on text-only models and preserves the draft until switching back', () => {
   const send = vi.fn();

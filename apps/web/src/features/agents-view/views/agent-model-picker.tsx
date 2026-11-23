@@ -47,7 +47,7 @@ export function AgentModelPicker(props: {
           selectedCatalog.currentModel(),
         models: models(),
         suggestedModels: suggestedModels(),
-        suggestedSelected: !macro() || props.selected?.id === MACRO_PERSONA_ID,
+        suggestedSelected: props.selected?.id === MACRO_PERSONA_ID,
         suggestedDisabled: Boolean(
           (macro() ?? props.selected)?.unavailableReason
         ),

@@ -55,7 +55,7 @@ export function SpeedButton(props: { mobile?: boolean }) {
           aria-label={t('agentControls.speed')}
           class={cn(
             'h-6 min-h-6 gap-1 rounded-full pl-2.5 pr-1.5 text-xs text-ink-muted',
-            tier() !== 'standard' && 'bg-ink/12 pl-2 text-ink',
+            tier() !== 'standard' && 'bg-selected pl-2 text-ink',
             props.mobile &&
               'h-8 min-h-8 touch:min-h-8 pl-3.5 pr-2 text-sm leading-5',
             props.mobile && tier() !== 'standard' && 'pl-2.5'
@@ -95,8 +95,8 @@ export function SpeedButton(props: { mobile?: boolean }) {
                   closeOnSelect
                   disabled={state.disabled}
                   class={cn(
-                    'h-8 gap-2.5 rounded-md px-2.5 py-0 data-highlighted:bg-ink/12',
-                    props.mobile && 'h-11 gap-3 rounded-[14px] px-3.5'
+                    'h-8 gap-2.5 rounded-md px-2.5 py-0 data-highlighted:bg-active',
+                    props.mobile && 'h-11 gap-3 rounded-[20px] px-3.5'
                   )}
                   onSelect={() => {
                     state.onSpeed(choice.value);

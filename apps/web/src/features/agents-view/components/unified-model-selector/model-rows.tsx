@@ -23,7 +23,7 @@ export function ModelRows(props: {
           appearance="bare"
           data-model-choice
           class={cn(
-            'flex w-full items-center text-left font-normal gap-2.5 px-2.5 py-2 rounded-lg not-touch:hover:bg-ink/12 focus-visible:bg-ink/12 text-sm',
+            'flex w-full items-center text-left font-normal gap-2.5 px-2.5 py-2 rounded-lg not-touch:hover:bg-hover focus-visible:bg-active text-sm',
             props.mobile
               ? 'h-11 rounded-[22px] gap-3 px-3 py-2.5 text-base leading-[22px]'
               : 'min-h-9'

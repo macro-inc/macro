@@ -17,7 +17,7 @@ export function modelSelection(
 ) {
   const search = query.trim().toLocaleLowerCase();
   const catalog = buildModelCatalog(options, true);
-  const suggested = catalog.frontier.length ? catalog.frontier : options;
+  const suggested = catalog.frontier;
   const suggestedIds = new Set(suggested.map((option) => option.id));
   const allProviders = catalog.providers
     .map((provider) => ({

@@ -91,6 +91,20 @@ export function UnifiedModelSelector(props: {
         () => (props.state.onAgent ? props.state.onAgent(agent) : false),
         () => recentAgents().remember(agent.id)
       ),
+    get onKeepModel() {
+      const keepModel = props.state.onKeepModel;
+      if (!keepModel) return undefined;
+      return (keep: boolean) =>
+        track(
+          'agents.model_selector.keep',
+          {
+            'agent.id': props.state.agent?.id ?? '',
+            'model.id': props.state.model ?? '',
+            kept: String(keep),
+          },
+          () => keepModel(keep)
+        );
+    },
     onEffort: (choice: Parameters<UnifiedModelSelectorState['onEffort']>[0]) =>
       track(
         'agents.model_selector.effort',

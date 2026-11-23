@@ -30,7 +30,7 @@ export function AgentBubble(props: {
       onClick={props.onSelect}
     >
       <span
-        class="grid shrink-0 place-items-center overflow-hidden rounded-full bg-surface-2"
+        class="grid shrink-0 place-items-center overflow-hidden rounded-full bg-ink-extra-muted text-surface"
         style={
           props.selected
             ? {

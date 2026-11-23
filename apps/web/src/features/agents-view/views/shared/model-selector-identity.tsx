@@ -9,7 +9,7 @@ export function ModelSelectorIdentity(props: { mobile?: boolean }) {
   const state = useUnifiedModelSelector();
   const custom = () => state.agent && state.agent.id !== MACRO_PERSONA_ID;
   return (
-    <>
+    <span class="flex min-w-0 items-center gap-1">
       <Show
         when={custom()}
         fallback={
@@ -19,7 +19,7 @@ export function ModelSelectorIdentity(props: { mobile?: boolean }) {
           />
         }
       >
-        <span class="flex size-[18px] shrink-0 items-center justify-center rounded bg-ink/8">
+        <span class="flex size-[18px] shrink-0 items-center justify-center rounded bg-ink-extra-muted text-surface">
           <AgentIcon agent={state.agent!} class="size-4" />
         </span>
       </Show>
@@ -28,6 +28,6 @@ export function ModelSelectorIdentity(props: { mobile?: boolean }) {
           ? state.agent?.name
           : catalogModelLabel(state.model, state.models)}
       </span>
-    </>
+    </span>
   );
 }

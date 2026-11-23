@@ -67,6 +67,7 @@ import {
   createPersistedComposerDraft,
   NEW_CONVERSATION_ATTACHMENTS_KEY,
 } from '../primitives/composer-draft';
+import { createKeptAgentModels } from '../primitives/kept-agent-model';
 import { createPreferredEffort } from '../primitives/preferred-effort';
 import { createPreferredInmemModel } from '../primitives/preferred-inmem-model';
 import { createPreferredRepository } from '../primitives/preferred-repository';
@@ -143,6 +144,7 @@ export function NewChatPage(props: {
   const repositories = createRecentRepositories(userId());
   const preferredInmem = createMemo(() => createPreferredInmemModel(userId()));
   const preferredEffort = createMemo(() => createPreferredEffort(userId()));
+  const keptModels = createMemo(() => createKeptAgentModels(userId()));
   const ownMode = createWorkspaceMode();
   const mode = () => props.mode ?? ownMode.mode();
   const auto = () => mode() === 'auto';
@@ -171,9 +173,27 @@ export function NewChatPage(props: {
   createEffect(
     on(agentKind, () => setPendingMention(undefined), { defer: true })
   );
-  /** One-shot model from a coding agent's submenu; Macro uses {@link preferredInmem}. */
-  const [modelOverride, setModelOverride] = createSignal<string>();
-  const [effortPickerOpen, setEffortPickerOpen] = createSignal(false);
+  /** One-shot picks belong to the account and agent that made them. */
+  const [modelChoice, setModelChoice] = createSignal<{
+    userId: string | undefined;
+    agentId: string;
+    model: string;
+  }>();
+  const modelOverride = () => {
+    const choice = modelChoice();
+    if (choice?.userId !== userId() || choice?.agentId !== selected()?.id)
+      return;
+    return choice?.model;
+  };
+  const setModelOverride = (model: string | undefined) => {
+    const agent = selected();
+    setModelChoice(
+      model && agent
+        ? { userId: userId(), agentId: agent.id, model }
+        : undefined
+    );
+  };
+  const [modelSelectorOpen, setModelSelectorOpen] = createSignal(false);
   const [repositoryPickerOpen, setRepositoryPickerOpen] = createSignal(false);
   const preferredRepository = createPreferredRepository(userId());
   // An explicit Auto-detect pick must override a saved repository, too.
@@ -213,18 +233,54 @@ export function NewChatPage(props: {
   const selectedCatalog = createComposerModels(selected);
   const macro = () => options().find((agent) => agent.id === MACRO_PERSONA_ID);
   const macroCatalog = createComposerModels(macro);
+  /** Kept choices survive sends; only a successful catalog can retire one. */
+  createEffect(
+    on(
+      () => {
+        const agent = selected();
+        return {
+          agent,
+          kept: agent && keptModels().model(agent.id),
+          available: selectedCatalog.available(),
+          models: selectedCatalog.models(),
+          preferences: keptModels(),
+        };
+      },
+      ({ agent, kept, available, models, preferences }) => {
+        if (!agent || !kept) return;
+        if (
+          kept === agent.defaultModel ||
+          (available && !models.some((option) => option.id === kept))
+        ) {
+          preferences.forget(agent.id);
+        }
+      }
+    )
+  );
   /** In-memory choices come from the owner's catalog; other runtimes keep their rules. */
   const composerModelOverride = () => {
     const agent = selected();
-    if (agent?.harness !== 'macro-inmem' && agent?.harness !== 'in-memory')
-      return modelOverride();
-    const preferred =
-      modelOverride() ??
-      (agent.id === MACRO_PERSONA_ID
-        ? preferredInmem().model()
-        : agent.defaultModel);
-    return selectedCatalog.models().some((option) => option.id === preferred)
-      ? preferred
+    if (!agent) return;
+    const custom = agent.id !== MACRO_PERSONA_ID;
+    const kept = custom ? keptModels().model(agent.id) : undefined;
+    const preferred = modelOverride() ?? kept;
+    // A kept model was selected from a prior catalog. A pending discovery is
+    // not retirement and must not replace that choice with the server default.
+    if (custom && preferred && !selectedCatalog.available()) return preferred;
+    if (agent.harness !== 'macro-inmem' && agent.harness !== 'in-memory') {
+      if (
+        kept &&
+        !modelOverride() &&
+        selectedCatalog.available() &&
+        !selectedCatalog.models().some((option) => option.id === kept)
+      )
+        return;
+      return preferred;
+    }
+    const model =
+      preferred ?? (custom ? agent.defaultModel : preferredInmem().model());
+    return selectedCatalog.models().some((option) => option.id === model)
+      ? model
       : selectedCatalog.currentModel();
   };
   const capabilityTarget = () => {
@@ -475,8 +531,7 @@ export function NewChatPage(props: {
         ? { speedOverride: speedOverride() }
         : {}),
     });
-    // Macro's preferred model and the picked efforts stay; coding-agent model
-    // picks are one-shot.
+    // Clear only the one-shot choice; account-scoped kept models and effort stay.
     setModelOverride(undefined);
   };
 
@@ -503,6 +558,10 @@ export function NewChatPage(props: {
   // setting for a previous visit. Reopening the card never resets a setting.
   const selectPickerModel = (agent: RosterAgent, model: string) => {
     selectAgent(agent, model);
+    if (agent.id !== MACRO_PERSONA_ID) {
+      if (model === agent.defaultModel) keptModels().forget(agent.id);
+      else if (keptModels().model(agent.id)) keptModels().keep(agent.id, model);
+    }
     const harness =
       agent.harness === 'macro-inmem' ? 'in-memory' : agent.harness;
     if (harness === 'in-memory' || harness === 'cursor') {
@@ -592,7 +651,7 @@ export function NewChatPage(props: {
         models: catalogModels(),
         suggestedModels: suggestedModels(),
         suggestedDisabled: Boolean((macro() ?? selected())?.unavailableReason),
-        suggestedSelected: !macro() || selected()?.id === macro()?.id,
+        suggestedSelected: selected()?.id === MACRO_PERSONA_ID,
         loading: props.rosterLoading,
         effort: effort(),
         effortValue: effortOverride()?.value,
@@ -606,6 +665,19 @@ export function NewChatPage(props: {
           speedOption()
             ? { [composerModelOverride()!]: speedOption()!.offered }
             : undefined,
+        modelKept: Boolean(
+          selected() &&
+            keptModels().model(selected()!.id) &&
+            keptModels().model(selected()!.id) === composerModelOverride()
+        ),
+        onKeepModel: (keep) => {
+          const agent = selected();
+          const model = composerModelOverride();
+          if (!agent || agent.id === MACRO_PERSONA_ID) return;
+          if (keep && model && model !== agent.defaultModel)
+            keptModels().keep(agent.id, model);
+          else keptModels().forget(agent.id);
+        },
         onModel: (model) => {
           const agent = selected();
           if (!agent) return false;
@@ -625,7 +697,7 @@ export function NewChatPage(props: {
         onCreate: () => props.onOpenRoster(coding() ? 'coder' : 'agent'),
         onEffort: rememberEffort,
         onSpeed: setPreferredSpeed,
-        onOpenChange: setEffortPickerOpen,
+        onOpenChange: setModelSelectorOpen,
         onCloseAutoFocus: restoreInputFocus,
       }}
     />
@@ -706,7 +778,7 @@ export function NewChatPage(props: {
       collapseOnBlur={props.compact}
       phoneLayout={phoneComposer()}
       settingsPlacement={props.homeLayout ? 'below' : 'inside'}
-      controlsOpen={repositoryPickerOpen() || effortPickerOpen()}
+      controlsOpen={repositoryPickerOpen() || modelSelectorOpen()}
       registerFocus={(focus) => {
         focusInput = focus;
         props.registerFocus?.(focus);

@@ -322,13 +322,8 @@ async function selectTarget(
     fireEvent.click(screen.getByRole('button', { name: 'See all' }));
     fireEvent.click(screen.getByRole('button', { name: /^Researcher/ }));
     if (target === 'override') {
-      openPicker();
-      fireEvent.click(
-        within(screen.getByRole('group', { name: 'Model' })).getByRole(
-          'button',
-          { name: 'Custom model' }
-        )
-      );
+      fireEvent.click(screen.getByRole('button', { name: 'Sonnet' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Custom model' }));
     }
   } else {
     fireEvent.input(

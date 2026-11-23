@@ -1,7 +1,9 @@
 import { t } from '@app/lib/i18n';
+import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigation';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import * as Popover from '@kobalte/core/popover';
 import { Button } from '@ui';
+import { Show } from 'solid-js';
 import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
 import { createModelSelectorNavigation } from '../../primitives/model-selector-navigation';
 import { ModelSelectionList } from '../shared/model-selection-list';
@@ -10,12 +12,18 @@ import { UnifiedModelTriggerContent } from '../shared/model-trigger-content';
 
 export function MobileModelSelector() {
   const state = useUnifiedModelSelector();
-  const nav = createModelSelectorNavigation(state.onOpenChange);
+  let trigger: HTMLButtonElement | undefined;
+  const nav = createModelSelectorNavigation(state.onOpenChange, () => trigger);
   const sheetOpen = () => nav.open() && nav.page() !== 'card';
+  createCloseOnNavigation({
+    open: nav.open,
+    close: () => nav.changeOpen(false),
+  });
   let card: HTMLDivElement | undefined;
+  let sheet: HTMLDivElement | undefined;
   return (
     <Popover.Root
-      open={nav.open()}
+      open={nav.open() && !sheetOpen()}
       onOpenChange={(open) => {
         if (!open && sheetOpen()) return;
         nav.changeOpen(open);
@@ -24,6 +32,7 @@ export function MobileModelSelector() {
       gutter={6}
     >
       <Popover.Trigger
+        ref={trigger}
         as={Button}
         variant="ghost"
         size="md"
@@ -36,28 +45,38 @@ export function MobileModelSelector() {
         <UnifiedModelTriggerContent />
       </Popover.Trigger>
       <Popover.Portal>
-        <Popover.Content
-          ref={card}
-          aria-hidden={sheetOpen()}
-          inert={sheetOpen()}
-          class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none transition-[opacity,translate] duration-200 motion-reduce:transition-none"
-          style={{
-            'box-shadow':
-              'inset 0 0 0 1px var(--color-edge), 0 8px 24px #00000066',
-            opacity: sheetOpen() ? 0.35 : 1,
-            translate: sheetOpen() ? '0 12px' : '0 0',
-            'pointer-events': sheetOpen() ? 'none' : 'auto',
-          }}
-          onInteractOutside={(event) => {
-            if (sheetOpen()) event.preventDefault();
-          }}
-          onCloseAutoFocus={state.onCloseAutoFocus}
-        >
-          <Popover.Title class="sr-only">
-            {t('agentControls.modelSelector')}
-          </Popover.Title>
-          <ModelSelectorCard mobile onSelect={() => nav.setPage('list')} />
-        </Popover.Content>
+        <Show when={!sheetOpen()}>
+          <div
+            data-model-selector-overlay
+            onClick={() => nav.changeOpen(false)}
+            class="portal-scope fixed inset-0 z-modal"
+            style={{ 'background-color': 'var(--color-overlay)' }}
+            aria-hidden="true"
+          />
+        </Show>
+        <Show when={!sheetOpen()}>
+          <Popover.Content
+            ref={card}
+            class="portal-scope menu-surface z-modal w-[358px] max-w-[calc(100vw-var(--safe-left,0px)-var(--safe-right,0px)-32px)] rounded-[28px] p-0 outline-none"
+            style={{
+              'box-shadow':
+                'inset 0 0 0 1px var(--color-edge), var(--shadow-menu)',
+            }}
+            onCloseAutoFocus={(event) => {
+              if (sheetOpen()) event.preventDefault();
+              else state.onCloseAutoFocus?.(event);
+            }}
+          >
+            <Popover.Title class="sr-only">
+              {t('agentControls.modelSelector')}
+            </Popover.Title>
+            <ModelSelectorCard
+              mobile
+              onSelect={() => nav.setPage('list')}
+              onModels={() => nav.setPage('agentModels')}
+            />
+          </Popover.Content>
+        </Show>
       </Popover.Portal>
       <MobileDrawer
         onEscapeKeyDown={(event) => {
@@ -68,18 +87,31 @@ export function MobileModelSelector() {
         onOpenChange={(open) => {
           if (!open) nav.changeOpen(false);
         }}
+        onInitialFocus={(event) => {
+          event.preventDefault();
+          sheet?.focus({ preventScroll: true });
+        }}
         onFinalFocus={(event) => {
           event.preventDefault();
-          if (nav.open())
-            card?.querySelector<HTMLButtonElement>('button')?.focus();
+          if (nav.open()) {
+            queueMicrotask(() => {
+              if (nav.open() && card?.isConnected)
+                card.querySelector<HTMLButtonElement>('button')?.focus({
+                  preventScroll: true,
+                });
+            });
+          } else if (state.onCloseAutoFocus) state.onCloseAutoFocus(event);
+          else if (trigger?.isConnected) trigger.focus({ preventScroll: true });
         }}
       >
         <MobileDrawer.Portal>
           <MobileDrawer.Overlay
-            style={{ 'background-color': 'rgb(0 0 0 / 0.45)' }}
+            style={{ 'background-color': 'var(--color-overlay)' }}
           />
           <MobileDrawer.Content
+            ref={sheet}
             targetHeight={90}
+            tabIndex={-1}
             maxHeight={90}
             opaque
             class="rounded-[44px]"

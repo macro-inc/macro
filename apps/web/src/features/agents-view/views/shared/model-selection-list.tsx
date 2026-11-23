@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { matchesModelQuery } from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -50,14 +49,12 @@ export function ModelSelectionList(props: {
         []
     );
   const recent = () => {
-    if (!savedModels().length)
-      return filtered().suggested.filter((model) => model.id !== auto()?.id);
     const current = catalog().find(
       (model) => model.id === state.model && model.id !== auto()?.id
     );
     const ids = [
       ...new Set([
-        ...(current ? [current.id] : []),
+        ...(current && savedModels().length ? [current.id] : []),
         ...savedModels().map((model) => model.id),
       ]),
     ];
@@ -65,19 +62,28 @@ export function ModelSelectionList(props: {
       .slice(0, 5)
       .flatMap((id) => catalog().find((model) => model.id === id) ?? []);
   };
-  const customModels = () =>
-    state.models.filter((model) =>
-      matchesModelQuery(model, nav.query().trim().toLocaleLowerCase())
-    );
+  const suggested = () => {
+    const recentIds = new Set(recent().map((model) => model.id));
+    return filtered()
+      .suggested.filter(
+        (model) => model.id !== auto()?.id && !recentIds.has(model.id)
+      )
+      .slice(0, 5);
+  };
+  const agentModels = createMemo(() =>
+    modelSelection(state.models, [], nav.query(), true)
+  );
+  const clearSearch = () => {
+    nav.setQuery('');
+    search?.focus();
+  };
   const noMatches = () => {
     if (!searching()) return false;
     if (nav.page() === 'all') return filtered().allModels.length === 0;
+    if (nav.page() === 'agentModels')
+      return agentModels().allModels.length === 0;
     if (nav.page() === 'agents') return filtered().agents.length === 0;
-    return (
-      filtered().suggested.length === 0 &&
-      filtered().agents.length === 0 &&
-      customModels().length === 0
-    );
+    return filtered().allModels.length === 0 && filtered().agents.length === 0;
   };
   const bubbles = () => {
     if (searching()) return filtered().agents;
@@ -156,13 +162,13 @@ export function ModelSelectionList(props: {
         }
       }}
     >
-      <div class={cn('shrink-0 px-2 pt-2 pb-0', props.mobile && 'px-3 pb-3')}>
+      <div class={cn('shrink-0 px-2 pt-2 pb-0', props.mobile && 'px-3 py-2')}>
         <Button
           variant="ghost"
           appearance="bare"
           onClick={props.onBack}
           class={cn(
-            'my-0.5 flex h-8 items-center gap-1.5 rounded-full pl-1.5 pr-2.5 not-touch:hover:bg-ink/12 text-sm',
+            'my-0.5 flex h-8 items-center gap-1.5 rounded-full pl-1.5 pr-2.5 not-touch:hover:bg-hover active:bg-active text-sm',
             props.mobile && 'h-10 gap-2 pl-2 pr-3.5 text-base leading-[22px]'
           )}
         >
@@ -174,7 +180,7 @@ export function ModelSelectionList(props: {
             }
           />
           <Show
-            when={nav.page() === 'list'}
+            when={nav.page() === 'list' || nav.page() === 'agentModels'}
             fallback={
               <span>
                 {nav.page() === 'all'
@@ -189,8 +195,8 @@ export function ModelSelectionList(props: {
       </div>
       <div
         class={cn(
-          'mx-3 my-1 flex h-9 shrink-0 items-center gap-2.5 rounded-[10px] bg-ink/8 px-3 focus-within:ring-1 focus-within:ring-accent',
-          props.mobile && 'h-11 rounded-[22px] px-3.5'
+          'mx-3 my-1 flex h-9 shrink-0 items-center gap-2.5 rounded-[10px] bg-active px-3 focus-within:ring-1 focus-within:ring-accent',
+          props.mobile && 'my-0 h-11 rounded-[22px] px-3.5'
         )}
       >
         <Search
@@ -203,8 +209,16 @@ export function ModelSelectionList(props: {
         <Input
           ref={search}
           value={nav.query()}
-          aria-label={t('agentControls.searchAgentsModels')}
-          placeholder={t('agentControls.searchAgentsModels')}
+          aria-label={
+            nav.page() === 'agentModels'
+              ? t('agentControls.searchModels')
+              : t('agentControls.searchAgentsModels')
+          }
+          placeholder={
+            nav.page() === 'agentModels'
+              ? t('agentControls.searchModels')
+              : t('agentControls.searchAgentsModels')
+          }
           onInput={(event) => nav.setQuery(event.currentTarget.value)}
           class={cn(
             'min-w-0 flex-1 border-0 bg-transparent p-0 shadow-none focus-visible:ring-0 text-sm',
@@ -216,10 +230,7 @@ export function ModelSelectionList(props: {
             variant="ghost"
             size="icon-xs"
             aria-label={t('entityActions.clear')}
-            onClick={() => {
-              nav.setQuery('');
-              search?.focus();
-            }}
+            onClick={clearSearch}
           >
             <X class="size-3.5" />
           </Button>
@@ -231,13 +242,16 @@ export function ModelSelectionList(props: {
       >
         <Show when={nav.page() === 'list'}>
           <Show when={bubbles().length || (!searching() && state.onCreate)}>
-            <div class="mx-2 mt-1 flex h-[30px] items-center justify-between px-2.5 text-xs text-ink-extra-muted">
+            <div class="mx-2 mt-1 flex items-center justify-between px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
               <span>{t('nav.agents')}</span>
               <Show when={!searching()}>
                 <Button
                   variant="link"
                   size="xs"
-                  class="-mr-1.5 not-data-disabled:hover:no-underline"
+                  class={cn(
+                    '-mr-1.5 -my-1 not-data-disabled:hover:no-underline',
+                    props.mobile && '-my-0.5 text-sm'
+                  )}
                   onClick={() => {
                     nav.setPage('agents');
                     if (!props.mobile) search?.focus();
@@ -283,7 +297,7 @@ export function ModelSelectionList(props: {
           </Show>
           <Show when={!searching() && auto()}>
             {(option) => (
-              <div class="px-2 pt-1 pb-2">
+              <div class="px-2 pt-4 pb-2">
                 <ModelRows
                   models={[option()]}
                   mobile={props.mobile}
@@ -296,41 +310,71 @@ export function ModelSelectionList(props: {
               </div>
             )}
           </Show>
-          <div
-            class="px-2 pb-2"
-            classList={{ 'mt-8': searching() && bubbles().length > 0 }}
-            role="group"
-            aria-label={
-              searching()
-                ? t('agentControls.models')
-                : savedModels().length
-                  ? t('nav.recent')
-                  : t('agentControls.suggested')
-            }
-          >
-            <div class="flex h-[30px] items-center px-2.5 text-xs text-ink-extra-muted">
-              {searching()
-                ? t('agentControls.models')
-                : savedModels().length
-                  ? t('nav.recent')
-                  : t('agentControls.suggested')}
+          <Show when={searching() && filtered().allModels.length > 0}>
+            <div
+              class="px-2 pb-2"
+              classList={{ 'mt-4': bubbles().length > 0 }}
+              role="group"
+              aria-label={t('agentControls.models')}
+            >
+              <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
+                {t('agentControls.models')}
+              </div>
+              <ModelRows
+                models={filtered().allModels}
+                mobile={props.mobile}
+                selected={
+                  state.suggestedSelected !== false ? state.model : undefined
+                }
+                disabled={state.disabled || state.suggestedDisabled}
+                onPick={pickModel}
+              />
             </div>
-            <ModelRows
-              models={searching() ? filtered().suggested : recent()}
-              mobile={props.mobile}
-              selected={
-                state.suggestedSelected !== false ? state.model : undefined
-              }
-              disabled={state.disabled || state.suggestedDisabled}
-              onPick={pickModel}
-            />
-            <Show when={!searching()}>
+          </Show>
+          <Show when={!searching()}>
+            <Show when={recent().length}>
+              <div class="px-2 pb-2" role="group" aria-label={t('nav.recent')}>
+                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
+                  {t('nav.recent')}
+                </div>
+                <ModelRows
+                  models={recent()}
+                  mobile={props.mobile}
+                  selected={
+                    state.suggestedSelected !== false ? state.model : undefined
+                  }
+                  disabled={state.disabled || state.suggestedDisabled}
+                  onPick={pickModel}
+                />
+              </div>
+            </Show>
+            <Show when={suggested().length}>
+              <div
+                class="px-2 pb-2"
+                role="group"
+                aria-label={t('agentControls.suggested')}
+              >
+                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
+                  {t('agentControls.suggested')}
+                </div>
+                <ModelRows
+                  models={suggested()}
+                  mobile={props.mobile}
+                  selected={
+                    state.suggestedSelected !== false ? state.model : undefined
+                  }
+                  disabled={state.disabled || state.suggestedDisabled}
+                  onPick={pickModel}
+                />
+              </div>
+            </Show>
+            <div class="px-2 pb-2">
               <Button
                 variant="ghost"
                 appearance="bare"
                 data-model-choice
                 class={cn(
-                  'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm not-touch:hover:bg-ink/12 focus-visible:bg-ink/12',
+                  'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm not-touch:hover:bg-hover focus-visible:bg-active',
                   props.mobile && 'h-11 rounded-[22px] text-base leading-[22px]'
                 )}
                 onClick={() => {
@@ -350,14 +394,14 @@ export function ModelSelectionList(props: {
                   }
                 />
               </Button>
-            </Show>
-          </div>
+            </div>
+          </Show>
         </Show>
         <Show when={nav.page() === 'all'}>
           <For each={filtered().allProviders}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="flex h-[30px] items-center gap-2 px-2.5 text-xs text-ink-extra-muted">
+                <div class="flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
                   <ModelIcon model={group.options[0]?.id} class="size-4" />
                   {group.label}
                 </div>
@@ -379,7 +423,7 @@ export function ModelSelectionList(props: {
           <For each={agentPickerGroups(filtered().agents)}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>
-                <div class="flex h-[30px] items-center px-2.5 text-xs text-ink-extra-muted">
+                <div class="px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
                   {group.label}
                 </div>
                 <For each={group.agents}>
@@ -389,7 +433,7 @@ export function ModelSelectionList(props: {
                       appearance="bare"
                       data-model-choice
                       class={cn(
-                        'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm font-normal not-touch:hover:bg-ink/12',
+                        'flex min-h-9 w-full gap-2.5 rounded-lg px-2.5 py-2 text-sm font-normal not-touch:hover:bg-hover',
                         props.mobile &&
                           'h-11 rounded-[22px] text-base leading-[22px]'
                       )}
@@ -399,7 +443,9 @@ export function ModelSelectionList(props: {
                       }
                       onClick={() => pickAgent(agent)}
                     >
-                      <AgentIcon agent={agent} class="size-4" />
+                      <span class="grid size-[18px] shrink-0 place-items-center rounded bg-ink-extra-muted text-surface">
+                        <AgentIcon agent={agent} class="size-4" />
+                      </span>
                       <span class="flex-1 text-left">{agent.name}</span>
                       <span class="text-xs text-ink-extra-muted">
                         {agent.connectLabel ?? agent.runtime.label}
@@ -414,35 +460,64 @@ export function ModelSelectionList(props: {
             )}
           </For>
         </Show>
-        <Show
-          when={
-            nav.page() === 'list' &&
-            state.agent &&
-            state.agent.id !== MACRO_PERSONA_ID &&
-            state.models.length > 1
-          }
-        >
-          <div
-            class="px-2 pb-2"
-            role="group"
-            aria-label={t('agentControls.model')}
-          >
-            <div class="flex h-[30px] items-center px-2.5 text-xs text-ink-extra-muted">
-              {t('agentControls.model')}
-            </div>
-            <ModelRows
-              models={customModels()}
-              mobile={props.mobile}
-              selected={state.model}
-              disabled={state.disabled}
-              onPick={(id) => pickModel(id, true)}
-            />
-          </div>
+        <Show when={nav.page() === 'agentModels'}>
+          <For each={agentModels().allProviders}>
+            {(group) => (
+              <div class="px-2 pb-2" role="group" aria-label={group.label}>
+                <div class="flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-ink-extra-muted">
+                  <ModelIcon model={group.options[0]?.id} class="size-4" />
+                  {group.label}
+                </div>
+                <ModelRows
+                  models={group.options}
+                  mobile={props.mobile}
+                  showLogos={false}
+                  selected={state.model}
+                  disabled={state.disabled}
+                  onPick={(id) => pickModel(id, true)}
+                />
+              </div>
+            )}
+          </For>
         </Show>
         <Show when={noMatches()}>
-          <p role="status" class="p-3 text-sm text-ink-extra-muted">
-            {t('agentControls.noMatches')}
-          </p>
+          <div
+            class={cn(
+              'flex min-w-0 flex-col items-center gap-3 px-4 py-6',
+              props.mobile && 'py-8'
+            )}
+          >
+            <Search
+              aria-hidden="true"
+              class={cn(
+                'size-5 text-ink-extra-muted',
+                props.mobile && 'size-6'
+              )}
+            />
+            <p
+              role="status"
+              class={cn(
+                'flex max-w-full min-w-0 text-sm text-ink-muted',
+                props.mobile && 'text-base leading-[22px]'
+              )}
+            >
+              <span class="min-w-0 truncate">
+                {t('agentControls.noMatchesFor', { query: nav.query() })}
+              </span>
+            </p>
+            <Button
+              variant="secondary"
+              size="sm"
+              data-model-choice
+              onClick={clearSearch}
+              class={cn(
+                'h-6 min-h-6 rounded-full px-2.5 text-xs text-ink-muted',
+                props.mobile && 'h-9 min-h-9 px-3.5 text-sm'
+              )}
+            >
+              {t('agentControls.clearSearch')}
+            </Button>
+          </div>
         </Show>
       </div>
     </div>

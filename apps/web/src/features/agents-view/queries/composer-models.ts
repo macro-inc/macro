@@ -55,6 +55,8 @@ export function createComposerModels(agent: Accessor<RosterAgent | undefined>) {
   return {
     models: () => data()?.models ?? [],
     currentModel: () => data()?.currentModel ?? undefined,
+    /** Only a complete supported catalog can invalidate a saved choice. */
+    available: () => data()?.status === 'available',
     /** Discovery is in flight, so {@link models} is empty for now, not for good. */
     pending: () => target() !== undefined && query.isPending,
     message: () => {

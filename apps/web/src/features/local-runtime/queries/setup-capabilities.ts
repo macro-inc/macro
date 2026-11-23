@@ -13,6 +13,7 @@ import {
 import { agentModelsQueryOptions } from '@queries/agents/models';
 import { queryClient } from '@queries/client';
 import { patchHarness } from '@queries/harnesses/harnesses';
+import type { Accessor } from 'solid-js';
 import type { SetupCapabilities } from '../core/setup';
 
 /**
@@ -59,7 +60,9 @@ async function waitForRunning(
 }
 
 /** The production capabilities: the Tauri bridge and the agent queries. */
-export function useSetupCapabilities(): SetupCapabilities {
+export function useSetupCapabilities(
+  userId: Accessor<string | undefined>
+): SetupCapabilities {
   const createAgent = useCreateAgentMutation();
   return {
     detectAgents: macrodDetectAgents,
@@ -79,7 +82,7 @@ export function useSetupCapabilities(): SetupCapabilities {
     // just came online, so always ask again.
     loadModels: async (harnessId) =>
       await queryClient.fetchQuery({
-        ...agentModelsQueryOptions({ harness: 'macrod', harnessId }),
+        ...agentModelsQueryOptions({ harness: 'macrod', harnessId }, userId()),
         staleTime: 0,
       }),
     createAgent: async (agent) => {
