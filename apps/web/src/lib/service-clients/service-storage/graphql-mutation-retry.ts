@@ -15,17 +15,14 @@ const MAX_TRACKED_WRITES = 256;
 // A server fault, or an inbox that stayed locked past its lock timeout: the
 // write rolled back, so sending it again is safe.
 const RETRIED_DRAFT_CODES = ['INTERNAL', 'INBOX_BUSY'];
-// Channel writes carry the message id the client chose, and the server answers
-// a replay of one it already applied without writing again: a write it
-// committed but could not read back, or a conversation that stayed busy, is
-// sent again rather than rolled back, which would invite a resend under a new
-// id. The queue runner bounds how many server failures it retries.
-const CHANNEL_WRITES = [
-  'SendChannelMessage',
-  'EditChannelMessage',
-  'DeleteChannelMessage',
-  'ReactToChannelMessage',
-];
+// A send carries the message id the client chose and the server answers a
+// replay of it without writing again, and a repeated delete answers with the
+// tombstone: one the server committed but could not read back, or a
+// conversation that stayed busy, is sent again rather than rolled back, which
+// for a send would invite a resend under a new id. Edits and reactions are
+// not: a replay after another device changed the message would undo that
+// change. The queue runner bounds how many server failures it retries.
+const CHANNEL_WRITES = ['SendChannelMessage', 'DeleteChannelMessage'];
 const RETRIED_CHANNEL_CODES = ['SERVICE_UNAVAILABLE'];
 /** Server faults in a row for each queued draft write. */
 const draftFaults = new Map<string, number>();

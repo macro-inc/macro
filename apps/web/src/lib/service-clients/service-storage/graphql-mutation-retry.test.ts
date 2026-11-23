@@ -187,16 +187,25 @@ describe('GraphQL mutation retries', () => {
       ],
     });
 
-    it.each([
-      'SendChannelMessage',
-      'EditChannelMessage',
-      'DeleteChannelMessage',
-      'ReactToChannelMessage',
-    ])('replays %s the server could not answer', (operationName) => {
-      expect(
-        shouldRetryGraphqlMutation(unavailable, write(operationName))
-      ).toBe(true);
-    });
+    it.each(['SendChannelMessage', 'DeleteChannelMessage'])(
+      'replays %s the server could not answer',
+      (operationName) => {
+        expect(
+          shouldRetryGraphqlMutation(unavailable, write(operationName))
+        ).toBe(true);
+      }
+    );
+
+    // A replay compares the old request with what another device wrote since
+    // and writes the old content or reaction back.
+    it.each(['EditChannelMessage', 'ReactToChannelMessage'])(
+      'does not replay %s, which could undo a newer write',
+      (operationName) => {
+        expect(
+          shouldRetryGraphqlMutation(unavailable, write(operationName))
+        ).toBe(false);
+      }
+    );
 
     it.each([
       'FORBIDDEN',
