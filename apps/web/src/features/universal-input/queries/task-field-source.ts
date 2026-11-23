@@ -65,13 +65,16 @@ export function createTaskFieldSource(
   // A one-shot read of the same list, so a refresh of the live reader cannot
   // cancel it; concurrent loads share it.
   let loading: Promise<PropertyDefinitionResponse[]> | undefined;
+  const loadOnce = async (): Promise<PropertyDefinitionResponse[]> => {
+    try {
+      return await loadPropertyDefinitionsWithOptions({ scope: 'system' });
+    } finally {
+      loading = undefined;
+    }
+  };
   const loadRows = (): Promise<PropertyDefinitionResponse[]> => {
     if (query.isSuccess && query.data) return Promise.resolve(query.data);
-    loading ??= loadPropertyDefinitionsWithOptions({ scope: 'system' }).finally(
-      () => {
-        loading = undefined;
-      }
-    );
+    loading ??= loadOnce();
     return loading;
   };
   const people = useContactReferences(

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { createSignal, getOwner, onCleanup } from 'solid-js';
 
@@ -87,11 +88,21 @@ export function createCatalogMutation<TVars, TData>(
     }
   };
 
+  // A failure is reported through onError, so mutate drops it.
+  const executeReported = async (
+    vars: TVars,
+    call?: CatalogMutationCallbacks<TData, TVars>
+  ): Promise<void> => {
+    try {
+      await execute(vars, call);
+    } catch {
+      // Reported through onError.
+    }
+  };
+
   return {
     mutate(vars, call) {
-      execute(vars, call).catch(() => {
-        // Reported through onError.
-      });
+      fireAndForget(executeReported(vars, call), 'property-catalog');
     },
     mutateAsync: execute,
     get isPending() {

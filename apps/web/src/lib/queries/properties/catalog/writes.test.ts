@@ -111,9 +111,24 @@ function queueingHost() {
   soup.optimistic.mockImplementation(() => ({
     toPromise: async () => ({ queued: 'tx-1' }),
   }));
-  return (settlement: MutationSettlement) => {
-    for (const listener of [...listeners]) listener(settlement);
-  };
+  return Object.assign(
+    (settlement: MutationSettlement) => {
+      for (const listener of [...listeners]) listener(settlement);
+    },
+    {
+      /** Writes still waiting for a settlement; a write stops once it has handled its own. */
+      waiting: () => listeners.size,
+    }
+  );
+}
+
+/** The value a write resolves with, or the error it rejects with. */
+async function outcomeOf<T>(write: Promise<T>): Promise<unknown> {
+  try {
+    return await write;
+  } catch (error: unknown) {
+    return error;
+  }
 }
 
 describe('adding an option', () => {
@@ -149,10 +164,11 @@ describe('adding an option', () => {
   it('shows a queued add under its id and resolves only once it commits', async () => {
     const settle = queueingHost();
     let resolved = false;
-    const added = addPropertyOption('def-1', TAG).then((option) => {
+    const added = (async () => {
+      const option = await addPropertyOption('def-1', TAG);
       resolved = true;
       return option;
-    });
+    })();
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
     const [, , variables, response, options] =
       soup.optimistic.mock.calls[0] ?? [];
@@ -191,9 +207,7 @@ describe('adding an option', () => {
       queueingHost();
       soup.definitionCached = cached;
       // the queue never settles it here, so the test does not wait for it
-      const added = addPropertyOption('def-1', TAG).catch(
-        (error: unknown) => error
-      );
+      const added = outcomeOf(addPropertyOption('def-1', TAG));
       await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
       const [, , , , options] = soup.optimistic.mock.calls[0] ?? [];
       // A record link the cache cannot apply would drop every link of the add.
@@ -209,9 +223,7 @@ describe('adding an option', () => {
 
   it('rejects a queued add the server refuses later', async () => {
     const settle = queueingHost();
-    const added = addPropertyOption('def-1', TAG).catch(
-      (error: unknown) => error
-    );
+    const added = outcomeOf(addPropertyOption('def-1', TAG));
     await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
     await Promise.resolve();
     settle({
@@ -275,11 +287,13 @@ describe('a write started offline', () => {
   it('is dropped when another login took over the page meanwhile', async () => {
     onlineManager.setOnline(false);
     try {
-      const created = createPropertyDefinition({
-        display_name: 'Stage',
-        scope: 'user',
-        data_type: { type: 'boolean' },
-      }).catch((error: unknown) => error);
+      const created = outcomeOf(
+        createPropertyDefinition({
+          display_name: 'Stage',
+          scope: 'user',
+          data_type: { type: 'boolean' },
+        })
+      );
       await Promise.resolve();
       soup.session = 2;
       onlineManager.setOnline(true);
@@ -545,8 +559,8 @@ describe('option order', () => {
       // Two more commits while the first reload runs.
       settle({ transactionId: 'tx-b', status: 'committed' });
       settle({ transactionId: 'tx-c', status: 'committed' });
-      // Long enough for both commits to reach the coalescer.
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      // Both commits have reached the coalescer once their writes stop waiting.
+      await vi.waitFor(() => expect(settle.waiting()).toBe(0));
       // The trailing reload waits for the one running.
       expect(readers.refreshed).toHaveLength(HOLDING_DEF_1.length);
       readers.release();
