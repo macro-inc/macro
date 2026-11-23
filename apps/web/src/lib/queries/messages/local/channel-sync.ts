@@ -12,11 +12,13 @@ import {
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
 } from './channel-sync-runtime';
+import { type ChannelWindows, createChannelWindows } from './channel-timeline';
 import { type ChannelWrites, createChannelWrites } from './channel-writes';
 
 const runtimes = new WeakMap<CacheHost, ChannelSyncRuntime>();
 const touches = new WeakMap<CacheHost, ChannelTouches>();
 const writes = new WeakMap<CacheHost, ChannelWrites>();
+const windows = new WeakMap<CacheHost, ChannelWindows>();
 
 /** Reads a page of changes and resolves once its records are cached. */
 async function fetchChannelChanges(
@@ -92,5 +94,18 @@ export function channelWrites(host: CacheHost): ChannelWrites {
     client: getGraphqlSoupClient,
   });
   writes.set(host, created);
+  return created;
+}
+
+/**
+ * The windows timelines on this host left as they unmounted, made on first
+ * use. A new cache session forgets them.
+ */
+export function channelWindows(host: CacheHost): ChannelWindows {
+  const existing = windows.get(host);
+  if (existing) return existing;
+  const created = createChannelWindows();
+  host.onCacheGenerationChanged(() => created.clear());
+  windows.set(host, created);
   return created;
 }

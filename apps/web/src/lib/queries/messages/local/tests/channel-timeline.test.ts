@@ -22,6 +22,8 @@ import { createChannelTouches } from '../channel-pages';
 import { whileNoFills } from '../channel-resets';
 import {
   type ChannelTimelineRuntime,
+  type ChannelWindows,
+  createChannelWindows,
   createLocalChannelTimeline,
   type LocalChannelTimeline,
 } from '../channel-timeline';
@@ -170,6 +172,7 @@ function mount(options: {
   fetchPage?: FetchChannelServerPage;
   around?: string;
   unstored?: () => ChannelPageEntry[];
+  windows?: ChannelWindows;
 }) {
   const [rows, setRows] = createSignal(options.rows);
   const [held, setHeld] = createSignal(options.held ?? true);
@@ -189,6 +192,7 @@ function mount(options: {
         touches: createChannelTouches(),
         fetchPage: options.fetchPage,
         unstored: options.unstored,
+        windows: options.windows,
       },
       CHANNEL_ID,
       around,
@@ -542,5 +546,84 @@ describe('createLocalChannelTimeline', () => {
     expect(timeline.hasNewer()).toBe(false);
     expect(ids(timeline)[0]).toBe(rows[79]!.id);
     dispose();
+  });
+
+  describe('mounted again (another tab and back)', () => {
+    it('shows the window it left at once, then follows the device', async () => {
+      const windows = createChannelWindows();
+      const rows = messages(70);
+      const first = mount({ rows, windows });
+      await waitFor(() => !first.timeline.isLoading());
+      await first.timeline.loadOlder();
+      expect(first.timeline.entries()).toHaveLength(70);
+      first.dispose();
+
+      const fetchPage = vi.fn<FetchChannelServerPage>();
+      const second = mount({
+        rows: [...rows, graphqlMessage(71)],
+        windows,
+        fetchPage,
+      });
+      // Before any read: the list restores its scroll position over it.
+      expect(second.timeline.isLoading()).toBe(false);
+      expect(second.timeline.entries()).toHaveLength(70);
+      expect(second.timeline.hasOlder()).toBe(false);
+
+      // Then reads the device again and asks the server only if behind.
+      await waitFor(() => second.timeline.entries().length === 71);
+      expect(ids(second.timeline)[0]).toBe(graphqlMessage(71).id);
+      expect(ids(second.timeline).at(-1)).toBe(graphqlMessage(1).id);
+      await waitFor(
+        () => vi.mocked(second.runtime.ensureCurrent).mock.calls.length > 0
+      );
+      expect(fetchPage).not.toHaveBeenCalled();
+      second.dispose();
+    });
+
+    it('opens at the live end when it left a window around a target', async () => {
+      const windows = createChannelWindows();
+      const rows = messages(80);
+      const first = mount({ rows, windows, around: rows[10]!.id });
+      await waitFor(() => !first.timeline.isLoading());
+      first.dispose();
+
+      const second = mount({ rows, windows });
+      expect(second.timeline.isLoading()).toBe(true);
+      await waitFor(() => !second.timeline.isLoading());
+      expect(ids(second.timeline)[0]).toBe(rows[79]!.id);
+      expect(second.timeline.hasNewer()).toBe(false);
+      second.dispose();
+    });
+
+    it('opens around a target rather than the window it left', async () => {
+      const windows = createChannelWindows();
+      const rows = messages(80);
+      const first = mount({ rows, windows });
+      await waitFor(() => !first.timeline.isLoading());
+      first.dispose();
+
+      const second = mount({ rows, windows, around: rows[10]!.id });
+      expect(second.timeline.isLoading()).toBe(true);
+      await waitFor(() => !second.timeline.isLoading());
+      expect(ids(second.timeline)).toContain(rows[10]!.id);
+      second.dispose();
+    });
+
+    it('keeps only the most recent channels it left', () => {
+      const windows = createChannelWindows(2);
+      const window = { entries: [], olderCursor: null };
+      windows.keep('a', window);
+      windows.keep('b', window);
+      windows.keep('a', window);
+      windows.keep('c', window);
+      expect(windows.take('b')).toBeUndefined();
+      expect(windows.take('a')).toBe(window);
+      // Taken once: a second mount of the same channel reads it fresh.
+      expect(windows.take('a')).toBeUndefined();
+      expect(windows.take('c')).toBe(window);
+      windows.keep('d', window);
+      windows.clear();
+      expect(windows.take('d')).toBeUndefined();
+    });
   });
 });

@@ -11,7 +11,7 @@ import {
   onCleanup,
   untrack,
 } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
+import { createStore, produce, reconcile, unwrap } from 'solid-js/store';
 import { SESSION_CHANGE_RELOADS } from './channel-network';
 import {
   type ChannelPage,
@@ -48,6 +48,55 @@ export interface ChannelTimelineDeps extends ChannelPageDeps {
    * live end shows them until the device's copy replaces them.
    */
   unstored?: (channelId: string) => readonly ChannelPageEntry[];
+  /** Windows left by timelines that unmounted, for the next mount to show. */
+  windows?: ChannelWindows;
+}
+
+/** A live window the device held when its timeline unmounted. */
+export type LeftWindow = {
+  /** Newest first. */
+  entries: readonly ChannelPageEntry[];
+  olderCursor: string | null;
+};
+
+/**
+ * The live windows of the channels this page left most recently, in memory
+ * only. A view mounted again (another tab and back, a split reopened) shows
+ * the window it left at once, so its list can restore the reading position,
+ * then reads the device again: the window is what it showed, not a copy of
+ * the channel to trust.
+ */
+export interface ChannelWindows {
+  keep(channelId: string, window: LeftWindow): void;
+  /** The window left for this channel, handed out once. */
+  take(channelId: string): LeftWindow | undefined;
+  /** Forgets every window: the cache session they were read in is over. */
+  clear(): void;
+}
+
+/** Channels whose last window is kept, as REST keeps recent query pages. */
+const KEPT_WINDOWS = 8;
+
+export function createChannelWindows(limit = KEPT_WINDOWS): ChannelWindows {
+  const kept = new Map<string, LeftWindow>();
+  return {
+    keep(channelId, window) {
+      kept.delete(channelId);
+      kept.set(channelId, window);
+      for (const oldest of kept.keys()) {
+        if (kept.size <= limit) break;
+        kept.delete(oldest);
+      }
+    },
+    take(channelId) {
+      const window = kept.get(channelId);
+      kept.delete(channelId);
+      return window;
+    },
+    clear() {
+      kept.clear();
+    },
+  };
 }
 
 type TimelineState = {
@@ -240,6 +289,18 @@ export function createLocalChannelTimeline(
 
   const release = deps.runtime.open(channelId);
   onCleanup(() => {
+    // A live window the device holds is left for the next mount to show.
+    if (
+      held &&
+      anchorId === undefined &&
+      state.phase === 'ready' &&
+      state.newerCursor === null
+    ) {
+      deps.windows?.keep(channelId, {
+        entries: [...unwrap(state.entries)],
+        olderCursor: state.olderCursor,
+      });
+    }
     release();
     loadToken += 1;
     abort?.abort();
@@ -433,8 +494,25 @@ export function createLocalChannelTimeline(
   // The target is set again as the view mounts (undefined, then null): only
   // a different message loads another window.
   const around = createMemo(() => aroundMessageId() ?? undefined);
+  // Mounted again without a target: show the window left, then read it again.
+  const left =
+    untrack(around) === undefined ? deps.windows?.take(channelId) : undefined;
+  if (left) {
+    loadToken += 1;
+    held = true;
+    setState({
+      phase: 'ready',
+      entries: [...left.entries],
+      olderCursor: left.olderCursor,
+      newerCursor: null,
+    });
+    scheduleReread();
+    fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-local-sync');
+  }
   createEffect(
-    on(around, (target) => fireAndForget(load(target), 'channel-local-sync'))
+    on(around, (target) => fireAndForget(load(target), 'channel-local-sync'), {
+      defer: left !== undefined,
+    })
   );
 
   const entries = createMemo(() => {

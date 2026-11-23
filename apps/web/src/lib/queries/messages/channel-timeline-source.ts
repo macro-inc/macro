@@ -20,6 +20,7 @@ import { channelCacheSupported } from './local/channel-flag';
 import {
   channelSyncRuntime,
   channelTouches,
+  channelWindows,
   channelWrites,
 } from './local/channel-sync';
 import {
@@ -187,6 +188,7 @@ export function useChannelTimelineSource(
           runtime: channelSyncRuntime(current),
           touches: channelTouches(current),
           unstored: channelWrites(current).unstoredRoots,
+          windows: channelWindows(current),
         },
         parent().id,
         aroundMessageId,
