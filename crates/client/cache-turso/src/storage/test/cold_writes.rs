@@ -227,3 +227,34 @@ fn a_reused_document_id_starts_without_facts() {
         );
     });
 }
+
+/// A failure after any record of a batched page, including one inside a
+/// multi-row statement, rolls back the whole page.
+#[test]
+fn a_failure_after_any_record_of_a_batch_rolls_back_the_page() {
+    block_on(async {
+        for index in 0..=70 {
+            let mut storage = TursoStorage::open_in_memory("cold-page-fault").unwrap();
+            storage.arm_fault(TestFault::After {
+                site: TestFaultSite::Put,
+                index,
+            });
+            let (records, mutations, _) = cold_page(0, 70);
+            let result = storage
+                .put_batch_with_projections(records, mutations)
+                .await;
+            assert_eq!(result.is_err(), index < 70, "{index}");
+            let expected = if index < 70 { 0 } else { 70 };
+            assert_eq!(
+                raw_scalar(&storage, "SELECT COUNT(*) FROM records"),
+                expected,
+                "{index}"
+            );
+            assert_eq!(
+                raw_scalar(&storage, "SELECT COUNT(*) FROM index_documents"),
+                expected,
+                "{index}"
+            );
+        }
+    });
+}
