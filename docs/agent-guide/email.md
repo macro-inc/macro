@@ -103,8 +103,13 @@ inbox: Focus, Signal and Noise), `in:focus`, `in:signal`, `in:noise`,
 `in:archived`. Each matches what that list shows, applied by the search service
 before paging (Focus and Favorites by their thread ids); the last one typed
 wins, an `in:` still being typed is left out of the words, and any other `in:`
-is searched as a word. Check from Inbox with a term that only Noise or
-archived mail holds, then the same term with each `in:`.
+is searched as a word. Picking a tab while a search runs narrows it to that
+tab's view and keeps the words (All mail goes back to all mail, the sidebar's
+Inbox gives `in:inbox`); Scheduled, Reminders, Spam and Trash, which the index
+has no view of, end the search. While a search covers all mail no tab shows as
+selected; with an `in:` filter the view it names does. Check from Inbox with a
+term that only Noise or archived mail holds, then the same term with each
+`in:`, then pick Sent, Signal and All mail while it runs.
 
 ### Wide search (flagged)
 
