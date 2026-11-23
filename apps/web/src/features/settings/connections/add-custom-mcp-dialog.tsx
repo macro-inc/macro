@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { useAddMcpServerMutation } from '@queries/mcp-servers';
+import { useAddConnectorServerMutation } from '@queries/connectors';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal } from 'solid-js';
 
@@ -10,7 +10,7 @@ export function AddCustomMcpDialog(props: {
 }) {
   const [name, setName] = createSignal('');
   const [url, setUrl] = createSignal('');
-  const addMutation = useAddMcpServerMutation();
+  const addMutation = useAddConnectorServerMutation();
 
   const reset = () => {
     setName('');
@@ -29,7 +29,7 @@ export function AddCustomMcpDialog(props: {
     if (!n || !u) return;
 
     addMutation.mutate(
-      { server_name: n, url: u },
+      { name: n, url: u },
       {
         onSuccess: () => {
           close();

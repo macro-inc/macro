@@ -1,13 +1,10 @@
 import type { AsideLayout } from '@app/components/view-shell';
-import type { Accessor, JSX } from 'solid-js';
-import type { InboxStatus } from '../core/inbox-filters';
+import type { JSX } from 'solid-js';
 
 /** What the list hands a host's header, which takes the place of its own. */
 export type NotificationsFrameControls = {
   /** Filter and Clear: the list's own header actions. */
   actions: JSX.Element;
-  status: Accessor<InboxStatus>;
-  onStatusChange: (status: InboxStatus) => void;
   /** Leave what the content area shows, for the idle pane. */
   closePreview: () => void;
 };

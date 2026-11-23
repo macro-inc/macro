@@ -18,6 +18,7 @@ const ASSIGNEES_PROPERTY_ID = '00000001-0000-0000-0000-000000000001';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
 const DUE_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000004';
 const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
+const START_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000015';
 const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
 
@@ -66,8 +67,8 @@ export class Task extends Document {
   }
 
   /**
-   * Create a task, with its initiative, assignees and due date in the same
-   * request. The task starts Not started.
+   * Create a task, with its initiative, assignees, start and due dates in the
+   * same request. The task starts Not started.
    */
   static async create(
     client: MacroClient,
@@ -80,7 +81,18 @@ export class Task extends Document {
       initiative?: Initiative;
       /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
       assignees?: User[];
+      /** The day the task is due, kept as a whole day. */
       dueDate?: Date;
+      /**
+       * The day work on the task starts, kept as a whole day. A start after
+       * `dueDate` is saved as the due date.
+       */
+      startDate?: Date;
+      /**
+       * Keeps the time of day of `startDate` and `dueDate`, making each an
+       * exact moment (a 2 to 4 PM block) instead of a whole day.
+       */
+      withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
       /** Defaults to team sharing, or private when the session cannot share. */
@@ -98,6 +110,8 @@ export class Task extends Document {
       initiative: true,
       assignees: true,
       dueDate: true,
+      startDate: true,
+      withTimes: true,
       team: true,
       shareWithTeam: true,
     });
@@ -267,11 +281,20 @@ export class Task extends Document {
  * (creator assigned, Not started). Sending any value replaces those defaults,
  * so the defaults are spelled out here.
  */
+function dateValue(date: Date, withTime: boolean | undefined) {
+  return {
+    type: 'date' as const,
+    value: date.toISOString(),
+    ...(withTime ? { has_time: true } : {}),
+  };
+}
+
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
 ): Promise<PropertyInput[] | null> {
-  if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
+  if (!opts.initiative && !opts.assignees && !opts.dueDate && !opts.startDate)
+    return null;
   const assignees = opts.assignees ?? [await User.me(client)];
   const values: PropertyInput[] = [
     {
@@ -303,7 +326,13 @@ async function initialProperties(
   if (opts.dueDate) {
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.dueDate.toISOString() },
+      value: dateValue(opts.dueDate, opts.withTimes),
+    });
+  }
+  if (opts.startDate) {
+    values.push({
+      propertyId: START_DATE_PROPERTY_ID,
+      value: dateValue(opts.startDate, opts.withTimes),
     });
   }
   return values;
