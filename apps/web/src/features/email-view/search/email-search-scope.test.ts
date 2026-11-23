@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
-  editEmailSearchField,
+  completeEmailSearch,
+  emailSearchTextParts,
   parseEmailSearch,
-  splitEmailSearchField,
 } from './email-search-scope';
 
 describe('parseEmailSearch', () => {
@@ -42,65 +42,34 @@ describe('parseEmailSearch', () => {
   });
 });
 
-describe('splitEmailSearchField', () => {
-  it('shows the view a search runs in as the chip, wherever it was named', () => {
-    expect(splitEmailSearchField('in:sent invoice')).toEqual({
-      scope: 'sent',
-      text: 'invoice',
-    });
-    expect(splitEmailSearchField('in:sent')).toEqual({
-      scope: 'sent',
-      text: '',
-    });
-    expect(splitEmailSearchField('invoice in:sent')).toEqual({
-      scope: 'sent',
-      text: 'invoice ',
-    });
+describe('emailSearchTextParts', () => {
+  it('marks a whole, known in: filter as an operator wherever it is typed', () => {
+    expect(emailSearchTextParts('invoice in:sent march')).toEqual([
+      { text: 'invoice ', operator: false },
+      { text: 'in:sent', operator: true },
+      { text: ' march', operator: false },
+    ]);
+    expect(emailSearchTextParts('IN:Archived')).toEqual([
+      { text: 'IN:Archived', operator: true },
+    ]);
   });
 
-  it('shows the same view the search runs in when a stored search names two', () => {
-    const stored = 'in:sent invoice in:drafts';
-    expect(splitEmailSearchField(stored).scope).toBe(
-      parseEmailSearch(stored).scope
-    );
-    expect(splitEmailSearchField(stored).text).toBe('invoice ');
-  });
-
-  it('leaves an in: still being typed, or naming no view, in the text', () => {
-    expect(splitEmailSearchField('invoice in:se')).toEqual({
-      text: 'invoice in:se',
-    });
-    expect(splitEmailSearchField('in:berlin offsite')).toEqual({
-      text: 'in:berlin offsite',
-    });
+  it('leaves an in: still being typed, or naming no view, plain', () => {
+    expect(emailSearchTextParts('invoice in:se')).toEqual([
+      { text: 'invoice in:se', operator: false },
+    ]);
+    expect(emailSearchTextParts('in:berlin offsite')).toEqual([
+      { text: 'in:berlin offsite', operator: false },
+    ]);
   });
 });
 
-describe('editEmailSearchField', () => {
-  it('turns a view named in full into the chip at once and keeps the rest', () => {
-    expect(editEmailSearchField(undefined, 'in:sent')).toBe('in:sent ');
-    expect(editEmailSearchField(undefined, 'invoice in:sent')).toBe(
-      'in:sent invoice '
+describe('completeEmailSearch', () => {
+  it('keeps the search as typed but drops an in: still being typed', () => {
+    expect(completeEmailSearch('invoice  in:sent march')).toBe(
+      'invoice in:sent march'
     );
-    expect(editEmailSearchField(undefined, 'invoice in:sent march')).toBe(
-      'in:sent invoice march'
-    );
-  });
-
-  it('replaces the chip when another view is named, so they never disagree', () => {
-    expect(editEmailSearchField('sent', 'invoice in:drafts')).toBe(
-      'in:drafts invoice '
-    );
-  });
-
-  it('keeps the chip while the text after it changes', () => {
-    expect(editEmailSearchField('sent', 'invoice')).toBe('in:sent invoice');
-    expect(editEmailSearchField('sent', 'in:se')).toBe('in:sent in:se');
-    expect(editEmailSearchField('sent', '')).toBe('in:sent ');
-  });
-
-  it('leaves text without a view as typed', () => {
-    expect(editEmailSearchField(undefined, 'invoice')).toBe('invoice');
-    expect(editEmailSearchField(undefined, 'in:berlin ')).toBe('in:berlin ');
+    expect(completeEmailSearch('invoice in:se')).toBe('invoice');
+    expect(completeEmailSearch('in:berlin offsite')).toBe('in:berlin offsite');
   });
 });

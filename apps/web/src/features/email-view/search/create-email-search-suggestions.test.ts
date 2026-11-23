@@ -127,11 +127,25 @@ it('lists the views an in: being typed can name, leaving out ones the person lac
       'view:shared',
     ]);
 
-    // Picking one makes it the chip and keeps the words typed before it.
+    // Picking one finishes the in: where it was typed and keeps the words.
     expect(suggestions.editsQuery?.(1)).toBe(true);
     suggestions.pick(1);
-    expect(search()).toBe('in:sent invoice');
+    expect(search()).toBe('invoice in:sent ');
     expect(suggestions.awaitsPickedResults()).toBe(false);
+    dispose();
+  });
+});
+
+it('remembers a search as it ran, leaving out an in: still being typed', () => {
+  createRoot((dispose) => {
+    const { setSearch, suggestions } = setup();
+    suggestions.setFocused(true);
+    setSearch('invoice in:s');
+    suggestions.setFocused(false);
+
+    setSearch('');
+    suggestions.setFocused(true);
+    expect(recentListed(suggestions)).toEqual(['invoice']);
     dispose();
   });
 });

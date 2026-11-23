@@ -78,8 +78,5 @@ export default {
   clearSearch: 'Clear search',
   recentSearches: 'Recent searches',
   searchViews: 'Views to search in',
-  searchIn: 'In',
-  changeSearchView: 'Change the view searched',
-  removeSearchView: 'Search all mail instead of {{view}}',
   archived: 'Archived',
 };

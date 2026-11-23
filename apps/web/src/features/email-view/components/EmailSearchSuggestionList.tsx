@@ -1,3 +1,4 @@
+import { SearchOperatorText } from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import FunnelIcon from '@icon/system/regular/funnel-simple.svg';
@@ -11,27 +12,17 @@ import {
 } from '../search/create-email-search-suggestions';
 import {
   emailSearchScopeLabel,
-  splitEmailSearchField,
+  emailSearchTextParts,
 } from '../search/email-search-scope';
 
-/** A remembered search, with the view its `in:` filter named first. */
+/** A remembered search, its operators drawn as they are in the field. */
 function RecentSearch(props: { search: string }) {
-  const field = () => splitEmailSearchField(props.search);
-
   return (
     <>
       <ClockIcon aria-hidden="true" class="size-4 shrink-0 text-ink-muted" />
-      <Show when={field().scope}>
-        {(scope) => (
-          <span class="flex h-5 shrink-0 items-center gap-1 rounded-full bg-active px-2 text-xs leading-none">
-            <span class="text-ink-muted">{t('emailViews.searchIn')}</span>
-            <span class="font-medium text-ink">
-              {emailSearchScopeLabel(scope())}
-            </span>
-          </span>
-        )}
-      </Show>
-      <span class="min-w-0 flex-1 truncate">{field().text}</span>
+      <span class="min-w-0 flex-1 truncate whitespace-pre">
+        <SearchOperatorText parts={emailSearchTextParts(props.search)} />
+      </span>
     </>
   );
 }

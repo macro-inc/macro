@@ -1,11 +1,10 @@
 import type { ListSearchSuggestions } from '@app/components/view-shell/list-search-keys';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import {
+  completeEmailSearch,
   type EmailSearchScopeId,
   emailSearchScopesStartingWith,
-  formatEmailSearch,
   parseEmailSearch,
-  splitEmailSearchField,
 } from './email-search-scope';
 import {
   createRecentEmailSearches,
@@ -63,14 +62,14 @@ export function createEmailSearchSuggestions(options: {
   const [active, setActive] = createSignal(-1);
   const [awaitsPickedResults, setAwaitsPickedResults] = createSignal(false);
 
-  // The text after the chip, split at an `in:` being typed at its end.
+  // The text split at an `in:` being typed at its end.
   const typedFilter = () => {
-    const field = splitEmailSearchField(options.search());
-    const typed = TYPED_FILTER.exec(field.text);
+    const text = options.search();
+    const typed = TYPED_FILTER.exec(text);
     if (!typed) return undefined;
 
     return {
-      before: field.text.slice(0, typed.index),
+      before: text.slice(0, typed.index),
       prefix: typed[1] ?? '',
     };
   };
@@ -96,8 +95,9 @@ export function createEmailSearchSuggestions(options: {
     listed,
     setFocused: (next) => {
       if (next) setAwaitsPickedResults(false);
+      // Remembered as it searched, without an `in:` still being typed.
       else if (parseEmailSearch(options.search()).query)
-        recent.add(options.search());
+        recent.add(completeEmailSearch(options.search()));
 
       setActive(-1);
       setFocusedState(next);
@@ -116,9 +116,11 @@ export function createEmailSearchSuggestions(options: {
       const suggestion = listed()[index];
       if (!suggestion) return;
 
+      // The view replaces the `in:` being typed, where it was typed.
       if (suggestion.kind === 'view') {
+        const before = typedFilter()?.before ?? '';
         options.setSearch(
-          formatEmailSearch(suggestion.scope, typedFilter()?.before ?? '')
+          `${before}${before ? ' ' : ''}in:${suggestion.scope} `
         );
         setActive(-1);
         return;

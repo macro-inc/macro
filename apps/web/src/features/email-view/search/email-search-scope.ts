@@ -1,3 +1,4 @@
+import { splitSearchOperators } from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
 import { EMAIL_TAB_LABELS } from '../constants';
 import type { EmailTab } from '../tabs';
@@ -7,7 +8,7 @@ import type { EmailTab } from '../tabs';
  * names them. Inbox is Focus, Signal and Noise together. Scheduled,
  * Reminders, Spam and Trash are not in the search index.
  */
-export const EMAIL_SEARCH_SCOPE_IDS = [
+const EMAIL_SEARCH_SCOPE_IDS = [
   'inbox',
   'focus',
   'signal',
@@ -34,9 +35,7 @@ export type ParsedEmailSearch = {
 
 const IN_FILTER = /^in:(\S*)$/i;
 
-export const isEmailSearchScopeId = (
-  value: string
-): value is EmailSearchScopeId =>
+const isEmailSearchScopeId = (value: string): value is EmailSearchScopeId =>
   (EMAIL_SEARCH_SCOPE_IDS as readonly string[]).includes(value);
 
 /** The views whose names start with what follows a typed `in:`. */
@@ -73,10 +72,7 @@ export function parseEmailSearch(text: string): ParsedEmailSearch {
   return { query: words.join(' '), ...(scope ? { scope } : {}) };
 }
 
-/**
- * The search text for `query` narrowed to `scope`, with the filter first and
- * a space after it, which is how the field shows it as a chip.
- */
+/** The search text for `query` narrowed to `scope`, the filter first. */
 export function formatEmailSearch(
   scope: EmailSearchScopeId | undefined,
   query: string
@@ -84,42 +80,33 @@ export function formatEmailSearch(
   return scope ? `in:${scope} ${query}` : query;
 }
 
-/** A view's whole name in the text, with the space after it. */
-const WHOLE_FILTER = /(?<=^|\s)in:(\S+)(?:\s|$)/gi;
+/** Whether a token is a whole, known `in:<view>` filter, drawn as an operator. */
+const isEmailSearchOperator = (token: string) => {
+  const value = IN_FILTER.exec(token)?.[1]?.toLowerCase();
+  return value !== undefined && isEmailSearchScopeId(value);
+};
 
 /**
- * The field's chip and the text beside it. The chip is the view the search
- * runs in, the last one named as `parseEmailSearch` reads it, so a stored or
- * restored search can never show one view and search another; every whole
- * view name leaves the text. No view's name starts another's, so a whole
- * name is never one still being typed.
+ * The search text in runs, its complete `in:<view>` filters marked as
+ * operators; one still being typed (`in:se`) stays plain.
  */
-export function splitEmailSearchField(text: string): {
-  scope?: EmailSearchScopeId;
-  text: string;
-} {
-  let scope: EmailSearchScopeId | undefined;
-  const rest = text.replace(WHOLE_FILTER, (whole, value: string) => {
-    const id = value.toLowerCase();
-    if (!isEmailSearchScopeId(id)) return whole;
-
-    scope = id;
-    return '';
-  });
-
-  return scope ? { scope, text: rest } : { text };
-}
+export const emailSearchTextParts = (text: string) =>
+  splitSearchOperators(text, isEmailSearchOperator);
 
 /**
- * What typing `typed` beside the chip makes of the search: a view's whole
- * name typed as `in:<view>` becomes the chip at once, replacing the one there.
+ * The search as it ran, to remember: every token but an `in:` still being
+ * typed, single-spaced.
  */
-export function editEmailSearchField(
-  scope: EmailSearchScopeId | undefined,
-  typed: string
-): string {
-  const field = splitEmailSearchField(typed);
-  return formatEmailSearch(field.scope ?? scope, field.text);
+export function completeEmailSearch(text: string): string {
+  return text
+    .split(/\s+/)
+    .filter((token) => {
+      const value = IN_FILTER.exec(token)?.[1]?.toLowerCase();
+      if (value === undefined || isEmailSearchScopeId(value)) return true;
+      return emailSearchScopesStartingWith(value).length === 0;
+    })
+    .join(' ')
+    .trim();
 }
 
 /** The tab each view is, except Inbox, which is Focus, Signal and Noise. */

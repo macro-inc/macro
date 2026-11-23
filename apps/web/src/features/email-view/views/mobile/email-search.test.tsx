@@ -102,23 +102,23 @@ it('clears the field without leaving it, and Cancel or Escape leaves the page', 
   expect(onCancel).toHaveBeenCalledTimes(2);
 });
 
-it('turns a picked view into a chip, keeps the keyboard up, and Backspace takes it off', () => {
+it('finishes a picked view as text in the field, marked as an operator, and keeps the keyboard up', () => {
   const { field, search } = renderPage();
   field.focus();
   fireEvent.input(field, { target: { value: 'invoice in:se' } });
+  expect(document.querySelector('[data-search-operator]')).toBeNull();
 
   fireEvent.click(screen.getByRole('option', { name: /^Sent/ }));
-  expect(search()).toBe('in:sent invoice');
+  expect(search()).toBe('invoice in:sent ');
   expect(document.activeElement).toBe(field);
-  expect((field as HTMLInputElement).value).toBe('invoice');
-  expect(screen.getByRole('group', { name: 'In' }).textContent).toContain(
-    'Sent'
+  expect((field as HTMLInputElement).value).toBe('invoice in:sent ');
+  expect(document.querySelector('[data-search-operator]')?.textContent).toBe(
+    'in:sent'
   );
 
-  (field as HTMLInputElement).setSelectionRange(0, 0);
-  fireEvent.keyDown(field, { key: 'Backspace' });
-  expect(search()).toBe('invoice');
-  expect(screen.queryByRole('group', { name: 'In' })).toBeNull();
+  // Ordinary text: deleting into the operator unmarks it.
+  fireEvent.input(field, { target: { value: 'invoice in:sen' } });
+  expect(document.querySelector('[data-search-operator]')).toBeNull();
 });
 
 it('picks a listed view from a hardware keyboard and keeps the keyboard up', () => {
@@ -130,7 +130,7 @@ it('picks a listed view from a hardware keyboard and keeps the keyboard up', () 
   fireEvent.keyDown(field, { key: 'ArrowDown' });
   fireEvent.keyDown(field, { key: 'ArrowDown' });
   fireEvent.keyDown(field, { key: 'Enter' });
-  expect(search()).toBe('in:sent invoice');
+  expect(search()).toBe('invoice in:sent ');
   expect(document.activeElement).toBe(field);
 });
 

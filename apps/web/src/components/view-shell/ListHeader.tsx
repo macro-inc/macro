@@ -2,7 +2,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, cn } from '@ui';
 import {
-  children,
   createEffect,
   createSignal,
   type JSX,
@@ -16,6 +15,7 @@ import {
   useListSearchKeys,
 } from './list-search-keys';
 import { SearchBar } from './SearchBar';
+import type { SearchTextPart } from './search-operator-text';
 import { ViewShell } from './ViewShell';
 
 export function ListHeader(props: {
@@ -63,20 +63,11 @@ export function ListHeaderSearch(props: {
   onOpenChange?: (open: boolean) => void;
   onFocusChange?: (focused: boolean) => void;
   suggestions?: ListSearchSuggestions;
-  /**
-   * Shown in the field before the text, such as the filter the search is
-   * narrowed to. While it shows, an empty field stays open.
-   */
-  leading?: JSX.Element;
-  /** Empties the field and whatever `leading` holds; defaults to the text. */
-  onClear?: () => void;
-  /** Runs before the field's own keys; `preventDefault` skips them. */
-  onKeyDown?: (event: KeyboardEvent) => void;
+  /** Marks operators (`in:sent`) in the text, drawn as tokens. */
+  operators?: (value: string) => readonly SearchTextPart[];
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const leading = children(() => props.leading);
-  const hasContent = () => Boolean(props.value.trim() || leading());
-  const [expanded, setExpandedState] = createSignal(hasContent());
+  const [expanded, setExpandedState] = createSignal(Boolean(props.value));
   const setExpanded = (open: boolean) => {
     if (open === expanded()) return;
 
@@ -93,8 +84,7 @@ export function ListHeaderSearch(props: {
     });
   };
   const clear = () => {
-    if (props.onClear) props.onClear();
-    else props.onValueChange('');
+    props.onValueChange('');
     setExpanded(false);
   };
   const close = () => {
@@ -103,7 +93,6 @@ export function ListHeaderSearch(props: {
   };
   const keys = useListSearchKeys({
     value: () => props.value,
-    hasQuery: hasContent,
     clear,
     focusResults: () => props.focusResults,
     input: () => input,
@@ -126,9 +115,9 @@ export function ListHeaderSearch(props: {
   // typing in it.
   createEffect(
     on(
-      hasContent,
-      (content) => {
-        if (!props.wide || content) return;
+      () => props.value,
+      (value) => {
+        if (!props.wide || value.trim()) return;
         if (document.activeElement !== input) setExpanded(false);
       },
       { defer: true }
@@ -173,16 +162,13 @@ export function ListHeaderSearch(props: {
           autocomplete="off"
           aria-controls={props.suggestions?.listId}
           aria-activedescendant={props.suggestions?.activeId?.()}
-          leading={leading()}
+          operators={props.operators}
           onClose={close}
-          onKeyDown={(event) => {
-            props.onKeyDown?.(event);
-            if (!event.defaultPrevented) keys.onKeyDown(event);
-          }}
+          onKeyDown={keys.onKeyDown}
           onFocus={() => props.onFocusChange?.(true)}
           onBlur={() => {
             props.onFocusChange?.(false);
-            if (props.wide && !hasContent()) setExpanded(false);
+            if (props.wide && !props.value.trim()) setExpanded(false);
           }}
           onEscape={keys.onEscape}
         />

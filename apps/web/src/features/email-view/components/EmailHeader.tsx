@@ -28,13 +28,7 @@ import {
 } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailSearchSuggestions } from '../search/create-email-search-suggestions';
-import {
-  EMAIL_SEARCH_SCOPE_IDS,
-  editEmailSearchField,
-  formatEmailSearch,
-  splitEmailSearchField,
-} from '../search/email-search-scope';
-import { useEmailSearchScopeAvailability } from '../tab-availability';
+import { emailSearchTextParts } from '../search/email-search-scope';
 import type { EmailTab } from '../tabs';
 import { EMAIL_TOUR } from '../tour';
 import { useVisibleEmailTab } from '../use-visible-email-tab';
@@ -45,7 +39,6 @@ import {
   useEmailSavedViewTitle,
 } from '../views/email-saved-views';
 import { EmailControls } from './EmailControls';
-import { EmailSearchScopeChip } from './EmailSearchScopeChip';
 
 /** What the header gives up, in order, when its actions would overflow it. */
 const HEADER_COLLAPSE_ORDER = ['viewOptions'] as const;
@@ -184,20 +177,6 @@ export function EmailHeader(props: EmailHeaderProps) {
       : (EMAIL_TABS.find((tab) => tab.id === shownTab())?.label ?? 'Email'));
 
   const canSearch = () => canSearchEmailTab(state.tab);
-  const scopeAvailable = useEmailSearchScopeAvailability();
-  // The wide field shows an `in:` filter as a chip; the compact one as text.
-  const field = () =>
-    props.searchSuggestions
-      ? splitEmailSearchField(state.search)
-      : { scope: undefined, text: state.search };
-  const removeScope = () => setState('search', field().text);
-  // Backspace at the start of the text takes the chip back off.
-  const removesScope = (event: KeyboardEvent) =>
-    event.key === 'Backspace' &&
-    field().scope !== undefined &&
-    event.target instanceof HTMLInputElement &&
-    event.target.selectionStart === 0 &&
-    event.target.selectionEnd === 0;
   const savedAppearance = () => {
     const view = savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
@@ -293,37 +272,9 @@ export function EmailHeader(props: EmailHeaderProps) {
           ref={searchTarget}
           label="Search email"
           placeholder={t('emailViews.searchAllMail')}
-          value={field().text}
-          onValueChange={(text) =>
-            setState(
-              'search',
-              props.searchSuggestions
-                ? editEmailSearchField(field().scope, text)
-                : text
-            )
-          }
-          onClear={() => setState('search', '')}
-          leading={
-            <Show when={field().scope}>
-              {(scope) => (
-                <EmailSearchScopeChip
-                  scope={scope()}
-                  menu={{
-                    options: EMAIL_SEARCH_SCOPE_IDS.filter(scopeAvailable),
-                    onChange: (next) =>
-                      setState('search', formatEmailSearch(next, field().text)),
-                  }}
-                  onRemove={removeScope}
-                />
-              )}
-            </Show>
-          }
-          onKeyDown={(event) => {
-            if (removesScope(event)) {
-              event.preventDefault();
-              removeScope();
-            }
-          }}
+          value={state.search}
+          onValueChange={(search) => setState('search', search)}
+          operators={emailSearchTextParts}
           focusResults={props.focusSearchResults}
           wide={!!props.searchSuggestions}
           onOpenChange={props.searchSuggestions?.setOpen}

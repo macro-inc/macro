@@ -1,16 +1,13 @@
+import { SearchOperatorOverlay } from '@app/components/view-shell/search-operator-text';
 import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, CommandMenuSearchInput } from '@ui';
 import { onCleanup, onMount, Show } from 'solid-js';
-import { EmailSearchScopeChip } from '../../components/EmailSearchScopeChip';
 import { EmailSearchSuggestionList } from '../../components/EmailSearchSuggestionList';
 import type { EmailSearchSuggestions } from '../../search/create-email-search-suggestions';
-import {
-  editEmailSearchField,
-  splitEmailSearchField,
-} from '../../search/email-search-scope';
+import { emailSearchTextParts } from '../../search/email-search-scope';
 
 /**
  * The field and Cancel of Email's search page on touch, in place of the list
@@ -47,9 +44,6 @@ export function EmailMobileSearchField(props: {
 
   // Keeps the keyboard up for presses on the field's own controls.
   const keepFocus = (event: Event) => event.preventDefault();
-  // An `in:` filter shows as a chip before the text, as on desktop.
-  const field = () => splitEmailSearchField(props.search);
-  const removeScope = () => props.setSearch(field().text);
   // A hardware keyboard walks the rows under the field and picks one; a
   // picked view keeps the keyboard up for the words, as a tap does.
   const moveInSuggestions = (event: KeyboardEvent) => {
@@ -78,52 +72,41 @@ export function EmailMobileSearchField(props: {
           aria-hidden="true"
           class="size-4 shrink-0 text-ink-extra-muted"
         />
-        <Show when={field().scope}>
-          {(scope) => (
-            <EmailSearchScopeChip scope={scope()} onRemove={removeScope} />
-          )}
-        </Show>
-        <CommandMenuSearchInput
-          ref={(element: HTMLInputElement) => {
-            input = element;
-            props.ref(element);
-          }}
-          type="search"
-          enterkeyhint="search"
-          autocomplete="off"
-          aria-label={t('emailViews.searchEmail')}
-          aria-controls={props.suggestions.listId}
-          aria-activedescendant={props.suggestions.activeId?.()}
-          placeholder={t('emailViews.searchAllMail')}
-          class="text-base text-ink [&::-webkit-search-cancel-button]:hidden"
-          value={field().text}
-          onInput={(event) =>
-            props.setSearch(
-              editEmailSearchField(field().scope, event.currentTarget.value)
-            )
-          }
-          onFocus={() => props.suggestions.setFocused(true)}
-          onBlur={() => props.suggestions.setFocused(false)}
-          onKeyDown={(event) => {
-            if (isComposing(event)) return;
-            if (moveInSuggestions(event)) {
-              event.preventDefault();
-              return;
-            }
-            // Search drops the keyboard to show the results.
-            if (event.key === 'Enter') input?.blur();
-            // Backspace at the start of the text takes the chip back off.
-            if (
-              event.key === 'Backspace' &&
-              field().scope &&
-              event.currentTarget.selectionStart === 0 &&
-              event.currentTarget.selectionEnd === 0
-            ) {
-              event.preventDefault();
-              removeScope();
-            }
-          }}
-        />
+        {/* Operators (`in:sent`) are drawn as tokens behind the text. */}
+        <div class="relative flex min-w-0 flex-1">
+          <SearchOperatorOverlay
+            parts={emailSearchTextParts(props.search)}
+            input={() => input}
+            class="text-base text-ink"
+          />
+          <CommandMenuSearchInput
+            ref={(element: HTMLInputElement) => {
+              input = element;
+              props.ref(element);
+            }}
+            type="search"
+            enterkeyhint="search"
+            autocomplete="off"
+            aria-label={t('emailViews.searchEmail')}
+            aria-controls={props.suggestions.listId}
+            aria-activedescendant={props.suggestions.activeId?.()}
+            placeholder={t('emailViews.searchAllMail')}
+            class="text-base text-transparent caret-ink [&::-webkit-search-cancel-button]:hidden"
+            value={props.search}
+            onInput={(event) => props.setSearch(event.currentTarget.value)}
+            onFocus={() => props.suggestions.setFocused(true)}
+            onBlur={() => props.suggestions.setFocused(false)}
+            onKeyDown={(event) => {
+              if (isComposing(event)) return;
+              if (moveInSuggestions(event)) {
+                event.preventDefault();
+                return;
+              }
+              // Search drops the keyboard to show the results.
+              if (event.key === 'Enter') input?.blur();
+            }}
+          />
+        </div>
         <Show when={props.search}>
           <Button
             aria-label={t('emailViews.clearSearch')}

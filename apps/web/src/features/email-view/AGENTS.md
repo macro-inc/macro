@@ -36,12 +36,13 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-search-scroll-reset.ts`: a new search starts at the top
   once its own results replace the rows kept on screen.
 - `search/`: the `in:<view>` filter (`email-search-scope.ts`: parsing, the
-  field's chip and the views it names), recent searches (`recent-searches.ts`,
+  operator runs the field draws and the views it names), recent searches (`recent-searches.ts`,
   per person in browser storage) and the rows the search field lists, views
   while `in:` is typed and recent searches otherwise
   (`create-email-search-suggestions.ts`, drawn by
   `components/EmailSearchSuggestionList.tsx`), behind
-  `enable-email-wide-search`. The chip is `components/EmailSearchScopeChip.tsx`.
+  `enable-email-wide-search`. Operators are drawn by the shared
+  `components/view-shell/search-operator-text.tsx`.
 - `filters/email-saved-view.ts`: the `kind: "email"` definition codec: strict
   capture, permissive read with skipped-setting issues, materialization,
   canonical comparison, scope resolution, and each tab's own filters.
