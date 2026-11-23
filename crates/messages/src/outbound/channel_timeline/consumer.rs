@@ -56,16 +56,23 @@ impl ChannelTimelineTopicConsumer {
     }
 }
 
+/// The topic could not be read.
+#[derive(Debug, thiserror::Error)]
+#[error("failed to receive channel timeline update: {0:?}")]
+pub struct ChannelTimelineReceiveError(Report);
+
 impl ChannelTimelineUpdateSource for ChannelTimelineTopicConsumer {
+    type Err = ChannelTimelineReceiveError;
+
     /// Cancel-safe. A record that does not decode is logged and skipped, so
     /// one bad record never stops delivery of the rest.
-    async fn recv(&self) -> Result<(AddressedChannelTimelineUpdate, tracing::Span), Report> {
+    async fn recv(&self) -> Result<(AddressedChannelTimelineUpdate, tracing::Span), Self::Err> {
         loop {
             let message = self
                 .consumer
                 .recv()
                 .await
-                .context("failed to receive channel timeline update")?;
+                .map_err(ChannelTimelineReceiveError)?;
             let kafka_message = message.inner();
             let span = kafka_util::consumer_span(kafka_message, CONSUMER_NAME);
 

@@ -83,6 +83,10 @@ fn users(ids: &[&str]) -> HashSet<String> {
     ids.iter().map(|id| (*id).to_owned()).collect()
 }
 
+fn user(id: &'static str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::parse_from_str(id).unwrap()
+}
+
 /// Records what the gateway was asked to send.
 #[derive(Default)]
 struct Gateway(Mutex<Vec<HashSet<String>>>);
@@ -122,13 +126,17 @@ impl ChannelMessageChangeLoader for Changes {
 #[derive(Default)]
 struct Published(Mutex<Vec<AddressedChannelTimelineUpdate>>);
 impl ChannelTimelineUpdatePublisher for Published {
-    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report> {
+    type Err = std::convert::Infallible;
+
+    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err> {
         self.0.lock().unwrap().push(update.clone());
         Ok(())
     }
 }
 impl ChannelTimelineUpdatePublisher for std::sync::Arc<Published> {
-    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report> {
+    type Err = std::convert::Infallible;
+
+    fn publish(&self, update: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err> {
         self.as_ref().publish(update)
     }
 }
@@ -167,7 +175,11 @@ async fn sequenced_reply_is_hydrated_once_with_its_root_and_addressed_to_the_del
         panic!("one update per change, got {}", published.len());
     };
     assert_eq!(
-        addressed.recipients.iter().cloned().collect::<HashSet<_>>(),
+        addressed
+            .recipients
+            .iter()
+            .map(ToString::to_string)
+            .collect::<HashSet<_>>(),
         users(&["macro|a@example.com", "macro|b@example.com"])
     );
     assert_eq!(addressed.update.channel_id, CHANNEL);
@@ -233,10 +245,15 @@ async fn unsequenced_and_non_channel_changes_publish_nothing_and_read_nothing() 
 /// Fixed participants, counting the reads.
 struct Participants(Mutex<usize>);
 impl ChannelTimelineAudience for Participants {
-    async fn participants(&self, channel_id: Uuid) -> Result<Vec<String>, rootcause::Report> {
+    type Err = std::convert::Infallible;
+
+    async fn participants(
+        &self,
+        channel_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
         assert_eq!(channel_id, CHANNEL);
         *self.0.lock().unwrap() += 1;
-        Ok(vec!["macro|a@example.com".into()])
+        Ok(vec![user("macro|a@example.com")])
     }
 }
 
@@ -278,7 +295,7 @@ async fn sequenced_activity_is_published_one_update_per_seq_with_one_participant
     assert!(
         published
             .iter()
-            .all(|addressed| addressed.recipients == ["macro|a@example.com"])
+            .all(|addressed| addressed.recipients == [user("macro|a@example.com")])
     );
 
     // Nothing sequenced: no participant read.
@@ -302,13 +319,13 @@ mod fanout {
     /// Updates handed in by the test.
     struct Source(tokio::sync::Mutex<mpsc::UnboundedReceiver<AddressedChannelTimelineUpdate>>);
     impl ChannelTimelineUpdateSource for Source {
-        async fn recv(
-            &self,
-        ) -> Result<(AddressedChannelTimelineUpdate, tracing::Span), rootcause::Report> {
+        type Err = std::io::Error;
+
+        async fn recv(&self) -> Result<(AddressedChannelTimelineUpdate, tracing::Span), Self::Err> {
             let update = self.0.lock().await.recv().await;
             update
                 .map(|update| (update, tracing::Span::none()))
-                .ok_or_else(|| rootcause::report!("source closed"))
+                .ok_or_else(|| std::io::Error::other("source closed"))
         }
     }
 
@@ -326,8 +343,6 @@ mod fanout {
             Source(tokio::sync::Mutex::new(receiver)),
             project,
         ));
-        let user =
-            |id: &'static str| macro_user_id::user_id::MacroUserIdStr::parse_from_str(id).unwrap();
         let (mut a1, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
         let (mut a2, _) = fanout.subscribe(user("macro|a@example.com")).into_parts();
         let (mut b, _) = fanout.subscribe(user("macro|b@example.com")).into_parts();
@@ -339,9 +354,9 @@ mod fanout {
 
         let update = |seq| AddressedChannelTimelineUpdate {
             recipients: vec![
-                "macro|a@example.com".into(),
-                "macro|b@example.com".into(),
-                "macro|nobody-here@example.com".into(),
+                user("macro|a@example.com"),
+                user("macro|b@example.com"),
+                user("macro|nobody-here@example.com"),
             ],
             update: ChannelTimelineUpdate::activity(CHANNEL, seq, activity(seq as u128)),
         };
@@ -385,7 +400,9 @@ impl MessageRealtime for GatewayAwaitingPublish {
 /// Signals each publish.
 struct SignalsPublish(std::sync::Arc<tokio::sync::Notify>);
 impl ChannelTimelineUpdatePublisher for SignalsPublish {
-    fn publish(&self, _: &AddressedChannelTimelineUpdate) -> Result<(), rootcause::Report> {
+    type Err = std::convert::Infallible;
+
+    fn publish(&self, _: &AddressedChannelTimelineUpdate) -> Result<(), Self::Err> {
         self.0.notify_one();
         Ok(())
     }

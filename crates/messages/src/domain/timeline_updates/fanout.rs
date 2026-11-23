@@ -3,7 +3,7 @@
 use std::num::NonZeroUsize;
 
 use broadcast::{BroadcastManager, BroadcastSubscription, GlobalSpawner};
-use macro_user_id::{cowlike::CowLike as _, user_id::MacroUserIdStr};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::{AddressedChannelTimelineUpdate, ChannelTimelineUpdate};
 
@@ -15,13 +15,14 @@ const SUBSCRIBER_BUFFER_CAPACITY: NonZeroUsize = NonZeroUsize::new(128).unwrap()
 
 /// Receives every addressed update published after this process started.
 pub trait ChannelTimelineUpdateSource: Send + Sync + 'static {
+    /// Why no further update can be received.
+    type Err: std::error::Error + Send + Sync + 'static;
+
     /// Waits for the next update and the span its processing belongs to,
     /// parented to the trace of the write that published it.
     fn recv(
         &self,
-    ) -> impl Future<
-        Output = Result<(AddressedChannelTimelineUpdate, tracing::Span), rootcause::Report>,
-    > + Send;
+    ) -> impl Future<Output = Result<(AddressedChannelTimelineUpdate, tracing::Span), Self::Err>> + Send;
 }
 
 /// Delivers each received update to its recipients' local subscriptions.
@@ -56,7 +57,7 @@ impl<S: ChannelTimelineUpdateSource, T: Clone + Send + Sync + 'static> ChannelTi
 
     /// Receive and deliver updates until the source fails. Run it in a
     /// supervised task; updates for users with no subscriber here are dropped.
-    pub async fn run(&self) -> Result<(), rootcause::Report> {
+    pub async fn run(&self) -> Result<(), S::Err> {
         loop {
             let (addressed, span) = self.source.recv().await?;
             span.in_scope(|| self.deliver(addressed));
@@ -78,8 +79,6 @@ impl<S: ChannelTimelineUpdateSource, T: Clone + Send + Sync + 'static> ChannelTi
         let recipients: Vec<_> = addressed
             .recipients
             .iter()
-            .filter_map(|recipient| MacroUserIdStr::parse_from_str(recipient).ok())
-            .map(|recipient| recipient.into_owned())
             .filter(|recipient| self.broadcasts.subscriber_count(recipient) > 0)
             .collect();
         if recipients.is_empty() {
