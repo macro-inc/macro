@@ -551,8 +551,12 @@ pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
 
 /// Type alias for the bots service wired into DSS.
-pub(crate) type DssBotService =
-    BotServiceImpl<PgBotsRepo, DssEventBroker, DssHarnessService, ai_tools::PipedreamMcpAppCatalog>;
+pub(crate) type DssBotService = BotServiceImpl<
+    PgBotsRepo,
+    DssEventBroker,
+    DssHarnessService,
+    ai_tools::ConnectorsAppCatalog<connectors::Connectors>,
+>;
 
 /// Type alias for the bots router state.
 pub(crate) type DssBotsState =
@@ -711,11 +715,19 @@ pub(crate) type DssSqlState = databases_sql::inbound::axum_router::SqlRouterStat
     DatabasesServiceType,
     EntityAccessService,
     DssSoupService,
+    DssContactReads,
+    AuthorizationService,
+>;
+
+/// Contact reads that follow each viewer's `contacts-list-reads` flag between
+/// the legacy graph and the list-aware tables.
+pub(crate) type DssContactReads = contacts::domain::list_reads::FlaggedContactReads<
     contacts::domain::service::ContactsDomainService<
         contacts::outbound::repository::DbContactsRepository,
         Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
     >,
-    AuthorizationService,
+    contacts::outbound::repository::DbContactsRepository,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
 >;
 
 /// Type alias for the databases router state.
@@ -955,9 +967,7 @@ pub(crate) type DssWebhookState =
 pub(crate) type DssSseStreamService = WebhookEventStreamServiceImpl<
     EntityAccessService,
     PgWebhookRepo,
-    crate::outbound::stream_contacts::ContactsStreamChecker<
-        contacts::outbound::repository::DbContactsRepository,
-    >,
+    crate::outbound::stream_contacts::ContactsStreamChecker<DssContactReads>,
 >;
 
 /// Type alias for the webhook-event SSE router state.
@@ -1034,6 +1044,11 @@ pub(crate) struct ApiContext {
     /// Focus reads for the GraphQL `emailFocus` list and thread `focus` field.
     pub email_focus_reader: Arc<dyn complete_graph::EmailFocusReader>,
     pub graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader,
+    /// The Soup lists with their channels read from the primary, for pages
+    /// that ask `channelReads: PRIMARY`.
+    pub graphql_primary_channel_soup: graphql_soup::PrimaryChannelSoup<
+        <DssGraphqlSoupSchema as complete_graph::SoupSchemaService>::Service,
+    >,
     pub graphql_soup_item_loader: graphql_soup::SoupItemDataLoader,
     pub databases_state: DssDatabasesState,
     pub sql_state: DssSqlState,
