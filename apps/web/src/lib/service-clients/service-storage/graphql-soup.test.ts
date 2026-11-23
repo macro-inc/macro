@@ -184,6 +184,67 @@ it('preserves initiative identity, properties, and metadata separately from fold
   });
 });
 
+it('keeps whether a date property has its time of day set', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const property = (id: string, dateValue: string, dateHasTime: boolean) => ({
+    id,
+    propertyDefinitionId: id,
+    displayName: id,
+    dataType: 'DATE' as const,
+    isMultiSelect: false,
+    specificEntityType: null,
+    isSystem: true,
+    isMetadata: false,
+    value: {
+      __typename: 'GraphqlDatePropertyValue' as const,
+      dateValue,
+      dateHasTime,
+    },
+  });
+  const mapped = mapGraphqlSoupItem({
+    __typename: 'GraphqlSoupInitiative',
+    appearance: null,
+    id: 'initiative',
+    entityType: 'INITIATIVE',
+    displayName: 'Launch',
+    metadata: {
+      ownerId: 'owner',
+      createdAt: '2026-09-01',
+      updatedAt: '2026-09-26',
+      viewedAt: null,
+    },
+    viewerPermission: {
+      __typename: 'GraphqlAccessLevelPermission',
+      accessLevel: 'EDIT',
+    },
+    properties: [
+      property('start', '2026-09-28T14:30:00Z', true),
+      property('due', '2026-09-30T00:00:00Z', false),
+    ],
+    notifications: [],
+    isFavorited: false,
+    frecencyScore: null,
+    cacheProjection: null,
+  });
+
+  expect(mapped).toMatchObject({
+    data: {
+      properties: [
+        {
+          value: {
+            type: 'Date',
+            value: '2026-09-28T14:30:00Z',
+            has_time: true,
+          },
+        },
+        { value: { type: 'Date', value: '2026-09-30T00:00:00Z' } },
+      ],
+    },
+  });
+  if (mapped?.tag !== 'initiative') throw new Error('expected an initiative');
+  expect(mapped.data.properties[1]?.value).not.toHaveProperty('has_time');
+});
+
 it('skips a Soup item type from a newer server', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const fromNewerServer = JSON.parse(
@@ -708,6 +769,42 @@ describe('legacy channel list notifications', () => {
         viewedAt: '2026-01-02T00:00:00Z',
       })
     ).toMatchObject({ state: 'seen', viewed_at: '2026-01-02T00:00:00Z' });
+  });
+
+  it('spells a direct message the way notification checks read it', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageReactionMetadata',
+        channelMessageReactionMessageId: 'message',
+        channelMessageReactionThreadId: null,
+        channelMessageReactionMessageContent: 'Ship it',
+        channelMessageReactionEmoji: '❤️',
+        channelMessageReactionChannelType: 'DIRECT_MESSAGE',
+        channelMessageReactionChannelName: 'Ada',
+        channelMessageReactionSenderProfilePictureUrl: null,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_reaction',
+      content: { channelType: 'directMessage' },
+    });
+  });
+
+  it('reads a channel kind it does not know as a named channel', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'message',
+        channelMessageSendChannelType: 'FUTURE_KIND' as never,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_send',
+      content: { channelType: 'public' },
+    });
   });
 
   it('preserves mention and reply thread membership and message targets', async () => {

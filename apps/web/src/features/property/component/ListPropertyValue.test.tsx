@@ -39,6 +39,9 @@ vi.mock('@property/context/PropertiesContext', () => ({
   }),
 }));
 vi.mock('@property/utils', async () => import('../utils/typeGuards'));
+vi.mock('../hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => false,
+}));
 vi.mock('@ui', async () => {
   const { cn } = await import('../../../components/ui/utils/classname');
   return {

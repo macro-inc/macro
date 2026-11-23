@@ -11,6 +11,7 @@ browser-test-hooks = []
 [dependencies]
 cache-core = { path = "../cache-core" }
 maybe_send = { path = "../../maybe_send" }
+item-filter-index = { path = "../../item_filter_index" }
 predicate-index = { path = "../../predicate_index" }
 thiserror = { workspace = true }
 uuid = { workspace = true }

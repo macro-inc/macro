@@ -3899,6 +3899,7 @@ dependencies = [
  "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru 0.16.4",
  "macro_user_id",
  "maybe_send",
@@ -3918,6 +3919,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-diff-fuzz"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "cache-core",
+ "cache-turso",
+ "clap",
+ "pollster",
+ "predicate-index",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "soup-filter-cache-adapter",
+ "soup-filter-projection",
+ "tokio",
+ "tracing",
+ "turso_core",
+ "uuid",
+]
+
+[[package]]
 name = "cache-schema"
 version = "0.1.0"
 dependencies = [
@@ -3934,6 +3957,7 @@ version = "0.1.0"
 dependencies = [
  "cache-core",
  "chrono",
+ "item-filter-index",
  "maybe_send",
  "miniz_oxide",
  "pollster",
@@ -13958,6 +13982,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum 0.27.2",
+ "unicode-segmentation",
  "utoipa",
  "uuid",
  "workspace-hack",
