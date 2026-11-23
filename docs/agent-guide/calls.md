@@ -118,11 +118,14 @@ extension before they can send or play these cues. Do not infer a leave from a
 missing participant, because recovery uses the same RTC removal events.
 
 Incoming channel-call ringing keeps its original 30-second deadline when duplicate
-start events arrive. Answer, decline, and end resolutions silence every tab and
-prevent delayed starts from restarting that ring, including answers on another
-device. `call.sound.play` traces record the cue kind and count; incoming rings
-also carry the opaque call ID. Participation playback nests `audio.cue.play`,
-which distinguishes scheduled playback from audio that was not ready.
+start events arrive. Expiry, answer, decline, and end resolutions silence every
+tab and prevent delayed starts from restarting that ring, including answers on
+another device. Ring coordination owns the deadline and joined-state checks;
+the audio loop only repeats the phrase while that ownership remains active.
+`call.sound.play` traces record the cue kind and count; incoming rings also carry
+the opaque call ID. Remote participation playback nests `call.sound.play` and
+`audio.cue.play` under the presence receive span. The audio span distinguishes
+scheduled playback from audio that was not ready.
 
 To verify, join one browser call from two participants. Check each self join,
 the first participant hearing the second join, and both sides of a deliberate

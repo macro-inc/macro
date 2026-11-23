@@ -98,6 +98,11 @@ describe('incoming call sound lifecycle', () => {
     expect(
       contexts.every((context) => context.close.mock.calls.length > 0)
     ).toBe(true);
+
+    // Expiry is terminal too: a delayed start cannot open another ring window.
+    startCallRinger(callId, () => false);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(contexts).toHaveLength(soundsBeforeDeadline);
   });
 
   it.each(['answered', 'declined', 'ended'] as const)(

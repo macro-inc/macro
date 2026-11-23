@@ -95,8 +95,7 @@ export function startCallRinger(
     callId,
     shouldStop,
     maxDurationMs,
-    ring: (end) =>
-      startRingingLoop(callId, shouldStop, playRingSound(callId), end).stop,
+    ring: () => startRingingLoop(callId, playRingSound(callId)).stop,
     onEnd: () => {
       if (activeCallRingers.get(callId) === ringer) {
         activeCallRingers.delete(callId);
@@ -177,12 +176,7 @@ function playRingSound(callId: string): RingSound | undefined {
   };
 }
 
-function startRingingLoop(
-  callId: string,
-  shouldStop: () => boolean,
-  initialSound?: RingSound,
-  onStop?: () => void
-): Ringer {
+function startRingingLoop(callId: string, initialSound?: RingSound): Ringer {
   let stopped = false;
   const activeSounds = new Set<RingSound>();
 
@@ -200,23 +194,15 @@ function startRingingLoop(
     if (stopped) return;
     stopped = true;
     window.clearInterval(intervalId);
-    window.clearTimeout(timeoutId);
     for (const sound of activeSounds) {
       sound.stop();
     }
     activeSounds.clear();
-    onStop?.();
   };
 
   const intervalId = window.setInterval(() => {
-    if (shouldStop()) {
-      stop();
-      return;
-    }
     trackSound(playRingSound(callId));
   }, RING_INTERVAL_MS);
-
-  const timeoutId = window.setTimeout(stop, MAX_RING_DURATION_MS);
 
   return { stop };
 }
