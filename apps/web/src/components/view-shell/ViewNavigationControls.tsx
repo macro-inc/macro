@@ -34,6 +34,7 @@ export function ViewSidebarCloseButton(
 export function ViewSidebarToggle(props: {
   action: 'collapse' | 'expand';
   presentation?: 'pill';
+  size?: 'icon-xs' | 'icon-md';
 }) {
   const ws = useContext(ViewShellContext);
   const pane = useContext(ViewShellPaneContext);
@@ -67,7 +68,9 @@ export function ViewSidebarToggle(props: {
           hotkey: TOKENS.workspace.toggleNavigation,
         }}
         variant="ghost"
-        size={props.presentation === 'pill' ? 'icon-md' : 'icon-xs'}
+        size={
+          props.size ?? (props.presentation === 'pill' ? 'icon-md' : 'icon-xs')
+        }
         class={cn(
           'shrink-0',
           // The same island as the touch filter button beside it.
@@ -112,14 +115,17 @@ export function ViewSidebarToggle(props: {
 }
 
 /** Takes a narrow list view from the open entity back to its list. */
-function ViewListBackButton(props: { onClick: () => void }) {
+function ViewListBackButton(props: {
+  onClick: () => void;
+  size?: 'icon-xs' | 'icon-md';
+}) {
   return (
     <HeaderIsland class="px-1">
       <Button
         aria-label={t('common.back')}
         tooltip={t('common.back')}
         variant="ghost"
-        size="icon-xs"
+        size={props.size ?? 'icon-xs'}
         class="shrink-0"
         // The way out of an inline preview is reachable before it is used.
         data-allow-focus-in-preview
@@ -132,16 +138,19 @@ function ViewListBackButton(props: { onClick: () => void }) {
 }
 
 /** Shared leading controls, kept in place beneath navigation overlays. */
-export function ViewNavigationControls() {
+export function ViewNavigationControls(
+  props: { size?: 'icon-xs' | 'icon-md' } = {}
+) {
   const returnToList = useContext(ViewShellReturnToListContext);
   return (
     <Show
       when={returnToList?.()}
       keyed
-      fallback={<SidebarNavigationControls />}
+      fallback={<SidebarNavigationControls size={props.size} />}
     >
       {(onBack) => (
         <ViewListBackButton
+          size={props.size}
           onClick={() => fireAndForget(onBack(), 'workspace-back')}
         />
       )}
@@ -149,7 +158,7 @@ export function ViewNavigationControls() {
   );
 }
 
-function SidebarNavigationControls() {
+function SidebarNavigationControls(props: { size?: 'icon-xs' | 'icon-md' }) {
   const ws = useContext(ViewShellContext);
   const pane = useContext(ViewShellPaneContext);
   return (
@@ -164,17 +173,21 @@ function SidebarNavigationControls() {
         inert={ws?.aside.isOverlay()}
         aria-hidden={ws?.aside.isOverlay()}
       >
-        <SplitPanel.CloseButton />
+        <SplitPanel.CloseButton size={props.size} />
         <Show
           when={ws?.narrowList() === 'main'}
           fallback={
             <ViewSidebarToggle
               action="expand"
+              size={props.size}
               presentation={isTouchDevice() ? 'pill' : undefined}
             />
           }
         >
-          <ViewListBackButton onClick={() => ws?.returnToList()} />
+          <ViewListBackButton
+            size={props.size}
+            onClick={() => ws?.returnToList()}
+          />
         </Show>
       </SplitPanel.ControlGroup>
     </Show>

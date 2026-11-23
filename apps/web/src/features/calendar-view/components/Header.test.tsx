@@ -41,6 +41,8 @@ vi.mock('@ui', async () => ({
   Layer: (await import('@app/components/ui/components/Layer')).Layer,
   Tabs: (await import('@app/components/ui/components/Tabs')).Tabs,
   Input: (await import('@app/components/ui/components/Input')).Input,
+  InputGroup: (await import('@app/components/ui/components/InputGroup'))
+    .InputGroup,
   Hotkey: (await import('@app/components/ui/components/Hotkey')).Hotkey,
   cn: (await import('@app/components/ui/utils/classname')).cn,
 }));
@@ -50,6 +52,7 @@ vi.mock('@app/components/view-shell', async () => ({
     breakpoints: { narrow: () => false },
   }),
   ViewSidebar: { Toggle: () => <button>Show sidebar</button> },
+  ViewNavigationControls: () => <button>Show navigation</button>,
   ViewShell: {
     TopBar: (await import('@app/components/view-shell/ViewShell')).ViewShell
       .TopBar,

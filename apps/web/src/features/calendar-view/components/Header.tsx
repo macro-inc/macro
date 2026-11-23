@@ -1,5 +1,6 @@
 import {
   useViewShell,
+  ViewNavigationControls,
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -284,19 +285,17 @@ export function Header(props: {
         }}
         variant="secondary"
         size={mobile ? 'icon-md' : 'md'}
-        class={mobile ? 'relative' : undefined}
         onClick={navigation.navigateToToday}
       >
         <Show when={mobile} fallback="Today">
-          <CalendarBlankIcon
-            class="size-4 touch:size-6 shrink-0 pointer-events-none"
-            aria-hidden="true"
-          />
           <span
+            class="relative size-8 shrink-0 pointer-events-none"
             aria-hidden="true"
-            class="pointer-events-none absolute inset-0 flex items-center justify-center pt-1 text-xxs font-bold leading-none"
           >
-            {today().getDate()}
+            <CalendarBlankIcon class="size-8" />
+            <span class="absolute inset-x-0 top-3.5 text-center text-xxs font-bold leading-none tabular-nums">
+              {today().getDate()}
+            </span>
           </span>
         </Show>
       </Control>
@@ -343,6 +342,7 @@ export function Header(props: {
       <Match when={!usesTouchHeader()}>
         <ViewShell.TopBar
           ref={setHeaderElement}
+          navigation={false}
           class="h-auto min-h-12 flex-wrap items-start gap-x-2 not-touch:gap-y-4 py-2 [--view-search-height:2rem]"
         >
           <div
@@ -351,6 +351,7 @@ export function Header(props: {
             ref={tourTarget(CALENDAR_TOUR.period)}
             onClick={() => setSearchExpanded(false)}
           >
+            <ViewNavigationControls size="icon-md" />
             <div
               class="flex min-w-0 flex-1 items-center gap-2"
               classList={{
