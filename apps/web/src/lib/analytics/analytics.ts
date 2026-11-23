@@ -215,6 +215,10 @@ const initializePosthog = (instance: PostHog) => {
       if (cr) {
         cr.properties = redactLinkTokenProperties(cr.properties);
         cr.properties.frontend_instance_id = frontendInstanceId;
+        // `track` adds these; PostHog's own events ($exception, $autocapture,
+        // $web_vitals, ...) skip it, so device filters would miss them.
+        cr.properties[DEVICE_PROPERTY] ??= getDeviceType();
+        cr.properties[ENVIRONMENT_PROPERTY] ??= getEnvironment();
         if (cr.$set) cr.$set = redactLinkTokenProperties(cr.$set);
         if (cr.$set_once) {
           cr.$set_once = redactLinkTokenProperties(cr.$set_once);

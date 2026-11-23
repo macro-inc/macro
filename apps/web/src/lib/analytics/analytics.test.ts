@@ -207,6 +207,40 @@ describe('PostHog exception frames', () => {
       ).toBe(frontendInstanceId);
     }
   });
+  it.each([
+    ['desktop', false, 'desktop-app'],
+    ['ios', true, 'mobile-app'],
+    ['web', true, 'mobile-web'],
+    ['web', false, 'desktop-web'],
+  ] as const)(
+    'adds the device to PostHog events on %s (touch: %s)',
+    async (platform, touch, device) => {
+      mocks.platform = platform;
+      mocks.touch = touch;
+      vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
+      await import('./analytics');
+      const beforeSend = mocks.init.mock.calls[0][1].before_send;
+      for (const event of ['$exception', '$autocapture', '$web_vitals']) {
+        expect(beforeSend({ event, properties: {} }).properties).toMatchObject({
+          macro_device: device,
+          macro_environment: 'prod',
+        });
+      }
+    }
+  );
+
+  it('keeps the device an event already carries', async () => {
+    vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
+    await import('./analytics');
+    const beforeSend = mocks.init.mock.calls[0][1].before_send;
+    expect(
+      beforeSend({
+        event: 'search_performed',
+        properties: { macro_device: 'mobile-web', macro_environment: 'dev' },
+      }).properties
+    ).toMatchObject({ macro_device: 'mobile-web', macro_environment: 'dev' });
+  });
+
   async function beforeSendException(value: string, filenames: string[]) {
     vi.stubEnv('VITE_POSTHOG_API_KEY', 'test-key');
     await import('./analytics');
