@@ -712,6 +712,46 @@ fn another_epochs_cache_keeps_its_queue_and_drops_its_records() {
         assert!(sources(&mut storage).await.iter().all(is_retired));
         storage.try_close().unwrap();
 
+        // A file of another epoch at the previous cache format moves to both
+        // in one open, and keeps its queue too.
+        let database = TursoMemoryDatabase::new("schema-epoch-format.db");
+        let storage = populate(database.open("scope").unwrap()).await;
+        let previous = cache_core::codec::MIGRATABLE_CACHE_FORMAT_VERSIONS[0];
+        raw_execute(
+            &storage,
+            "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+            vec![text(&format!(
+                "graphql-cache:scope:s{}:v{previous}",
+                cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH - 1
+            ))],
+        );
+        storage.try_close().unwrap();
+        let mut storage = database.open("scope").unwrap();
+        let namespace = driver::query(
+            &storage.connection(),
+            "SELECT value FROM meta WHERE key = 'namespace'",
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(
+            required_text(&namespace[0], 0).unwrap(),
+            cache_namespace("scope")
+        );
+        let adoption = adopt(&storage, OLD, &ProjectionInputs::none());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(
+            storage
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|queued| (queued.id, queued.mutation.request))
+                .collect::<Vec<_>>(),
+            commands
+        );
+        assert!(sources(&mut storage).await.iter().all(is_retired));
+        storage.try_close().unwrap();
+
         // Another scope's namespace under another epoch is still not ours.
         let database = TursoMemoryDatabase::new("schema-epoch-other.db");
         let storage = database.open("scope").unwrap();

@@ -2,8 +2,8 @@ use crate::driver::{self, Db, WalCheckpoint, WalPosition};
 use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
-    MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at, decode_record,
-    decode_record_updates, encode_record, encode_record_updates, namespace_epoch,
+    CACHE_FORMAT_VERSION, MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at,
+    decode_record, decode_record_updates, encode_record, encode_record_updates, namespace_versions,
 };
 use cache_core::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
@@ -3590,16 +3590,21 @@ fn sql_bound(bound: RangeBound, lower: bool) -> (&'static str, i64) {
 /// Queued mutations, optimistic layers, and their projections are kept, which is
 /// why this is not a physical reset. The namespace moves to this build inside the
 /// same transaction, so an interrupted migration leaves the previous state intact
-/// and is retried on the next open.
+/// and is retried on the next open. A file of another schema compatibility
+/// epoch also leaves it there ([`schema_store::leave_epoch`]).
 fn migrate_previous_format(
     connection: &Db,
     scope: &str,
     previous_namespace: &str,
 ) -> Result<(), TursoStorageError> {
-    if !migratable_namespace(scope, previous_namespace) {
+    let Some(format) = migratable_format(scope, previous_namespace) else {
         return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
-    }
+    };
+    let other_epoch = cache_namespace_at(scope, format) != previous_namespace;
     driver::write_transaction(connection, || {
+        if other_epoch {
+            schema_store::mark_unreadable(connection)?;
+        }
         driver::execute(connection, "DELETE FROM search_documents", Vec::new())?;
         // Facts cascade from their index documents.
         driver::execute(connection, "DELETE FROM index_documents", Vec::new())?;
@@ -3615,12 +3620,12 @@ fn migrate_previous_format(
     .map_err(TursoStorageError::initialization)
 }
 
-/// Whether `namespace` is a previous cache format of `scope` that opening
-/// carries forward.
-fn migratable_namespace(scope: &str, namespace: &str) -> bool {
-    MIGRATABLE_CACHE_FORMAT_VERSIONS
-        .iter()
-        .any(|version| cache_namespace_at(scope, *version) == namespace)
+/// The previous cache format `namespace` names, when it is `scope`'s under
+/// any schema compatibility epoch and opening carries it forward.
+fn migratable_format(scope: &str, namespace: &str) -> Option<u32> {
+    namespace_versions(scope, namespace)
+        .map(|(_, format)| format)
+        .filter(|format| MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(format))
 }
 
 /// Rejects a file that another scope wrote, or a cache format this build
@@ -3638,8 +3643,9 @@ fn check_owner(connection: &Db, scope: &str) -> Result<(), TursoStorageError> {
     };
     let namespace = meta_value(namespace, "namespace")?;
     let owned = meta_value(stored_scope, "scope")? == scope
-        && (namespace_epoch(scope, &namespace).is_some()
-            || migratable_namespace(scope, &namespace));
+        && namespace_versions(scope, &namespace).is_some_and(|(_, format)| {
+            format == CACHE_FORMAT_VERSION || MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(&format)
+        });
     owned
         .then_some(())
         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
@@ -3778,7 +3784,10 @@ fn initialize(
         }
     }
     let format_migrated = match previous_namespace {
-        Some(previous_namespace) if namespace_epoch(scope, &previous_namespace).is_some() => {
+        Some(previous_namespace)
+            if namespace_versions(scope, &previous_namespace)
+                .is_some_and(|(_, format)| format == CACHE_FORMAT_VERSION) =>
+        {
             schema_store::leave_epoch(connection, &cache_namespace(scope))?;
             false
         }

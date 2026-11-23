@@ -364,19 +364,26 @@ fn apply(
 /// an interrupted open leaves the old namespace.
 pub(super) fn leave_epoch(connection: &Db, namespace: &str) -> Result<(), TursoStorageError> {
     driver::write_transaction(connection, || {
-        driver::execute(
-            connection,
-            UPSERT,
-            vec![
-                text(UNREADABLE),
-                text(UNREADABLE),
-                Value::from_blob(vec![0]),
-            ],
-        )?;
+        mark_unreadable(connection)?;
         driver::execute(connection, NAMESPACE_UPDATE, vec![text(namespace)])?;
         Ok(())
     })
     .map_err(TursoStorageError::initialization)
+}
+
+/// Overwrites the stored schema with one no build can read, inside the
+/// caller's transaction, so the next adoption resets the cache.
+pub(super) fn mark_unreadable(connection: &Db) -> Result<(), TursoStorageError> {
+    driver::execute(
+        connection,
+        UPSERT,
+        vec![
+            text(UNREADABLE),
+            text(UNREADABLE),
+            Value::from_blob(vec![0]),
+        ],
+    )?;
+    Ok(())
 }
 
 /// Records that a live engine now runs with `merged`, the stored schema with
