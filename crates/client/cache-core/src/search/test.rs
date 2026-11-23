@@ -317,3 +317,85 @@ fn email_projection_matches_subject_and_all_senders_but_never_bodies() {
     );
     assert!(project_search_documents(&key, &record).is_empty());
 }
+
+/// Values a projection could read from a field it does not list: text, a
+/// timestamp, the texts buckets switch on, a flag, a number, and an object a
+/// subtype or sender reads.
+fn probe_values() -> Vec<CacheValue> {
+    vec![
+        CacheValue::String("2030-01-01T00:00:00Z".into()),
+        CacheValue::String("direct_message".into()),
+        CacheValue::String("md".into()),
+        CacheValue::Bool(true),
+        CacheValue::Number(CacheNumber::PosInt(1_900_000_000_000)),
+        CacheValue::Object(
+            [
+                (
+                    "__typename".to_owned(),
+                    CacheValue::String("ProbeTask".into()),
+                ),
+                ("name".to_owned(), CacheValue::String("probe".into())),
+            ]
+            .into_iter()
+            .collect(),
+        ),
+    ]
+}
+
+#[test]
+fn quick_access_reads_only_the_inputs_it_lists() {
+    // A schema change keeps the records of a type that loses a field unless
+    // a derived row reads it: every field of these types the bundled schema
+    // has, and the list leaves out, must not change a row.
+    let schema = crate::meta::bundled_schema_ref();
+    let without_hash = |documents: Vec<SearchDocument>| {
+        documents
+            .into_iter()
+            .map(|document| SearchDocument {
+                source_hash: String::new(),
+                ..document
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        QUICK_ACCESS_INPUTS
+            .iter()
+            .map(|(typename, _)| *typename)
+            .collect::<Vec<_>>(),
+        QUICK_ACCESS_TYPENAMES
+    );
+    for (typename, inputs) in QUICK_ACCESS_INPUTS {
+        let key = EntityKey::entity(typename, &["1"]);
+        let mut base = Record::default();
+        base.fields
+            .insert("__typename".into(), CacheValue::String((*typename).into()));
+        for field in inputs
+            .iter()
+            .filter(|field| !["deletedAt", "hidden"].contains(field))
+        {
+            base.fields.insert(
+                (*field).into(),
+                CacheValue::String("2024-01-01T00:00:00Z".into()),
+            );
+        }
+        let expected = without_hash(project_search_documents(&key, &base));
+        assert_eq!(expected.len(), 1, "{typename} projects a row");
+        let ty = schema.type_meta(typename).expect("a bundled type");
+        for field in ty
+            .fields
+            .iter()
+            .filter(|field| !inputs.contains(&field.name.as_str()))
+        {
+            for probe in probe_values() {
+                let mut record = base.clone();
+                record.fields.insert(field.name.clone(), probe.clone());
+                assert_eq!(
+                    without_hash(project_search_documents(&key, &record)),
+                    expected,
+                    "{typename}.{} = {probe:?} changed the row",
+                    field.name
+                );
+            }
+        }
+    }
+}
