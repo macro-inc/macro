@@ -66,7 +66,6 @@ import {
   HomeEntityDetailRouteView,
   MailRouteView,
   MeetingRouter,
-  NewHomeRouteView,
   NotFound,
   NotificationsCalendarRouteView,
   NotificationsRouteView,
@@ -166,7 +165,6 @@ import {
   loginRoute,
   meetRoute,
   mobileEmailSignupRoute,
-  newHomeRoute,
   notFoundRoute,
   notificationsCalendarRoute,
   notificationsRoute,
@@ -393,7 +391,6 @@ export function appRouteElements(): JSX.Element {
             component={HomeDetailRouteView}
           />
         </Route>
-        <Route definition={newHomeRoute} component={NewHomeRouteView} />
         <Route definition={recentRoute} component={RecentRouteView} />
         <Route definition={forYouRoute} component={ForYouRouteView} />
         <Route definition={activityRoute} component={ActivityRouteView} />

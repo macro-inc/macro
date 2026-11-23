@@ -134,6 +134,14 @@ function legacyLocation(type: string, id: string): SplitLocation | undefined {
   return { route: paneRoute({ id: 'legacy-content', params: { type, id } }) };
 }
 
+/** Retired views' own paths, and the view each now opens. */
+const RETIRED_VIEW_ROUTES = new Map([
+  // The Getting Started checklist.
+  ['getting-started', 'view-home'],
+  // New Home: its Notifications tab is the Notifications view again.
+  ['new-home', 'view-notifications'],
+]);
+
 export function handleLegacySplitPath(
   context: LegacySplitPathContext
 ): SplitLocation[] | undefined {
@@ -143,9 +151,10 @@ export function handleLegacySplitPath(
     return [{ route: paneRoute({ id: 'drive', params: {} }) }];
   }
 
-  // The retired Getting Started checklist's own path.
-  if (segments.length === 1 && segments[0] === 'getting-started') {
-    return [{ route: paneRoute({ id: 'view-home', params: {} }) }];
+  const retiredView =
+    segments.length === 1 ? RETIRED_VIEW_ROUTES.get(segments[0]!) : undefined;
+  if (retiredView) {
+    return [{ route: paneRoute({ id: retiredView, params: {} }) }];
   }
 
   if (segments.length === 1 && segments[0] === 'calendar') {

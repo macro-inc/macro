@@ -19,12 +19,12 @@ import computers from './en/computers';
 import create from './en/create';
 import crm from './en/crm';
 import databaseAnswers from './en/database-answers';
+import dictation from './en/dictation';
 import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
 import githubConnect from './en/github-connect';
-import home from './en/home';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -79,11 +79,11 @@ export default {
   create,
   crm,
   databaseAnswers,
+  dictation,
   emailThread,
   emailViews,
   entityActions,
   entityIcons,
-  home,
   importJobs,
   suggestions,
   localRuntime,

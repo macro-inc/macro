@@ -32,7 +32,7 @@ while the user last pressed or focused something in that pane), so a field,
 an editor, a button, a detail beside the list or an open item without tabs
 keeps normal focus order, at every width and with the sidebar collapsed.
 Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
-number keys; tabs atop a list that is the sidebar (Chat's rail, New Home) are
+number keys; tabs atop a list that is the sidebar (Chat's rail) are
 that pane's top bar. A destination (`ViewSidebar.Item` in a `ViewSidebar.Nav`)
 or a view on the app rail chosen with the mouse leaves the keyboard on the pane
 even though the browser leaves focus on the button, so the next Tab switches
