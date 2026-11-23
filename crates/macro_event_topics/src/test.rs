@@ -26,6 +26,7 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroTeamsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroChannelsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroMessagesTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroChannelTimelineTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroBotsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroCallsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroCallNotificationsTopic::TOPIC_STR));
