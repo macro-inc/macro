@@ -51,7 +51,7 @@ function isSpanningEvent(event: MonthEvent) {
   nextDay.setHours(24, 0, 0, 0);
   return new Date(event.end).getTime() > nextDay.getTime();
 }
-/** Assign shared lanes before clipping, so a multi-day bar never jumps between cells. */
+/** Pack each day's rows, then join adjacent same-lane segments into span bars. */
 export function layoutPhoneMonthWeek<T extends MonthEvent>(
   days: readonly MonthDay<T>[],
   capacity: number
@@ -80,64 +80,34 @@ export function layoutPhoneMonthWeek<T extends MonthEvent>(
       Date.parse(a.event.start) - Date.parse(b.event.start) ||
       a.event.id.localeCompare(b.event.id)
   );
-  const bars: MonthBar<T>[] = [];
-  for (const span of ordered) {
-    // Spans share lanes across the week. Timed rows start below every span in
-    // their own day, rather than backfilling a gap above a continuing span.
-    let lane = 0;
-    if (span.kind === 'span') {
-      while (
-        bars.some(
-          (bar) =>
-            bar.lane === lane &&
-            bar.startColumn < span.endColumn &&
-            span.startColumn < bar.endColumn
-        )
-      )
-        lane += 1;
-    } else {
-      for (const bar of bars) {
-        if (
-          bar.startColumn <= span.startColumn &&
-          bar.endColumn > span.startColumn
-        ) {
-          lane = Math.max(lane, bar.lane + 1);
-        }
-      }
-    }
-    bars.push({ ...span, lane });
-  }
-
-  // Reserve overflow only in the cells that need it. Split a crossing bar
-  // around a reserved slot without moving the rest of that bar to another lane.
-  const limits = days.map((_, column) =>
-    bars.some(
-      (bar) =>
-        bar.startColumn <= column &&
-        bar.endColumn > column &&
-        bar.lane >= capacity
-    )
-      ? capacity - 1
-      : capacity
-  );
   const visible: MonthBar<T>[] = [];
-  for (const bar of bars) {
-    if (bar.lane >= capacity) continue;
-    let startColumn: number | undefined;
-    for (let column = bar.startColumn; column <= bar.endColumn; column += 1) {
-      const shown = column < bar.endColumn && bar.lane < limits[column]!;
-      if (shown && startColumn === undefined) startColumn = column;
-      if (!shown && startColumn !== undefined) {
-        visible.push({ ...bar, startColumn, endColumn: column });
-        startColumn = undefined;
+  const latestSegment = new Map<string, MonthBar<T>>();
+  const hidden = days.map((_, column) => {
+    const events = ordered.filter(
+      (span) => span.startColumn <= column && span.endColumn > column
+    );
+    const limit =
+      events.length > capacity ? Math.max(0, capacity - 1) : events.length;
+
+    // A finished span must not leave a hole or force a false overflow count.
+    // Compact each day first. Keep horizontal spans wherever the neighboring
+    // day has the same row; split only at an actual row change or hidden day.
+    events.slice(0, limit).forEach((span, lane) => {
+      const previous = latestSegment.get(span.event.id);
+      if (previous?.lane === lane && previous.endColumn === column) {
+        previous.endColumn = column + 1;
+        return;
       }
-    }
-  }
-  const hidden = days.map((day, column) => {
-    const shown = visible.filter(
-      (bar) => bar.startColumn <= column && bar.endColumn > column
-    ).length;
-    return Math.max(0, day.events.length - shown);
+      const segment = {
+        ...span,
+        startColumn: column,
+        endColumn: column + 1,
+        lane,
+      };
+      visible.push(segment);
+      latestSegment.set(span.event.id, segment);
+    });
+    return events.length - limit;
   });
   return { days, bars: visible, hidden };
 }

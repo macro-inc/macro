@@ -54,7 +54,8 @@ creation lane is reserved. The drawer's Agenda, Day, 3 days, Week, and Month row
 are text-only and retain their selected state.
 Phone Month uses a Sunday-start five/six-week grid. Weekday letters sit above
 its card; today has an accent circle, other-month dates are tertiary, and their
-events are dimmed. All-day and multi-day bars keep shared horizontal spans.
+events are dimmed. All-day and multi-day segments join across adjacent cells
+while they share a row; continuing events move up when an earlier span ends.
 Timed events stack vertically beneath them in calendar color, one truncated
 line per event. Complete rows fit the measured cell height; when events overflow,
 the last available row becomes `+N`, counting all hidden events. Hiding weekends

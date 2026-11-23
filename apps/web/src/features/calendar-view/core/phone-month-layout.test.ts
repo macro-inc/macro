@@ -1,4 +1,5 @@
 import { agendaEventsByDay } from '@app/features/calendar/primitives/agenda-window';
+import { addDays, format } from 'date-fns';
 import { describe, expect, it } from 'vitest';
 import {
   layoutPhoneMonthWeek,
@@ -74,6 +75,50 @@ describe('phone Month geometry', () => {
     }
   );
 
+  it('keeps every day packed and counted across overlapping span chains', () => {
+    const start = new Date(2026, 10, 8);
+    const spans = Array.from({ length: 5 }, (_, index) => ({
+      id: `span-${index}`,
+      start: format(addDays(start, index), 'yyyy-MM-dd'),
+      end: format(addDays(start, index + 3), 'yyyy-MM-dd'),
+      allDay: true,
+      isCancelled: false,
+    }));
+    const timed = Array.from({ length: 7 }, (_, index) => ({
+      id: `timed-${index}`,
+      start: `${format(addDays(start, index), 'yyyy-MM-dd')}T09:00:00`,
+      end: `${format(addDays(start, index), 'yyyy-MM-dd')}T10:00:00`,
+      allDay: false,
+      isCancelled: false,
+    }));
+    const days = agendaEventsByDay([...spans, ...timed], start, 7);
+    for (let capacity = 0; capacity <= 6; capacity += 1) {
+      const week = layoutPhoneMonthWeek(days, capacity);
+      days.forEach((day, column) => {
+        const visible = week.bars.filter(
+          (bar) => bar.startColumn <= column && bar.endColumn > column
+        );
+        const expected =
+          day.events.length > capacity
+            ? Math.max(0, capacity - 1)
+            : day.events.length;
+        expect(visible).toHaveLength(expected);
+        expect(visible.map((bar) => bar.lane).sort((a, b) => a - b)).toEqual(
+          Array.from({ length: expected }, (_, lane) => lane)
+        );
+        expect(week.hidden[column]).toBe(day.events.length - expected);
+        const timedRow = visible.find((bar) => bar.kind === 'timed');
+        if (timedRow) {
+          expect(
+            visible
+              .filter((bar) => bar.kind === 'span')
+              .every((bar) => bar.lane < timedRow.lane)
+          ).toBe(true);
+        }
+      });
+    }
+  });
+
   it('stacks timed events chronologically below every span in their day', () => {
     const events = [
       {
@@ -109,18 +154,113 @@ describe('phone Month geometry', () => {
       agendaEventsByDay(events, new Date(2026, 10, 8), 7),
       4
     );
-    expect(week.bars.filter((bar) => bar.startColumn === 2)).toMatchObject([
-      { event: { id: 'early' }, lane: 2, endColumn: 3, kind: 'timed' },
-      { event: { id: 'late' }, lane: 3, endColumn: 3, kind: 'timed' },
+    expect(week.bars.filter((bar) => bar.kind === 'timed')).toMatchObject([
+      { event: { id: 'early' }, lane: 1, endColumn: 3, kind: 'timed' },
+      { event: { id: 'late' }, lane: 2, endColumn: 3, kind: 'timed' },
     ]);
     expect(
-      week.bars.find((bar) => bar.event.id === 'continuing')
-    ).toMatchObject({
-      startColumn: 1,
-      endColumn: 3,
+      week.bars.filter((bar) => bar.event.id === 'continuing')
+    ).toMatchObject([
+      { startColumn: 1, endColumn: 2, lane: 1, kind: 'span' },
+      { startColumn: 2, endColumn: 3, lane: 0, kind: 'span' },
+    ]);
+  });
+
+  it('keeps fitting events visible after an earlier span ends', () => {
+    const events = [
+      {
+        id: 'first',
+        start: '2026-11-09',
+        end: '2026-11-11',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'second',
+        start: '2026-11-10',
+        end: '2026-11-12',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'early',
+        start: '2026-11-09T10:00:00',
+        end: '2026-11-09T11:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+      {
+        id: 'late',
+        start: '2026-11-11T10:00:00',
+        end: '2026-11-11T11:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+    ];
+    const week = layoutPhoneMonthWeek(
+      agendaEventsByDay(events, new Date(2026, 10, 8), 7),
+      2
+    );
+    expect(week.hidden).toEqual([0, 0, 0, 0, 0, 0, 0]);
+    for (const column of [1, 2, 3]) {
+      const visible = week.bars.filter(
+        (bar) => bar.startColumn <= column && bar.endColumn > column
+      );
+      expect(visible.map((bar) => bar.lane).sort()).toEqual([0, 1]);
+    }
+    expect(week.bars.filter((bar) => bar.event.id === 'first')).toMatchObject([
+      { startColumn: 1, endColumn: 3, lane: 0 },
+    ]);
+    expect(week.bars.filter((bar) => bar.event.id === 'second')).toMatchObject([
+      { startColumn: 2, endColumn: 3, lane: 1 },
+      { startColumn: 3, endColumn: 4, lane: 0 },
+    ]);
+    expect(week.bars.find((bar) => bar.event.id === 'late')).toMatchObject({
+      startColumn: 3,
+      endColumn: 4,
       lane: 1,
-      kind: 'span',
     });
+  });
+
+  it('counts overflow from actual events after compacting a continuing span', () => {
+    const events = [
+      {
+        id: 'first',
+        start: '2026-11-09',
+        end: '2026-11-11',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'second',
+        start: '2026-11-10',
+        end: '2026-11-12',
+        allDay: true,
+        isCancelled: false,
+      },
+      {
+        id: 'early',
+        start: '2026-11-11T09:00:00',
+        end: '2026-11-11T10:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+      {
+        id: 'late',
+        start: '2026-11-11T10:00:00',
+        end: '2026-11-11T11:00:00',
+        allDay: false,
+        isCancelled: false,
+      },
+    ];
+    const week = layoutPhoneMonthWeek(
+      agendaEventsByDay(events, new Date(2026, 10, 8), 7),
+      2
+    );
+    expect(week.hidden).toEqual([0, 0, 0, 2, 0, 0, 0]);
+    expect(
+      week.bars.filter((bar) => bar.startColumn <= 3 && bar.endColumn > 3)
+    ).toMatchObject([{ event: { id: 'second' }, lane: 0 }]);
   });
 
   it('retains timed overnight spans ahead of single-day timed events', () => {
