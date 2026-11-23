@@ -242,7 +242,8 @@ fn step_phases(older: &Path, live: &Path) -> Vec<(String, Duration)> {
 }
 
 /// A connection to `path` that runs no open checks or upgrades, set up as a
-/// native open sets its own: sorts in memory, under the native page cache.
+/// native open sets its own: foreign keys on, so deletes cascade, and sorts
+/// in memory, under the native page cache.
 fn native_connection(path: &Path) -> Db {
     let io: Arc<dyn IO> = Arc::new(PlatformIO::new().unwrap());
     let database = Database::open(
@@ -256,6 +257,7 @@ fn native_connection(path: &Path) -> Db {
     connection
         .execute(format!("PRAGMA cache_size = {NATIVE_PAGE_CACHE_PAGES}"))
         .unwrap();
+    connection.execute("PRAGMA foreign_keys = ON").unwrap();
     Db::uncached(connection)
 }
 
