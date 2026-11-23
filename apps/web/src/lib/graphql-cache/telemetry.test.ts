@@ -146,6 +146,28 @@ describe('cache telemetry privacy contract', () => {
     expect(events[1]).not.toHaveProperty('schemaResetReason');
   });
 
+  it('exports the reset of a schema change whose own tier failed', () => {
+    const events: CacheTelemetryEnvelope[] = [];
+    const reporter = new CacheTelemetryReporter(
+      browserCacheTelemetryContext('treatment'),
+      { emit: (event) => events.push(event) }
+    );
+    reporter.emit({
+      name: 'graphql_cache.schema_init',
+      operationCategory: 'initialization',
+      outcome: 'success',
+      schemaChange: 'reset',
+      schemaResetReason: 'failed',
+    });
+
+    expect(events[0]).toEqual(
+      expect.objectContaining({
+        schemaChange: 'reset',
+        schemaResetReason: 'failed',
+      })
+    );
+  });
+
   it('exports a slow request with its fixed kind and wait, and drops an unknown kind', () => {
     const events: CacheTelemetryEnvelope[] = [];
     const reporter = new CacheTelemetryReporter(

@@ -93,6 +93,7 @@ export const CACHE_SCHEMA_RESET_REASONS = [
   'unreadable',
   'roots',
   'invalid',
+  'failed',
 ] as const;
 export type CacheSchemaResetReason =
   (typeof CACHE_SCHEMA_RESET_REASONS)[number];
