@@ -2,7 +2,10 @@ use super::*;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// Exercises the actual pinned updater's HTTP, version and signature handling.
-async fn check_fixture(version: &str, corrupt: bool) -> (tauri_plugin_updater::Result<()>, Status) {
+async fn check_fixture(
+    version: &str,
+    corrupt: bool,
+) -> (Result<(), CheckError>, Status, Vec<Outcome>) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     let manifest = serde_json::json!({
@@ -46,20 +49,26 @@ async fn check_fixture(version: &str, corrupt: bool) -> (tauri_plugin_updater::R
         .plugin(tauri_plugin_updater::Builder::new().build())
         .build(context)
         .unwrap();
-    let coordinator = Coordinator {
-        state: Mutex::new(State::new(true)),
-        check: Notify::new(),
-        restart: Mutex::new(false),
-    };
-    let result = check(app.handle(), &coordinator).await;
+    let coordinator = Coordinator::new(true, "1.0.0".into());
+    let result = check(app.handle(), &coordinator, &Timing::start()).await;
     let status = coordinator.state.lock().unwrap().status.clone();
+    let reports = coordinator.reports.lock().unwrap().take();
+    assert!(
+        reports
+            .iter()
+            .all(|report| report.current_version == "1.0.0")
+    );
     server.abort();
-    (result, status)
+    (
+        result,
+        status,
+        reports.into_iter().map(|report| report.outcome).collect(),
+    )
 }
 
 #[tokio::test]
 async fn a_verified_download_becomes_ready() {
-    let (result, status) = check_fixture("99.0.0", false).await;
+    let (result, status, outcomes) = check_fixture("99.0.0", false).await;
     result.unwrap();
     assert_eq!(
         status,
@@ -67,18 +76,54 @@ async fn a_verified_download_becomes_ready() {
             version: "99.0.0".into()
         }
     );
+    let [
+        found,
+        Outcome::Downloaded {
+            target_version,
+            download_bytes,
+            ..
+        },
+    ] = outcomes.as_slice()
+    else {
+        panic!("unexpected outcomes {outcomes:?}");
+    };
+    assert_eq!(
+        found,
+        &Outcome::UpdateFound {
+            target_version: "99.0.0".into()
+        }
+    );
+    assert_eq!(target_version, "99.0.0");
+    assert_eq!(
+        *download_bytes,
+        include_str!("test/fixtures/update.txt").len() as u64
+    );
 }
 
 #[tokio::test]
 async fn tampered_download_never_becomes_ready() {
-    let (result, status) = check_fixture("99.0.0", true).await;
-    assert!(result.is_err());
+    let (result, status, outcomes) = check_fixture("99.0.0", true).await;
     assert!(!matches!(status, Status::Ready { .. }));
+    assert_eq!(
+        outcomes,
+        [Outcome::UpdateFound {
+            target_version: "99.0.0".into()
+        }]
+    );
+    assert_eq!(
+        result.unwrap_err().outcome(3),
+        Outcome::DownloadFailed {
+            target_version: "99.0.0".into(),
+            failure: Failure::new(FailureKind::Signature),
+            consecutive_failures: 3,
+        }
+    );
 }
 
 #[tokio::test]
 async fn older_releases_are_not_downloaded() {
-    let (result, status) = check_fixture("0.0.0", false).await;
+    let (result, status, outcomes) = check_fixture("0.0.0", false).await;
     result.unwrap();
     assert_eq!(status, Status::Idle);
+    assert_eq!(outcomes, [Outcome::UpToDate]);
 }
