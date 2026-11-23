@@ -645,6 +645,12 @@ live in Doppler `macos-release/prd`, read using the existing
 committed. Keep this private key: changing the embedded key requires a transition
 release signed with the old key.
 
+The macOS feed entry carries `minimumSystemVersion`, the minimum from
+`../desktop-cef/tauri.conf.json` (the app's `LSMinimumSystemVersion`; see
+`../desktop-cef/AGENTS.md`). An installed app on an older macOS treats that
+release as no update, since macOS would refuse to open it after installation.
+Apps released before that check don't read the field.
+
 Versioned GitHub Release assets are immutable. Publication retries reuse and
 verify any already-published signatures, since newly generated signatures include
 the signing time. The stable manifest is uploaded last to the dedicated
