@@ -243,6 +243,49 @@ fn a_swap_a_crash_interrupted_reopens_the_migrated_database() {
     });
 }
 
+/// A file at `path` with one queued write, and a copy of it where a swap a
+/// crash stopped after the compacted file was in place leaves the original.
+#[cfg(not(target_arch = "wasm32"))]
+async fn a_swap_finished_but_for_its_cleanup(path: &Path) -> (TursoFileDatabase, PathBuf) {
+    let database = TursoFileDatabase::new(path).unwrap();
+    let mut storage = database.open("scope").unwrap();
+    storage.enqueue_mutation(queued("Pending")).await.unwrap();
+    storage.try_close().unwrap();
+    let backup_path = path.with_extension("backup");
+    std::fs::copy(path, &backup_path).unwrap();
+    (database, backup_path)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn an_open_after_a_finished_swap_deletes_the_original() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let (database, backup_path) = a_swap_finished_but_for_its_cleanup(&path).await;
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 1);
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn a_physical_reset_leaves_no_original_to_reopen() {
+    block_on(async {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("cache.turso");
+        let (database, backup_path) = a_swap_finished_but_for_its_cleanup(&path).await;
+        database.physical_reset().unwrap();
+        // The queued write the original holds may have settled since.
+        let storage = database.open("scope").unwrap();
+        assert!(storage.load_mutation_queue().await.unwrap().is_empty());
+        storage.try_close().unwrap();
+        assert!(!backup_path.exists());
+    });
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 #[test]
 fn failed_swap_keeps_the_migrated_database() {

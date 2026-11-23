@@ -721,14 +721,19 @@ impl TursoFileDatabase {
         Ok(reopened)
     }
 
-    /// Puts back the original [`Self::install_compacted`] moved aside when a
-    /// crash stopped it before the compacted file was in place. The original
-    /// is the migrated database; without it the open would start an empty
-    /// cache and lose the queued writes the migration kept.
+    /// Finishes a swap [`Self::install_compacted`] left when a crash stopped
+    /// it. Before the compacted file was in place, it puts back the original:
+    /// the migrated database, without which the open would start an empty
+    /// cache and lose the queued writes the migration kept. After, it deletes
+    /// the original, which a later physical reset would otherwise reopen,
+    /// with writes that have settled since queued again.
     fn recover_interrupted_swap(&self) -> Result<(), TursoStorageError> {
         let backup_path = self.path.with_extension("backup");
-        if self.path.exists() || !backup_path.is_file() {
+        if !backup_path.is_file() {
             return Ok(());
+        }
+        if self.path.exists() {
+            return remove_native_file(&backup_path);
         }
         std::fs::rename(&backup_path, &self.path)
             .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Io))
@@ -788,8 +793,11 @@ impl TursoFileDatabase {
         }
     }
 
-    /// Deletes the native main and WAL files after all connections are closed.
+    /// Deletes the native main and WAL files after all connections are
+    /// closed, and any original a compaction swap left aside, so the next
+    /// open starts empty.
     pub fn physical_reset(&self) -> Result<(), TursoStorageError> {
+        remove_native_file(&self.path.with_extension("backup"))?;
         remove_native_file(&self.path)?;
         let wal_path = PathBuf::from(format!("{}-wal", self.turso_path));
         remove_native_file(&wal_path)
