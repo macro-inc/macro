@@ -239,13 +239,16 @@ new fields needs the regenerated SDL in the same change.
   rejects the whole document.
 - Client caches keep their records across a schema change they can read
   ([schema changes](../../crates/client/README.md#schema-changes)). Additions,
-  and removals of fields no local projection reads, cost nothing. A changed
-  field shape or identity, or a removed field a projection reads, drops that
-  type's cached records on each client's next open, and they refetch; a
-  renamed operation root drops every record. Bump
-  `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in `crates/client/cache-schema/src/lib.rs`,
-  which also drops every record, only for a change the schema cannot show,
-  such as a removed enum value cached records may hold. Prefer a new field.
+  and removals of fields no local projection reads, cost nothing. A narrowed
+  or retyped field, a changed identity, or a removed field a projection reads
+  drops that type's cached records on each client's next open, and they
+  refetch; a renamed operation root drops every record. Native apps built
+  before clients stored their schema refuse such a change and run without the
+  cache until they update. Bump `CACHE_SCHEMA_COMPATIBILITY_EPOCH` in
+  `crates/client/cache-schema/src/lib.rs`, which also drops every record, only
+  for a change the schema cannot show, such as a removed enum value cached
+  records may hold; browsers then start a new cache file, losing writes still
+  queued. Prefer a new field.
 
 ## Verify locally
 

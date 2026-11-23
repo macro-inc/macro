@@ -340,7 +340,9 @@ fn check_version(artifact: &SchemaArtifact) -> Result<(), SchemaError> {
 /// Bump when existing normalized records become unsafe in a way the schema
 /// does not show: a change to how the cache derives records from the schema,
 /// or a removed enum value records may hold. A bump makes every stored cache
-/// schema unreadable, so every cache drops its records on its next open.
+/// schema unreadable, so every cache drops its records on its next open. A
+/// native file keeps its queued writes; a browser database's name holds the
+/// epoch, so the browser opens a new file.
 ///
 /// A GraphQL field or type change needs no bump: opening a cache with another
 /// schema drops only the records of the types whose stored values changed

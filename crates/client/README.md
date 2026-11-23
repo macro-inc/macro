@@ -145,19 +145,26 @@ type:
   When documents keyed by other records read a changed type, every document is
   marked incomplete.
 - **Reset**: an operation root was renamed, the stored schema cannot be read
-  (another compatibility epoch or artifact format), or the schema to store
-  would not validate. Every refetchable row goes.
+  (another compatibility epoch or artifact format), the schema to store would
+  not validate, or applying the Types tier failed and rolled back. Every
+  refetchable row goes.
 
 Every tier keeps the cache's identity, authority and queued mutations. Types
 and Reset drop the storage generation record, so the backfill starts over and
 refetches what went. A queued write's optimistic overlay that no longer fits is retired:
-the mutation is still sent, but its overlay adds no records. The stored schema
+the mutation is still sent, but its overlay adds no records. Queued projections
+of the records that went go with them, so no optimistic list entry outlives its
+record. The stored schema
 is the incoming one plus the definitions it removed that kept records may still
 hold, so a later build that adds a field back with another shape drops the old
 values instead of reading them as the new type. A cache stored before schema 13
 is read as written under `cache-core/src/schema_change/unrecorded.schema`, the
 schema the last builds without a stored copy shipped. It does not change once
-it ships, and an epoch bump retires it. A removed enum value or a changed
+it ships, and an epoch bump retires it. An older native build's `schema.json`
+names what wrote its cache instead, and one that cannot be read resets it. An
+epoch bump makes every stored schema unreadable: a native file moves to the new
+namespace and resets on adoption, keeping its queued writes, while a browser
+database's name holds the epoch, so the browser opens a new, empty file. A removed enum value or a changed
 argument or default is not visible in the schema and leaves stale values, as a
 server change without a schema change would.
 
@@ -169,13 +176,15 @@ is free; removing one a projection reads changes its type. A new store of rows
 derived from records lists its tables in `DERIVED_STORES` and the fields it
 reads in that derived list.
 
-Natively, `open_cache` adopts the bundle's schema on every open, and a cache
-that cannot take it is replaced and opened empty; `graphql_cache.native.adopt_schema`
+Natively, `open_cache` adopts the bundle's schema on every open, and only a
+cache that cannot even reset is replaced and opened empty; `graphql_cache.native.adopt_schema`
 records the tier, counts and duration. The browser worker adopts its built-in
 schema on open and records the same as `cache.schema.*` attributes on the open
-span. Types and Reset delete rows one at a time, so they cost about in
-proportion to the rows dropped; a type holding more than half of the documents
-instead keeps the other documents' facts and recreates the fact tables. On a
+span. Types deletes the changed types' rows, so it costs about in proportion
+to the rows dropped; a type holding more than half of the documents instead
+keeps the other documents' facts and recreates the fact tables. Reset drops and
+recreates every table records feed, which frees their pages without rewriting
+them. On a
 320 MB cache-bench database (256k records), a compatible open took 7–9 ms
 natively and 15–72 ms in browsers, a Types change 0.5–4.2 s natively and
 0.9–6.3 s in browsers, and a Reset 2.0–2.7 s natively and 0.3–1.6 s in browsers.
