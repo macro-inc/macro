@@ -8,6 +8,10 @@
  *   cached lists it belongs to. The server creates it under that id and a
  *   replay answers with it. The add resolves once the server has it, so the
  *   id a caller applies to an entity always exists there.
+ * - The server orders options of equal display order by value under the
+ *   database's collation, which the cache cannot reproduce. Adding an option,
+ *   or changing its value or order, reloads the lists holding them once the
+ *   server has it, as the invalidation after a REST write did.
  * - Creating a definition, provisioning a tag set, and sharing or replacing a
  *   tag are answered by the server (it assigns ids and owners, and decides
  *   name collisions); the lists that hold them reload after it answers.
@@ -16,6 +20,7 @@
  *   the cache queues shows at once and the queue sends it.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   executeOptimisticMutation,
   type OptimisticUpdate,
@@ -54,6 +59,7 @@ import {
 } from '@service-storage/graphql-soup';
 import { onlineManager } from '@tanstack/solid-query';
 import type { AnyVariables, OperationResult } from '@urql/core';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import { queryAccountSession } from '../../auth/account-scope';
 import { queryClient } from '../../client';
@@ -111,6 +117,34 @@ export function whenOnline(): Promise<void> {
   });
 }
 
+type Settlements = ReturnType<typeof observePropertyMutationSettlements>;
+
+type SettleOptions = {
+  waitForCommit: boolean;
+  serverAnswered: boolean;
+  onLateFailure?: (error: Error) => void;
+  /** Runs once the server has the write, whether it went at once or queued. */
+  onCommit?: () => void;
+};
+
+/** Waits for a queued write's commit in the background. */
+async function observeCommit(
+  settlements: Settlements,
+  transactionId: string,
+  options: SettleOptions
+): Promise<void> {
+  try {
+    await settlements.waitForCommit(transactionId);
+    options.onCommit?.();
+  } catch (error: unknown) {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    console.error('Queued property catalog write failed', failure);
+    options.onLateFailure?.(failure);
+  } finally {
+    settlements.dispose();
+  }
+}
+
 type Settled<TData> =
   | { kind: 'committed'; data: TData | undefined; waited?: true }
   | { kind: 'queued' };
@@ -125,11 +159,7 @@ type Settled<TData> =
  */
 async function settle<TData, TVariables extends AnyVariables>(
   send: () => Promise<OperationResult<TData, TVariables>>,
-  options: {
-    waitForCommit: boolean;
-    serverAnswered: boolean;
-    onLateFailure?: (error: Error) => void;
-  }
+  options: SettleOptions
 ): Promise<Settled<TData>> {
   // Context does not survive an await in the browser.
   const trace = Telemetry.captureContext();
@@ -152,24 +182,21 @@ async function settle<TData, TVariables extends AnyVariables>(
     if (disposition?.kind === 'queued') {
       if (options.waitForCommit) {
         await settlements.waitForCommit(disposition.transactionId);
+        options.onCommit?.();
         return { kind: 'committed', data: undefined, waited: true };
       }
       observing = true;
-      settlements
-        .waitForCommit(disposition.transactionId)
-        .catch((error: unknown) => {
-          const failure =
-            error instanceof Error ? error : new Error(String(error));
-          console.error('Queued property catalog write failed', failure);
-          options.onLateFailure?.(failure);
-        })
-        .finally(() => settlements.dispose());
+      fireAndForget(
+        observeCommit(settlements, disposition.transactionId, options),
+        'property-catalog'
+      );
       return { kind: 'queued' };
     }
     if (result.error) throw errorOf(result);
     if (disposition?.kind === 'permanently-failed') {
       throw new CatalogMutationError(disposition.error.message);
     }
+    options.onCommit?.();
     return { kind: 'committed', data: result.data };
   } finally {
     if (!observing) settlements.dispose();
@@ -181,6 +208,37 @@ function noData(operation: string): never {
 }
 
 const usingCache = () => getGraphqlSoupCacheHost() !== undefined;
+
+/** Mounted lists that hold a definition's options. */
+function holdsOptionsOf(propertyDefinitionId: string) {
+  return (reader: CatalogReader) =>
+    match(reader)
+      .with(
+        { kind: 'options' },
+        (options) => options.propertyDefinitionId() === propertyDefinitionId
+      )
+      .with(
+        { kind: 'definitions' },
+        (definitions) =>
+          definitions.withOptions &&
+          definitions.definitionIds().includes(propertyDefinitionId)
+      )
+      .with({ kind: 'tags' }, (tags) =>
+        tags
+          .definitions()
+          .some((set) => set.definitionId === propertyDefinitionId)
+      )
+      .exhaustive();
+}
+
+/** Puts a definition's options back in the server's order (see the header). */
+function reorderOptionsOf(propertyDefinitionId: string) {
+  if (usingCache())
+    refreshCatalogReadersInBackground(
+      undefined,
+      holdsOptionsOf(propertyDefinitionId)
+    );
+}
 
 // ---------------------------------------------------------------------------
 // Predicted by resolvers
@@ -209,7 +267,14 @@ export async function updatePropertyOption(
             },
           })
           .toPromise(),
-      { waitForCommit: false, serverAnswered: !usingCache(), onLateFailure }
+      {
+        waitForCommit: false,
+        serverAnswered: !usingCache(),
+        onLateFailure,
+        ...(body.value != null || body.display_order != null
+          ? { onCommit: () => reorderOptionsOf(propertyDefinitionId) }
+          : {}),
+      }
     );
     span.setAttr('property.outcome', outcome.kind);
   });
@@ -361,7 +426,11 @@ export async function addPropertyOption(
               }
             ).toPromise()
           : client.mutation(AddPropertyOptionDocument, { input }).toPromise(),
-      { waitForCommit: true, serverAnswered: !host }
+      {
+        waitForCommit: true,
+        serverAnswered: !host,
+        onCommit: () => reorderOptionsOf(propertyDefinitionId),
+      }
     );
     span.setAttr(
       'property.outcome',

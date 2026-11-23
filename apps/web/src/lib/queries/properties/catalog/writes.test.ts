@@ -1,6 +1,7 @@
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import { onlineManager } from '@tanstack/solid-query';
 import { CombinedError, type OperationResult } from '@urql/core';
+import { createRoot } from 'solid-js';
 import { version as uuidVersion, validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,11 +53,13 @@ vi.mock('../../auth/account-scope', () => ({
 }));
 
 import { isCatalogErrorCode } from './errors';
+import { registerCatalogReader } from './readers';
 import {
   addPropertyOption,
   createPropertyDefinition,
   deletePropertyOption,
   ensureTagSet,
+  updatePropertyOption,
 } from './writes';
 
 const TAG = {
@@ -274,5 +277,90 @@ describe('provisioning a tag set', () => {
     };
     const ensured = await ensureTagSet('team').catch((error: unknown) => error);
     expect(ensured).toBeInstanceOf(Error);
+  });
+});
+
+describe('option order', () => {
+  /** Mounted readers: which of them a write reloads. */
+  function mountedReaders() {
+    const refreshed: string[] = [];
+    const refresh = (name: string) => async () => {
+      refreshed.push(name);
+    };
+    const dispose = createRoot((dispose) => {
+      registerCatalogReader({
+        kind: 'options',
+        propertyDefinitionId: () => 'def-1',
+        refresh: refresh('options of def-1'),
+      });
+      registerCatalogReader({
+        kind: 'options',
+        propertyDefinitionId: () => 'def-2',
+        refresh: refresh('options of def-2'),
+      });
+      registerCatalogReader({
+        kind: 'definitions',
+        variables: () => ({ scope: 'ALL' }),
+        withOptions: true,
+        definitionIds: () => ['def-1'],
+        refresh: refresh('definitions with options'),
+      });
+      registerCatalogReader({
+        kind: 'definitions',
+        variables: () => ({ scope: 'ALL' }),
+        withOptions: false,
+        definitionIds: () => ['def-1'],
+        refresh: refresh('definitions'),
+      });
+      registerCatalogReader({
+        kind: 'tags',
+        definitions: () => [{ scope: 'USER', definitionId: 'def-1' }],
+        refresh: refresh('tags'),
+      });
+      return dispose;
+    });
+    return { refreshed, dispose };
+  }
+  const HOLDING_DEF_1 = [
+    'options of def-1',
+    'definitions with options',
+    'tags',
+  ];
+
+  it('reloads the lists holding the options once an add commits', async () => {
+    const readers = mountedReaders();
+    try {
+      const settle = queueingHost();
+      const added = addPropertyOption('def-1', TAG);
+      await vi.waitFor(() => expect(soup.optimistic).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(readers.refreshed).toEqual([]);
+      settle({ transactionId: 'tx-1', status: 'committed' });
+      await added;
+      expect(readers.refreshed.sort()).toEqual([...HOLDING_DEF_1].sort());
+    } finally {
+      readers.dispose();
+    }
+  });
+
+  it('reloads them once a rename commits, not for a colour change', async () => {
+    for (const [body, reloads] of [
+      [{ value: 'Renamed' }, HOLDING_DEF_1],
+      [{ color: '#0f0' }, []],
+    ] as const) {
+      const readers = mountedReaders();
+      try {
+        const settle = queueingHost();
+        soup.result = { queued: 'tx-1' } as Partial<OperationResult>;
+        await updatePropertyOption('def-1', 'opt-1', body, () => {});
+        expect(readers.refreshed).toEqual([]);
+        settle({ transactionId: 'tx-1', status: 'committed' });
+        await vi.waitFor(() =>
+          expect(readers.refreshed.sort()).toEqual([...reloads].sort())
+        );
+      } finally {
+        readers.dispose();
+      }
+    }
   });
 });
