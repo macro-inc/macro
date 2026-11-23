@@ -140,6 +140,12 @@ pub const WEB_CI_CACHE_TAG: &str = "web-ci";
 /// profile's default volume, where other jobs would overwrite that store.
 pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 
+/// Namespace cache tag and remote sccache for the desktop app check
+/// (`desktop_check.rs`). Its own volume, because it holds the Tauri Linux
+/// libraries no other job needs, and PR jobs write it, so no release build may
+/// share it.
+pub const DESKTOP_CI_CACHE: &str = "desktop-ci";
+
 /// Namespace remote sccache used when the web checks compile Rust API schema
 /// generators. Kept separate from [`CI_SCCACHE_NAME`] because these jobs have
 /// a different workload and runner profile.

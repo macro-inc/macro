@@ -62,6 +62,7 @@ mod deploy_service_generic;
 mod deploy_sync_service;
 mod deploy_web_app;
 mod deploy_website;
+mod desktop_check;
 mod desktop_qa_macos;
 mod desktop_release_watch;
 mod desktop_windows;
@@ -484,6 +485,11 @@ pub(crate) const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_tauri_lockfiles",
         file_name: "check_tauri_lockfiles.yml",
         render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
+    },
+    WorkflowFile {
+        slug: "desktop_check",
+        file_name: "desktop_check.yml",
+        render_yaml: || render_gh_workflow(desktop_check::desktop_check)(),
     },
     WorkflowFile {
         slug: "check_generated",

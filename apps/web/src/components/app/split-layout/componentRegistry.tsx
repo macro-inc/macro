@@ -311,6 +311,9 @@ registerComponent(
 registerComponent('routines', () => <AgentsRouteView />, {
   splitPanelLayout: 'composable',
 });
+registerComponent('agents-archive', () => <AgentsRouteView />, {
+  splitPanelLayout: 'composable',
+});
 registerComponent('agents', () => <AgentsRouteView />, {
   splitPanelLayout: 'composable',
 });

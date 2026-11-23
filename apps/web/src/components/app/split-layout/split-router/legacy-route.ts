@@ -1,4 +1,10 @@
 import {
+  AGENTS_ARCHIVE_ROUTE_ID,
+  AGENTS_ARCHIVE_VIEW_ID,
+  agentsArchiveContent,
+  agentsArchiveLocation,
+} from '@app/features/agents-view/archive-navigation';
+import {
   agentsRouteFromSegments,
   agentsRouteSegments,
 } from '@app/features/agents-view/core/route';
@@ -232,6 +238,12 @@ export function splitLocationFromContent(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  if (
+    content.type === 'component' &&
+    (content.id === AGENTS_ARCHIVE_VIEW_ID ||
+      (content.id === 'agents' && content.params?.agentPage === 'archived'))
+  )
+    return agentsArchiveLocation();
   // Persisted panes can still contain the old block discriminator.
   if (['routine', 'automation'].includes(content.type))
     return routineLocation(content.id);
@@ -347,6 +359,14 @@ export function resolveContentLocation(
   routes: SplitRoutesManifest,
   content: SplitContent
 ): SplitLocation {
+  // Old in-place Archived entries can carry the old Agents route metadata.
+  // Upgrade the route before that metadata can keep the archive at /agents.
+  if (
+    content.type === 'component' &&
+    content.id === 'agents' &&
+    content.params?.agentPage === 'archived'
+  )
+    return agentsArchiveLocation();
   let metadata: Record<string, unknown> | undefined;
   if (isRecord(content.entryMetadata)) metadata = content.entryMetadata;
 
@@ -410,6 +430,7 @@ export function splitContentFromLocation(
     return { type: 'component', id: NOT_FOUND_ROUTE_ID };
   }
 
+  if (root.id === AGENTS_ARCHIVE_ROUTE_ID) return agentsArchiveContent();
   if (root.id === ROUTINES_ROUTE_ID) return routineContent();
   if (root.id === ROUTINE_CREATE_ROUTE_ID) return routineContent('new');
   if (root.id === ROUTINE_DETAIL_ROUTE_ID) {

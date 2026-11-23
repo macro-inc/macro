@@ -4598,6 +4598,33 @@ impl From<CallCheckTauriLockfiles> for CallJob {
     }
 }
 
+/// Calls `./.github/workflows/desktop_check.yml` (desktop check), defined in `workflows/desktop_check.rs`.
+#[must_use]
+pub struct CallDesktopCheck(CallJob);
+
+impl CallDesktopCheck {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/desktop_check.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallDesktopCheck> for CallJob {
+    fn from(call: CallDesktopCheck) -> Self {
+        call.0
+    }
+}
+
 /// Calls `./.github/workflows/check_generated.yml` (check generated workflows), defined in `workflows/check_generated.rs`.
 #[must_use]
 pub struct CallCheckGenerated(CallJob);

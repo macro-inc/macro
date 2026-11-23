@@ -173,6 +173,13 @@ fn publish_desktop_job() -> Job {
                 .add_env(("RELEASE_TAG", steps::ARTIFACT_METADATA.outputs.tag.read()))
                 .add_env(("RELEASE_REPOSITORY", github().repository())),
         )
+        .add_step(
+            Step::new("Publish stable download links")
+                .run(include_str!("scripts/publish_desktop_download_links.sh"))
+                .shell("bash")
+                .add_env(("GH_TOKEN", github().token()))
+                .add_env(("RELEASE_REPOSITORY", github().repository())),
+        )
     // No Teardown Nix here. This job runs on a hosted runner with no /nix cache
     // volume to unmount, where the teardown's `fuser -km /nix` kills the runner
     // process itself — the job dies with "lost communication with the server"

@@ -1,18 +1,15 @@
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { FeaturePage } from '../../features/marketing/components/FeaturePage';
 import {
   ANDROID_PLAY_STORE_URL,
+  DESKTOP_DOWNLOAD_URLS,
   DESKTOP_PLATFORM_DETAILS,
   DESKTOP_RELEASE_URL,
-  type DesktopDownloadUrls,
   desktopPlatformOrder,
-  desktopReleaseVersion,
   detectPhonePlatform,
   detectVisitorPlatform,
-  FALLBACK_DOWNLOAD_URLS,
-  fetchDesktopDownloadUrls,
   IOS_APP_STORE_URL,
   PHONE_PLATFORM_DETAILS,
   type PhonePlatform,
@@ -31,24 +28,13 @@ export function RouteDownload() {
     path: '/download',
   });
 
-  const [downloads, setDownloads] = createSignal<DesktopDownloadUrls>(
-    FALLBACK_DOWNLOAD_URLS
-  );
   const [visitor, setVisitor] = createSignal<VisitorPlatform>();
   const [phone, setPhone] = createSignal<PhonePlatform>();
   const platforms = () => desktopPlatformOrder(visitor());
-  const releaseVersion = () =>
-    desktopReleaseVersion(downloads()[platforms()[0]]);
 
   onMount(() => {
     setVisitor(detectVisitorPlatform(navigator.userAgent));
     setPhone(detectPhonePlatform(navigator.userAgent));
-    const controller = new AbortController();
-    onCleanup(() => controller.abort());
-    const loadLatestRelease = async () => {
-      setDownloads(await fetchDesktopDownloadUrls(controller.signal));
-    };
-    void loadLatestRelease();
   });
 
   return (
@@ -93,7 +79,9 @@ export function RouteDownload() {
                 <li>
                   <a
                     class={index() === 0 ? 'site-nav-start' : 'site-nav-demo'}
-                    href={downloads()[platform]}
+                    href={DESKTOP_DOWNLOAD_URLS[platform]}
+                    // A full request, so the edge redirect serves the installer.
+                    target="_self"
                     onClick={() =>
                       analytics.trackPosthog('desktop_download_clicked', {
                         platform,
@@ -126,11 +114,6 @@ export function RouteDownload() {
             <ArrowUpRight aria-hidden="true" />
           </a>
         </p>
-        <Show when={releaseVersion()}>
-          {(version) => (
-            <p class="downloads-version downloads-desktop-only">{version()}</p>
-          )}
-        </Show>
 
         <article class="documentation-body">
           <h2 id="desktop" class="downloads-desktop-only">

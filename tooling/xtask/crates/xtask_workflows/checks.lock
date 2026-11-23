@@ -108,6 +108,7 @@ check	deploy_web_app.yml	build/build	Build / Build
 check	deploy_web_app.yml	deploy	Deploy
 check	deploy_website.yml	build-deploy	Build and Deploy Website
 check	desktop-release-watch.yml	watch	Alert when a release's desktop installers are missing
+check	desktop_check.yml	test-linux	Test on Linux
 check	desktop_qa_macos.yml	qa-macos	QA on macOS
 check	desktop_windows.yml	build-windows-frontend	Build Windows frontend
 check	desktop_windows.yml	build-windows	Build Windows installer
@@ -166,6 +167,7 @@ check	pr-ci.yml	node-modules-nix/check-linux-node-modules-nix	node_modules nix /
 check	pr-ci.yml	node-modules-nix/check-darwin-node-modules-nix	node_modules nix / check Darwin node_modules nix
 check	pr-ci.yml	tauri-lockfiles/check-tauri-lockfiles	Tauri lockfiles / check Tauri lockfiles
 check	pr-ci.yml	tauri-lockfiles/check-tauri-vendoring	Tauri lockfiles / check Tauri vendoring
+check	pr-ci.yml	desktop/test-linux	Desktop app / Test on Linux
 check	pr-ci.yml	sdk/check-package	SDK / SDK Package Check
 check	pr-ci.yml	observability-aws/validate	Observability AWS layer / Render and validate
 check	pr-ci.yml	observability-image/build-image	Observability image / Build observability image
