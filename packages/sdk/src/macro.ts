@@ -665,6 +665,10 @@ export {
   type TimeEntryChanges,
 } from './entities/time/time-entry';
 export { type StopTimerOptions, Timer } from './entities/time/timer';
+export type {
+  ContactListKey,
+  ListMembersOptions,
+} from './entities/users/namespace';
 export {
   ExternalProfilePicture,
   type ProfilePicture,

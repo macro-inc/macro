@@ -94,8 +94,15 @@ export function UserToolCall(props: {
       title={props.common.label}
       status={props.common.status}
       subtitle={draft() && draftSubtitle(draft()!)}
-      muted={props.common.muted || failure() !== undefined}
-      trailing={props.common.trailing ?? outcomeLabel(outcome())}
+      muted={props.common.unsuccessful || failure() !== undefined}
+      trailing={
+        props.common.trailing ??
+        (props.common.unsuccessful ? (
+          <span class="text-failure">Failed</span>
+        ) : (
+          outcomeLabel(outcome())
+        ))
+      }
       hasContent={draft() !== undefined}
     >
       <Show when={draft()}>

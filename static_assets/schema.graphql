@@ -1643,7 +1643,7 @@ The typed activity-action vocabulary. One member per durable action, plus
 with an undecodable payload) surface with their raw tag and payload
 instead of failing the page.
 """
-union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityUnknownAction
+union GraphqlActivityAction = GraphqlActivityCreated | GraphqlActivityEdited | GraphqlActivityOpened | GraphqlActivityDeleted | GraphqlActivityMessaged | GraphqlActivitySent | GraphqlActivityResponded | GraphqlActivityPropertyChanged | GraphqlActivityParticipantAdded | GraphqlActivityParticipantRemoved | GraphqlActivityCallStarted | GraphqlActivityTaskAdded | GraphqlActivityTaskRemoved | GraphqlActivityTimeLogged | GraphqlActivityUnknownAction
 
 """
 A call was started in the entity.
@@ -1927,6 +1927,39 @@ type GraphqlActivityTaskRemoved {
 	this object has nothing as a field but we need at least 1 field
 	"""
 	nothing: Boolean!
+}
+
+"""
+How time was logged.
+"""
+enum GraphqlActivityTimeLogSource {
+	"""
+	Typed as a length.
+	"""
+	MANUAL
+	"""
+	Saved by stopping a timer.
+	"""
+	TIMER
+}
+
+"""
+Time was logged on the entity (a task). The entry's note is never part of
+activity.
+"""
+type GraphqlActivityTimeLogged {
+	"""
+	Whole minutes logged.
+	"""
+	minutes: Int!
+	"""
+	The day the time counts for, in `YYYY-MM-DD` form, as the person chose it.
+	"""
+	entryDate: String!
+	"""
+	How the time was logged.
+	"""
+	source: GraphqlActivityTimeLogSource!
 }
 
 """
@@ -7536,6 +7569,10 @@ enum GraphqlPropertyTargetEntityType {
 	CRM company target.
 	"""
 	COMPANY
+	"""
+	CRM contact target.
+	"""
+	CONTACT
 	"""
 	Row of a Macro database table.
 	"""

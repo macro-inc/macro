@@ -24,6 +24,7 @@ export function createInteractionController(
       request.requestId,
     ]);
   const canAnswer = () => source.canEdit() === true;
+  const accessKnown = () => source.canEdit() !== undefined;
 
   const respond = async (response: InteractionResponse): Promise<boolean> => {
     const identity = key(response);
@@ -76,6 +77,7 @@ export function createInteractionController(
   return {
     pending: source.pending,
     canAnswer,
+    accessKnown,
     answering: (request) => answering[key(request)] === true,
     respond,
   };

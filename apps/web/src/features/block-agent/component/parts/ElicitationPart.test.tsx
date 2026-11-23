@@ -12,7 +12,7 @@ import type {
   PendingElicitation,
 } from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import { fireEvent, render } from '@solidjs/testing-library';
+import { fireEvent, render, within } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -218,25 +218,41 @@ beforeEach(() => {
 describe('ElicitationPart', () => {
   it('offers the form only while the metadata names this question', () => {
     pending = live();
-    const { queryByTestId, getByTestId } = render(() => (
+    const { queryByTestId } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).not.toBeNull();
-    expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
-    expect(getByTestId('trailing').textContent).toBe('Waiting for you');
+  });
+
+  it('shows a live question as a card: who asks, the question, its fields and decisions', () => {
+    pending = live();
+    const { getByRole, queryByTestId } = render(() => (
+      <ElicitationPart turn={0} part={part()} />
+    ));
+    const card = getByRole('region', { name: 'Agent question' });
+    expect(queryByTestId('tool-card')).toBeNull();
+    const inCard = within(card);
+    inCard.getByText('Macro Coder is asking');
+    inCard.getByText('Waiting for you');
+    inCard.getByText('What is the best colour?');
+    inCard.getByTestId('form');
+    for (const name of ['Submit', 'Skip']) {
+      inCard.getByRole('button', { name });
+    }
+    // Skip is the one refusal: no agent stops for Cancel, so it is not offered.
+    expect(inCard.queryByRole('button', { name: 'Decline' })).toBeNull();
+    expect(inCard.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
   it('a viewer without edit access sees the question locked', () => {
     pending = live();
     canAnswer = false;
-    const { getByTestId, getByText } = render(() => (
+    const { getByText } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    expect(getByTestId('trailing').textContent).toBe('Waiting for an editor');
-    expect(getByTestId('body').textContent).toContain(
-      'Only people who can edit this session can answer.'
-    );
-    for (const label of ['Submit', 'Decline', 'Cancel']) {
+    getByText('Waiting for an editor');
+    getByText('Only people who can edit this session can answer.');
+    for (const label of ['Submit', 'Skip']) {
       const button = getByText(label).closest('button');
       expect(button?.disabled).toBe(true);
       fireEvent.click(getByText(label));
@@ -305,15 +321,13 @@ describe('ElicitationPart', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('decline and cancel send their actions', () => {
+  it('skip declines the question', () => {
     pending = live();
     const { getByText } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    fireEvent.click(getByText('Decline'));
+    fireEvent.click(getByText('Skip'));
     expect(respond).toHaveBeenCalledWith({ action: 'decline' });
-    fireEvent.click(getByText('Cancel'));
-    expect(respond).toHaveBeenCalledWith({ action: 'cancel' });
   });
 
   it('shows the harness-reported answer over what was sent', () => {
@@ -492,7 +506,7 @@ describe('ElicitationPart', () => {
 
     // The email composer offers only Send, so the card carries the decline the
     // calendar composer answers through its own Cancel.
-    it('an email review can be declined from the card', () => {
+    it('an email review can be skipped from the card', () => {
       const request = review('SendEmail', {
         to: [{ email: 'alice@example.com' }],
         cc: [],
@@ -504,7 +518,7 @@ describe('ElicitationPart', () => {
       const { getByText } = render(() => (
         <ElicitationPart turn={0} part={part({ request })} />
       ));
-      fireEvent.click(getByText('Cancel'));
+      fireEvent.click(getByText('Skip'));
       expect(respond).toHaveBeenCalledWith({ action: 'decline' });
     });
 
@@ -521,6 +535,30 @@ describe('ElicitationPart', () => {
       );
       fireEvent.click(getByTestId('composer-execute'));
       expect(respond).not.toHaveBeenCalled();
+    });
+
+    it('a tool with no composer here asks with its flat form on one card', () => {
+      const request = {
+        ...review('WebSearch', { query: 'colours' }),
+        schema: colourForm.schema,
+      };
+      pending = { ...live(), request };
+      const { getByRole, getAllByRole } = render(() => (
+        <ElicitationPart turn={0} part={part({ request })} />
+      ));
+      expect(getAllByRole('region', { name: 'Agent question' })).toHaveLength(
+        1
+      );
+      const card = getByRole('region', { name: 'Agent question' });
+      within(card).getByTestId('form');
+      fireEvent.click(within(card).getByTestId('pick-red'));
+      fireEvent.click(within(card).getByRole('button', { name: 'Submit' }));
+      expect(respond).toHaveBeenCalledWith({
+        action: 'accept',
+        content: { question_0: 'Red' },
+      });
+      // A card carries no primary button (design-system rule).
+      expect(card.querySelector('[data-variant="primary"]')).toBeNull();
     });
 
     it("falls back to the flat form for a draft the tool's schema rejects", () => {
@@ -557,7 +595,7 @@ describe('ElicitationPart', () => {
       expect(tool.dataset.status).toBe('completed');
     });
 
-    it('a declined review with no tool report reads as a declined question', () => {
+    it('a declined review with no tool report reads as a skipped question', () => {
       const request = review('CreateCalendarEvent', eventDraft);
       const { getByTestId, queryByTestId } = render(() => (
         <ElicitationPart
@@ -566,7 +604,7 @@ describe('ElicitationPart', () => {
         />
       ));
       expect(queryByTestId('user-tool')).toBeNull();
-      expect(getByTestId('trailing').textContent).toBe('Declined');
+      expect(getByTestId('trailing').textContent).toBe('Skipped');
     });
   });
 
