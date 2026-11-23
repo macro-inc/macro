@@ -271,6 +271,8 @@ fn code_mode_hides_tools_the_sdk_covers() {
         "DeleteInitiative",
         "ListAgents",
         "ConfigureAgent",
+        "LogTime",
+        "ReadTimeEntries",
     ] {
         assert!(!code_mode.toolset.tools.contains_key(name), "{name}");
         assert!(

@@ -446,6 +446,14 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         macro_event_broker.clone(),
     );
 
+    let time_tracking_tool_context = ai_tools::build_time_tracking_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+        macro_env::Environment::Local,
+        None,
+    );
+
     let databases_tool_context = ai_tools::build_databases_tool_context(
         pool.clone(),
         entity_access_service.clone(),
@@ -581,6 +589,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
             entity_access_service.clone(),
         ),
         initiative_tool_context,
+        time_tracking_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,

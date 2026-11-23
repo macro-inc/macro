@@ -566,6 +566,14 @@ pub async fn build_tool_service_context_from_env(
         &document_tool_context,
     );
 
+    let time_tracking_tool_context = crate::tool_context::build_time_tracking_tool_context(
+        pool.clone(),
+        entity_access_service.clone(),
+        side_effect_clients.macro_event_broker.clone(),
+        side_effect_clients.environment,
+        side_effect_clients.feature_flags.clone(),
+    );
+
     let initiative_tool_context = crate::tool_context::build_initiative_tool_context(
         pool.clone(),
         &document_tool_context,
@@ -754,6 +762,7 @@ pub async fn build_tool_service_context_from_env(
             entity_access_service.clone(),
         ),
         initiative_tool_context,
+        time_tracking_tool_context,
         team_tool_context: crate::tool_context::build_team_tool_context(pool.clone()),
         crm_tool_context,
         pipeline_tool_context,

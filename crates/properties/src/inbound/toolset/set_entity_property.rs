@@ -62,6 +62,7 @@ Tasks always have these system properties (use these property_definition_id valu
 - Parent Task (00000001-0000-0000-0000-000000000005): entity, single. Use entity_ref with entity_type='task'.
 - Subtasks (00000001-0000-0000-0000-000000000006): entity, multi. Use entity_refs with entity_type='task'.
 - Story Points (00000001-0000-0000-0000-000000000009): number, single. Use number_value.
+- Time logged (00000001-0000-0000-0000-000000000016) is the sum of the task's time entries in minutes, absent until time is logged, and cannot be set here: log time with LogTime.
 
 A task can belong to one project:
 - Project (00000001-0000-0000-0000-000000000014): entity, single. Use entity_ref with entity_type='initiative' and the project UUID; send no value field to remove the task from its project. Setting it requires edit access to the task and the project, and the project's agents are assigned to the task.

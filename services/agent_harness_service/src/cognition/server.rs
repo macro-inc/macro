@@ -637,6 +637,14 @@ pub async fn build(
         macro_event_broker.clone(),
     );
 
+    let time_tracking_tool_context = ai_tools::build_time_tracking_tool_context(
+        db.clone(),
+        entity_access_service.clone(),
+        macro_event_broker.clone(),
+        config.environment,
+        side_effect_clients.feature_flags.clone(),
+    );
+
     let databases_tool_context = ai_tools::build_databases_tool_context(
         db.clone(),
         entity_access_service.clone(),
@@ -826,6 +834,7 @@ pub async fn build(
             entity_access_service.clone(),
         ),
         initiative_tool_context,
+        time_tracking_tool_context,
         team_tool_context: ai_tools::build_team_tool_context(db.clone()),
         crm_tool_context,
         pipeline_tool_context,
