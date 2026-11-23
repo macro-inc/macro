@@ -124,11 +124,18 @@ export function HomepageTour() {
   onMount(() => {
     updateFades();
     window.addEventListener('resize', updateFades);
+    // Turning on reduced motion mid-visit stops the tour too.
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const onMotionChange = (event: MediaQueryListEvent) => {
+      if (event.matches) stop();
+    };
+    reducedMotion.addEventListener('change', onMotionChange);
     onCleanup(() => {
       window.removeEventListener('resize', updateFades);
+      reducedMotion.removeEventListener('change', onMotionChange);
       clearInterval(timer);
     });
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if (reducedMotion.matches) return;
     setPlaying(true);
     timer = setInterval(() => {
       if (!document.hidden) show(current() + 1);

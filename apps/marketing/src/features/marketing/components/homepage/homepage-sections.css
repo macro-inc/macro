@@ -36,7 +36,7 @@
   border-bottom-width: 2px;
   border-radius: 6px;
   background: #151515;
-  color: var(--color-ink);
+  color: #fff;
   font: 600 12px/1 'Inter Variable', Inter, sans-serif;
 }
 
@@ -77,7 +77,7 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  color: var(--color-ink);
+  color: #fff;
   font: 400 14px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
   white-space: nowrap;
 }

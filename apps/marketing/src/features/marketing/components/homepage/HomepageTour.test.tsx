@@ -2,11 +2,20 @@ import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HomepageTour } from './HomepageTour';
 
-const reducedMotion = { matches: false };
+let motionListeners: ((event: { matches: boolean }) => void)[] = [];
+const reducedMotion = {
+  matches: false,
+  addEventListener: (_: 'change', listener: (typeof motionListeners)[0]) =>
+    motionListeners.push(listener),
+  removeEventListener: (_: 'change', listener: (typeof motionListeners)[0]) => {
+    motionListeners = motionListeners.filter((item) => item !== listener);
+  },
+};
 
 beforeEach(() => {
   vi.useFakeTimers();
   reducedMotion.matches = false;
+  motionListeners = [];
   vi.stubGlobal('matchMedia', () => reducedMotion);
 });
 
@@ -51,4 +60,20 @@ it('never moves on its own for visitors who prefer reduced motion', () => {
   const view = render(() => <HomepageTour />);
   vi.advanceTimersByTime(15000);
   expect(selected(view)).toBe('Home');
+});
+
+it('stops when keyboard focus enters the tour', () => {
+  const view = render(() => <HomepageTour />);
+  view.getByRole('tab', { name: 'Home' }).focus();
+  vi.advanceTimersByTime(15000);
+  expect(selected(view)).toBe('Home');
+});
+
+it('stops when reduced motion is turned on during the visit', () => {
+  const view = render(() => <HomepageTour />);
+  vi.advanceTimersByTime(5000);
+  expect(selected(view)).toBe('Mail');
+  for (const listener of motionListeners) listener({ matches: true });
+  vi.advanceTimersByTime(15000);
+  expect(selected(view)).toBe('Mail');
 });
