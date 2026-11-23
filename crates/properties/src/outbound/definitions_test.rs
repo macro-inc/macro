@@ -194,9 +194,10 @@ async fn get_property_definition_with_owner_checks_ownership(
     Ok(())
 }
 
-/// Both listings order names by their Rust lowercase, so a name with a
-/// leading space, underscore or emoji sits in the same place in each. A
-/// non-C database collation skips those characters when it sorts.
+/// Both listings order names by their Rust lowercase, then by id, so a name
+/// with a leading space, underscore or emoji, and each of two names equal but
+/// for case, sits in the same place in each. A non-C database collation skips
+/// those characters when it sorts.
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
@@ -211,6 +212,8 @@ async fn listings_order_names_alike(pool: Pool<Postgres>) -> anyhow::Result<()> 
         "alpha",
         "\u{1F680} launch",
         "Mixed",
+        "same",
+        "Same",
     ] {
         repo.create_property_definition(
             PropertyDefinitionOwner::User(&user),
@@ -223,29 +226,41 @@ async fn listings_order_names_alike(pool: Pool<Postgres>) -> anyhow::Result<()> 
         .await?;
     }
 
-    let plain: Vec<String> = repo
+    let plain: Vec<(String, Uuid)> = repo
         .list_property_definitions(None, Some(&user), false)
         .await?
         .into_iter()
-        .map(|d| d.display_name)
+        .map(|d| (d.display_name, d.id))
         .collect();
-    let with_options: Vec<String> = repo
+    let with_options: Vec<(String, Uuid)> = repo
         .list_property_definitions_with_options(None, Some(&user), false)
         .await?
         .into_iter()
-        .map(|d| d.definition.display_name)
+        .map(|d| (d.definition.display_name, d.definition.id))
         .collect();
+    assert_eq!(plain, with_options);
+
+    // Names equal but for case follow their ids.
+    let mut same: Vec<&(String, Uuid)> = plain
+        .iter()
+        .filter(|(name, _)| name.eq_ignore_ascii_case("same"))
+        .collect();
+    assert_eq!(same.len(), 2);
+    same.sort_by_key(|(_, id)| *id);
+    let ties: Vec<&str> = same.iter().map(|(name, _)| name.as_str()).collect();
+    let names: Vec<&str> = plain.iter().map(|(name, _)| name.as_str()).collect();
 
     let expected = [
         " leading space",
         "_under",
         "alpha",
         "Mixed",
+        ties[0],
+        ties[1],
         "Zeta",
         "\u{1F680} launch",
     ];
-    assert_eq!(plain, expected);
-    assert_eq!(with_options, expected);
+    assert_eq!(names, expected);
     Ok(())
 }
 
