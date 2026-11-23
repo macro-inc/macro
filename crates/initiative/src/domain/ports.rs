@@ -225,3 +225,12 @@ pub trait InitiativeService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
 }
+
+/// Physical identity facts for trusted backend integrations; grants no access.
+pub trait InitiativeLifecycleReads: Send + Sync + 'static {
+    /// Initiatives are permanently deleted; a persisted identity is live.
+    fn initiative_is_live(
+        &self,
+        id: InitiativeId,
+    ) -> impl Future<Output = Result<bool, InitiativeError>> + Send;
+}

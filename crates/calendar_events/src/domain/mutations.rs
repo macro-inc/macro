@@ -124,8 +124,8 @@ where
 
     /// Announce retired events and, when anything was actually retired, nudge
     /// the link's calendar viewers to refetch their projections. An Outlook
-    /// copy's viewers hear of it from the projection relay instead, which
-    /// publishes the outbox row the retirement queued.
+    /// copy's retirement is announced by the projection relay instead, which
+    /// publishes the outbox row it queued to the topic and to viewers.
     async fn announce_retirements(
         &self,
         owner_id: &str,
@@ -133,16 +133,14 @@ where
         provider: CalendarProvider,
         retired: Vec<RetiredCalendarEvent>,
     ) {
-        if retired.is_empty() {
+        if retired.is_empty() || provider == CalendarProvider::Outlook {
             return;
         }
         let team_ooo_changed = retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
-        if provider != CalendarProvider::Outlook {
-            self.refresh
-                .calendar_changed(owner_id, email_link_id, team_ooo_changed)
-                .await;
-        }
+        self.refresh
+            .calendar_changed(owner_id, email_link_id, team_ooo_changed)
+            .await;
     }
 
     /// Announce what a write did to the canonical row. A write that changed
@@ -231,9 +229,9 @@ where
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let source = upsert.source.details();
         let email_link_id = source.email_link_id;
-        // An Outlook copy's viewers hear of a change through the projection
-        // relay, which publishes the outbox row every change to the event's
-        // row queues, so its own inbox gets no nudge from here.
+        // An Outlook copy's change is announced by the projection relay, which
+        // publishes the outbox row every change to the event's row queues to
+        // the topic and to the inbox's viewers, so neither happens here.
         let relayed = matches!(upsert.source, CalendarEventSource::Outlook(_));
         let outcome = self
             .repository
@@ -241,11 +239,13 @@ where
             .await
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = outcome.event_id;
-        self.publish_write_outcome(&outcome);
-        if !relayed && outcome.change != CalendarEventChange::Unchanged {
-            self.refresh
-                .calendar_changed(&outcome.owner_id, email_link_id, outcome.team_ooo_changed)
-                .await;
+        if !relayed {
+            self.publish_write_outcome(&outcome);
+            if outcome.change != CalendarEventChange::Unchanged {
+                self.refresh
+                    .calendar_changed(&outcome.owner_id, email_link_id, outcome.team_ooo_changed)
+                    .await;
+            }
         }
         for copy in &outcome.aligned_copies {
             self.refresh
@@ -869,7 +869,11 @@ fn provider_error(error: CalendarProviderError) -> CalendarMutationError {
             CalendarMutationError::Retryable(error.to_string())
         }
         CalendarProviderErrorKind::Permanent | CalendarProviderErrorKind::PushUnsupported => {
-            CalendarMutationError::ProviderRejected(error.to_string())
+            CalendarMutationError::ProviderRejected(if error.is_refused() {
+                error.message().to_owned()
+            } else {
+                error.to_string()
+            })
         }
     }
 }

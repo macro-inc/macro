@@ -1,9 +1,14 @@
-import { SearchBar, ViewSidebar } from '@app/components/view-shell';
+import {
+  SearchBar,
+  useViewTabHotkeys,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -25,6 +30,7 @@ import {
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { ChannelsLiveCallsSidebar } from '../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../tour';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
@@ -123,9 +129,24 @@ const GROUPS: GroupConfig[] = [
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
+  const panel = useSplitPanelOrThrow();
   const selectTab = (value: ChannelsTab) => {
     if (value !== 'threads' || rail.threadsEnabled()) rail.selectTab(value);
   };
+  const tabOptions = () =>
+    rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS;
+  const [tabs, setTabs] = createSignal<HTMLElement>();
+
+  useViewTabHotkeys<ChannelsTab>({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    tabs,
+    ids: () => tabOptions().map((option) => option.value),
+    activeId: rail.tab,
+    setActiveId: selectTab,
+    label: (id) =>
+      tabOptions().find((option) => option.value === id)?.label ?? id,
+  });
 
   return (
     <div class="flex shrink-0 flex-col">
@@ -160,11 +181,10 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
         <SidebarRoutineSuggestions surface="chat" />
         <ViewSidebar.Toolbar class={!isTouchDevice() ? 'px-0' : undefined}>
           <Tabs
+            ref={setTabs}
             aria-label="Chat sidebar views"
             fullWidth={!isTouchDevice()}
-            options={
-              rail.threadsEnabled() ? CHANNEL_TABS_WITH_THREADS : CHANNEL_TABS
-            }
+            options={tabOptions()}
             value={rail.tab()}
             onChange={selectTab}
           />
@@ -660,6 +680,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   return (
     <>
       <ExpandedHeader search={props.search} />
+      <ChannelsLiveCallsSidebar />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={(element) => {

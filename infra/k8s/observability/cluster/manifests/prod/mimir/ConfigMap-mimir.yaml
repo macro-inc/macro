@@ -1,0 +1,54 @@
+apiVersion: v1
+data:
+  mimir.yaml: |
+    activity_tracker:
+      filepath: "/data/metrics-activity.log"
+    blocks_storage:
+      bucket_store:
+        sync_dir: "/data/tsdb-sync"
+      storage_prefix: "blocks"
+      tsdb:
+        dir: "/data/tsdb"
+    common:
+      storage:
+        backend: "s3"
+        s3:
+          bucket_name: "macro-observability-k8s-mimir"
+          endpoint: "s3.us-east-2.amazonaws.com"
+          region: "us-east-2"
+    compactor:
+      data_dir: "/data/compactor"
+    ingester:
+      ring:
+        replication_factor: 3
+        tokens_file_path: "/data/ingester-tokens"
+    limits:
+      compactor_blocks_retention_period: "30d"
+      ingestion_burst_size: 500000
+      ingestion_rate: 50000
+      max_global_exemplars_per_user: 100000
+      max_global_series_per_user: 300000
+    memberlist:
+      bind_port: 7946
+      cluster_label: "mimir.observability"
+      join_members:
+        - "dns+mimir-headless.observability.svc.cluster.local:7946"
+    multitenancy_enabled: false
+    ruler:
+      rule_path: "/data/ruler"
+    ruler_storage:
+      storage_prefix: "ruler"
+    server:
+      grpc_listen_port: 9095
+      http_listen_port: 8080
+      log_level: "info"
+    store_gateway:
+      sharding_ring:
+        replication_factor: 3
+        tokens_file_path: "/data/store-gateway-tokens"
+    usage_stats:
+      enabled: false
+kind: ConfigMap
+metadata:
+  name: mimir
+  namespace: observability

@@ -27,6 +27,24 @@ fn db_error(error: sqlx::Error) -> Error {
 fn decode<T: serde::de::DeserializeOwned>(value: serde_json::Value) -> Result<T, Error> {
     serde_json::from_value(value).map_err(|_| Error::Unavailable)
 }
+/// Decode a stored booking. Bookings abandoned before the booking carried its
+/// own abandon time hold it only on their operation: give the booking that
+/// time, and mark a create abandoned on its first attempt before its start as
+/// unsent, since before the start recovery abandons only on a refusal.
+fn decode_record(value: serde_json::Value) -> Result<BookingRecord, Error> {
+    let mut record: BookingRecord = decode(value)?;
+    if record.booking.status == BookingStatus::Failed
+        && record.booking.abandoned_at.is_none()
+        && let Some(operation) = &mut record.operation
+        && let Some(abandoned_at) = operation.abandoned_at
+    {
+        record.booking.abandoned_at = Some(abandoned_at);
+        operation.unsent = matches!(operation.kind, CalendarOperationKind::Create)
+            && operation.attempt == 0
+            && abandoned_at < record.booking.starts_at;
+    }
+    Ok(record)
+}
 fn encode<T: serde::Serialize>(value: &T) -> Result<serde_json::Value, Error> {
     serde_json::to_value(value).map_err(|_| Error::Unavailable)
 }
@@ -63,7 +81,7 @@ impl Repository for PostgresRepository {
         let Some(row) = row else {
             return Ok(None);
         };
-        let mut record: BookingRecord = decode(row)?;
+        let mut record = decode_record(row)?;
         let operation = record.operation.as_mut().ok_or(Error::Unavailable)?;
         operation.attempt = operation.attempt.saturating_add(1);
         record.revision = record.revision.saturating_add(1);
@@ -112,7 +130,7 @@ impl Repository for PostgresRepository {
                 "Too many bookings in this date range. Choose a shorter date range.".into(),
             ));
         }
-        records.into_iter().map(decode).collect()
+        records.into_iter().map(decode_record).collect()
     }
     async fn host_booking_counts(
         &self,
@@ -137,6 +155,19 @@ impl Repository for PostgresRepository {
         .await
         .map_err(db_error)?;
         Ok(rows.into_iter().map(|row| (row.host, row.count)).collect())
+    }
+    async fn daily_bookings(
+        &self,
+        profile: Uuid,
+        event_type: Uuid,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        exclude: Option<Uuid>,
+    ) -> Result<i64, Error> {
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
+        let count = count_daily_bookings(&mut tx, profile, event_type, start, end, exclude).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(count)
     }
     async fn busy(
         &self,
@@ -171,7 +202,7 @@ impl Repository for PostgresRepository {
         .await
         .map_err(db_error)?
         {
-            let existing: BookingRecord = decode(existing)?;
+            let existing = decode_record(existing)?;
             if existing.profile_id == record.profile_id
                 && existing.booking.email == record.booking.email
                 && existing.booking.starts_at == record.booking.starts_at
@@ -182,7 +213,15 @@ impl Repository for PostgresRepository {
             return Err(Error::Conflict);
         }
         if let Some(limit) = limit {
-            let count = sqlx::query_scalar!("SELECT count(*) FROM scheduling_booking WHERE profile_id = $1 AND event_type_id = $2 AND starts_at >= $3 AND starts_at < $4 AND status <> 'cancelled'", record.profile_id, record.booking.event_type_id, day_start, day_end).fetch_one(&mut *tx).await.map_err(db_error)?.unwrap_or(0);
+            let count = count_daily_bookings(
+                &mut tx,
+                record.profile_id,
+                record.booking.event_type_id,
+                day_start,
+                day_end,
+                None,
+            )
+            .await?;
             if count >= i64::from(limit) {
                 return Err(Error::Conflict);
             }
@@ -202,7 +241,7 @@ impl Repository for PostgresRepository {
             .fetch_optional(&self.pool)
             .await
             .map_err(db_error)?
-            .map(decode)
+            .map(decode_record)
             .transpose()
     }
     async fn booking_request(&self, request: Uuid) -> Result<Option<BookingRecord>, Error> {
@@ -213,7 +252,7 @@ impl Repository for PostgresRepository {
         .fetch_optional(&self.pool)
         .await
         .map_err(db_error)?
-        .map(decode)
+        .map(decode_record)
         .transpose()
     }
     async fn move_booking(
@@ -232,7 +271,15 @@ impl Repository for PostgresRepository {
         .await
         .map_err(db_error)?;
         if let Some(limit) = record.event.daily_limit {
-            let count = sqlx::query_scalar!("SELECT count(*) FROM scheduling_booking WHERE profile_id = $1 AND event_type_id = $2 AND starts_at >= $3 AND starts_at < $4 AND status <> 'cancelled' AND id <> $5", record.profile_id, record.booking.event_type_id, start, end, record.booking.id).fetch_one(&mut *tx).await.map_err(db_error)?.unwrap_or(0);
+            let count = count_daily_bookings(
+                &mut tx,
+                record.profile_id,
+                record.booking.event_type_id,
+                start,
+                end,
+                Some(record.booking.id),
+            )
+            .await?;
             if count >= i64::from(limit) {
                 return Err(Error::Conflict);
             }
@@ -294,6 +341,59 @@ impl Repository for PostgresRepository {
         tx.commit().await.map_err(db_error)?;
         Ok(record)
     }
+}
+
+/// Bookings that take a place in an event type's daily limit on `[start, end)`,
+/// optionally leaving one out (the booking being moved). A move holds both its
+/// days until the calendar answers: its row already starts on the new day, and
+/// a first attempt still in flight goes back to `originalStart` if the calendar
+/// refuses it (`recovery::finish_operation`), so it also counts on the day it
+/// left. Later attempts are never put back. The second count reads only the
+/// profile's in-flight bookings, through `scheduling_booking_processing`.
+/// The count runs under a 5 s statement timeout, restored afterwards so the
+/// caller's later writes keep their own.
+async fn count_daily_bookings(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    profile: Uuid,
+    event_type: Uuid,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    exclude: Option<Uuid>,
+) -> Result<i64, Error> {
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    let count = sqlx::query_scalar!(
+        r#"SELECT
+             (SELECT count(*) FROM scheduling_booking
+               WHERE profile_id = $1 AND starts_at >= $3 AND starts_at < $4
+                 AND event_type_id = $2 AND status <> 'cancelled'
+                 AND ($5::uuid IS NULL OR id <> $5))
+           + (SELECT count(*) FROM scheduling_booking
+               WHERE profile_id = $1 AND status = 'processing'
+                 AND event_type_id = $2
+                 AND ($5::uuid IS NULL OR id <> $5)
+                 AND NOT (starts_at >= $3 AND starts_at < $4)
+                 AND record->'operation'->>'attempt' = '0'
+                 AND record->'operation'->'kind'->>'kind' = 'move'
+                 AND (record->'operation'->'kind'->>'original_start')::timestamptz >= $3
+                 AND (record->'operation'->'kind'->>'original_start')::timestamptz < $4)
+           AS "count!""#,
+        profile,
+        event_type,
+        start,
+        end,
+        exclude
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_error)?;
+    sqlx::query!("SET LOCAL statement_timeout = DEFAULT")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    Ok(count)
 }
 
 #[cfg(test)]

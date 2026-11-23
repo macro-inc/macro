@@ -926,8 +926,10 @@ fn document_actor(
 impl IncomingEvent {
     /// Mentions belong to the mentioned user, inbound mail to its inbox owner,
     /// a started call to who created it, and an ended call to who joined it.
-    /// Entity access is checked separately at admission and dispatch. These
-    /// audience restrictions never turn an event into an access grant.
+    /// Admission also gives inbound mail to the inbox's delegates
+    /// (`received_inbox`). Entity access is checked separately at admission
+    /// and dispatch. These audience restrictions never turn an event into an
+    /// access grant.
     pub fn is_for_owner(&self, owner: &MacroUserIdStr<'static>) -> bool {
         match &self.payload {
             EventPayload::Message(MessageFact::Mentioned(data)) => {
@@ -939,6 +941,17 @@ impl IncomingEvent {
                 data.participants.contains(owner)
             }
             _ => true,
+        }
+    }
+
+    /// The owner and id of the inbox a received email arrived in. Whoever the
+    /// owner delegated that inbox to receives it too, as their own mail.
+    pub fn received_inbox(&self) -> Option<(&MacroUserIdStr<'static>, Uuid)> {
+        match &self.payload {
+            EventPayload::Email(EmailTopicEvent::MessageReceived(data)) => {
+                Some((&data.owner, data.link_id))
+            }
+            _ => None,
         }
     }
 

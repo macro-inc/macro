@@ -22,6 +22,8 @@ const policies = {
     'authoritative: revision-checked deletion and collection revalidation',
   ReorderSavedViews:
     'authoritative: per-viewer order; revalidate the ordered cursor chain',
+  SavedViewAppearanceCacheWrite:
+    'custom: cache-only identity patch; appearance writer owns rollback',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',

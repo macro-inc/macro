@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { EditorSystemMessage } from '@block-md/component/EditorSystemMessage';
 import { InlinePropertyValue } from '@block-md/component/InlinePropertyValue';
 import { RecoverTaskDrafts } from '@block-md/component/RecoverTaskDrafts';
@@ -11,9 +12,19 @@ import XIcon from '@icon/system/regular/x.svg';
 import { Property } from '@property';
 import { Modals } from '@property/component/modal';
 import { PropertiesProvider } from '@property/context/PropertiesContext';
+import {
+  StartDueEditor,
+  type StartDueEditorProps,
+} from '@property/editors/popover/StartDueEditor';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { InlineTagsPill } from '@property/tags';
+import type { Property as PropertyType } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDue, startDueOf } from '@property/utils/start-due';
 import { Button, EntityComposer, Scroll, ToggleSwitch, Tooltip } from '@ui';
 import {
+  type Component,
   createContext,
   For,
   type JSX,
@@ -45,11 +56,13 @@ function useTaskComposer() {
 type TaskComposerPickers = {
   tagsPill: typeof InlineTagsPill;
   propertyEditor: typeof Property.PopoverEditor;
+  datesEditor: Component<StartDueEditorProps>;
 };
 
 const TaskComposerPickersContext = createContext<TaskComposerPickers>({
   tagsPill: InlineTagsPill,
   propertyEditor: Property.PopoverEditor,
+  datesEditor: StartDueEditor,
 });
 
 function Root(props: {
@@ -58,6 +71,8 @@ function Root(props: {
   tagsPill?: typeof InlineTagsPill;
   /** The editor property pills open; `Property.SheetEditor` inside a touch sheet. */
   propertyEditor?: typeof Property.PopoverEditor;
+  /** The start and due dates picker; `StartDueSheetEditor` inside a touch sheet. */
+  datesEditor?: Component<StartDueEditorProps>;
   children: JSX.Element;
 }) {
   const pickers: TaskComposerPickers = {
@@ -66,6 +81,9 @@ function Root(props: {
     },
     get propertyEditor() {
       return props.propertyEditor ?? Property.PopoverEditor;
+    },
+    get datesEditor() {
+      return props.datesEditor ?? StartDueEditor;
     },
   };
   return (
@@ -82,7 +100,7 @@ function Root(props: {
 function ContinueInSplit() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.isPopover()}>
+    <Show when={composer.isPopover() && !composer.isTemplateMode()}>
       <Button
         onMouseDown={composer.continueInSplit}
         disabled={composer.isCreating()}
@@ -100,7 +118,7 @@ function ContinueInSplit() {
 function ClearDraft() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.hasDraftChanges()}>
+    <Show when={!composer.isTemplateMode() && composer.hasDraftChanges()}>
       <Button
         onMouseDown={composer.clearDraft}
         disabled={composer.isCreating()}
@@ -119,7 +137,7 @@ function ClearDraft() {
 function Clear() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.hasDraftChanges()}>
+    <Show when={!composer.isTemplateMode() && composer.hasDraftChanges()}>
       <Button
         variant="ghost"
         size="sm"
@@ -138,6 +156,7 @@ function Close() {
     <Show when={composer.isPopover()}>
       <Button
         onMouseDown={composer.close}
+        disabled={composer.isSavingTemplate()}
         tabIndex={-1}
         tooltip="Close"
         variant="ghost"
@@ -176,7 +195,11 @@ function Title() {
   const pickers = useContext(TaskComposerPickersContext);
   return (
     <EntityComposer.Title {...{ [TASK_COMPOSER_TITLE_ATTRIBUTE]: '' }}>
-      <Show when={composer.tagLayoutMode() === 'title'}>
+      <Show
+        when={
+          !composer.isTemplateMode() && composer.tagLayoutMode() === 'title'
+        }
+      >
         <TaskTitleAccessory>
           <Dynamic
             component={pickers.tagsPill}
@@ -189,29 +212,34 @@ function Title() {
           />
         </TaskTitleAccessory>
       </Show>
-      <ComposeTaskTitleEditor
-        value={composer.title}
-        onChange={composer.setTitle}
-        disabled={composer.isCreating}
-        bodyEditor={composer.bodyEditor}
-        containerRef={composer.containerRef}
-        onUserInput={() => {
-          if (composer.errorMessage()) {
-            composer.setErrorMessage('');
-          }
-        }}
-        onTagSelected={(tag) => {
-          composer.setTagLayoutMode('title');
-          fireAndForget(
-            composer.composerTags.applyTag(tag.scope, tag.optionId),
-            'compose-task'
-          );
-        }}
-        onDeleteTagsAtStart={composer.deleteTitleTagsAtStart}
-        portalScope={composer.portalScope()}
-        ref={composer.setTitleEditorRoot}
-        autofocus={composer.autofocusTitle}
-      />
+      <Show when={composer.isTemplateMode() ? 'template' : 'task'} keyed>
+        {(mode) => (
+          <ComposeTaskTitleEditor
+            value={composer.title}
+            onChange={composer.setTitle}
+            disabled={composer.isCreating}
+            onSubmit={() => {
+              const submit =
+                mode === 'template'
+                  ? composer.saveTemplate
+                  : composer.createTask;
+              fireAndForget(submit(), 'compose-task');
+            }}
+            bodyEditor={composer.bodyEditor}
+            containerRef={composer.containerRef}
+            onUserInput={() => {
+              if (composer.errorMessage()) composer.setErrorMessage('');
+            }}
+            onTagSelected={mode === 'task' ? composer.applyTitleTag : undefined}
+            onDeleteTagsAtStart={
+              mode === 'task' ? composer.deleteTitleTagsAtStart : undefined
+            }
+            portalScope={composer.portalScope()}
+            ref={composer.setTitleEditorRoot}
+            autofocus={mode === 'task' && composer.autofocusTitle}
+          />
+        )}
+      </Show>
     </EntityComposer.Title>
   );
 }
@@ -223,6 +251,7 @@ function Body() {
       <Scroll>
         <MarkdownShell
           config={composer.editorConfig}
+          onConnect={composer.onBodyReady}
           initialState={composer.initialState.editorState}
           initialValue={
             composer.initialState.editorState
@@ -275,6 +304,36 @@ function Attach() {
 function Properties(props: { class?: string }) {
   const composer = useTaskComposer();
   const pickers = useContext(TaskComposerPickersContext);
+  // The due date pill reads as the range and sets the start too.
+  const startDateEnabled = composer.startDatesEnabled;
+  const draftDate = (definitionId: string) => {
+    const property = composer.draftProperty(definitionId);
+    return property && isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = (property: PropertyType) => {
+    if (
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(
+      startDueOf(draftDate(SYSTEM_PROPERTY_IDS.START_DATE), property)
+    );
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: () => draftDate(SYSTEM_PROPERTY_IDS.START_DATE),
+    saveOther: (property, value) =>
+      composer.saveHandler.saveProperty(property, value),
+    get editor() {
+      return pickers.datesEditor;
+    },
+    get fallback() {
+      return pickers.propertyEditor;
+    },
+  });
   return (
     <Suspense fallback={<div class="h-7" />}>
       <PropertiesProvider
@@ -307,7 +366,12 @@ function Properties(props: { class?: string }) {
               <InlinePropertyValue
                 property={property}
                 emptyLabel={property.displayName}
-                editor={pickers.propertyEditor}
+                editor={
+                  property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? dueDatesEditor
+                    : pickers.propertyEditor
+                }
+                valueText={dueDatesText(property)}
               />
             )}
           </For>
@@ -326,9 +390,8 @@ function Properties(props: { class?: string }) {
             />
           </Show>
           <TaskComposerPropertyEditor
-            name={composer.title()}
             definitions={composer.availableProperties()}
-            properties={composer.properties()}
+            properties={composer.draftProperties()}
             onAdd={composer.addProperty}
             onSave={(id, value) => composer.setPropertyValues(id, value)}
           />
@@ -358,13 +421,15 @@ function ShareToggle() {
   return (
     <Show when={composer.team()}>
       {(team) => (
-        <Tooltip label={composer.sharingHint()} tabIndex={0}>
+        <Tooltip label={composer.sharingHint()}>
           <ToggleSwitch
             class="shrink-0 ml-0.5"
             checked={composer.shareWithTeam()}
             onChange={composer.setShareWithTeam}
             disabled={composer.isCreating()}
-            label={`Share with ${team().name}`}
+            label={t('create.taskTemplateShareWithTeam', {
+              name: team().name,
+            })}
             labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
           />
         </Tooltip>
@@ -376,7 +441,7 @@ function ShareToggle() {
 function LinkInSourceToggle() {
   const composer = useTaskComposer();
   return (
-    <Show when={composer.props.linkInSource}>
+    <Show when={!composer.isTemplateMode() && composer.props.linkInSource}>
       {(linkInSource) => (
         <ToggleSwitch
           labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
@@ -392,31 +457,60 @@ function LinkInSourceToggle() {
 function CreateMoreToggle() {
   const composer = useTaskComposer();
   return (
-    <ToggleSwitch
-      labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
-      onChange={composer.setCreateMore}
-      disabled={!!composer.recovered || composer.isCreating()}
-      checked={composer.createMore()}
-      label="Create More"
-    />
+    <Show when={!composer.isTemplateMode()}>
+      <ToggleSwitch
+        labelClass="text-xs text-ink-muted font-normal whitespace-nowrap"
+        onChange={composer.setCreateMore}
+        disabled={!!composer.recovered || composer.isCreating()}
+        checked={composer.createMore()}
+        label="Create More"
+      />
+    </Show>
   );
 }
 
 function Submit() {
   const composer = useTaskComposer();
+  const label = () => {
+    if (composer.isTemplateMode()) return t('create.taskTemplateSave');
+    return composer.createMore()
+      ? t('create.taskCreateMore')
+      : t('create.taskCreate');
+  };
+  const submit = () => {
+    const action = composer.isTemplateMode()
+      ? composer.saveTemplate
+      : composer.createTask;
+    fireAndForget(action(), 'compose-task');
+  };
   return (
     <EntityComposer.Submit
       variant="primary"
       size="sm"
-      onClick={composer.createTask}
-      disabled={composer.title().trim().length === 0 || composer.isCreating()}
-      hasContent={composer.title().trim().length > 0}
+      onClick={submit}
+      disabled={!composer.canSubmit() || composer.isCreating()}
+      hasContent={composer.canSubmit()}
     >
-      Create Task
+      {label()}
     </EntityComposer.Submit>
   );
 }
 
+function CancelTemplate() {
+  const composer = useTaskComposer();
+  return (
+    <Show when={composer.isTemplateMode()}>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={composer.isSavingTemplate()}
+        onClick={composer.cancelTemplateEdit}
+      >
+        {t('create.taskTemplateCancel')}
+      </Button>
+    </Show>
+  );
+}
 function SimilarTasks() {
   const composer = useTaskComposer();
   return (
@@ -448,5 +542,6 @@ export const TaskComposerParts = {
   LinkInSourceToggle,
   CreateMoreToggle,
   Submit,
+  CancelTemplate,
   SimilarTasks,
 };

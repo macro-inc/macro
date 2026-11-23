@@ -1,6 +1,24 @@
 use super::compute_body_replyless;
 
 #[test]
+fn a_body_nested_too_deep_is_kept_whole() {
+    let nested = |depth: usize| {
+        format!(
+            "{}Reply<blockquote>Quoted</blockquote>{}",
+            "<div>".repeat(depth),
+            "</div>".repeat(depth)
+        )
+    };
+    let shallow = compute_body_replyless(None, Some(&nested(100)), None).expect("html");
+    let deep = nested(10_000);
+
+    let kept = compute_body_replyless(None, Some(&deep), None).expect("html");
+
+    assert!(!shallow.contains("Quoted"), "{shallow}");
+    assert_eq!(kept, deep);
+}
+
+#[test]
 fn reply_html_preserves_attribute_order_across_thread_reads() {
     let html = r#"<div dir="ltr" class="reply" style="color: blue"><a href="https://example.com" title="A &amp; B" target="_blank">Reply</a></div><blockquote>Older message</blockquote>"#;
     let expected = r#"<div dir="ltr" class="reply" style="color: blue"><a href="https://example.com" title="A &amp; B" target="_blank">Reply</a></div>"#;

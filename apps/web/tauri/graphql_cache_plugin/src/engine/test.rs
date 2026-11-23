@@ -1,6 +1,8 @@
 use super::*;
 use pollster::block_on;
 
+mod authority;
+mod bench;
 mod calendar;
 mod people;
 mod soup;
@@ -727,6 +729,46 @@ fn sole_engine_handle_shuts_turso_down_explicitly() {
     spawn_handle().shutdown().unwrap();
 }
 
+/// Writes until the WAL is due, then leaves the engine quiet: the idle task has
+/// copied it by the time the next command looks, so a copy there finds
+/// nothing to do. Without the idle caller that copy still runs.
+#[test]
+fn quiet_engine_checkpoints_the_wal_off_the_command_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let database = cache_turso::TursoFileDatabase::new(dir.path().join("cache.turso")).unwrap();
+    let handle = EngineHandle::new(database.open_or_reset("scope-1").unwrap(), None);
+    let mut due = None;
+    for batch in 0..200 {
+        let items: Vec<_> = (0..200)
+            .map(|n| serde_json::json!({"__typename": "GraphqlSoupDocument", "id": format!("{batch:04}-{n:04}-{}", "x".repeat(200))}))
+            .collect();
+        write(
+            &handle,
+            None,
+            serde_json::json!({"user": {"id": "user-1", "soup": {"nextCursor": null, "items": items}}}),
+            None,
+        );
+        // The write armed the idle task; wait until it has run.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        while !handle.inner.idle_settled() {
+            assert!(std::time::Instant::now() < deadline, "idle task never ran");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let state = block_on(handle.inner.lock());
+        let checkpoint = state.engine.storage().checkpoint_if_due().unwrap();
+        if checkpoint.wal_frames >= 500 {
+            due = Some(checkpoint);
+            break;
+        }
+    }
+    let checkpoint = due.expect("the WAL reached 500 frames");
+    assert!(
+        !checkpoint.ran,
+        "the idle task already copied it: {checkpoint:?}"
+    );
+    handle.shutdown().unwrap();
+}
+
 #[test]
 fn bad_transaction_id_is_an_error() {
     let handle = spawn_handle();
@@ -792,4 +834,264 @@ fn native_runtime_schema_persists_across_ota_and_rejects_conflicts_without_data_
         );
         reopened.shutdown().unwrap();
     });
+}
+
+#[test]
+fn a_staged_native_hydrate_writes_and_reports_what_a_whole_one_does() {
+    let run = |staging: bool| {
+        super::test_hooks::STAGING.with(|on| on.set(staging));
+        super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+        super::test_hooks::YIELDS.with(|yields| yields.set(0));
+        let handle = spawn_handle();
+        let scope = HydrationScope {
+            contact_fence: None,
+            storage_generation: block_on(handle.current_storage_generation())
+                .unwrap()
+                .parse()
+                .unwrap(),
+            identity: "user-1".into(),
+        };
+        let bound = || Some("user-1".to_string());
+        let mut results = Vec::new();
+        // The first bound hydrate binds the account, so it runs whole.
+        for (data, identity, scope) in [
+            (soup_data(true), None, None),
+            (soup_data(true), None, None),
+            (soup_data(false), None, None),
+            (soup_data(true), bound(), Some(scope.clone())),
+            (soup_data(true), bound(), Some(scope)),
+            (soup_data(false), bound(), None),
+        ] {
+            let result = block_on(handle.hydrate_query(
+                HYDRATION_QUERY.to_string(),
+                Some("Soup".to_string()),
+                variables(),
+                data,
+                identity,
+                scope,
+            ))
+            .unwrap();
+            results.push(serde_json::json!({
+                "unchangedViews": result.unchanged_views,
+                "searchChangedBuckets": result.search_changed_buckets,
+                "writeResult": result.write_result,
+                "data": result.data,
+            }));
+            let ReadResultWire::Hit { data } = block_on(handle.read(
+                None,
+                "query Viewer { user { id } }".to_string(),
+                Some("Viewer".to_string()),
+                Variables::new(),
+                Vec::new(),
+            ))
+            .unwrap() else {
+                panic!("expected hydrated viewer");
+            };
+            results.push(data);
+        }
+        let staged = super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get);
+        let yields = super::test_hooks::YIELDS.with(std::cell::Cell::get);
+        super::test_hooks::STAGING.with(|on| on.set(true));
+        (results, staged, yields)
+    };
+    let (whole, none_staged, no_yields) = run(false);
+    let (staged, staged_commits, yields) = run(true);
+    assert_eq!((none_staged, no_yields), (0, 0));
+    // Reads may run after the authoritative rows, after each of the three
+    // projection passes and after staging: 5 times a staged hydrate. The
+    // binding hydrate yields 4 times, up to staging, and then runs whole.
+    assert_eq!((staged_commits, yields), (5, 5 * 5 + 4));
+    assert_eq!(staged, whole);
+}
+
+#[test]
+fn a_failed_staging_read_fails_the_native_hydrate_instead_of_retrying_it_whole() {
+    let handle = spawn_handle();
+    super::test_hooks::STAGED_COMMITS.with(|commits| commits.set(0));
+    super::test_hooks::FAIL_STAGE.with(|fail| fail.set(true));
+    let result = block_on(handle.hydrate_query(
+        HYDRATION_QUERY.to_string(),
+        Some("Soup".to_string()),
+        variables(),
+        soup_data(true),
+        None,
+        None,
+    ));
+    assert_eq!(result.err().as_deref(), Some("injected staging failure"));
+    assert_eq!(
+        super::test_hooks::STAGED_COMMITS.with(std::cell::Cell::get),
+        0
+    );
+    let ReadResultWire::Miss = block_on(handle.read(
+        None,
+        "query Viewer { user { id } }".to_string(),
+        Some("Viewer".to_string()),
+        Variables::new(),
+        Vec::new(),
+    ))
+    .unwrap() else {
+        panic!("a failed hydrate writes nothing");
+    };
+}
+
+fn poll_once<F: std::future::Future>(
+    future: std::pin::Pin<&mut F>,
+    waker: &std::task::Waker,
+) -> std::task::Poll<F::Output> {
+    future.poll(&mut std::task::Context::from_waker(waker))
+}
+
+/// An abandoned read keeps its place in the engine's queue, whether it waits
+/// for the engine or, behind a command, for a turn; when its turn comes it
+/// gives the engine back without reading, and the reads queued after it run.
+#[test]
+fn an_abandoned_read_skips_its_turn_and_the_rest_still_run() {
+    block_on(async {
+        let handle = spawn_handle();
+        let noop = std::task::Waker::noop();
+        for behind_a_command in [false, true] {
+            let gone = handle.clone().abandonable(Some("gone".to_owned()));
+            let kept = handle.clone().abandonable(Some("kept".to_owned()));
+            let unnamed = handle.clone();
+            let reused = handle.clone().abandonable(Some("kept".to_owned()));
+            assert!(reused.abandon.is_none(), "a running id registers once");
+            assert_eq!(handle.abandons.running(), 2);
+
+            let held = handle.inner.write().await;
+            let mut command = Box::pin(handle.inner.lock());
+            if behind_a_command {
+                assert!(poll_once(command.as_mut(), noop).is_pending());
+            }
+            let mut gone_read = Box::pin(gone.current_authority("scope-1"));
+            assert!(poll_once(gone_read.as_mut(), noop).is_pending());
+            let mut kept_read = Box::pin(kept.current_authority("scope-1"));
+            assert!(poll_once(kept_read.as_mut(), noop).is_pending());
+            let mut unnamed_read = Box::pin(unnamed.current_authority("scope-1"));
+            assert!(poll_once(unnamed_read.as_mut(), noop).is_pending());
+
+            assert!(handle.abandon("gone"));
+            assert!(!handle.abandon("never-sent"));
+            assert!(
+                poll_once(gone_read.as_mut(), noop).is_pending(),
+                "an abandoned read keeps its place while the engine is held"
+            );
+            drop(held);
+            if behind_a_command {
+                drop(command.await);
+            } else {
+                drop(command);
+            }
+            assert_eq!(gone_read.await.unwrap_err(), abandon::ABANDONED);
+            assert!(kept_read.await.is_ok());
+            assert!(unnamed_read.await.is_ok());
+            drop((gone, kept, unnamed, reused));
+            assert_eq!(handle.abandons.running(), 0);
+        }
+        // An abandon after the read finished changes nothing for the next one.
+        assert!(!handle.abandon("kept"));
+        let again = handle.clone().abandonable(Some("kept".to_owned()));
+        assert!(again.current_authority("scope-1").await.is_ok());
+    });
+}
+
+/// Abandons `reader`'s queued `read` while the engine is held, then lets it
+/// take its turn, which it skips.
+fn abandon_queued<T: std::fmt::Debug>(
+    handle: &EngineHandle,
+    request_id: &str,
+    read: impl std::future::Future<Output = Result<T, String>>,
+) {
+    block_on(async {
+        let held = handle.inner.write().await;
+        let mut read = Box::pin(read);
+        assert!(poll_once(read.as_mut(), std::task::Waker::noop()).is_pending());
+        assert!(handle.abandon(request_id));
+        drop(held);
+        assert_eq!(read.await.unwrap_err(), abandon::ABANDONED);
+    });
+}
+
+/// A read of an operation registers the records it depends on, so later
+/// writes report the operation. One abandoned before it ran registers the
+/// operation against every change instead, so the next write still reports
+/// it and the webview reads it again.
+#[test]
+fn an_abandoned_read_of_an_operation_is_still_reported_by_the_next_write() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    abandon_queued(
+        &handle,
+        "read-1",
+        reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ),
+    );
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert_eq!(result.affected_ops, vec!["client:1".to_string()]);
+}
+
+/// A watch the webview abandoned drops its retained view, so the next watch
+/// from the webview's last revision reads the operation whole.
+#[test]
+fn an_abandoned_watch_makes_the_next_watch_read_whole() {
+    use cache_core::engine::watch_query::QueryUpdate;
+    async fn watch(handle: &EngineHandle, since: Option<String>) -> Result<QueryUpdate, String> {
+        handle
+            .watch(
+                "view:1".into(),
+                QUERY.into(),
+                None,
+                variables(),
+                vec![],
+                since,
+            )
+            .await
+    }
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let QueryUpdate::Hit { revision, .. } = block_on(watch(&handle, None)).unwrap() else {
+        panic!("expected initial snapshot");
+    };
+    let reader = handle.clone().abandonable(Some("watch-1".to_owned()));
+    abandon_queued(&handle, "watch-1", watch(&reader, Some(revision.clone())));
+    assert!(matches!(
+        block_on(watch(&handle, Some(revision))).unwrap(),
+        QueryUpdate::Hit { .. }
+    ));
+}
+
+/// An abandoned read registers its operation in its own turn, so a teardown
+/// queued behind it still has the last word, as it had over the read.
+#[test]
+fn a_teardown_queued_behind_an_abandoned_read_still_unregisters_it() {
+    let handle = spawn_handle();
+    write(&handle, None, soup_data(false), None);
+    let reader = handle.clone().abandonable(Some("read-1".to_owned()));
+    block_on(async {
+        let noop = std::task::Waker::noop();
+        let held = handle.inner.write().await;
+        let mut read = Box::pin(reader.read(
+            Some("client:1".to_owned()),
+            QUERY.to_owned(),
+            Some("Soup".to_owned()),
+            variables(),
+            Vec::new(),
+        ));
+        assert!(poll_once(read.as_mut(), noop).is_pending());
+        let mut teardown = Box::pin(handle.teardown("client:1".to_owned()));
+        assert!(poll_once(teardown.as_mut(), noop).is_pending());
+        assert!(handle.abandon("read-1"));
+        drop(held);
+        // Polled in reverse: only the queue's order decides which runs first.
+        let (torn_down, read) = tokio::join!(teardown, read);
+        torn_down.unwrap();
+        assert_eq!(read.unwrap_err(), abandon::ABANDONED);
+    });
+    let result = write(&handle, Some("client:2"), soup_data(true), None);
+    assert!(result.affected_ops.is_empty());
 }

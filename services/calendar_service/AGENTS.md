@@ -54,6 +54,12 @@ gateway `/calendar` prefix.
 - A calendar whose sync fails is isolated: the job completes, the calendar
   keeps its error and failure count, and nothing retries it before the next
   push or the five-minute poll, whatever `Retry-After` Google sent.
+- Macro's own per-inbox Google gate (`calendar_ratelimit.rs`, 300 calls per
+  `REDIS_RATE_LIMIT_WINDOW_SECS` window, shared by the sync and calendar
+  mutations) is not a calendar failure: the gate answers `Deferred` naming
+  its window, the account round stops there, and the backfill consumer hides
+  the delivery for that long (`Disposition::Defer`) so the next one resumes
+  the round. `crates/calendar_events`' `AGENTS.md` has the round's rules.
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
 - The HTTP API and every background worker share one tokio runtime, on a
@@ -79,8 +85,9 @@ gateway `/calendar` prefix.
   (`calendar.projection_publish`), and refreshes each inbox the batch changed
   once. A round that claims fewer waits for the next two-second poll, so a
   first import or a bulk change refreshes open clients about every two
-  seconds instead of once per event. It is the only refresh for an Outlook
-  event's changes, Macro writes included, so it runs while either
+  seconds instead of once per event. It is the only topic publish and viewer
+  refresh for an Outlook event's changes, Macro writes included, so it runs
+  while either
   `OUTLOOK_SYNC_ENABLED` or `OUTLOOK_WRITES_ENABLED` is on (inside
   `CALENDAR_SYNC_ENABLED`; `config::OutlookLoops`), and startup logs which
   Outlook loops the task runs.
@@ -90,8 +97,10 @@ gateway `/calendar` prefix.
   sharing changes and uncertain sync results require `true`. An inbox refresh
   already refreshes its viewers' team views, so its teammate fan-out skips
   them; a sharing change also refreshes the sharer (`sharing_changed`).
-- One inbox refresh is one gateway request (`refresh_calendars`, a
-  `batch_send_unique`): the inbox's viewers get `synced` and their teammates
+- One inbox refresh is one gateway request (`calendar_events`'
+  `GatewayCalendarRefresh`, composed once in `main.rs` on
+  `event_broker_tracker` and awaited inline by the backfill): the inbox's
+  viewers get `synced` and their teammates
   `team_sharing_changed`, so a write by a member of a large team costs one
   request, not one per teammate. A viewer whose sharing setting is `none`
   shows teammates nothing, so their inbox's changes refresh none of that

@@ -69,6 +69,62 @@ describe('ChannelNamespace', () => {
     ]);
   });
 
+  test('activeSince lists the channels with a message or reply since then, the most recent first', async () => {
+    const latest = (created_at: string) => ({
+      message_id: 'm',
+      content: '',
+      created_at,
+      mentions: [],
+      sender_id: 'macro|user@example.com',
+    });
+    const quiet = channel('quiet', 'Quiet');
+    const replied = {
+      ...channel('replied', 'Replied'),
+      latest_message: latest('2026-11-19T10:05:00Z'),
+    };
+    const old = {
+      ...channel('old', 'Old'),
+      latest_message: latest('2026-11-19T09:00:00Z'),
+    };
+    const newest = {
+      ...channel('newest', 'Newest'),
+      latest_message: latest('2026-11-19T11:00:00Z'),
+    };
+    const client = {
+      storage: {
+        getChannels: async () => ({
+          data: { items: [quiet, replied, old, newest], next_cursor: null },
+        }),
+      },
+    } as unknown as MacroClient;
+
+    const ids = [];
+    for await (const active of new ChannelNamespace(client).activeSince(
+      '2026-11-19T10:00:00Z',
+    ))
+      ids.push(active.id);
+
+    expect(ids).toEqual(['newest', 'replied']);
+    const first = await Array.fromAsync(
+      new ChannelNamespace(client).activeSince('2026-11-19T10:00:00Z', {
+        maxItems: 1,
+      }),
+    );
+    expect(first.map(({ id }) => id)).toEqual(['newest']);
+  });
+
+  test('activeSince refuses a value that is not an instant', async () => {
+    const client = {
+      storage: {
+        getChannels: async () => ({ data: { items: [], next_cursor: null } }),
+      },
+    } as unknown as MacroClient;
+
+    expect(() =>
+      new ChannelNamespace(client).activeSince('not a time'),
+    ).toThrow('not an instant');
+  });
+
   test('name search asks the server for channel names in one request', async () => {
     const listRequests: GetChannelsData['query'][] = [];
     const searchRequests: UnifiedSearchData[] = [];
@@ -127,5 +183,15 @@ describe('ChannelNamespace', () => {
 
     expect(ids).toEqual(['channel-1', 'channel-2', 'channel-3', 'channel-4']);
     expect(requests).toHaveLength(3);
+  });
+
+  test('a blank name search keeps the page size it was given', async () => {
+    const { client, requests } = channelsClient();
+
+    await Array.fromAsync(
+      new ChannelNamespace(client).search('', { pageSize: 2 }),
+    );
+
+    expect(requests[0]).toEqual({ limit: 2 });
   });
 });

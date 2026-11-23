@@ -1,9 +1,9 @@
 use super::DocumentIdArrays;
 use crate::domain::models::{DynamicSort, SoupSortDirection, grouping::ItemGroupingInfo};
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    DocumentGrants, ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, MAX_NAMED_CANDIDATES,
-    build_document_filter, build_grouped_query, build_query, expanded_dynamic_cursor_soup,
-    expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
+    DocumentGrants, ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, ItemSource,
+    MAX_NAMED_CANDIDATES, build_document_filter, build_grouped_query, build_query_from,
+    expanded_dynamic_cursor_soup, expanded_dynamic_cursor_soup_grouped, first_document_id_slot,
 };
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
@@ -175,6 +175,12 @@ fn bind_free_rendering_keeps_every_id_inline() {
 
 #[test]
 fn arrays_follow_each_querys_fixed_binds() {
+    for item_source in [ItemSource::ItemTables, ItemSource::SourceItems] {
+        arrays_follow_fixed_binds(item_source);
+    }
+}
+
+fn arrays_follow_fixed_binds(item_source: ItemSource) {
     for sort in [
         SimpleSortMethod::UpdatedAt.into(),
         DynamicSort::Property {
@@ -194,13 +200,16 @@ fn arrays_follow_each_querys_fixed_binds() {
                 Expr::is_not(any_of(&absent(2, count))),
             ));
             let mut flat_ids = DocumentIdArrays::starting_at(flat_first);
-            let flat = build_query(
+            let flat = build_query_from(
                 &filter,
                 false,
                 sort,
                 DocumentGrants::Estimated,
+                item_source,
+                "macro|viewer@example.com",
                 &mut flat_ids,
             )
+            .0
             .sql()
             .to_owned();
             let grouping = GroupingConfig {
@@ -237,8 +246,16 @@ fn arrays_follow_each_querys_fixed_binds() {
             )));
             assert!(!sql.contains(&format!("${}", first + 2)));
             assert!(!sql.contains("sort_parameters"));
-            assert!(sql.contains(&format!("ea.source_id = ANY(${}::text[])", first - 1)));
         }
+        // A source_items lookup checks each named id's grants itself; the item tables and
+        // the grouped query match the bound source ids.
+        if item_source == ItemSource::ItemTables {
+            assert!(flat.contains(&format!("ea.source_id = ANY(${}::text[])", flat_first - 1)));
+        }
+        assert!(grouped.contains(&format!(
+            "ea.source_id = ANY(${}::text[])",
+            grouped_first - 1
+        )));
         assert!(grouped.contains("ep.entity_type = $10::property_entity_type"));
         if matches!(sort, DynamicSort::Property { .. }) {
             assert_eq!((flat_first, grouped_first), (12, 14));

@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { runSplitBack } from '@components/app/split-layout/back-interceptor';
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
@@ -35,6 +36,10 @@ import {
   selectOptions,
 } from './tests/select-helpers';
 
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 const agentsPageProps = {
   onCursor: vi.fn(),
   onSetUpRuntime: vi.fn(),
@@ -254,78 +259,93 @@ vi.mock('@core/component/Toast/Toast', () => ({
   },
 }));
 
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'channel-general', name: 'general', channel_type: 'private' },
-      {
-        id: 'channel-engineering',
-        name: 'engineering',
-        channel_type: 'team',
-      },
-    ],
-  }),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channels = [
+    directoryChannel('channel-general', {
+      name: 'general',
+      channelType: 'private',
+    }),
+    directoryChannel('channel-engineering', {
+      name: 'engineering',
+      channelType: 'team',
+    }),
+  ];
+  return { useChannelDirectory: () => ({ channels: () => channels }) };
+});
 
-const pipedreamMocks = vi.hoisted(() => ({
+const connectorMocks = vi.hoisted(() => ({
   connected: [] as string[],
   connect: vi.fn(),
   catalog: [
     {
-      app_slug: 'linear',
-      display_name: 'Linear',
+      key: 'app/linear',
+      slug: 'linear',
+      name: 'Linear',
       description: 'Issue tracking',
-      icon_url: null,
+      iconUrl: null,
+      categories: [],
     },
     {
-      app_slug: 'notion',
-      display_name: 'Notion',
+      key: 'app/notion',
+      slug: 'notion',
+      name: 'Notion',
       description: 'Docs and wikis',
-      icon_url: null,
+      iconUrl: null,
+      categories: [],
     },
   ],
 }));
 
-vi.mock('@queries/pipedream-connectors', () => ({
-  usePipedreamConnectedSlugs: () => ({
-    slugs: () => new Set(pipedreamMocks.connected),
-    ready: () => true,
-  }),
-  usePipedreamCatalogIconsQuery: () => ({
-    isPending: false,
-    data: new Map(),
-  }),
-  usePipedreamCatalogQuery: (search: () => string) => ({
-    get data() {
-      const term = search().trim().toLowerCase();
+vi.mock('@queries/connectors', async () => {
+  const { createSignal } = await import('solid-js');
+  return {
+    appConnectorKey: (slug: string) => `app/${slug}`,
+    useConnectors: () => ({
+      connectedApps: () => new Set(connectorMocks.connected),
+      ready: () => true,
+    }),
+    useConnectorCatalogIconsQuery: () => ({
+      isPending: false,
+      data: new Map(),
+    }),
+    createConnectorCatalogSearch: (exclude: () => ReadonlySet<string>) => {
+      const [searchInput, setSearchInput] = createSignal('');
+      const entries = () => {
+        const term = searchInput().trim().toLowerCase();
+        return connectorMocks.catalog.filter(
+          (entry) =>
+            entry.name.toLowerCase().includes(term) &&
+            !exclude().has(entry.slug)
+        );
+      };
       return {
-        pages: [
-          {
-            servers: pipedreamMocks.catalog.filter((entry) =>
-              entry.display_name.toLowerCase().includes(term)
-            ),
-            next_cursor: null,
-          },
-        ],
-        pageParams: [undefined],
+        searchInput,
+        onSearchInput: (value: string) => setSearchInput(value),
+        search: searchInput,
+        entries,
+        query: {
+          isFetching: false,
+          isFetchingNextPage: false,
+          hasNextPage: false,
+          isError: false,
+          fetchNextPage: vi.fn(),
+          refetch: vi.fn(),
+        },
       };
     },
-    isFetching: false,
-    isSuccess: true,
-    isFetchingNextPage: false,
-    hasNextPage: false,
-    isError: false,
-    fetchNextPage: vi.fn(),
-    refetch: vi.fn(),
-  }),
-  connectPipedreamApp: pipedreamMocks.connect,
-}));
+    connectConnector: connectorMocks.connect,
+  };
+});
 
 beforeAll(() => {
   vi.stubGlobal('scrollTo', vi.fn());
 });
 
 beforeEach(() => {
+  device.touch = false;
   avatarMocks.upload.mockReset();
   apiKeyMocks.query.data = undefined;
   apiKeyMocks.save.mockReset();
@@ -347,14 +367,15 @@ beforeEach(() => {
   agentMocks.isTeamOwner = false;
   agentMocks.isTeamAdmin = false;
   harnessMocks.query.data = [];
-  pipedreamMocks.connected = [];
-  pipedreamMocks.connect.mockReset();
-  pipedreamMocks.connect.mockImplementation(
-    async (args: { appSlug: string }) => {
-      pipedreamMocks.connected = [...pipedreamMocks.connected, args.appSlug];
-      return 'connected';
-    }
-  );
+  connectorMocks.connected = [];
+  connectorMocks.connect.mockReset();
+  connectorMocks.connect.mockImplementation(async (args: { key: string }) => {
+    connectorMocks.connected = [
+      ...connectorMocks.connected,
+      args.key.replace(/^app\//, ''),
+    ];
+    return 'connected';
+  });
   modelMocks.queries = {
     'in-memory:': successfulModels([
       { id: Model.sonnet55, name: 'Claude Sonnet 4.5' },
@@ -379,6 +400,16 @@ const MACROD_HARNESS = {
 } satisfies Harness;
 
 describe('Agents', () => {
+  it('returns from a phone agent editor to its list before navigating away', () => {
+    device.touch = true;
+    updateSearchParams({ createAgent: 'true' });
+    render(() => <Agents {...agentsPageProps} />);
+    expect(screen.getByRole('region', { name: 'New agent' })).toBeTruthy();
+    const goBack = vi.fn();
+    expect(runSplitBack({ canGoBack: () => true, goBack })).toBe(true);
+    expect(screen.queryByRole('region', { name: 'New agent' })).toBeNull();
+    expect(goBack).not.toHaveBeenCalled();
+  });
   it('opens the new-agent form from a link and clears the action on cancel', () => {
     updateSearchParams({ createAgent: 'true' });
     render(() => <Agents {...agentsPageProps} />);
@@ -2060,8 +2091,8 @@ describe('Agents', () => {
     );
 
     await waitFor(() => {
-      expect(pipedreamMocks.connect).toHaveBeenCalledWith(
-        expect.objectContaining({ appSlug: 'linear', serverName: 'Linear' })
+      expect(connectorMocks.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ key: 'app/linear' })
       );
     });
     expect(agentMocks.update).not.toHaveBeenCalled();

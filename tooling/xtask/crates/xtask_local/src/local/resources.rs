@@ -126,6 +126,19 @@ impl Queue {
                 (14 * 24 * 60 * 60).to_string(),
             )]
             .into(),
+            // The deployed queue's visibility timeout and delivery delay. It
+            // also deduplicates per message group, which changes nothing here:
+            // every message carries a deduplication id of its own.
+            macro_queues::EmailCrmPopulationQueue::LOCAL => [
+                (QueueAttributeName::VisibilityTimeout, "60".to_string()),
+                (QueueAttributeName::DelaySeconds, "10".to_string()),
+            ]
+            .into(),
+            // The deployed link-manager queues' visibility timeout: a purge
+            // outlasts SQS's 30 s default before its first renewal at 60 s.
+            macro_queues::LinkManagerQueue::LOCAL | macro_queues::LinkMaintenanceQueue::LOCAL => {
+                [(QueueAttributeName::VisibilityTimeout, "300".to_string())].into()
+            }
             _ => Default::default(),
         }
     }
@@ -190,6 +203,14 @@ pub const QUEUES: &[Queue] = &[
         )],
     },
     Queue {
+        // Consumed by email_service's CRM population workers.
+        name: macro_queues::EmailCrmPopulationQueue::LOCAL,
+        bindings: &[(
+            macro_queues::EmailCrmPopulationQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
         name: macro_queues::ChatDeleteQueue::LOCAL,
         bindings: &[("CHAT_DELETE_QUEUE", Name)],
     },
@@ -236,6 +257,15 @@ pub const QUEUES: &[Queue] = &[
     Queue {
         name: macro_queues::LinkManagerQueue::LOCAL,
         bindings: &[("LINK_MANAGER_QUEUE", Name)],
+    },
+    Queue {
+        // Consumed by email_service's link-maintenance consumers; the refresh
+        // handler sends its periodic work here.
+        name: macro_queues::LinkMaintenanceQueue::LOCAL,
+        bindings: &[(
+            macro_queues::LinkMaintenanceQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
     },
     Queue {
         name: macro_queues::SearchEventQueue::LOCAL,

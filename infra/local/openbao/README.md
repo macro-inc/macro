@@ -33,9 +33,28 @@ environment gets `OPENBAO_ADDRESS`, `PASSWORDS_JWT_KMS_KEY_ID` (that alias), and
 down replaces the key, so rerun the bootstrap below for each team afterwards.
 Generated environment files are ignored by git. Applications receive no OpenBao root token.
 
-After the local stack starts, copy the bootstrap credentials into the ignored
-instance directory without printing them. Substitute the instance's actual
-container name and allocated OpenBao host port below:
+## Team vaults
+
+Creating a team does not create its vault namespace; until it exists, every
+Passwords action for that team fails with `vault_not_provisioned` ("This team's
+vault isn't set up yet."). As a stopgap until a provisioner does this
+automatically, `just run_local` and `just stack up` provision every existing
+team during stack startup through `bring_up`. `just stack update` does not
+provision team vaults. For a team created after startup, run:
+
+```sh
+just passwords_provision                   # default instance
+just passwords_provision --instance <name>
+```
+
+It copies the bootstrap credentials into the ignored instance directory
+(`infra/local/generated/<instance>/openbao-bootstrap.json`, mode `0600`, never
+printed) and runs `bootstrap.py` once with a `--team-id` per team. It is safe to
+repeat: provisioning never deletes or replaces values.
+
+To do the same by hand, copy the bootstrap credentials without printing them.
+Substitute the instance's actual container name and allocated OpenBao host port
+below; repeat `--team-id` for several teams:
 
 ```sh
 docker cp <instance-openbao-container>:/openbao/file/bootstrap.json \
@@ -50,8 +69,7 @@ python3 infra/local/openbao/bootstrap.py \
 ```
 
 The provisioning logic lives in `infra/openbao/openbao_provisioning.py`, shared with the
-hosted dev entrypoint (`infra/openbao/README.md`). Provision each new Macro team
-explicitly. The bootstrap refuses remote origins
+hosted dev entrypoint (`infra/openbao/README.md`). The bootstrap refuses remote origins
 and redirects. It may be repeated: it preserves existing values and versions,
 validates mount types, and reapplies policy/auth configuration.
 It does not create teams or change Postgres.

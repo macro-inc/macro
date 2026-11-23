@@ -46,7 +46,6 @@ export default {
     'No settings found. Try “signature”, “theme”, or “calendar”.',
   backToSettings: 'Back to settings',
   closeSettings: 'Close settings',
-  goToTab: 'Go to settings tab {{number}}',
   editProfile: 'Edit profile',
   logOut: 'Log out',
   yourAccount: 'Your account',
@@ -56,5 +55,6 @@ export default {
   sectionUnavailable: 'This settings section is unavailable.',
   createTeam: 'Create a team',
   inviteTeam: 'Invite your team',
+  inviteAgents: 'Invite agents',
   teamActions: 'Team actions',
 };

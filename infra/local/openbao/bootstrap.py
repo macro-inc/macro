@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Provision one local Passwords team without deleting or replacing secret data."""
+"""Provision local Passwords teams without deleting or replacing secret data."""
 
 import argparse
 import json
@@ -34,7 +34,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--address", required=True)
     parser.add_argument("--init-file", type=Path, help="local bootstrap.json copied from the instance volume")
-    parser.add_argument("--team-id", required=True, type=UUID)
+    parser.add_argument("--team-id", required=True, type=UUID, action="append", help="repeat for each team")
     parser.add_argument("--jwt-public-key", required=True, type=Path, action="append",
                         help="PEM public key to trust; repeat to trust the old and new key during a switch")
     parser.add_argument("--jwt-alg", required=True, action="append", choices=JWT_ALGORITHMS,
@@ -48,14 +48,11 @@ def main():
         token = json.loads(arguments.init_file.read_text())["root_token"]
     if not token:
         parser.error("--init-file or BAO_TOKEN is required (local bootstrap identity only)")
-    namespace = provision_team(
-        LocalOpenBao(arguments.address, token),
-        arguments.team_id,
-        [path.read_text() for path in arguments.jwt_public_key],
-        arguments.jwt_issuer,
-        arguments.jwt_alg,
-    )
-    print(f"Provisioned local Passwords namespace {namespace}")
+    client = LocalOpenBao(arguments.address, token)
+    public_keys = [path.read_text() for path in arguments.jwt_public_key]
+    for team_id in arguments.team_id:
+        namespace = provision_team(client, team_id, public_keys, arguments.jwt_issuer, arguments.jwt_alg)
+        print(f"Provisioned local Passwords namespace {namespace}")
 
 
 if __name__ == "__main__":

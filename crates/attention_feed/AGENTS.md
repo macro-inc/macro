@@ -21,7 +21,9 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 - `src/domain/models.rs`: keys, revisions, cursors, receipts, candidates.
 - `src/domain/reader.rs`: paging with refill, recompute by key.
 - `src/domain/keying.rs`: which candidate a notification belongs to.
-- `src/outbound/soup.rs`: the candidate source over Soup's attention query.
+- `src/outbound/soup.rs`: the candidate source over Soup's attention query,
+  and the keys that may hold something unread (`unread_keys`), which a feed
+  reads through `FeedReader::current` before trusting one.
 
 ## Scope
 
@@ -53,8 +55,29 @@ whose `DoneReceipt` is the undo token. Subscriptions run `FeedTriggers` through
 
 ## Gotchas
 
+- `reader::listed` asks a candidate source how a new notification about one
+  entity would be listed (Soup's `assume_attention` probe), returning the
+  hydrated entity or `None`; the inbox wraps it as
+  `new_notification_listing` and the work feed as `admits_new_notification`,
+  each with its own candidate request.
+
+- `CandidateRequest::read` picks the store. Pages, unread counts and bulk
+  clears read the replica (`CandidateRead::Replica`); the feeds' recomputes
+  (live updates, and the entries undo, seen and the inbox's
+  single-notification done return) and the rows done and seen act on read
+  the primary (`Committed`, through
+  `SoupCandidateSource::with_committed_reads`). Clients apply recomputed
+  entries over the Soup patch that announced the change, which was hydrated
+  from the primary, so entries read from a lagging replica would write the
+  state before the change back into their caches; and done or seen on a row
+  a recompute showed would find nothing to mark on a replica that does not
+  have it yet. `outbound/soup/test.rs`
+  pins the routing with a store per read (`AttentionPages`, `ViewerInboxes`).
 - Revision, cursor and undo token JSON is a wire format clients hold across
   deploys; `models/test.rs` pins it.
+- Undo recomputes every key its token names, on the primary, so the GraphQL
+  undos decode with `DoneReceipt::decode_at_most` and their done mutation's
+  item limit; a token naming more keys is refused before anything is written.
 - Under `ThreadScoped`, a `channel_message` candidate reads its channel's
   notifications; the feed scopes them to the thread.
 

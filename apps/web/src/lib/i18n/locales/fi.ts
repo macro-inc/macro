@@ -103,7 +103,6 @@ export default {
     close: 'Sulje',
     delete: 'Poista',
     rename: 'Nimeä uudelleen',
-    more: 'Lisää',
     search: 'Hae',
     settings: 'Asetukset',
   },
@@ -519,6 +518,10 @@ export default {
       other: '{{count}} kohdetta poistettu',
     },
     toastDeleteFailed: 'Poisto epäonnistui',
+    toastPropertySet: {
+      one: '{{property}} asetettu',
+      other: '{{property}} asetettu {{count}} kohteelle',
+    },
     toastAddedToFavorites: 'Lisätty suosikkeihin',
     toastAddedCountToFavorites: {
       one: '{{count}} kohde lisätty suosikkeihin',
@@ -774,7 +777,6 @@ export default {
       'Asetuksia ei löytynyt. Kokeile hakusanoja ”allekirjoitus”, ”teema” tai ”kalenteri”.',
     backToSettings: 'Takaisin asetuksiin',
     closeSettings: 'Sulje asetukset',
-    goToTab: 'Siirry asetusvälilehteen {{number}}',
     editProfile: 'Muokkaa profiilia',
     logOut: 'Kirjaudu ulos',
     yourAccount: 'Oma tili',

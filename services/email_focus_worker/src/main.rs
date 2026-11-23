@@ -2,15 +2,20 @@
 //! Classifies email threads for the Focus view.
 //!
 //! Reads `macro.email` for new and sent messages, asks Jev about each signal
-//! thread and key mail in an inbox whose owner is in the Focus rollout (their
-//! `enable-email-focus` flag) with the owner's stored memory as context, asks
-//! the agent harness for the day a thread that can be in Focus is due, stores
-//! both in `email_thread_focus`, and tells the inbox's readers through the
-//! connection gateway. Every minute it looks for inboxes whose owner joined the
-//! rollout and fills them from the last window of mail; an hourly sweep catches
-//! what the event stream missed.
+//! thread and key mail in an inbox in the Focus rollout (the
+//! `enable-email-focus` flag of its owner or of a user it is linked to, for
+//! someone who used Macro in the last week) with the owner's stored memory
+//! as context, asks the agent harness for the day a thread that can be in
+//! Focus is due, stores both in `email_thread_focus`, and tells the inbox's
+//! readers through the connection gateway. Every minute it looks for inboxes
+//! that joined the rollout and fills them from the last window of mail; an
+//! hourly sweep catches what the event stream missed. Backfills and sweeps
+//! keep to a TypeSafe token budget and slow down when TypeSafe pushes back;
+//! new mail never waits on it. Its rollout numbers (cost, failures, delays)
+//! go to CloudWatch as `Macro/EmailFocus` once a minute.
 
 mod config;
+mod metrics;
 #[cfg(test)]
 mod test_support;
 mod inbound {
@@ -19,15 +24,21 @@ mod inbound {
     pub mod sweep;
 }
 mod outbound {
+    pub mod active_enrollment;
+    pub mod cloudwatch_metrics;
     pub mod flag_enrollment;
     pub mod gateway_notifier;
     pub mod harness_due_dates;
     pub mod jev_classifier;
     pub mod memory_profile;
+    pub mod metered;
+    pub mod paced;
+    pub mod token_budget;
 }
 
 use std::{sync::Arc, time::Duration};
 
+use activity::outbound::pg_activity_repo::PgActivityRepo;
 use calendar_events::outbound::pg::PgCalendarRepository;
 use connection_gateway_client::ConnectionGatewayClient;
 use email::{domain::focus::FocusService, outbound::FocusPgRepository};
@@ -43,12 +54,18 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use crate::{
     config::Config,
     inbound::{backfill::run_backfills, kafka_consumer::run_focus_consumer, sweep::run_sweeps},
+    metrics::{FocusMetrics, Metric, run_publisher},
     outbound::{
+        active_enrollment::ActiveEnrollment,
+        cloudwatch_metrics::CloudWatchMetrics,
         flag_enrollment::{EMAIL_FOCUS_FLAG, FlagEnrollment},
         gateway_notifier::{CoalescingNotifier, GatewayDelivery},
         harness_due_dates::HarnessDueDates,
-        jev_classifier::JevFocusClassifier,
+        jev_classifier::{self, JevFocusClassifier},
         memory_profile::MemoryProfiles,
+        metered::{MeteredClassifier, MeteredRecorder, Prices, TimedStore},
+        paced::{PacedClassifier, SpendingRecorder},
+        token_budget::{Rates, TokenBudget},
     },
 };
 
@@ -102,21 +119,45 @@ async fn main() -> Result<(), Report> {
         .connect(config.macro_db_url.as_ref())
         .await?;
     let shutdown = CancellationToken::new();
+    let metrics = FocusMetrics::new(shutdown.clone());
+    metrics.add(Metric::WorkerStarts, 1.0);
+    let prices = Arc::new(Prices::from_db(db.clone()));
+    // Read before the first classification, so its cost is counted from the
+    // start; a failed read is tried again with the next.
+    prices.load(jev_classifier::MODEL).await;
     let notifications = TaskTracker::new();
     let gateway = ConnectionGatewayClient::new(
         config.internal_api_key.to_string(),
         ConnectionGatewayUrl::new()?.to_string(),
     );
+    let activity = PgActivityRepo::new(db.clone());
+    // Shared by every Jev call, so backfills and sweeps keep inside
+    // TypeSafe's rate limits with live mail taking what it needs.
+    let budget = Arc::new(TokenBudget::new(Rates::default()));
     let service = Arc::new(FocusService::new(
-        FocusPgRepository(db.clone()),
+        TimedStore::new(FocusPgRepository(db.clone()), metrics.clone()),
         MemoryProfiles::new(
             PgMemoryRepo::new(db.clone()),
             PgCalendarRepository::new(db.clone()),
         ),
-        JevFocusClassifier::new(JevClassifier::new(
-            provider,
-            ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
-        )),
+        MeteredClassifier::new(
+            PacedClassifier::new(
+                JevFocusClassifier::new(JevClassifier::new(
+                    provider,
+                    Arc::new(SpendingRecorder::new(
+                        Arc::new(MeteredRecorder::new(
+                            ai_usage::pg_recorder_with_enforcement(db.clone(), enforcement),
+                            metrics.clone(),
+                            Arc::clone(&prices),
+                        )),
+                        Arc::clone(&budget),
+                    )),
+                )),
+                budget,
+                metrics.clone(),
+            ),
+            metrics.clone(),
+        ),
         CoalescingNotifier::new(
             GatewayDelivery::new(gateway, db),
             notifications.clone(),
@@ -125,14 +166,31 @@ async fn main() -> Result<(), Report> {
         HarnessDueDates::new(
             AgentHarnessServiceUrl::new()?.as_ref(),
             config.internal_api_key.as_ref(),
+            metrics.clone(),
+            prices,
         )?,
-        FlagEnrollment::new(flags),
+        ActiveEnrollment::new(
+            FlagEnrollment::new(flags),
+            activity,
+            chrono::Duration::days(i64::from(config.focus_active_days.max(1))),
+            Duration::from_secs(config.focus_activity_cache_secs),
+        ),
     ));
     // The Focus list reads at most 90 days; a longer window would only make
     // every stale-thread page scan the whole thread table.
     let window_days = config.focus_window_days.clamp(1, MAX_WINDOW_DAYS);
     tracing::info!(window_days, "email focus worker started");
 
+    // Publishing runs apart from the loops below, so a loop's error still
+    // ends with the last batch published: a crash loop shows in the restarts.
+    // Started after every step that can fail, which can then return without
+    // stranding it; a failure before here shows only in ECS's stopped tasks.
+    let publishing = TaskTracker::new();
+    publishing.spawn(run_publisher(
+        metrics.clone(),
+        CloudWatchMetrics::new(config.environment).await,
+        shutdown.clone(),
+    ));
     tokio::spawn({
         let shutdown = shutdown.clone();
         async move {
@@ -141,13 +199,24 @@ async fn main() -> Result<(), Report> {
         }
     });
     let brokers = config.kafka_brokers.to_string();
-    let consumer = run_focus_consumer(&brokers, Arc::clone(&service), shutdown.clone());
-    let backfills = run_backfills(Arc::clone(&service), window_days, shutdown.clone());
+    let consumer = run_focus_consumer(
+        &brokers,
+        Arc::clone(&service),
+        metrics.clone(),
+        shutdown.clone(),
+    );
+    let backfills = run_backfills(
+        Arc::clone(&service),
+        window_days,
+        metrics.clone(),
+        shutdown.clone(),
+    );
     let sweeps = run_sweeps(
         service,
         // A zero interval would panic the timer.
         Duration::from_secs(config.focus_sweep_interval_secs.max(60)),
         window_days,
+        metrics,
         shutdown.clone(),
     );
     // Any loop ending with an error stops the worker so it restarts fresh.
@@ -155,5 +224,7 @@ async fn main() -> Result<(), Report> {
     shutdown.cancel();
     notifications.close();
     notifications.wait().await;
+    publishing.close();
+    publishing.wait().await;
     result
 }

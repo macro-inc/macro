@@ -8,8 +8,9 @@
 //! channel: GitHub emails a scheduled run's failure only to whoever last
 //! edited its cron line, and only if they opted in.
 
+use gh_workflow::expr::typed::failure;
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Workflow, WorkflowDispatch, ZizmorRule,
 };
 
 use crate::workflows::{cargo_deny, runners, steps};
@@ -29,7 +30,10 @@ fn advisories_job() -> Job {
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
         .permissions(Permissions::default().contents(Level::Read))
-        .add_step(cargo_deny::checkout())
+        .add_step(cargo_deny::checkout().step().zizmor_ignore(
+            ZizmorRule::Artipacked,
+            "cargo deny fetches git dependencies",
+        ))
         .add_step(steps::setup_rust_light())
         .add_step(cargo_deny::install_cargo_deny())
         .add_step(cargo_deny::deny("advisories"))
@@ -46,5 +50,5 @@ fn alert() -> Step<Run> {
             message="🚨 The daily cargo deny advisories run failed on $GITHUB_REF_NAME. If the log shows a RustSec advisory against a package in Cargo.lock, update the crate, or ignore the advisory in deny.toml with a reason. $run_url"
         "#},
     )
-    .if_condition(Expression::new("failure()"))
+    .if_condition(failure())
 }

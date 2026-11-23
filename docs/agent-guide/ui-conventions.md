@@ -24,7 +24,16 @@ filters, view options, New, then expandable Search. Related detail actions share
 a `HeaderActionGroup`; keep sharing, item navigation, and detail/view toggles in
 separate groups. View tabs (channel, CRM record, and project sections, Signal and
 Noise) are `Tabs`: separate pills at their bar's control height (`size="sm"`
-in a detail header), never inside a group. Action groups use
+in a detail header), never inside a group. A pane's top-bar view tabs take
+`Tab`, `Shift+Tab` and `1`–`9` through `useViewTabHotkeys`, called beside the
+`Tabs` with its element: the keys act only while those tabs are on screen and
+the keyboard is on their pane (its list, the pane itself, or nothing focused
+while the user last pressed or focused something in that pane), so a field,
+an editor, a button, a detail beside the list or an open item without tabs
+keeps normal focus order, at every width and with the sidebar collapsed.
+Sidebar navigation (views, folders, scopes) is not tabs and takes no Tab or
+number keys; tabs atop a list that is the sidebar (Chat's rail, New Home) are
+that pane's top bar. Nothing else in a view binds `Tab`. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
@@ -44,7 +53,8 @@ another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
 iconOnly`, then a menu). Decide those steps from whether the row fits with the
 shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
-Reviews' list header, Email's phone reply buttons) or the split header's
+Reviews' list header, Email's list header, which hides its view options
+before Search would leave the pane, Email's phone reply buttons) or the split header's
 `PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
@@ -129,7 +139,9 @@ Opening the editor must not blank or remount the surrounding app.
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,
 or send notifications. They create entity-history entries without entering
-broader activity feeds. Copies and template instances retain the appearance.
+broader activity feeds. Copies and template instances retain the appearance,
+except that an agent creating or changing a routine may pick its look; it never
+replaces a look the owner chose.
 
 ## Responsive workspace navigation
 
@@ -331,7 +343,12 @@ newly selected values.
 New references appear immediately in the collection as pending chips with an
 inline spinner through saving and refresh. Use the dragged item's label while
 its preview metadata loads. Failed saves clear pending chips through the existing
-error flow. Pending chips cannot be opened or removed. A persistently
+error flow. Pending chips cannot be opened or removed. Click a saved chip's
+name to open its item (a contact, company, task, document, channel, email,
+folder or project); shift-click opens it in a new split, and an item already
+open in another split is brought forward instead of opened twice. The Add
+button opens the picker and a chip's remove control removes that value; a chip
+never opens the picker. People who can't edit the item still open its values. A persistently
 mounted status region announces additions, including picker saves. Removed
 references disappear immediately and are restored from the last confirmed values
 if saving fails. A failed refresh does not undo a successful save: keep confirmed

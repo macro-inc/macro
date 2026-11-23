@@ -2,16 +2,17 @@
 //! subscription change means for each computer. The lifecycle decides; this
 //! module only talks to the billing provider and feeds it events.
 
+use crate::domain::ports::HostScope;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::{Clock, ComputerError, ComputerService, internal};
 use crate::domain::ids::ComputerId;
 use crate::domain::lifecycle::{
-    BILLING_BACKOFF, Billing as ComputerBilling, Effect, EffectWorker, Event, Rejected,
-    SubscriptionItemId, backoff, restore_allowed, undo_allowed,
+    BILLING_BACKOFF, Billing as ComputerBilling, DeclineSeen, Effect, EffectWorker, Event,
+    LandedCharge, Rejected, SubscriptionItemId, backoff, restore_allowed, undo_allowed,
 };
-use crate::domain::models::{ComputerRecord, ComputerStatus, Funding};
+use crate::domain::models::{ComputerRecord, ComputerStatus, Funding, charge_key};
 use crate::domain::ports::{
     Applied, Billing, BillingError, ChargeStatus, CompPolicy, ComputerRepo, FleetAttachmentSource,
     ItemCharge, PendingEffect,
@@ -19,6 +20,12 @@ use crate::domain::ports::{
 
 /// Billing effects leased per worker pass.
 const BILLING_BATCH: u32 = 16;
+/// How soon a billing effect refused because another change to the team's
+/// subscription is still in flight runs again. That change settles within
+/// the teams guard's own window (five minutes at most), so this never spins
+/// for long, and it spends no attempt.
+pub(crate) const CHANGE_IN_FLIGHT_RETRY: chrono::Duration = chrono::Duration::seconds(5);
+
 /// How long a leased billing effect stays hidden from other workers.
 const BILLING_LEASE: chrono::Duration = chrono::Duration::minutes(2);
 /// Failed attempts after which a billing item removal stops retrying and
@@ -55,12 +62,20 @@ fn readd_key(computer: &crate::domain::models::Computer, purpose: &str, attempt:
     )
 }
 
-/// The key of one generation of a billing effect's item removal.
-fn removal_key(effect_id: i64, generation: u32) -> String {
-    format!("computer-remove:{effect_id}:{generation}")
+/// The key of one generation of a billing effect's item removal. Effect ids
+/// come from each database's own sequence, so environments sharing one
+/// Stripe account reuse them; the computer id makes the key unique there.
+pub(super) fn removal_key(computer_id: ComputerId, effect_id: i64, generation: u32) -> String {
+    format!("computer-remove:{computer_id}:{effect_id}:{generation}")
 }
 
 /// One removal per stray item and snapshot: a later snapshot tries again.
+/// The key a computer's purchase refund is sent under, the same on every
+/// retry.
+fn refund_key(computer_id: ComputerId) -> String {
+    format!("computer-refund:{computer_id}")
+}
+
 fn stray_key(item: &SubscriptionItemId, observed_at: DateTime<Utc>) -> String {
     format!("computer-stray:{item}:{}", observed_at.timestamp_micros())
 }
@@ -131,9 +146,11 @@ impl<
         let computer = self.team_computer(team_id, computer_id).await?;
         let at = match computer.state.billing {
             ComputerBilling::Active { .. } => self.billing.period_end(team_id).await?,
+            // The lifecycle refuses a still-charging computer's cancel.
             ComputerBilling::PastDue { .. }
             | ComputerBilling::EndsAt { .. }
-            | ComputerBilling::Comped { .. } => self.clock.now(),
+            | ComputerBilling::Comped { .. }
+            | ComputerBilling::Charging { .. } => self.clock.now(),
         };
         self.apply_for_team(team_id, computer_id, Event::CancelAtPeriodEnd { at })
             .await
@@ -376,7 +393,13 @@ impl<
             }
         }
 
-        for computer in computers.iter().filter_map(ComputerRecord::healthy) {
+        // A charge still settling may just have added its computer's item;
+        // the charge decides, so the snapshot neither bills nor strips it.
+        for computer in computers
+            .iter()
+            .filter_map(ComputerRecord::healthy)
+            .filter(|computer| !computer.state.billing.is_charging())
+        {
             let named: Vec<&SubscriptionItemId> = observed
                 .items
                 .iter()
@@ -542,6 +565,7 @@ impl<
             .repo
             .lease_effects(
                 EffectWorker::Billing,
+                HostScope::Every,
                 BILLING_BATCH,
                 now,
                 now + BILLING_LEASE,
@@ -577,9 +601,18 @@ impl<
         use tracing::Instrument;
         let span = tracing::info_span!("computer.billing.effect", computer_id = %pending.computer_id, effect_id = pending.id, attempts = i64::from(pending.attempts), otel.status_code = tracing::field::Empty);
         async {
+            // A charge is never abandoned: it settles for good on its last
+            // attempt, and until that answers the computer stays unpaid.
+            let abandonable = !matches!(pending.effect, Effect::Charge);
             // Every failure, reading the computer included, is retried with
             // backoff and counts toward the abandonment alert.
-            match self.remove_billing_item(&pending).await {
+            let done = match &pending.effect {
+                Effect::RefundPurchase { .. } => self.refund_purchase(&pending).await,
+                Effect::Charge => self.charge(&pending).await,
+                Effect::SettleCharge { landed } => self.settle_charge(&pending, *landed).await,
+                _ => self.remove_billing_item(&pending).await,
+            };
+            match done {
                 Ok(()) => self
                     .repo
                     .complete_effect(pending.id)
@@ -588,14 +621,29 @@ impl<
                 // Not the removal's failure: it runs again once its lease
                 // expires, without spending an attempt.
                 Err(error) if error.is_storage_unavailable() => Err(error),
+                // Turned away, not failed: nothing was sent while another
+                // change to the subscription settles.
+                Err(ComputerError::Billing(BillingError::ChangeInFlight)) => {
+                    tracing::info!(effect_id = pending.id,
+                        "another subscription change is in flight; billing effect deferred");
+                    self.repo
+                        .defer_effect(pending.id, self.clock.now() + CHANGE_IN_FLIGHT_RETRY)
+                        .await
+                        .map_err(internal)
+                }
                 Err(error) => {
                     super::super::telemetry::effect_failed("billing");
                     tracing::Span::current().record("otel.status_code", "ERROR");
                     let attempts = pending.attempts.saturating_add(1);
-                    if attempts >= MAX_BILLING_ATTEMPTS {
+                    if abandonable && attempts >= MAX_BILLING_ATTEMPTS {
                         // Alerting keys on this event; see the crate's AGENTS.md.
-                        tracing::error!(computer_id = %pending.computer_id, effect_id = pending.id,
-                            attempts, error = ?error, "computer billing item removal abandoned");
+                        if matches!(pending.effect, Effect::RefundPurchase { .. }) {
+                            tracing::error!(computer_id = %pending.computer_id, effect_id = pending.id,
+                                attempts, error = ?error, "computer purchase refund abandoned");
+                        } else {
+                            tracing::error!(computer_id = %pending.computer_id, effect_id = pending.id,
+                                attempts, error = ?error, "computer billing item removal abandoned");
+                        }
                         return self
                             .repo
                             .complete_effect(pending.id)
@@ -617,6 +665,149 @@ impl<
         }
         .instrument(span)
         .await
+    }
+
+    /// Charge a just-bought computer whose purchase request could not answer
+    /// the charge, under its billing guard and the purchase's one key
+    /// ([`charge_key`]), so a replay never charges twice. From
+    /// [`MAX_BILLING_ATTEMPTS`] on the add is settled for good instead: an
+    /// item that reached the subscription bills the computer, none releases
+    /// it. A computer no longer charging is left alone: its outcome applied,
+    /// or a release queued [`Effect::SettleCharge`] behind this.
+    #[tracing::instrument(
+        name = "computer.billing.charge",
+        skip_all,
+        fields(computer_id = %pending.computer_id, settling, outcome = tracing::field::Empty),
+        err
+    )]
+    async fn charge(&self, pending: &PendingEffect) -> Result<(), ComputerError> {
+        let _billing = self
+            .repo
+            .lock_billing(pending.computer_id)
+            .await
+            .map_err(internal)?;
+        let computer = self
+            .repo
+            .get(pending.computer_id)
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?
+            .into_healthy()
+            .map_err(|_| ComputerError::NeedsAttention)?;
+        super::super::telemetry::adopt(&tracing::Span::current(), &computer.state);
+        let ComputerBilling::Charging { extra_items, .. } = &computer.state.billing else {
+            tracing::Span::current().record("outcome", "settled_already");
+            return Ok(());
+        };
+        let Funding::Stripe { price_id } = &computer.funding else {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "a comped computer is charging"
+            )));
+        };
+        let key = charge_key(computer.id);
+        let settling = pending.attempts.saturating_add(1) >= MAX_BILLING_ATTEMPTS;
+        tracing::Span::current().record("settling", settling);
+        let outcome = if settling {
+            self.billing
+                .settle_computer_add(computer.team_id, computer.id, &key)
+                .await
+        } else {
+            self.billing
+                .add_computer(
+                    computer.team_id,
+                    computer.id,
+                    price_id,
+                    extra_items,
+                    ItemCharge::Prorated,
+                    &key,
+                )
+                .await
+                .map(Some)
+        };
+        let event = match outcome {
+            Ok(Some(subscription_item)) => Event::ChargeSucceeded { subscription_item },
+            Ok(None) => {
+                tracing::warn!(computer_id = %computer.id,
+                    "computer charge settled uncharged; releasing the computer");
+                Event::ChargeFailed {
+                    seen: DeclineSeen::Later,
+                }
+            }
+            Err(error) if error.is_definite() => {
+                tracing::warn!(computer_id = %computer.id, error = ?error,
+                    "computer charge refused; releasing the computer");
+                Event::ChargeFailed {
+                    seen: DeclineSeen::Later,
+                }
+            }
+            Err(error) => return Err(error.into()),
+        };
+        tracing::Span::current().record(
+            "outcome",
+            if matches!(event, Event::ChargeSucceeded { .. }) {
+                "charged"
+            } else {
+                "refused"
+            },
+        );
+        self.repo
+            .apply(computer.id, event, self.clock.now())
+            .await
+            .map_err(internal)?;
+        Ok(())
+    }
+
+    /// Fence the charge of a computer released while it was charging, under
+    /// its billing guard (so a purchase request still charging finishes
+    /// first), then remove or refund the item it left, if it landed. A
+    /// subscription already gone took the item with it.
+    #[tracing::instrument(
+        name = "computer.billing.settle_charge",
+        skip_all,
+        fields(computer_id = %pending.computer_id, landed = ?landed, item_landed = tracing::field::Empty),
+        err
+    )]
+    async fn settle_charge(
+        &self,
+        pending: &PendingEffect,
+        landed: LandedCharge,
+    ) -> Result<(), ComputerError> {
+        let _billing = self
+            .repo
+            .lock_billing(pending.computer_id)
+            .await
+            .map_err(internal)?;
+        let team_id = self
+            .repo
+            .get(pending.computer_id)
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?
+            .team_id();
+        let item = match self
+            .billing
+            .settle_computer_add(
+                team_id,
+                pending.computer_id,
+                &charge_key(pending.computer_id),
+            )
+            .await
+        {
+            Ok(item) => item,
+            Err(BillingError::NoSubscription) => None,
+            Err(error) => return Err(error.into()),
+        };
+        tracing::Span::current().record("item_landed", item.is_some());
+        let Some(subscription_item) = item else {
+            return Ok(());
+        };
+        tracing::warn!(computer_id = %pending.computer_id, subscription_item = %subscription_item,
+            "taking back the item of a computer released while it was charging");
+        match landed {
+            LandedCharge::Remove => {}
+            LandedCharge::Refund => self.refund_and_record(team_id, pending.computer_id).await?,
+        }
+        self.remove_once(pending, team_id, &subscription_item).await
     }
 
     /// Remove the effect's item, deciding under the computer's billing guard
@@ -649,7 +840,7 @@ impl<
                 return Ok(());
             }
         }
-        let Some(key) = self.removal_key(pending.id).await? else {
+        let Some(key) = self.removal_key(pending).await? else {
             tracing::info!(subscription_item = %subscription_item,
                 "an earlier attempt removed this item");
             return Ok(());
@@ -665,15 +856,107 @@ impl<
         }
     }
 
+    /// Refund a released computer's purchase, record it on the computer, then
+    /// take its item off the subscription without proration. The refund goes
+    /// first and under one key per computer, so a retry after a failed
+    /// removal replays the same credit note rather than refunding twice.
+    #[tracing::instrument(
+        name = "computer.billing.refund_purchase",
+        skip_all,
+        fields(computer_id = %pending.computer_id, refunded = tracing::field::Empty),
+        err
+    )]
+    async fn refund_purchase(&self, pending: &PendingEffect) -> Result<(), ComputerError> {
+        let Effect::RefundPurchase { subscription_item } = &pending.effect else {
+            return Err(ComputerError::Internal(rootcause::report!(
+                "not a refund reached the refund handler"
+            )));
+        };
+        let _billing = self
+            .repo
+            .lock_billing(pending.computer_id)
+            .await
+            .map_err(internal)?;
+        let record = self
+            .repo
+            .get(pending.computer_id)
+            .await
+            .map_err(internal)?
+            .ok_or(ComputerError::NotFound)?;
+        self.refund_and_record(record.team_id(), pending.computer_id)
+            .await?;
+        self.remove_once(pending, record.team_id(), subscription_item)
+            .await
+    }
+
+    /// Refund a computer's purchase under its one refund key and record the
+    /// refund on the computer.
+    async fn refund_and_record(
+        &self,
+        team_id: Uuid,
+        computer_id: ComputerId,
+    ) -> Result<(), ComputerError> {
+        let (refund, subscription_gone) = match self
+            .billing
+            .refund_computer_purchase(team_id, computer_id, &refund_key(computer_id))
+            .await
+        {
+            Ok(refund) => (refund, false),
+            // A subscription that is gone was canceled with its team.
+            Err(BillingError::NoSubscription) => (None, true),
+            Err(error) => return Err(error.into()),
+        };
+        tracing::Span::current().record("refunded", refund.is_some());
+        if subscription_gone {
+            tracing::info!(%computer_id, "computer purchase refund skipped: the team's subscription is gone");
+        } else if refund.is_none() {
+            // The computer was billed on an item, so a purchase invoice
+            // should exist: it may still be open, or older than the invoices
+            // searched. Alerting keys on this event; see the crate's AGENTS.md.
+            tracing::error!(%computer_id, "computer purchase refund found no paid purchase");
+        }
+        if let Some(refund) = refund {
+            self.repo
+                .apply(
+                    computer_id,
+                    Event::PurchaseRefunded { refund },
+                    self.clock.now(),
+                )
+                .await
+                .map_err(internal)?;
+        }
+        Ok(())
+    }
+
+    /// Remove `subscription_item` under the effect's own removal key, once.
+    async fn remove_once(
+        &self,
+        pending: &PendingEffect,
+        team_id: Uuid,
+        subscription_item: &SubscriptionItemId,
+    ) -> Result<(), ComputerError> {
+        let Some(key) = self.removal_key(pending).await? else {
+            return Ok(());
+        };
+        match self
+            .billing
+            .remove_computer(team_id, subscription_item, &key)
+            .await
+        {
+            Ok(()) | Err(BillingError::NoSubscription) => Ok(()),
+            Err(error) => Err(error.into()),
+        }
+    }
+
     /// The key a billing effect's removal is sent under: the same one on
     /// every retry, so a retry replays its own change (which the
     /// subscription guard lets through) instead of being refused by it. A
     /// generation whose change definitely did not apply (given up while its
     /// outcome was unknown) is spent, and the next one is used. `None` when
     /// a generation already removed the item.
-    async fn removal_key(&self, effect_id: i64) -> Result<Option<String>, ComputerError> {
+    async fn removal_key(&self, pending: &PendingEffect) -> Result<Option<String>, ComputerError> {
         for generation in 0..MAX_BILLING_ATTEMPTS {
-            let key = removal_key(effect_id, generation);
+            let key = removal_key(pending.computer_id, pending.id, generation);
             match self.billing.charge_status(&key).await? {
                 Some(ChargeStatus::NotApplied) => continue,
                 Some(ChargeStatus::Applied) => return Ok(None),

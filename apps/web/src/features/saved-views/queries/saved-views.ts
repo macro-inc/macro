@@ -18,11 +18,14 @@ import {
   onMount,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import { readEntityAppearance } from '../../entity-appearance/core/appearance';
+import { usePendingEntityAppearance } from '../../entity-appearance/queries/pending-appearance';
 import type {
   SavedViewSource,
   SavedViewsSource,
 } from '../context/saved-views-source';
 import type { SavedView } from '../core/saved-view';
+import { registerSavedViewReader } from './active-queries';
 import { refreshOnSavedViewChanges } from './saved-view-changes';
 
 export function toSavedView(view: SavedViewFieldsFragment): SavedView {
@@ -33,6 +36,7 @@ export function toSavedView(view: SavedViewFieldsFragment): SavedView {
     config: structuredClone(unwrap(view.config)),
     sharedTeamId: view.sharedTeamId ?? null,
     revision: view.revision,
+    appearance: readEntityAppearance(view.appearance),
   };
 }
 
@@ -74,6 +78,7 @@ export function useSavedViews(options: {
   viewerId: Accessor<string | undefined>;
   kind: string;
 }): SavedViewsSource {
+  const pendingAppearance = usePendingEntityAppearance();
   const client = createMemo(getGraphqlSoupClient);
   const list = createUrqlInfiniteQuery<
     SavedViewsQuery,
@@ -109,12 +114,20 @@ export function useSavedViews(options: {
     requestPolicy: 'cache-and-network',
   }));
   const refresh = async () => {
-    await list.refetch({ requestPolicy: 'network-only' });
+    const result = await list.refetch({ requestPolicy: 'network-only' });
+    if (result.error) throw result.error;
   };
   revalidateSavedViewQuery(options.viewerId, refresh, options.kind);
+  registerSavedViewReader({ client, refresh });
+  const items = createMemo(() => {
+    if (list.data?.viewerId !== options.viewerId()) return undefined;
+    return list.data?.items.map((view) => {
+      const appearance = pendingAppearance('saved_view', view.id, !!list.error);
+      return appearance ? { ...view, appearance } : view;
+    });
+  });
   return {
-    items: () =>
-      list.data?.viewerId === options.viewerId() ? list.data?.items : undefined,
+    items,
     loading: () =>
       !list.error &&
       (list.isPending || list.data?.viewerId !== options.viewerId()),
@@ -132,6 +145,7 @@ export function useSavedView(options: {
   id: Accessor<string | undefined>;
 }): SavedViewSource {
   const client = createMemo(getGraphqlSoupClient);
+  const pendingAppearance = usePendingEntityAppearance();
   const detail = createLiveQuery(
     SavedViewDocument,
     () => {
@@ -145,14 +159,26 @@ export function useSavedView(options: {
     })
   );
   const refresh = async () => {
-    if (options.id()) await detail.refetch({ requestPolicy: 'network-only' });
+    if (!options.id()) return;
+    const result = await detail.refetch({ requestPolicy: 'network-only' });
+    if (result.error) throw result.error;
   };
   revalidateSavedViewQuery(options.viewerId, refresh);
+  registerSavedViewReader({ client, id: options.id, refresh });
   return {
     data: () =>
       detail.data?.user.id === options.viewerId()
         ? detail.data?.user.savedView
-          ? toSavedView(detail.data.user.savedView)
+          ? {
+              ...toSavedView(detail.data.user.savedView),
+              appearance:
+                pendingAppearance(
+                  'saved_view',
+                  detail.data.user.savedView.id,
+                  !!detail.error
+                ) ??
+                readEntityAppearance(detail.data.user.savedView.appearance),
+            }
           : null
         : undefined,
     viewerId: () => detail.data?.user.id,

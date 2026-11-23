@@ -314,6 +314,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         enabled: () =>
           props.menu.isOpen() &&
           (!props.sources || props.sources.includes('emails')),
+        recentWhenShort: () =>
+          props.sources?.length === 1 && props.sources[0] === 'emails',
       });
 
   // A WhatsApp chat mentioned in a channel is shared with its members; only
@@ -448,6 +450,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     sourceEnabled('users') && userMention.waitingForPeople();
   const retryPeople = () =>
     fireAndForget(userMention.retryPeople(), 'mentions-menu');
+  // People keeps its place while its first answer loads, so the sections
+  // listed below it don't move when people land. A menu whose other sections
+  // can't list anything for the query (Booking Links answer only an empty
+  // one) has nothing to push down and says it is searching instead.
+  const listsOtherSources = () =>
+    !props.sources ||
+    props.sources.some(
+      (source) =>
+        source !== 'users' &&
+        (source !== 'bookingLinks' || searchTerm().trim() === '')
+    );
+  const peopleHolding = () =>
+    userMention.holdsRows() || (waitingForPeople() && listsOtherSources());
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     // Phones pin people above every other row and rank the rest around them,
@@ -524,13 +539,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ];
     }
 
+    // Booking links arrive from the network after the menu opens; listed below
+    // People they never push down the row Macro leads with. Phones pin People
+    // rows above the rest of their one ranked list instead.
     const buckets: BucketConfig[] = [
-      {
-        id: 'bookingLinks',
-        label: 'Booking Links',
-        getData: bookingLinks,
-        getFullCount: () => bookingLinks().length,
-      },
       {
         id: 'users',
         windowKey: peopleWindowKey,
@@ -543,9 +555,15 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: userMention.hasMore,
         isLoadingMore: userMention.isLoadingMore,
         loadMore: userMention.loadMore,
-        holding: userMention.holdsRows,
+        holding: peopleHolding,
         failed: userMention.peopleFailed,
         retry: retryPeople,
+      },
+      {
+        id: 'bookingLinks',
+        label: 'Booking Links',
+        getData: bookingLinks,
+        getFullCount: () => bookingLinks().length,
       },
       {
         id: 'documents',
@@ -1026,6 +1044,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                 <MentionLoadingRows
                                   count={count()}
                                   label={t('common.loadingPeople')}
+                                  blank={!userMention.showsLoading()}
                                 />
                               )}
                             </Show>
@@ -1103,6 +1122,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       count={Math.ceil(height() / VIRTUAL_ITEM_HEIGHT)}
                       label={t('common.loading')}
                       rowClass="h-9 sm:h-9"
+                      blank={!userMention.showsLoading()}
                     />
                   </div>
                 )}

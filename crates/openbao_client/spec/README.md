@@ -84,7 +84,7 @@ while other messages remain rejections. Missing namespace is a separate 404 caus
 HTTP 401/403 remain authentication/policy failures. Provider messages remain secret-wrapped
 and never appear in Debug, Display, error source chains or tracing.
 
-`regen.sh` mirrors `crates/incus_client/regen.sh`: pinned progenitor 0.15.1,
+`regen.sh` uses pinned progenitor 0.15.1,
 openapiv3 2.2.0, temporary standalone generator workspace, positional methods,
 BTreeMap maps, line-doc normalization, prettyplease and rustfmt. The AST visitor
 marks only progenitor's unused `ConversionError` helper with a narrow lint

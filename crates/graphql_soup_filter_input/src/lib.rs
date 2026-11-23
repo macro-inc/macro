@@ -734,7 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded query
+    /// property or a reference to the record; a task also through a custom
+    /// entity property that names the record. Requires an expanded query
     /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.
@@ -1108,7 +1109,8 @@ enum GraphqlChannelLiteral {
     Importance(bool),
     /// The is participant option. Filters by whether the requesting user is an
     /// active participant; its presence widens the candidate set to team channels
-    /// of the user's teams they have not joined.
+    /// of the user's teams they have not joined, and, when the filter admits only
+    /// channels it names by id, to public channels too.
     IsParticipant(bool),
     /// Exact notification state for the requester.
     NotificationState(GraphqlNotificationState),

@@ -141,9 +141,12 @@ fn channel_reaction_formats_push_copy() {
         reaction
             .format_title(Some(uid("macro|teo@macro.com")))
             .unwrap(),
-        "teo reacted with 👍 to “This is a useful message”"
+        "teo"
     );
-    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    assert_eq!(
+        reaction.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”\n#general"
+    );
     let apns = reaction
         .as_apns(
             Some(uid("macro|teo@macro.com")),
@@ -157,17 +160,70 @@ fn channel_reaction_formats_push_copy() {
             title: Some(ref title),
             body: Some(ref body),
             ..
-        })) if title == "teo reacted with 👍 to “This is a useful message”"
-            && body == "#general"
+        })) if title == "teo"
+            && body == "Reacted 👍 to: “This is a useful message”\n#general"
     ));
 
     let mut multiline = channel_reaction();
     multiline.message_content = "First line\nsecond line".to_string();
     assert_eq!(
-        multiline
-            .format_title(Some(uid("macro|teo@macro.com")))
-            .unwrap(),
-        "teo reacted with 👍 to “First line second line”"
+        multiline.format_body(None).unwrap(),
+        "Reacted 👍 to: “First line second line”\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_shortens_a_long_message_and_keeps_the_emoji_whole() {
+    let mut long = channel_reaction();
+    long.emoji = "🧑🏽‍💻".to_string();
+    long.message_content = "word ".repeat(40);
+    let body = long.format_body(None).unwrap();
+    let (reacted, place) = body.split_once('\n').unwrap();
+    assert!(reacted.starts_with("Reacted 🧑🏽‍💻 to: “word word"));
+    assert!(reacted.ends_with("…”"));
+    assert_eq!(
+        reacted.chars().count(),
+        "Reacted 🧑🏽‍💻 to: “”…".chars().count() + CHANNEL_REACTION_EXCERPT_MAX_CHARS
+    );
+    assert_eq!(place, "#general");
+}
+
+#[test]
+fn channel_reaction_never_cuts_a_character_in_half() {
+    let mut flag = channel_reaction();
+    flag.message_content = format!("{}🇨🇦 and more", "a".repeat(79));
+    let body = flag.format_body(None).unwrap();
+    assert_eq!(
+        body,
+        format!("Reacted 👍 to: “{}🇨🇦…”\n#general", "a".repeat(79))
+    );
+}
+
+#[test]
+fn channel_reaction_keeps_a_character_of_many_marks_within_the_push_budget() {
+    let mut marks = channel_reaction();
+    marks.message_content = format!("ok a{}", "\u{301}".repeat(2100));
+    let body = marks.format_body(None).unwrap();
+    assert_eq!(body, "Reacted 👍 to: “ok …”\n#general");
+}
+
+#[test]
+fn channel_reaction_to_a_message_without_text_names_your_message() {
+    let mut attachment = channel_reaction();
+    attachment.message_content = String::new();
+    assert_eq!(
+        attachment.format_body(None).unwrap(),
+        "Reacted 👍 to your message\n#general"
+    );
+}
+
+#[test]
+fn channel_reaction_in_a_direct_message_names_no_place() {
+    let mut dm = channel_reaction();
+    dm.common.channel_type = ChannelType::DirectMessage;
+    assert_eq!(
+        dm.format_body(None).unwrap(),
+        "Reacted 👍 to: “This is a useful message”"
     );
 }
 
@@ -1572,6 +1628,7 @@ fn computer_setup_serializes_with_the_computer_and_the_outcome() {
         agent: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer kept crashing.".to_string(),
+            released: false,
         },
     };
 
@@ -1629,6 +1686,7 @@ fn computer_setup_titles_say_ready_or_name_the_computer_and_why_it_failed() {
         agent: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer couldn't be created on the host.".to_string(),
+            released: false,
         },
     };
 
@@ -1666,6 +1724,7 @@ fn an_agent_teammates_computer_setup_names_the_agent() {
         harness_id: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer couldn't be created on the host.".to_string(),
+            released: false,
         },
         ..ready.clone()
     };
@@ -1689,5 +1748,154 @@ fn an_agent_teammates_computer_setup_names_the_agent() {
     assert_eq!(
         failed.format_body(None).unwrap(),
         "The computer couldn't be created on the host. Retry from Ada's row in Members."
+    );
+}
+
+#[test]
+fn pings_push_who_sent_them_what_about_and_the_senders_words() {
+    let metadata = PingMetadata {
+        body: "All 3 services are live.".to_string(),
+        entity_name: Some("Deploy plan".to_string()),
+        agent: Some(PingAgent {
+            id: Uuid::nil(),
+            name: "Macro".to_string(),
+            avatar_url: Some("https://example.com/macro.png".to_string()),
+        }),
+        message: None,
+    };
+    let entity = EntityType::Document.with_entity_str("doc-1");
+
+    let value = serde_json::to_value(NotifEvent::Ping(metadata.clone())).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "tag": "ping",
+            "content": {
+                "body": "All 3 services are live.",
+                "entityName": "Deploy plan",
+                "agent": {
+                    "id": "00000000-0000-0000-0000-000000000000",
+                    "name": "Macro",
+                    "avatarUrl": "https://example.com/macro.png",
+                },
+            },
+        })
+    );
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::Ping(decoded) if decoded == metadata));
+
+    // One line, as a digest shows it.
+    assert_eq!(
+        metadata.format_title(None).unwrap(),
+        "Macro pinged you — Deploy plan"
+    );
+    let apns = metadata.as_apns(None, &entity, Uuid::nil()).unwrap();
+    let Some(Alert::Dictionary(alert)) = apns.aps.alert else {
+        panic!("pings push an alert");
+    };
+    assert_eq!(alert.title.as_deref(), Some("Macro pinged you"));
+    assert_eq!(alert.subtitle.as_deref(), Some("Deploy plan"));
+    assert_eq!(alert.body.as_deref(), Some("All 3 services are live."));
+    assert_eq!(
+        apns.push_notification_data
+            .sender_profile_picture_url
+            .as_deref(),
+        Some("https://example.com/macro.png")
+    );
+
+    let other_words = PingMetadata {
+        body: "One service failed.".to_string(),
+        ..metadata.clone()
+    };
+    assert_ne!(
+        metadata.collapse_key(&entity).into_hashed().into_inner(),
+        other_words.collapse_key(&entity).into_hashed().into_inner()
+    );
+}
+
+#[test]
+fn a_ping_names_its_sender_and_leaves_out_a_name_it_does_not_have() {
+    let from_a_person = PingMetadata {
+        body: "Can you look?".to_string(),
+        entity_name: None,
+        agent: None,
+        message: None,
+    };
+    let sender = MacroUserIdStr::parse_from_str("macro|ada@example.com").unwrap();
+    assert_eq!(
+        from_a_person.format_title(Some(sender.clone())).unwrap(),
+        "ada pinged you"
+    );
+    assert_eq!(
+        from_a_person.format_title(None).unwrap(),
+        "You pinged yourself"
+    );
+
+    let entity = EntityType::Document.with_entity_str("doc-1");
+    let apns = from_a_person
+        .as_apns(Some(sender), &entity, Uuid::nil())
+        .unwrap();
+    let Some(Alert::Dictionary(alert)) = apns.aps.alert else {
+        panic!("pings push an alert");
+    };
+    assert_eq!(alert.subtitle, None);
+    assert_eq!(alert.body.as_deref(), Some("Can you look?"));
+}
+
+#[test]
+fn a_ping_about_a_channel_message_opens_at_the_message() {
+    let message_id = Uuid::from_u128(2);
+    let thread_id = Uuid::from_u128(3);
+    let metadata = PingMetadata {
+        body: "Needs an answer".to_string(),
+        entity_name: Some("#eng".to_string()),
+        agent: None,
+        message: Some(PingMessage {
+            message_id,
+            thread_id: Some(thread_id),
+        }),
+    };
+    let channel_id = Uuid::from_u128(1).to_string();
+    let channel = EntityType::Channel.with_entity_str(&channel_id);
+
+    let value = serde_json::to_value(NotifEvent::Ping(metadata.clone())).unwrap();
+    assert_eq!(
+        value["content"]["message"],
+        serde_json::json!({
+            "messageId": message_id.to_string(),
+            "threadId": thread_id.to_string(),
+        })
+    );
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::Ping(decoded) if decoded == metadata));
+
+    let apns = metadata.as_apns(None, &channel, Uuid::nil()).unwrap();
+    let Some(Alert::Dictionary(alert)) = &apns.aps.alert else {
+        panic!("pings push an alert");
+    };
+    assert_eq!(alert.subtitle.as_deref(), Some("#eng"));
+    assert_eq!(
+        serde_json::to_value(apns).unwrap()["navigation"],
+        serde_json::json!({
+            "type": "channel",
+            "channelId": channel_id,
+            "messageId": message_id.to_string(),
+            "threadId": thread_id.to_string(),
+        })
+    );
+
+    let other_message = PingMetadata {
+        message: Some(PingMessage {
+            message_id: Uuid::from_u128(4),
+            thread_id: None,
+        }),
+        ..metadata.clone()
+    };
+    assert_ne!(
+        metadata.collapse_key(&channel).into_hashed().into_inner(),
+        other_message
+            .collapse_key(&channel)
+            .into_hashed()
+            .into_inner()
     );
 }

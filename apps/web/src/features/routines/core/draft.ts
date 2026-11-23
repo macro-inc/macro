@@ -1,8 +1,9 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 import type { StepDraft } from './routine-steps';
 import type { RoutineTarget } from './routine-target';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
-/** A Pipedream app, as stored on the routine's task. */
+/** A catalog app, as stored on the routine's task. */
 export type RoutineApp = { app_slug: string; server_name: string };
 
 export type ScheduleFrequency = 'week' | 'month' | 'once';
@@ -41,6 +42,11 @@ export type ScheduleDraft = {
   name: string;
   /** What the routine is for; absent from drafts saved before descriptions. */
   description?: string;
+  /**
+   * The icon and colour AI picked for a drafted routine, which creating it
+   * saves. Absent otherwise: a saved routine's look is its own.
+   */
+  appearance?: EntityAppearance;
   /** The routine suggestion a new routine starts from, recorded on save. */
   suggestionId?: string;
   prompt: string;

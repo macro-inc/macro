@@ -15,7 +15,9 @@ stack generator owns the container, instance volumes, and generated credentials.
   `../../openbao/openbao_provisioning.py`, which the hosted dev provisioning shares.
 - `../../../tooling/xtask/crates/xtask_local/src/local/gen_compose.rs`: container
   and named-volume wiring; `local_env.rs` names the service's JWT signing key and
-  `localstack.rs` creates it and writes its public PEM.
+  `localstack.rs` creates it and writes its public PEM; `passwords_vault.rs`
+  provisions every team after stack up and backs `just passwords_provision` for
+  teams created later.
 
 ## Scope
 

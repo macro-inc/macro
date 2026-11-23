@@ -15,6 +15,9 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type { AddServerRequest } from './generated/schemas/addServerRequest';
+import type { CatalogPage } from './generated/schemas/catalogPage';
+import type { Connector } from './generated/schemas/connector';
+import type { ConnectStep } from './generated/schemas/connectStep';
 import type { DatabaseQueryAnswer } from './generated/schemas/databaseQueryAnswer';
 import type { DatabaseQueryRequest } from './generated/schemas/databaseQueryRequest';
 import type { GetBatchPreviewRequest } from './generated/schemas/getBatchPreviewRequest';
@@ -22,16 +25,11 @@ import type { GetBatchPreviewResponse } from './generated/schemas/getBatchPrevie
 import type { GetChatPermissionsResponse } from './generated/schemas/getChatPermissionsResponse';
 import type { GetChatResponse } from './generated/schemas/getChatResponse';
 import type { GetChatsForAttachmentResponse } from './generated/schemas/getChatsForAttachmentResponse';
-import type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
-import type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
-import type { ServerResponse } from './generated/schemas/serverResponse';
-import type { StartAuthRequest } from './generated/schemas/startAuthRequest';
-import type { StartAuthResponse } from './generated/schemas/startAuthResponse';
 import type { StopChatStreamRequest } from './generated/schemas/stopChatStreamRequest';
 import type { StopChatStreamResponse } from './generated/schemas/stopChatStreamResponse';
 import type { StructuredCompletionRequest } from './generated/schemas/structuredCompletionRequest';
 import type { StructuredCompletionResponse } from './generated/schemas/structuredCompletionResponse';
-import type { UpdateServerRequest } from './generated/schemas/updateServerRequest';
+import type { UpdateConnectorRequest } from './generated/schemas/updateConnectorRequest';
 
 const dcsHost: string = SERVER_HOSTS['cognition-service'];
 
@@ -55,53 +53,6 @@ function dcsFetch<T extends ObjectLike = never>(
 }
 
 type IdMappingResponse = { target_id: string | null };
-
-// Hand-written mirrors of the DCS OpenAPI types for the Pipedream MCP
-// connector endpoints (`/pipedream/mcp/*`); replace with the orval-generated
-// schemas on the next client regeneration.
-/** The backend holding a connection's grant. */
-export type PipedreamProvider = 'pipedream' | 'connect';
-export type PipedreamConnectionResponse = {
-  app_slug: string;
-  server_name: string;
-  enabled: boolean;
-  provider?: PipedreamProvider;
-};
-export type PipedreamUpdateRequest = {
-  app_slug: string;
-  server_name?: string;
-  enabled?: boolean;
-};
-export type PipedreamTokenRequest = {
-  /** With it, an app Macro Connect serves may answer with a Connect URL. */
-  app_slug?: string;
-};
-/** A Pipedream Connect token, or for `provider: 'connect'` a Connect URL. */
-export type PipedreamTokenResponse = {
-  provider: PipedreamProvider;
-  token?: string | null;
-  expires_at?: string | null;
-  connect_link_url?: string | null;
-  connect_url?: string | null;
-};
-export type PipedreamConnectCompleteRequest = {
-  app_slug: string;
-  server_name?: string;
-};
-export type PipedreamCompleteRequest = {
-  account_id: string;
-  server_name?: string;
-};
-export type PipedreamRecoverRequest = {
-  app_slug: string;
-  server_name?: string;
-};
-export type { PipedreamCatalogEntryResponse } from './generated/schemas/pipedreamCatalogEntryResponse';
-export type { PipedreamCatalogResponse } from './generated/schemas/pipedreamCatalogResponse';
-export type { PipedreamOverlayResponse } from './generated/schemas/pipedreamOverlayResponse';
-
-/** Error code for deployments where Pipedream MCP connect is not configured. */
-export const PIPEDREAM_DISABLED = 'PIPEDREAM_DISABLED' as const;
 
 export const cognitionApiServiceClient = {
   /** Creates a mapping from source_id to target_id */
@@ -188,149 +139,25 @@ export const cognitionApiServiceClient = {
     ).map((result) => result);
   },
 
-  async listMcpServers() {
-    return (
-      await dcsFetch<ServerResponse[]>(`/mcp/servers`, { method: 'GET' })
-    ).map((result) => result);
-  },
-
-  async addMcpServer(args: AddServerRequest) {
-    return (
-      await dcsFetch<ServerResponse>(`/mcp/servers`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      })
-    ).map((result) => result);
-  },
-
-  async updateMcpServer(args: UpdateServerRequest) {
-    return (
-      await dcsFetch<ServerResponse>(`/mcp/servers`, {
-        method: 'PUT',
-        body: JSON.stringify(args),
-      })
-    ).map((result) => result);
-  },
-
-  async deleteMcpServer(args: { url: string }) {
-    return await dcsFetch(`/mcp/servers?url=${encodeURIComponent(args.url)}`, {
-      method: 'DELETE',
-    });
-  },
-
-  async startMcpAuth(args: StartAuthRequest) {
-    return (
-      await dcsFetch<StartAuthResponse>(`/mcp/servers/auth/start`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      })
-    ).map((result) => result);
-  },
-
-  async listPipedreamConnections() {
-    return (
-      await dcsFetch<PipedreamConnectionResponse[]>(
-        `/pipedream/mcp/connections`,
-        {
-          method: 'GET',
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async updatePipedreamConnection(args: PipedreamUpdateRequest) {
-    return (
-      await dcsFetch<PipedreamConnectionResponse>(
-        `/pipedream/mcp/connections`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(args),
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async deletePipedreamConnection(args: { app_slug: string }) {
-    return await dcsFetch(
-      `/pipedream/mcp/connections?app_slug=${encodeURIComponent(args.app_slug)}`,
-      { method: 'DELETE' }
+  /** Every app and server the user holds, with where they stand. */
+  async listConnectors() {
+    return (await dcsFetch<Connector[]>(`/connectors`, { method: 'GET' })).map(
+      (result) => result
     );
   },
 
-  /**
-   * Start connecting an MCP connector: a Pipedream Connect token, or a
-   * Macro Connect URL when the backend routes `app_slug` through Connect.
-   * Answers with the {@link PIPEDREAM_DISABLED} error code on deployments
-   * where Pipedream isn't configured (HTTP 501).
-   */
-  async createPipedreamToken(args: PipedreamTokenRequest = {}) {
+  /** Add a server by URL; one at an app's address comes back as that app. */
+  async addConnectorServer(args: AddServerRequest) {
     return (
-      await fetchWithToken<PipedreamTokenResponse, typeof PIPEDREAM_DISABLED>(
-        `${dcsHost}/pipedream/mcp/token`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-          errorResponseHandler: async (response) => {
-            if (response.status === 501) {
-              return {
-                code: PIPEDREAM_DISABLED,
-                message: 'Pipedream is not configured for this deployment',
-              };
-            }
-            return {
-              code: 'HTTP_ERROR',
-              message: `HTTP error! status: ${response.status}`,
-            };
-          },
-        }
-      )
-    ).map((result) => result);
-  },
-
-  /** Register a connected account reported by the Pipedream Connect UI. */
-  async completePipedreamConnection(args: PipedreamCompleteRequest) {
-    return (
-      await dcsFetch<PipedreamConnectionResponse>(`/pipedream/mcp/complete`, {
+      await dcsFetch<Connector>(`/connectors`, {
         method: 'POST',
         body: JSON.stringify(args),
       })
     ).map((result) => result);
   },
 
-  /**
-   * Record an app connected through Macro Connect. Fails with `NOT_FOUND`
-   * until Connect lists the connection, so callers poll it.
-   */
-  async completeMacroConnect(args: PipedreamConnectCompleteRequest) {
-    return (
-      await dcsFetch<PipedreamConnectionResponse>(
-        `/pipedream/mcp/connect/complete`,
-        {
-          method: 'POST',
-          body: JSON.stringify(args),
-        }
-      )
-    ).map((result) => result);
-  },
-
-  /**
-   * Register an account a Connect flow created but the Connect UI never
-   * reported. Fails with `NOT_FOUND` when there is none.
-   */
-  async recoverPipedreamConnection(args: PipedreamRecoverRequest) {
-    return (
-      await dcsFetch<PipedreamConnectionResponse>(`/pipedream/mcp/recover`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      })
-    ).map((result) => result);
-  },
-
-  /**
-   * Browse or search Pipedream apps in popularity order, including their
-   * category labels for grouping.
-   */
-  async browsePipedreamCatalog(args: {
+  /** Browse or search the apps the user can connect, most popular first. */
+  async browseConnectorCatalog(args: {
     search?: string;
     cursor?: string;
     limit?: number;
@@ -341,25 +168,48 @@ export const cognitionApiServiceClient = {
     if (args.limit) params.set('limit', String(args.limit));
     const query = params.size > 0 ? `?${params}` : '';
     return (
-      await dcsFetch<PipedreamCatalogResponse>(
-        `/pipedream/mcp/catalog${query}`,
-        {
-          method: 'GET',
-        }
-      )
+      await dcsFetch<CatalogPage>(`/connectors/catalog${query}`, {
+        method: 'GET',
+      })
     ).map((result) => result);
   },
 
   /**
-   * Catalog apps that connect through their own MCP server instead of
-   * Pipedream; connect them with `startMcpAuth` against `server_url`.
+   * Begin connecting an app, or signing in to a server added by URL. `key`
+   * is a connector key (`app/{slug}` or `server/{id}`), which is URL-safe.
    */
-  async listPipedreamOverlays() {
+  async startConnectorConnect(args: { key: string }) {
     return (
-      await dcsFetch<PipedreamOverlayResponse[]>(`/pipedream/mcp/overlays`, {
-        method: 'GET',
+      await dcsFetch<ConnectStep>(`/connectors/${args.key}/connect`, {
+        method: 'POST',
       })
     ).map((result) => result);
+  },
+
+  /**
+   * Record the connection the user just made. Fails with `NOT_FOUND` until
+   * it exists, so callers poll it while the connect page is open.
+   */
+  async completeConnectorConnect(args: { key: string }) {
+    return (
+      await dcsFetch<Connector>(`/connectors/${args.key}/complete`, {
+        method: 'POST',
+      })
+    ).map((result) => result);
+  },
+
+  /** Turn a connection on or off, or rename it. */
+  async updateConnector(args: { key: string } & UpdateConnectorRequest) {
+    const { key, ...body } = args;
+    return await dcsFetch(`/connectors/${key}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+  },
+
+  /** Remove a connection; removing GitHub unlinks the account. */
+  async removeConnector(args: { key: string }) {
+    return await dcsFetch(`/connectors/${args.key}`, { method: 'DELETE' });
   },
 
   async databaseQuery(args: DatabaseQueryRequest) {

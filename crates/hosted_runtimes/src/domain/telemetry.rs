@@ -266,7 +266,7 @@ fn capacity(meter: &opentelemetry::metrics::Meter, allocations: &[HostAllocation
             &[
                 KeyValue::new("scope", "host"),
                 KeyValue::new("host_id", allocation.host.id.to_string()),
-                KeyValue::new("host", allocation.host.name.clone()),
+                KeyValue::new("host", allocation.host.name.to_string()),
             ],
         );
     }
@@ -276,6 +276,53 @@ fn capacity(meter: &opentelemetry::metrics::Meter, allocations: &[HostAllocation
 /// [`capacity`] through the process-wide meter provider.
 pub fn record_capacity(allocations: &[HostAllocation]) {
     capacity(&global::meter("hosted_runtimes"), allocations);
+}
+
+/// An outbox effect's wait from being queued until a worker started it.
+pub struct EffectQueued<'a> {
+    /// Outbox id of the effect.
+    pub effect_id: i64,
+    /// Computer the effect addresses.
+    pub computer_id: String,
+    /// The effect's name, as on `computer.effect.failures`.
+    pub phase: &'a str,
+    /// When the transition queued it.
+    pub queued_at: chrono::DateTime<chrono::Utc>,
+    /// When a worker started carrying it out.
+    pub started_at: chrono::DateTime<chrono::Utc>,
+}
+
+/// Export `computer.effect.queued` with its recorded start and end, under the
+/// purchase trace when there is one and the current span otherwise, plus its
+/// duration by phase.
+pub fn effect_queued<T: Tracer>(tracer: &T, traceparent: Option<&str>, queued: &EffectQueued<'_>) {
+    let parent = traceparent
+        .and_then(remote_parent)
+        .unwrap_or_else(|| tracing::Span::current().context());
+    let mut span = tracer
+        .span_builder("computer.effect.queued")
+        .with_kind(SpanKind::Internal)
+        .with_start_time(std::time::SystemTime::from(queued.queued_at))
+        .with_attributes([
+            KeyValue::new("effect_id", queued.effect_id),
+            KeyValue::new("computer_id", queued.computer_id.clone()),
+            KeyValue::new("effect", queued.phase.to_owned()),
+        ])
+        .start_with_context(tracer, &parent);
+    span.end_with_timestamp(std::time::SystemTime::from(queued.started_at));
+    global::meter("hosted_runtimes")
+        .f64_histogram("computer.effect.queued.duration")
+        .with_unit("s")
+        .build()
+        .record(
+            seconds(queued.queued_at, queued.started_at),
+            &[KeyValue::new("phase", queued.phase.to_owned())],
+        );
+}
+
+/// [`effect_queued`] through the process-wide tracer provider.
+pub fn record_effect_queued(traceparent: Option<&str>, queued: &EffectQueued<'_>) {
+    effect_queued(&global::tracer("hosted_runtimes"), traceparent, queued);
 }
 
 /// Link an already-running callback to the durable provisioning trace.

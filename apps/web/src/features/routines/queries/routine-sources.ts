@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ScheduledActionResponse } from '@service-scheduled-action/generated/schemas';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
@@ -12,9 +13,10 @@ import type {
 } from '../context/routine-sources';
 import { pendingCodeReview, taskSdk } from '../core/code-review';
 import type { ScheduleDraft } from '../core/draft';
+import type { UnusableItem } from '../core/knobs';
 import type { RoutineSnapshot } from '../core/routine';
 import { withDraftSteps } from '../core/routine-draft';
-import { programSteps } from '../core/routine-steps';
+import { picksItems, programSteps } from '../core/routine-steps';
 import { scheduleToEntity } from './entities';
 import {
   draftFromSchedule,
@@ -37,8 +39,10 @@ import {
   useSchedulesQuery,
   useSetScheduleEnabledMutation,
   useSubRoutinesQuery,
+  useUnusableItemsQuery,
   useUpdateScheduleMutation,
 } from './schedules';
+import { unusableItemsFromWire } from './unusable-items';
 
 function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   if (!schedule.id) throw new Error('Routine has no ID');
@@ -74,6 +78,12 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
   };
 }
 
+/**
+ * How the server refuses a routine to anyone but its owner: 401 without a
+ * grant, 404 with a grant but no ownership.
+ */
+const REFUSED_READ_CODES = ['UNAUTHORIZED', 'FORBIDDEN', 'NOT_FOUND'];
+
 type DetailCallbacks = {
   onError(title: string, error: unknown): void;
   onDuplicated(id: string): void;
@@ -95,6 +105,19 @@ export function createRoutineDetailSource(
         ? list.data?.find((item) => item.id === id())
         : undefined)
   );
+  // A refetch with no data puts the query back to pending, so the refusal is
+  // kept for this routine until a read settles otherwise; the page doesn't
+  // swap views on every refocus.
+  const refusedId = createMemo<string | undefined>((previous) => {
+    if (detail.isSuccess) return undefined;
+    if (detail.isError) {
+      const refused = REFUSED_READ_CODES.some((code) =>
+        thrownResultErrorHasCode(detail.error, code)
+      );
+      return refused ? id() : undefined;
+    }
+    return previous === id() ? previous : undefined;
+  });
   const routine = createMemo(() => {
     const current = raw();
     return current?.id ? toRoutine(current) : undefined;
@@ -121,6 +144,16 @@ export function createRoutineDetailSource(
   );
   const upgrades = useCodeUpgradesQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
+  );
+  // Only a routine that picks an item can have one go missing.
+  const unusable = useUnusableItemsQuery(id, () => {
+    const current = raw();
+    return Boolean(
+      current && current.owner === userId() && picksItems(current.task)
+    );
+  });
+  const unusableItems = createMemo((): UnusableItem[] =>
+    unusable.isPending ? [] : unusableItemsFromWire(unusable.data ?? [])
   );
   const codeReview = createMemo(() => {
     const current = raw();
@@ -170,6 +203,8 @@ export function createRoutineDetailSource(
     },
     loading: () => detail.isPending,
     error: () => detail.isError,
+    // A refusal says nothing about a routine the viewer's own lists hold.
+    readRefused: () => !raw() && refusedId() === id(),
     update: save,
     run: () => run.mutate({ scheduleId: id() }),
     runPending: () => run.isPending,
@@ -194,6 +229,7 @@ export function createRoutineDetailSource(
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
+    unusableItems,
     // Saving checks the proposal against the current SDK again.
     async approveCodeUpdate() {
       const proposal = codeReview()?.proposal;

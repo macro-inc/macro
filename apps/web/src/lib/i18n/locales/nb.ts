@@ -103,7 +103,6 @@ export default {
     close: 'Lukk',
     delete: 'Slett',
     rename: 'Gi nytt navn',
-    more: 'Mer',
     search: 'Søk',
     settings: 'Innstillinger',
   },
@@ -517,6 +516,10 @@ export default {
       other: 'Slettet {{count}} elementer',
     },
     toastDeleteFailed: 'Kunne ikke slette',
+    toastPropertySet: {
+      one: '{{property}} angitt',
+      other: '{{property}} angitt for {{count}} elementer',
+    },
     toastAddedToFavorites: 'Lagt til i favoritter',
     toastAddedCountToFavorites: {
       one: 'La til {{count}} element i favoritter',
@@ -771,7 +774,6 @@ export default {
       'Fant ingen innstillinger. Prøv «signatur», «tema» eller «kalender».',
     backToSettings: 'Tilbake til innstillinger',
     closeSettings: 'Lukk innstillinger',
-    goToTab: 'Gå til innstillingsfane {{number}}',
     editProfile: 'Rediger profil',
     logOut: 'Logg ut',
     yourAccount: 'Din konto',

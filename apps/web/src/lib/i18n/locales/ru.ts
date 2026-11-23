@@ -103,7 +103,6 @@ export default {
     close: 'Закрыть',
     delete: 'Удалить',
     rename: 'Переименовать',
-    more: 'Ещё',
     search: 'Поиск',
     settings: 'Настройки',
   },
@@ -533,6 +532,12 @@ export default {
       other: 'Удалено {{count}} элемента',
     },
     toastDeleteFailed: 'Не удалось удалить',
+    toastPropertySet: {
+      one: '{{property}}: задано для {{count}} элемента',
+      few: '{{property}}: задано для {{count}} элементов',
+      many: '{{property}}: задано для {{count}} элементов',
+      other: '{{property}}: задано для {{count}} элемента',
+    },
     toastAddedToFavorites: 'Добавлено в избранное',
     toastAddedCountToFavorites: {
       one: 'Добавлен в избранное {{count}} элемент',
@@ -829,7 +834,6 @@ export default {
       'Настройки не найдены. Попробуйте «подпись», «тема» или «календарь».',
     backToSettings: 'Назад к настройкам',
     closeSettings: 'Закрыть настройки',
-    goToTab: 'Перейти на вкладку настроек {{number}}',
     editProfile: 'Изменить профиль',
     logOut: 'Выйти',
     yourAccount: 'Ваш аккаунт',

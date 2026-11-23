@@ -104,7 +104,6 @@ export default {
     close: 'Fermer',
     delete: 'Supprimer',
     rename: 'Renommer',
-    more: 'Plus',
     search: 'Rechercher',
     settings: 'Paramètres',
   },
@@ -529,6 +528,11 @@ export default {
       other: '{{count}} éléments supprimés',
     },
     toastDeleteFailed: 'Impossible de supprimer',
+    toastPropertySet: {
+      one: '{{property}} : valeur définie',
+      many: '{{property}} : valeur définie pour {{count}} d’éléments',
+      other: '{{property}} : valeur définie pour {{count}} éléments',
+    },
     toastAddedToFavorites: 'Ajouté aux favoris',
     toastAddedCountToFavorites: {
       one: '{{count}} élément ajouté aux favoris',
@@ -806,7 +810,6 @@ export default {
       'Aucun paramètre trouvé. Essayez « signature », « thème » ou « agenda ».',
     backToSettings: 'Retour aux paramètres',
     closeSettings: 'Fermer les paramètres',
-    goToTab: 'Aller à l’onglet de paramètres {{number}}',
     editProfile: 'Modifier le profil',
     logOut: 'Se déconnecter',
     yourAccount: 'Votre compte',

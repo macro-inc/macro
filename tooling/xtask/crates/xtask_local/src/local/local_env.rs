@@ -21,6 +21,9 @@ use anyhow::Result;
 use super::instance::{Instance, Port};
 use super::{Mode, frontend, identity, proxy, resources};
 
+/// Issuer of the local Passwords service JWTs that OpenBao team roles trust.
+pub const PASSWORDS_JWT_ISSUER: &str = "macro-local-passwords";
+
 /// The public hostnames `--with-cf-tunnel` minted for this run.
 ///
 /// Both exist for the same reason: an agent that is not on this machine — a
@@ -139,10 +142,7 @@ impl LocalEnv {
         // stack and aborts the process.
         env.insert("RUST_MIN_STACK".into(), "67108864".into());
         env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
-        env.insert(
-            "PASSWORDS_JWT_ISSUER".into(),
-            "macro-local-passwords".into(),
-        );
+        env.insert("PASSWORDS_JWT_ISSUER".into(), PASSWORDS_JWT_ISSUER.into());
         // LocalStack's signing key, by alias: its key id changes every run.
         env.insert(
             "PASSWORDS_JWT_KMS_KEY_ID".into(),
@@ -796,6 +796,9 @@ impl BootStubEnv {
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PRIVATE_KEY_SECRET_NAME".into(),
             "local-cloudfront-signer-private-key".into(),
         );
+        // Local stacks run a computer fleet, so the agents worker that takes
+        // back agent teammates of released computers is on.
+        env.insert("COMPUTERS_AGENT_EFFECTS".into(), "true".into());
         // authentication_service's third-party OAuth/Stripe config. The Google
         // pair is the client the stack's Gmail emulator is given (see
         // google_emulator.rs); the FusionAuth kickstart only creates the

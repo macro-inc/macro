@@ -14,7 +14,7 @@ use macro_uuid::Uuid;
 use secretsmanager_client::LocalOrRemoteSecret;
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 macro_env_var::env_vars!(
     /// Local static file bucket, read only when using local AWS.
@@ -31,19 +31,6 @@ macro_env_var::env_vars!(
     /// Issuer stamped into minted Macro API tokens; must match what the
     /// validators expect.
     pub struct MacroApiTokenIssuer;
-    /// OAuth client ID for the Pipedream API. The same credentials
-    /// `agent_harness_service::cognition` uses: the connections a sandbox spends
-    /// are the ones the person connected in Macro, in the same rows.
-    pub struct PipedreamClientId;
-    /// OAuth client secret for the Pipedream API.
-    pub struct PipedreamClientSecret;
-    /// The Pipedream Connect project ID (`proj_...`).
-    pub struct PipedreamProjectId;
-    /// AES key the `mcp_servers` rows' OAuth credentials are encrypted with -
-    /// the same one `agent_harness_service::cognition` writes them with, so the
-    /// custom MCP servers a person added in Macro are the ones the egress
-    /// proxy can refresh and stamp for their sandboxes.
-    pub struct McpCredentialsKeySecretName;
     /// Dedicated KMS key the public MCP OAuth broker encrypts the upstream
     /// tokens behind its authorization codes with.
     pub struct McpOauthKmsKeyId;
@@ -63,9 +50,6 @@ macro_env_var::maybe_env_vars!(
     pub struct PosthogApiKey;
     /// Regional PostHog ingestion origin; defaults to the US origin.
     pub struct PosthogHost;
-    /// Macro's customer key for the Macro Connect API. When unset, Connect
-    /// is off and every connection goes through Pipedream.
-    pub struct ConnectCustomerKey;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
     /// Rollout gate for sessions owned by a bot.
@@ -75,15 +59,6 @@ macro_env_var::maybe_env_vars!(
 /// The shortest idle timeout a deployment may set; see
 /// [`Config::agent_session_idle_timeout`].
 pub const MIN_AGENT_SESSION_IDLE_TIMEOUT_SECS: u64 = 30;
-
-/// The Pipedream project environment matching this deployment: production in
-/// prd, development everywhere else.
-fn default_pipedream_environment() -> String {
-    match Environment::new_or_prod() {
-        Environment::Production => "production".to_owned(),
-        _ => "development".to_owned(),
-    }
-}
 
 /// The configuration parameters for the agent harness service.
 #[derive(macro_config::MacroConfig)]
@@ -132,9 +107,6 @@ pub struct Config {
     pub posthog_api_key: PosthogApiKey,
     /// Same regional origin as the frontend's PostHog project.
     pub posthog_host: PosthogHost,
-    /// Customer key for Macro Connect; sandboxes reach Connect-held grants
-    /// through its MCP gateway.
-    pub connect_customer_key: ConnectCustomerKey,
     /// Pinned Deno executable. Unset hosts do not advertise code execution.
     pub deno_binary: Option<String>,
     /// Default-off quota admission and prospective usage counting.
@@ -164,6 +136,9 @@ pub struct Config {
     pub environment: Environment,
     /// Optional physical fleet selection; absence attaches no computer fleet.
     pub computers_fleet: Option<ComputerFleetKind>,
+    /// Dev only: comma-separated Macro user ids that get computers without the
+    /// PostHog flag. Refused in production.
+    pub computers_rollout_allowlist: Option<String>,
     /// Days a Macro computer whose billing ended keeps its disk before it is
     /// destroyed; the timers the fleet operator fires use it. The same value
     /// authentication_service reads.
@@ -278,25 +253,8 @@ pub struct Config {
     pub egress_port: u16,
     /// Optional host-reachable egress origin for external runtimes in local stacks.
     pub external_egress_base_url: Option<String>,
-    /// OAuth client ID for the Pipedream API.
-    pub pipedream_client_id: PipedreamClientId,
-    /// OAuth client secret for the Pipedream API.
-    pub pipedream_client_secret: PipedreamClientSecret,
-    /// The Pipedream Connect project ID.
-    pub pipedream_project_id: PipedreamProjectId,
-    /// The Pipedream project environment (`development` or `production`).
-    #[macro_config_default(default_pipedream_environment())]
-    pub pipedream_environment: String,
-    /// Base URL of the Pipedream API.
-    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_API_URL))]
-    pub pipedream_api_url: String,
-    /// URL of Pipedream's remote MCP server.
-    #[macro_config_default(String::from(pipedream_mcp::outbound::api::DEFAULT_MCP_URL))]
-    pub pipedream_mcp_url: String,
     /// RSA key Macro API tokens are signed with.
     pub macro_api_token_private_secret_key: LocalOrRemoteSecret<MacroApiTokenPrivateSecretKey>,
-    /// AES key the custom MCP servers' stored OAuth credentials are encrypted with.
-    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
     /// Issuer stamped into minted Macro API tokens.
     pub macro_api_token_issuer: MacroApiTokenIssuer,
     /// S3 bucket the Changes pane's patches are stored in, one object per
@@ -384,18 +342,6 @@ impl Config {
         ))
     }
 
-    /// Reads GitHub account-link tokens, so GitHub's MCP server needs no
-    /// separate authorization.
-    pub fn linked_github_tokens(
-        &self,
-    ) -> anyhow::Result<std::sync::Arc<dyn mcp_client::domain::ports::LinkedGithubTokens>> {
-        Ok(std::sync::Arc::new(
-            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
-                self.auth_service_client()?,
-            ),
-        ))
-    }
-
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
         let enforcement = ai_usage::config::load_ai_usage_enforcement()
@@ -438,14 +384,59 @@ macro_env_var::maybe_env_vars! {
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ComputerFleetKind {
-    Incus,
+    /// Firecracker hosts, one per `hosted_runtime_host` row with a connection.
+    Firecracker,
+    /// The local Docker daemon; local stacks only.
     Docker,
+    /// Retired: Incus hosts are gone. A control plane still configured for
+    /// them attaches no fleet, as with `COMPUTERS_FLEET` unset.
+    // TODO: remove once COMPUTERS_FLEET=incus and the COMPUTERS_INCUS_* keys
+    // are deleted from Doppler dev/prd.
+    Incus,
 }
 
 /// Required settings for the selected fleet; unselected groups are not loaded.
 pub enum ComputerFleetConfig {
-    Incus(IncusFleetSettings),
+    Firecracker(FirecrackerFleetSettings),
     Docker(DockerFleetSettings),
+}
+
+/// Required Firecracker fleet configuration; each host's address and pinned
+/// certificate are on its `hosted_runtime_host` row.
+#[derive(macro_config::MacroConfig)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub struct FirecrackerFleetSettings {
+    pub computers_control_plane_id: String,
+    pub computers_image: String,
+    pub computers_agent_image: String,
+    pub computers_firecracker_client_cert: String,
+    pub computers_firecracker_client_key: String,
+}
+
+impl FirecrackerFleetSettings {
+    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
+        for (name, value) in [
+            (
+                "COMPUTERS_CONTROL_PLANE_ID",
+                self.computers_control_plane_id.as_str(),
+            ),
+            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
+            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_CERT",
+                self.computers_firecracker_client_cert.as_str(),
+            ),
+            (
+                "COMPUTERS_FIRECRACKER_CLIENT_KEY",
+                self.computers_firecracker_client_key.as_str(),
+            ),
+        ] {
+            if value.trim().is_empty() {
+                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Config {
@@ -459,6 +450,17 @@ impl Config {
             ));
         }
         Ok(())
+    }
+
+    /// The computers rollout allowlist; refused in production.
+    pub fn computer_rollout_allowlist(
+        &self,
+    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::rollout::RolloutAllowlist> {
+        hosted_runtimes::outbound::rollout_allowlist::configured(
+            self.computers_rollout_allowlist.as_deref(),
+            self.environment,
+        )
+        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
     }
 
     /// Macro computers' retention and past-due grace.
@@ -476,10 +478,14 @@ impl Config {
     pub fn computer_fleet(&self) -> macro_config::MacroConfigResult<Option<ComputerFleetConfig>> {
         self.validate_fleet_selection()?;
         match self.computers_fleet {
-            Some(ComputerFleetKind::Incus) => {
-                let settings: IncusFleetSettings = macro_config::load()?;
+            Some(ComputerFleetKind::Firecracker) => {
+                let settings: FirecrackerFleetSettings = macro_config::load()?;
                 settings.validate()?;
-                Ok(Some(ComputerFleetConfig::Incus(settings)))
+                Ok(Some(ComputerFleetConfig::Firecracker(settings)))
+            }
+            Some(ComputerFleetKind::Incus) => {
+                tracing::error!("COMPUTERS_FLEET=incus is retired; no computer fleet is attached");
+                Ok(None)
             }
             Some(ComputerFleetKind::Docker) => {
                 let settings: DockerFleetSettings = macro_config::load()?;
@@ -491,30 +497,6 @@ impl Config {
     }
 }
 
-/// Required Incus fleet configuration.
-#[derive(macro_config::MacroConfig)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub struct IncusFleetSettings {
-    pub computers_control_plane_id: String,
-    pub computers_host_name: String,
-    pub computers_image: String,
-    pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
-    pub computers_incus_request_timeout_secs: u64,
-    pub computers_incus_connect_timeout_secs: u64,
-    pub computers_incus_operation_wait_secs: u32,
-    pub computers_incus_state_change_timeout_secs: u32,
-    pub computers_incus_operation_waits: u32,
-    pub computers_incus_shutdown_grace_secs: u64,
-    pub computers_incus_profile: String,
-    pub computers_incus_storage_pool: String,
-    pub computers_incus_url: String,
-    pub computers_incus_client_cert: String,
-    pub computers_incus_client_key: String,
-    pub computers_incus_server_cert: String,
-}
-
 /// Required Docker fleet configuration.
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -523,56 +505,9 @@ pub struct DockerFleetSettings {
     pub computers_host_name: String,
     pub computers_image: String,
     pub computers_agent_image: String,
-    pub computers_host_reserve_gb: u32,
-    pub computers_oversell_factor: u32,
     pub computers_docker_network: String,
     pub computers_docker_enrollment_dir: String,
     pub computers_docker_memory_gb: u32,
-}
-
-impl IncusFleetSettings {
-    pub fn validate(&self) -> macro_config::MacroConfigResult<()> {
-        for (name, value) in [
-            (
-                "COMPUTERS_CONTROL_PLANE_ID",
-                self.computers_control_plane_id.as_str(),
-            ),
-            ("COMPUTERS_HOST_NAME", self.computers_host_name.as_str()),
-            ("COMPUTERS_IMAGE", self.computers_image.as_str()),
-            ("COMPUTERS_AGENT_IMAGE", self.computers_agent_image.as_str()),
-            (
-                "COMPUTERS_INCUS_PROFILE",
-                self.computers_incus_profile.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_STORAGE_POOL",
-                self.computers_incus_storage_pool.as_str(),
-            ),
-            ("COMPUTERS_INCUS_URL", self.computers_incus_url.as_str()),
-            (
-                "COMPUTERS_INCUS_CLIENT_CERT",
-                self.computers_incus_client_cert.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_CLIENT_KEY",
-                self.computers_incus_client_key.as_str(),
-            ),
-            (
-                "COMPUTERS_INCUS_SERVER_CERT",
-                self.computers_incus_server_cert.as_str(),
-            ),
-        ] {
-            if value.trim().is_empty() {
-                return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
-            }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
-        }
-        Ok(())
-    }
 }
 
 impl DockerFleetSettings {
@@ -597,11 +532,6 @@ impl DockerFleetSettings {
             if value.trim().is_empty() {
                 return Err(macro_config::MacroConfigError::MissingRequiredValue(name));
             }
-        }
-        if self.computers_oversell_factor == 0 {
-            return Err(macro_config::MacroConfigError::Deserialize(
-                "COMPUTERS_OVERSELL_FACTOR must be positive".into(),
-            ));
         }
         Ok(())
     }

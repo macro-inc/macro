@@ -372,6 +372,7 @@ fn an_assignment_with_context_prompts_with_instructions_and_carries_the_task() {
             markdown: "The popover scrolls the page.".to_owned(),
             status: None,
             priority: None,
+            start: None,
             due: None,
             assignees: Vec::new(),
             project: None,

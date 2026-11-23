@@ -12,6 +12,7 @@ members = [
   "crates/stripe_inbox",
   "crates/openbao_client",
   "crates/access_requests",
+  "crates/source_items",
   "crates/agent_api_keys",
   "crates/agent_credentials",
   "crates/agent_git",
@@ -45,7 +46,10 @@ members = [
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
+  "crates/client/cache-bench",
   "crates/client/cache-core",
+  "crates/client/cache-diff-fuzz",
+  "crates/client/cache-schema",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
@@ -76,6 +80,7 @@ members = [
   "crates/dictation",
   "crates/email_api_client",
   "crates/email_e2e",
+  "crates/connectors_e2e",
   "crates/entity_mutation",
   "crates/entity_registry/entity_registry",
   "crates/entity_registry/entity_registry_db_utils",
@@ -118,7 +123,11 @@ members = [
   "crates/harnessd_protocol",
   "crates/harnesses",
   "crates/hosted_runtimes",
-  "crates/incus_client",
+  "crates/firecracker_host_api",
+  "crates/pinned_tls",
+  "crates/computer_types",
+  "services/firecracker_guest_agent",
+  "services/firecracker_host",
   "crates/import",
   "crates/import_notion",
   "crates/import_tracker",
@@ -139,12 +148,11 @@ members = [
   "crates/memory",
   "crates/messages",
   "crates/model_owner",
-  "crates/mcp_select",
+  "crates/connectors",
   "crates/mcp_toolset",
   "crates/natural_time",
   "crates/notification_inbox",
   "crates/notification_state",
-  "crates/pipedream_mcp",
   "crates/granola_sync",
   "crates/onboarding",
   "crates/outlook_emulator",
@@ -168,6 +176,8 @@ members = [
   "crates/system_skills",
   "crates/system_status",
   "crates/task_dedup",
+  "crates/task_templates",
+  "crates/time_tracking",
   "crates/unfurl",
   "crates/single_flight",
   "crates/upstream_error",
@@ -217,6 +227,7 @@ members = [
   "services/organization_retention_handler",
   "services/organization_retention_trigger",
   "crates/scheduled_action",
+  "services/search_freshness_probe",
   "services/search_processing_service",
   "services/search_upload_handler",
   "services/sha_cleanup_worker",
@@ -245,6 +256,7 @@ harnessd_protocol = { path = "crates/harnessd_protocol" }
 pairing_id = { path = "crates/pairing_id" }
 openbao_client = { path = "crates/openbao_client" }
 macro_user_id = { path = "crates/macro_user_id" }
+model-entity = { path = "crates/model-entity" }
 aes = "0.8.4"
 aes-gcm = { version = "0.10.3", features = ["zeroize"] }
 anyhow = "1.0.100"
@@ -280,6 +292,7 @@ aws-msk-iam-sasl-signer = "1.0.1"
 # SDK defaults also enable the deprecated `rustls` feature, which pulls in
 # rustls 0.21 / hyper 0.14. Keep the modern HTTPS client and the other defaults;
 # macro_aws_config uses BehaviorVersion::latest() with this transport.
+aws-sdk-cloudwatch = { version = "1.113.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-dynamodb = { version = "1.111.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-ecs = { version = "1.124.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-kms = { version = "1.104.0", default-features = false, features = ["default-https-client", "rt-tokio"] }
@@ -312,6 +325,7 @@ cron = "0.16.0"
 csv = "1"
 csv-core = "0.1.13"
 dashmap = "6.1.0"
+derive_setters = "0.1.8"
 dateparser = "0.2.1"
 determinator = "0.12.0"
 dotenvy = "0.15.7"
@@ -367,6 +381,7 @@ lambda_runtime = "0.13.0"
 lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 libc = "0.2"
+memchr = "2"
 # Signal's curve25519 keys and XEdDSA; see crates/whatsmeow_signal/AGENTS.md.
 libsignal-core = { git = "https://github.com/signalapp/libsignal", tag = "v0.105.2" }
 livekit-api = { version = "0.4.16", default-features = false, features = [
@@ -384,8 +399,10 @@ lol_html = "2.4.0"
 loro = "=1.17.1"
 lru = "0.16"
 md-5 = "0.10.6"
+merge = "0.2.0"
 mimalloc = { version = "0.1", default-features = false }
 miniz_oxide = { version = "0.8", features = ["with-alloc"] }
+zlib-rs = { version = "0.6.3", default-features = false, features = ["rust-allocator"] }
 mockall = "0.13"
 nutype = { version = "0.8.0", features = ["serde", "derive_unchecked"] }
 nom = "8"
@@ -413,6 +430,7 @@ pgvector = { version = "0.4", features = ["postgres", "sqlx"] }
 png = "0.18"
 postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
+pretty_assertions = "1.4.1"
 progenitor-client = "0.15.1"
 proptest = { version = "1.11", default-features = false, features = ["std"] }
 proc-macro2 = "1"
@@ -503,6 +521,7 @@ tokio-tungstenite = { version = "0.28", default-features = false, features = [
 tokio-tungstenite-signal = { package = "tokio-tungstenite", version = "0.27", default-features = false, features = ["handshake"] }
 tungstenite-signal = { package = "tungstenite", version = "0.27", default-features = false, features = ["handshake", "deflate"] }
 tokio-util = "0.7.13"
+tokio-vsock = "0.7.2"
 tower = { version = "0.5.1", features = ["util"] }
 tower-service = "0.3"
 tower-http = { version = "0.6.1", features = [
@@ -564,6 +583,8 @@ doppleganger = "0.5"
 doppler-config = "0.1.2"
 js-sys = "0.3"
 scraper = "0.18"
+# The html5ever scraper 0.18 parses with: email_utils wraps its tree sink.
+html5ever = "0.26"
 serde_urlencoded = "0.7.1"
 strum_macros = "0.27.1"
 unicode-segmentation = "1.9.0"

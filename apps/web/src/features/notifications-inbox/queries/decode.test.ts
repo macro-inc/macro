@@ -380,10 +380,17 @@ describe('encodeInboxScope', () => {
     });
   });
 
-  it('reads every row, new types included, when every type is chosen', () => {
-    expect(encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES })).toEqual({
-      rowTypes: [],
-    });
+  it('reads every row, new types included, only with no category selection', () => {
+    expect(
+      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, allKinds: true })
+    ).toEqual({ rowTypes: [] });
+  });
+
+  it('keeps every known kind explicit when every category is selected', () => {
+    const scope = encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES });
+    expect(scope.rowTypes).toHaveLength(ALL_INBOX_ROW_TYPES.length + 1);
+    expect(scope.rowTypes).toContain('EMAIL');
+    expect(scope.rowTypes).toContain('PASSWORD_ACCESS_REQUESTED');
   });
 
   it('narrows the inbox to the chosen rows', () => {
@@ -394,7 +401,11 @@ describe('encodeInboxScope', () => {
 
   it('asks the server for unread rows only when the scope is unread', () => {
     expect(
-      encodeInboxScope({ rowTypes: ALL_INBOX_ROW_TYPES, unreadOnly: true })
+      encodeInboxScope({
+        rowTypes: ALL_INBOX_ROW_TYPES,
+        allKinds: true,
+        unreadOnly: true,
+      })
     ).toEqual({ rowTypes: [], unreadOnly: true });
   });
 });

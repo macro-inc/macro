@@ -20,14 +20,17 @@
 //! when the pushes or the sweep turn red, and when they pass again
 //! ([`email_e2e_alert`]).
 
-use gh_workflow::{
-    Concurrency, Container, Env, Event, Expression, Job, Port, Push, Run, Schedule, Step, Strategy,
-    Use, Workflow, WorkflowDispatch, WorkflowDispatchInput,
+use gh_workflow::expr::typed::{
+    Bool, Expr, JobHandle, Num, Str, always, cancelled, failure, format, github, input, matrix,
 };
-use std::collections::HashMap;
+use gh_workflow::{
+    Concurrency, Container, Env, Event, Job, Port, Push, Run, Schedule, Step, Strategy, Use,
+    Workflow, WorkflowDispatch, WorkflowInput,
+};
 
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::ActionsDownloadArtifact;
 use crate::workflows::{
     code_check_cloud_storage, email_e2e_alert, runners,
     steps::{self, FluentBuilder},
@@ -39,8 +42,13 @@ use crate::workflows::{
 /// EDT.
 pub(crate) const SWEEP: &str = "0 21 * * *";
 
-/// The comment the generated files carry above [`SWEEP`].
-const SWEEP_NOTE: &str = "# cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.";
+/// The comment the generated files carry on the [`SWEEP`] line.
+const SWEEP_NOTE: &str = "cron is UTC: 21:00 UTC is 4pm EST and 5pm EDT.";
+
+/// The [`SWEEP`] schedule, noting its local time.
+pub(crate) fn sweep() -> Schedule {
+    Schedule::new(SWEEP).comment(SWEEP_NOTE)
+}
 
 /// The `workflow_dispatch` input that asks for the known-bug report too.
 const KNOWN_BUGS_INPUT: &str = "known_bugs";
@@ -48,8 +56,12 @@ const KNOWN_BUGS_INPUT: &str = "known_bugs";
 /// True in the sweep, and in a run by hand that asked for it: the runs that
 /// also run and report the scenarios kept for known bugs. A push to `main`
 /// does not.
-pub(crate) const REPORTS_KNOWN_BUGS: &str =
-    "github.event_name == 'schedule' || inputs.known_bugs == true";
+pub(crate) fn reports_known_bugs() -> Expr<Bool> {
+    github()
+        .event_name()
+        .eq("schedule")
+        .or(input::<Bool>(KNOWN_BUGS_INPUT).eq(true))
+}
 
 /// Files whose change on `main` runs the suite: anything the two services
 /// are built from.
@@ -93,11 +105,20 @@ const KNOWN_BUGS: xtask_paths::RuntimePath<'static> =
 const COVERAGE: xtask_paths::RuntimePath<'static> =
     xtask_paths::runtime_path!("target/email-e2e-coverage");
 
-/// The jobs the coverage job reads the results of, by id.
-const REPORTED_JOBS: [&str; 3] = ["email-e2e", "email-e2e-search", "email-e2e-known-bugs"];
+/// The scenarios without search.
+const SCENARIOS: JobHandle<()> = JobHandle::new("email-e2e", ());
 
-/// The coverage job, by id.
-const COVERAGE_JOB: &str = "email-e2e-coverage";
+/// The search scenarios.
+const SEARCH_SCENARIOS: JobHandle<()> = JobHandle::new("email-e2e-search", ());
+
+/// The scenarios kept for known bugs, outside search.
+const KNOWN_BUG_SCENARIOS: JobHandle<()> = JobHandle::new("email-e2e-known-bugs", ());
+
+/// The jobs the coverage job reads the results of.
+const REPORTED_JOBS: [&JobHandle<()>; 3] = [&SCENARIOS, &SEARCH_SCENARIOS, &KNOWN_BUG_SCENARIOS];
+
+/// The coverage job.
+const COVERAGE_JOB: JobHandle<()> = JobHandle::new("email-e2e-coverage", ());
 
 /// The artifact the coverage job uploads its report as.
 const COVERAGE_REPORT: &str = "email-e2e-coverage";
@@ -113,18 +134,18 @@ pub fn email_e2e() -> Workflow {
     Workflow::new("Email end-to-end")
         .on(Event::default()
             .push(push)
-            .add_schedule(Schedule::new(SWEEP))
+            .add_schedule(sweep())
             .workflow_dispatch(dispatch()))
         .concurrency(concurrency("email-e2e"))
         .map(vars::with_global_env)
-        .add_job("email-e2e", scenarios())
-        .add_job("email-e2e-search", search())
-        .add_job("email-e2e-known-bugs", known_bug_scenarios())
+        .add_job(SCENARIOS, scenarios())
+        .add_job(SEARCH_SCENARIOS, search())
+        .add_job(KNOWN_BUG_SCENARIOS, known_bug_scenarios())
         .add_job(COVERAGE_JOB, coverage())
         .add_job(
             email_e2e_alert::JOB,
             email_e2e_alert::job(
-                &[REPORTED_JOBS.as_slice(), &[COVERAGE_JOB]].concat(),
+                &[REPORTED_JOBS.as_slice(), &[&COVERAGE_JOB]].concat(),
                 COVERAGE_REPORT,
             ),
         )
@@ -134,49 +155,32 @@ pub fn email_e2e() -> Workflow {
 /// `known_bugs` it also runs and reports the scenarios kept for known bugs,
 /// as the sweep does.
 pub(crate) fn dispatch() -> WorkflowDispatch {
-    WorkflowDispatch {
-        inputs: HashMap::from([(
-            KNOWN_BUGS_INPUT.to_string(),
-            WorkflowDispatchInput {
-                description: "Also report the tests kept for known bugs, as the daily sweep does"
-                    .into(),
-                required: false,
-                input_type: "boolean".into(),
-                default: None,
-            },
-        )]),
-    }
-}
-
-/// Render one of the email end-to-end workflows, with [`SWEEP_NOTE`] above
-/// its schedule: the YAML model has no comments.
-pub(crate) fn render(build: fn() -> Workflow) -> anyhow::Result<String> {
-    let yaml = build().to_string().map_err(|e| anyhow::anyhow!("{e:?}"))?;
-    let cron = format!("- cron: '{SWEEP}'");
-    let mut noted = false;
-    let lines: Vec<String> = yaml
-        .lines()
-        .flat_map(|line| {
-            let indent = line.len() - line.trim_start().len();
-            if line.trim_start() == cron {
-                noted = true;
-                vec![
-                    format!("{}{SWEEP_NOTE}", " ".repeat(indent)),
-                    line.to_string(),
-                ]
-            } else {
-                vec![line.to_string()]
-            }
-        })
-        .collect();
-    anyhow::ensure!(noted, "the workflow has no `{cron}` to put the note above");
-    Ok(lines.join("\n") + "\n")
+    WorkflowDispatch::default().add_input(
+        KNOWN_BUGS_INPUT,
+        WorkflowInput::boolean()
+            .description("Also report the tests kept for known bugs, as the daily sweep does"),
+    )
 }
 
 /// The part of an email end-to-end workflow's concurrency group after its
 /// name: one group for each event and branch, and one for each run by hand and
 /// each re-run.
-const QUEUE: &str = "${{ (github.event_name == 'workflow_dispatch' || github.run_attempt != '1') && github.run_id || format('{0}-{1}', github.event_name, github.ref) }}";
+fn queue() -> Expr<Str> {
+    github()
+        .event_name()
+        .eq("workflow_dispatch")
+        .or(github().run_attempt().ne("1"))
+        .then_else(
+            github().run_id(),
+            format(
+                "{0}-{1}",
+                [
+                    github().event_name().into_ast(),
+                    github().git_ref().into_ast(),
+                ],
+            ),
+        )
+}
 
 /// The runs of the email end-to-end workflow `name` queue as the dev deploys
 /// do: one at a time for each event and branch, the one running never
@@ -188,7 +192,7 @@ const QUEUE: &str = "${{ (github.event_name == 'workflow_dispatch' || github.run
 /// queue it would replace the push waiting and test an older commit in its
 /// place, leaving the commit pushed untested until the next push.
 pub(crate) fn concurrency(name: &str) -> Concurrency {
-    Concurrency::new(Expression::new(format!("{name}-{QUEUE}"))).cancel_in_progress(false)
+    Concurrency::new(format!("{name}-{}", queue())).cancel_in_progress(false)
 }
 
 /// Start a job of the suite: the runner, the servers every scenario needs,
@@ -221,6 +225,7 @@ fn job(name: &str) -> Job {
 /// database, and the services' binaries.
 fn prepare(job: Job) -> Job {
     job.add_step(steps::mount_cache_volume())
+        .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
         .add_step(steps::setup_dev_shell().timeout_minutes(vars::DEV_SHELL_TIMEOUT_MINUTES))
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
@@ -236,42 +241,43 @@ fn finish(job: Job, logs: &str) -> Job {
     job.add_step(upload_logs(logs))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// The scenarios that need no search cluster, divided over [`PARTITIONS`]
 /// jobs that run side by side.
 fn scenarios() -> Job {
     let parts: Vec<u8> = (1..=PARTITIONS).collect();
-    job(&format!(
-        "Email end-to-end (${{{{ matrix.partition }}}}/{PARTITIONS})"
-    ))
-    // A failure in one part says nothing about the others: let them finish.
-    .strategy(Strategy {
-        matrix: Some(serde_json::json!({ "partition": parts })),
-        fail_fast: Some(false),
-        max_parallel: None,
-    })
-    .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
-    .add_env((
-        "EMAIL_E2E_PARTITION",
-        format!("slice:${{{{ matrix.partition }}}}/{PARTITIONS}"),
-    ))
-    .map(prepare)
-    .add_step(run_scenarios())
-    .map(|job| keep_results(job, "email-e2e-results-${{ matrix.partition }}"))
-    .map(|job| finish(job, "email-e2e-logs-${{ matrix.partition }}"))
+    let partition = || matrix::<Num>("partition");
+    job(&format!("Email end-to-end ({}/{PARTITIONS})", partition()))
+        // A failure in one part says nothing about the others: let them finish.
+        .strategy(Strategy {
+            matrix: Some(serde_json::json!({ "partition": parts })),
+            fail_fast: Some(false),
+            max_parallel: None,
+        })
+        .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
+        .add_env((
+            "EMAIL_E2E_PARTITION",
+            format!("slice:{}/{PARTITIONS}", partition()),
+        ))
+        .map(prepare)
+        .add_step(run_scenarios())
+        .map(|job| keep_results(job, &format!("email-e2e-results-{}", partition())))
+        .map(|job| finish(job, &format!("email-e2e-logs-{}", partition())))
 }
 
 /// The search scenarios, with OpenSearch and the indexer, and, where
-/// [`REPORTS_KNOWN_BUGS`] holds, the search scenarios kept for known bugs.
+/// [`reports_known_bugs`] holds, the search scenarios kept for known bugs.
 fn search() -> Job {
     job("Email end-to-end (search)")
-        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
+        .add_env(("EMAIL_E2E_OPENSEARCH_URL", steps::SEARCH_OPENSEARCH_URL))
         .add_env(("EMAIL_E2E_SCENARIOS", SEARCH))
         .add_env(("EMAIL_E2E_BUILD_INDEXER", "true"))
-        .add_step(start_opensearch())
+        // Started first, so it is up by the time the services are built.
+        .add_step(steps::start_opensearch())
         .map(prepare)
-        .add_step(create_search_indices())
+        .add_step(steps::create_search_indices())
         .add_step(run_scenarios())
         .map(|job| keep_results(job, "email-e2e-results-search"))
         .add_step(known_bugs())
@@ -283,16 +289,17 @@ fn search() -> Job {
 /// design and several wait out a timeout, so they have a job of their own
 /// that never fails for a scenario: it reports which still fail and which
 /// now pass, and keeps the results for the coverage job, which fails for
-/// one that passes. Only where [`REPORTS_KNOWN_BUGS`] holds.
+/// one that passes. Only where [`reports_known_bugs`] holds.
 fn known_bug_scenarios() -> Job {
     job("Email end-to-end (known bugs)")
-        .cond(Expression::new(REPORTS_KNOWN_BUGS))
+        .cond(reports_known_bugs())
         .add_env(("EMAIL_E2E_SCENARIOS", WITHOUT_SEARCH))
         .map(prepare)
         .add_step(known_bugs())
         .map(|job| keep_known_bug_results(job, "email-e2e-known-bugs-rest"))
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+        .add_step(steps::seal_cargo_target())
 }
 
 /// Reports what the gating scenarios cover, from the records the jobs kept,
@@ -306,45 +313,35 @@ fn coverage() -> Job {
         .name("Email end-to-end (coverage)")
         .timeout_minutes(15u32)
         .runs_on(runners::Runner::Small.to_string())
-        .needs(REPORTED_JOBS.map(str::to_owned).to_vec())
-        .cond(Expression::new("always()"))
+        .needs(REPORTED_JOBS.map(|job| job.to_string()).to_vec())
+        .cond(always())
         .add_env(("EMAIL_E2E_RESULTS", RESULTS.as_str()))
         .add_env(("EMAIL_E2E_KNOWN_BUGS", KNOWN_BUGS.as_str()))
-        .add_env((
-            "EMAIL_E2E_REPORT_KNOWN_BUGS",
-            format!("${{{{ {REPORTS_KNOWN_BUGS} }}}}"),
-        ))
+        .add_env(("EMAIL_E2E_REPORT_KNOWN_BUGS", reports_known_bugs()))
         .add_env(("EMAIL_E2E_COVERAGE", COVERAGE.as_str()))
         .add_step(steps::checkout(false, false))
         .add_step(steps::setup_rust_light())
         .add_step(
-            Step::new("download the scenarios' records")
-                .uses(
-                    "actions",
-                    "download-artifact",
-                    "634f93cb2916e3fdff6788551b99b062d0335ce0",
-                ) // v5
-                .add_with(("pattern", "email-e2e-results-*"))
-                .add_with(("path", RESULTS.as_str())),
+            ActionsDownloadArtifact::new("download the scenarios' records")
+                .pattern("email-e2e-results-*")
+                .path(RESULTS.as_str())
+                .step(),
         )
         .add_step(
-            Step::new("download the results of the scenarios for known bugs")
-                .uses(
-                    "actions",
-                    "download-artifact",
-                    "634f93cb2916e3fdff6788551b99b062d0335ce0",
-                ) // v5
-                .add_with(("pattern", "email-e2e-known-bugs-*"))
-                .add_with(("path", KNOWN_BUGS.as_str()))
-                .if_condition(Expression::new(REPORTS_KNOWN_BUGS)),
+            ActionsDownloadArtifact::new("download the results of the scenarios for known bugs")
+                .pattern("email-e2e-known-bugs-*")
+                .path(KNOWN_BUGS.as_str())
+                .step()
+                .if_condition(reports_known_bugs()),
         )
         .add_step(
             Step::new("report the coverage").run(include_str!("scripts/email_e2e_coverage.sh")),
         )
         .add_step(
-            steps::upload_artifact(COVERAGE_REPORT, COVERAGE)
-                .add_with(("if-no-files-found", "ignore"))
-                .if_condition(Expression::new("always()")),
+            steps::upload_artifact_action(COVERAGE_REPORT, COVERAGE)
+                .if_no_files_found("ignore")
+                .step()
+                .if_condition(always()),
         )
 }
 
@@ -354,13 +351,14 @@ fn keep_results(job: Job, name: &str) -> Job {
     job.add_step(
         Step::new("keep the results for the coverage report")
             .run(include_str!("scripts/email_e2e_results.sh"))
-            .if_condition(Expression::new("always()")),
+            .if_condition(always()),
     )
     .add_step(
-        steps::upload_artifact(name, RESULTS)
-            .add_with(("if-no-files-found", "ignore"))
-            .add_with(("retention-days", 7))
-            .if_condition(Expression::new("always()")),
+        steps::upload_artifact_action(name, RESULTS)
+            .if_no_files_found("ignore")
+            .retention_days(7)
+            .step()
+            .if_condition(always()),
     )
 }
 
@@ -370,13 +368,14 @@ fn keep_known_bug_results(job: Job, name: &str) -> Job {
     job.add_step(
         Step::new("keep the results of the scenarios for known bugs")
             .run(include_str!("scripts/email_e2e_known_bug_results.sh"))
-            .if_condition(with_known_bugs("always()")),
+            .if_condition(with_known_bugs(always())),
     )
     .add_step(
-        steps::upload_artifact(name, KNOWN_BUGS)
-            .add_with(("if-no-files-found", "ignore"))
-            .add_with(("retention-days", 7))
-            .if_condition(with_known_bugs("always()")),
+        steps::upload_artifact_action(name, KNOWN_BUGS)
+            .if_no_files_found("ignore")
+            .retention_days(7)
+            .step()
+            .if_condition(with_known_bugs(always())),
     )
 }
 
@@ -424,17 +423,6 @@ pub(crate) fn kafka_service() -> Container {
         )
 }
 
-/// OpenSearch for the search scenarios. Not a service container: the image
-/// is built from the local stack's Dockerfile, which adds a plugin. Started
-/// first, so it is up by the time the services are built.
-fn start_opensearch() -> Step<Run> {
-    Step::new("start opensearch").run(include_str!("scripts/email_e2e_opensearch.sh"))
-}
-
-fn create_search_indices() -> Step<Run> {
-    Step::new("create the search indices").run(include_str!("scripts/email_e2e_search_indices.sh"))
-}
-
 /// Room for every scenario's connection pools.
 pub(crate) fn raise_connection_limit() -> Step<Run> {
     Step::new("raise the postgres connection limit")
@@ -453,25 +441,26 @@ fn run_scenarios() -> Step<Run> {
 
 /// The scenarios kept for known, unfixed bugs fail by design, so this step
 /// never fails the job: it reports which still fail and which now pass. Only
-/// where [`REPORTS_KNOWN_BUGS`] holds, and also after a failed step: in the
+/// where [`reports_known_bugs`] holds, and also after a failed step: in the
 /// search job it follows the gating scenarios, and the coverage job needs its
 /// results.
 fn known_bugs() -> Step<Run> {
     Step::new("report scenarios for known bugs")
         .run(include_str!("scripts/email_e2e_known_bugs.sh"))
         .continue_on_error(true)
-        .if_condition(with_known_bugs("!cancelled()"))
+        .if_condition(with_known_bugs(!cancelled()))
 }
 
-/// `when`, in a run where [`REPORTS_KNOWN_BUGS`] holds.
-fn with_known_bugs(when: &str) -> Expression {
-    Expression::new(format!("{when} && ({REPORTS_KNOWN_BUGS})"))
+/// `when`, in a run where [`reports_known_bugs`] holds.
+fn with_known_bugs(when: Expr<Bool>) -> Expr<Bool> {
+    when.and(reports_known_bugs())
 }
 
 /// Every scenario's service logs, when the suite failed.
 fn upload_logs(name: &str) -> Step<Use> {
-    steps::upload_artifact(name, LOGS)
-        .add_with(("if-no-files-found", "ignore"))
-        .add_with(("retention-days", 7))
-        .if_condition(Expression::new("failure()"))
+    steps::upload_artifact_action(name, LOGS)
+        .if_no_files_found("ignore")
+        .retention_days(7)
+        .step()
+        .if_condition(failure())
 }

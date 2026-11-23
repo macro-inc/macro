@@ -1,6 +1,9 @@
 //! Transport DTOs for the domain-owned confirmed replacement workflow.
-use super::mutation_router::CalendarMutationApiError;
-use crate::domain::replacement::{CalendarReplacementService, CalendarReplacementView};
+use super::mutation_router::{CalendarAttendeeInputBody, CalendarMutationApiError};
+use crate::domain::{
+    models::{CalendarEventPatch, EventReminders, EventTime, EventTransparency, EventVisibility},
+    replacement::{CalendarReplacementService, CalendarReplacementView},
+};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
@@ -88,6 +91,56 @@ pub struct PrepareCalendarReplacementRequest {
     pub recurrence_id: Option<String>,
     /// Omit the provider conference in the replacement.
     pub remove_conference: bool,
+    /// Unsaved edits the replacement carries instead of the saved values;
+    /// omit to copy the saved event as it is.
+    pub changes: Option<CalendarReplacementChanges>,
+}
+
+/// Edits laid over the saved event in its replacement, as an event update
+/// would apply them; omitted fields keep the saved value.
+#[derive(Debug, Default, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarReplacementChanges {
+    /// Replacement title.
+    pub title: Option<String>,
+    /// Replacement description; an empty string clears it.
+    pub description: Option<String>,
+    /// Replacement location; an empty string clears it.
+    pub location: Option<String>,
+    /// Replacement time. On a whole series, a time change drops the copied
+    /// changed and cancelled occurrences, as Outlook does.
+    pub time: Option<EventTime>,
+    /// Replacement guest list.
+    pub attendees: Option<Vec<CalendarAttendeeInputBody>>,
+    /// Replacement recurrence properties; an empty list clears them. Applies
+    /// only to a whole series, and drops its copied occurrences like a time
+    /// change.
+    pub recurrence_lines: Option<Vec<String>>,
+    /// Replacement visibility.
+    pub visibility: Option<EventVisibility>,
+    /// Replacement transparency.
+    pub transparency: Option<EventTransparency>,
+    /// Replacement reminder configuration.
+    pub reminders: Option<EventReminders>,
+}
+
+impl From<CalendarReplacementChanges> for CalendarEventPatch {
+    fn from(changes: CalendarReplacementChanges) -> Self {
+        Self {
+            title: changes.title,
+            description: changes.description,
+            location: changes.location,
+            time: changes.time,
+            attendees: changes
+                .attendees
+                .map(|attendees| attendees.into_iter().map(Into::into).collect()),
+            recurrence_lines: changes.recurrence_lines,
+            visibility: changes.visibility,
+            transparency: changes.transparency,
+            reminders: changes.reminders,
+            ..Self::default()
+        }
+    }
 }
 /// Provider-validated external event link.
 #[derive(Serialize, utoipa::ToSchema)]
@@ -117,6 +170,7 @@ pub async fn prepare_calendar_replacement<
                 request.calendar_id,
                 request.recurrence_id,
                 request.remove_conference,
+                request.changes.map(Into::into).unwrap_or_default(),
             )
             .await?,
     ))

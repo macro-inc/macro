@@ -1,5 +1,7 @@
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import type { ChannelEntity } from '@entity';
+import { toChannelListItem } from '@queries/channel/directory-core';
+import { mapChannelToEntity } from '@queries/channel/list-entity';
 import { createMemo } from 'solid-js';
 
 /**
@@ -10,19 +12,22 @@ import { createMemo } from 'solid-js';
  * agent DM its persona name.
  */
 export function useChannelListSearchPool() {
-  const { channels } = useChannelsContext();
+  const { channels } = useChannelDirectory();
   return createMemo<ChannelEntity[]>(() =>
-    channels().map((channel) => ({
-      id: channel.id,
-      type: 'channel',
-      name: channel.agent_dm?.name ?? (channel.name || 'Unknown Channel'),
-      channelType: channel.channel_type,
-      teamId: channel.team_id ?? undefined,
-      ownerId: channel.owner_id,
-      isParticipant: channel.is_participant,
-      participantIds: channel.participants.map(
-        (participant) => participant.user_id
-      ),
-    }))
+    channels().map((record) => {
+      const channel = toChannelListItem(record);
+      return {
+        ...mapChannelToEntity({
+          channel,
+          participants: channel.participants,
+          is_participant: channel.is_participant,
+          latest_message: channel.latest_message,
+          latest_non_thread_message: channel.latest_non_thread_message,
+          viewed_at: channel.viewed_at,
+          interacted_at: channel.interacted_at,
+        }),
+        name: record.agentDm?.name ?? (record.name || 'Unknown Channel'),
+      };
+    })
   );
 }

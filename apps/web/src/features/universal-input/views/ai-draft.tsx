@@ -1,4 +1,4 @@
-import { AgentPicker } from '../../agents-view/views/AgentPicker';
+import { AgentModelPicker } from '../../agents-view/views/agent-model-picker';
 import type { InputDisplay } from '../context/capabilities';
 import type { UniversalInputController } from '../primitives/universal-input';
 
@@ -13,7 +13,7 @@ export function AiDraft(props: {
     a.roster().find((agent) => agent.id === (s.fields().botId || 'macro'));
   return (
     <div class="flex min-w-0 items-center gap-2">
-      <AgentPicker
+      <AgentModelPicker
         agents={a.roster()}
         selected={selected()}
         modelOverride={s.fields().model || undefined}

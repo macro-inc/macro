@@ -35,6 +35,10 @@ import {
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import {
+  ChannelAskMacroButton,
+  useChannelAskMacroEntity,
+} from '@channel/Channel/channel-ask-macro';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
   type ChannelTabId,
@@ -47,7 +51,6 @@ import {
   toChannelTargetRequest,
 } from '@channel/Channel/link';
 import {
-  CallTabLabel,
   canUseInlineCallTab,
   normalizeChannelTab,
   useChannelTabItems,
@@ -168,9 +171,9 @@ function NewTop(props: { channelId: string }) {
       id: props.channelId,
       name: ch.name ?? 'New Channel',
       blockName: 'channel',
-      channelType: ch.channel_type,
-      teamId: ch.team_id ?? undefined,
-      ownerId: ch.owner_id,
+      channelType: ch.channelType,
+      teamId: ch.teamId ?? undefined,
+      ownerId: ch.ownerId,
       isParticipant: participantsQuery.isSuccess
         ? (participantsQuery.data ?? []).some(
             (participant) => participant.user_id === userId()
@@ -187,32 +190,14 @@ function NewTop(props: { channelId: string }) {
     },
   });
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned, so the
-  // user does not have to create an agent and mention the channel by hand.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
+  const askMacroEntity = useChannelAskMacroEntity(() => props.channelId);
 
-  // Mobile has no room for inline tabs; the title file-menu drawer leads with
-  // them instead, as a titled radio group mirroring the active tab. Built
-  // from tabs() so the call tab keeps its live-call label.
+  // The drawer owns the icon column, just as desktop tabs own their icon slot.
   const mobileViews = () => ({
     title: 'View',
     options: tabs().map((tab) => ({
       value: tab.value,
-      label:
-        tab.value === 'call' ? (
-          <CallTabLabel channelId={props.channelId} />
-        ) : (
-          tab.label
-        ),
+      label: tab.label,
       icon:
         tab.value === 'call' && tab.icon
           ? tab.icon
@@ -300,9 +285,16 @@ function NewTop(props: { channelId: string }) {
           ]}
         />
       </SplitTitleFileMenu>
-      <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
+      <AgentDmRuntimeStatus botId={channel()?.agentDm?.botId} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
+          {/* Desktop only: phones keep Ask Macro in the title drawer. Shares
+              Invite's contribution so it always lands before Invite. */}
+          <Show when={!isMobile() && askMacroEntity()}>
+            <HeaderIsland class="px-1">
+              <ChannelAskMacroButton channelId={props.channelId} />
+            </HeaderIsland>
+          </Show>
           {/* Only header islands receive taps on touch screens. */}
           <HeaderIsland class="px-1">
             <ChannelInviteButton
@@ -315,7 +307,7 @@ function NewTop(props: { channelId: string }) {
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
       <Show
-        when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
+        when={ENABLE_CALLS && !channel()?.agentDm && !call.isInThisChannel()}
       >
         <SplitHeaderRight>
           <HeaderIsland class="px-1">
@@ -406,9 +398,9 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
         id: channelId,
         name: channel.name ?? 'New Channel',
         blockName: 'channel',
-        ownerId: channel.owner_id,
-        channelType: channel.channel_type,
-        teamId: channel.team_id ?? undefined,
+        ownerId: channel.ownerId,
+        channelType: channel.channelType,
+        teamId: channel.teamId ?? undefined,
       });
     },
   });
@@ -494,7 +486,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
   );
   createComputed(() => {
     if (
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
       ['call', 'calls', 'participants'].includes(activeTab())
     )
       setActiveTabInternal(DEFAULT_CHANNEL_TAB);
@@ -511,7 +503,7 @@ function ChannelBlockAdapter(props: BlockChannelProps) {
 
   const setActiveTab = (tab: ChannelTabId) => {
     setActiveTabInternal(
-      conversationChannel()?.agent_dm &&
+      conversationChannel()?.agentDm &&
         ['call', 'calls', 'participants'].includes(tab)
         ? DEFAULT_CHANNEL_TAB
         : normalizeChannelTab(tab)

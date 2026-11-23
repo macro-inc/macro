@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id, name, cpu_allocation_percent, ram_allocation_percent, reserved_vcpus,\n                   reserved_memory_gib, oversell_factor, memory_low_watermark_percent,\n                   memory_high_watermark_percent, memory_hard_ceiling_percent,\n                   start_resident_memory_mib, minimum_idle_seconds, memory_report_freshness_seconds,\n                   total_vcpus, total_memory_mib, resident_memory_mib, memory_reported_at,\n                   admitted_since_report\n            FROM hosted_runtime_host\n            WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "cpu_allocation_percent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "ram_allocation_percent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "reserved_vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "reserved_memory_gib",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "oversell_factor",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "memory_low_watermark_percent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 8,
+        "name": "memory_high_watermark_percent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "memory_hard_ceiling_percent",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "start_resident_memory_mib",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "minimum_idle_seconds",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 12,
+        "name": "memory_report_freshness_seconds",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 13,
+        "name": "total_vcpus",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 14,
+        "name": "total_memory_mib",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 15,
+        "name": "resident_memory_mib",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 16,
+        "name": "memory_reported_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 17,
+        "name": "admitted_since_report",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "e9c32d7e96821cabaa3d69722b8f7d5289b390253ae5edc0e12558c3630e7eba"
+}

@@ -5,6 +5,8 @@ import {
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import {
@@ -18,8 +20,9 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -51,8 +54,8 @@ import {
   useAgentModelsQueries,
 } from '@queries/agents/models';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import { useConnectors } from '@queries/connectors';
 import { useRunnableHarnessesQuery } from '@queries/harnesses/harnesses';
-import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import {
   useCurrentTeamQuery,
   useIsTeamAdmin,
@@ -83,6 +86,7 @@ import {
   agentSettingsRequest,
   consumeAgentSettingsRequest,
 } from './agentSettingsState';
+import { ConnectorAppPicker } from './ConnectorAppPicker';
 import { CursorConnectPage } from './CursorConnectPage';
 import { AgentSetupStrips } from './components/agent-setup-strips';
 import { AutoArchiveSetting } from './components/auto-archive-setting';
@@ -99,7 +103,6 @@ import {
   apiKeyProviderName,
   apiKeyProviderOf,
 } from './core/agent-api-key';
-import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -198,7 +201,7 @@ export function Agents(props: {
   };
   const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
   const createAgentMutation = useCreateAgentMutation();
@@ -266,7 +269,7 @@ export function Agents(props: {
     );
   };
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
@@ -846,7 +849,7 @@ function AgentEditorPage(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
-  const connections = usePipedreamConnectedSlugs();
+  const connections = useConnectors();
   const [mcp, setMcp] = createSignal<AgentMcpServers>(
     props.agent?.mcp ?? { scope: 'owner_connections' }
   );
@@ -1241,6 +1244,16 @@ function AgentEditorPage(props: {
     close();
   };
 
+  const panel = useSplitPanel();
+  if (isTouchDevice()) {
+    useSplitBackInterceptor(() => {
+      if (panel && !panel.isPanelActive()) return false;
+      if (busy()) return true;
+      if (setup()) finishSetup();
+      else close();
+      return true;
+    });
+  }
   return (
     <Switch>
       <Match when={setup() === 'cursor'}>
@@ -1647,10 +1660,10 @@ function AgentEditorPage(props: {
 
                       <Show when={mcp().scope === 'selected'}>
                         <div class="mt-3 border-t border-edge-muted pt-3">
-                          <PipedreamAppPicker
+                          <ConnectorAppPicker
                             selected={selectedMcpServers()}
                             onChange={setSelectedMcpServers}
-                            connectedSlugs={connections.slugs}
+                            connectedSlugs={connections.connectedApps}
                             connectionsReady={connections.ready}
                             connectContainer={() => pageContentRef}
                           />

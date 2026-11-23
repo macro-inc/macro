@@ -8,6 +8,7 @@ import { PrChangesProvider } from '@block-pr/component/PrChanges';
 import { PrStatusIcon } from '@block-pr/component/PrStatus';
 import { createPrActions } from '@block-pr/primitives/create-pr-actions';
 import { usePrFileOperations } from '@block-pr/primitives/pr-file-operations';
+import { PR_HOST_MIN_WIDTH } from '@block-pr/util/pr-layout';
 import { prDisplayName, prHtmlUrl } from '@block-pr/util/prKey';
 import {
   PrDetailActions,
@@ -105,7 +106,7 @@ export function ReviewsPrDetail(props: { foreignEntityId: string }) {
           status={detail.data()?.pullRequest.status ?? undefined}
           operations={operations()}
         />
-        <ChangesSplit>
+        <ChangesSplit hostMinWidth={PR_HOST_MIN_WIDTH}>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden @container">
             <ViewShell.TopBar class="touch:flex touch:flex-wrap touch:gap-y-2">
               <HeaderIsland class="px-1">

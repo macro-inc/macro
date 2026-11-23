@@ -34,7 +34,7 @@ use models_email::email::service::link::Link;
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, link), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id, link_id=%link.id), err)]
+#[tracing::instrument(skip(ctx, authorization, link), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id, link_id=%link.id), err)]
 pub async fn disable_handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,

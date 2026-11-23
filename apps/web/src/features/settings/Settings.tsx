@@ -12,7 +12,7 @@ import {
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitPanel } from '@components/app/split-panel';
-import { enableMacroComputers } from '@core/constant/featureFlags';
+import { enableAgentNotifications } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -23,12 +23,12 @@ import {
   useSettingsTabs,
 } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
+import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useSearchParams } from '@solidjs/router';
 import {
   createMemo,
@@ -112,8 +112,9 @@ export function SettingsPanel(props: SettingsPanelProps) {
   // Hotkeys and touch pills follow the visible nav, which hides team pages
   // from people without a team.
   const navTabs = createMemo(() => navGroups().flatMap((group) => group.items));
+  const agentNotifications = useFeatureFlag(enableAgentNotifications);
   const outlook = useOutlookAvailable();
-  const macroComputers = useFeatureFlag(enableMacroComputers);
+  const macroComputers = useMacroComputersRollout();
 
   const activeNavigationTab = activeTabId;
 
@@ -124,6 +125,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     searchSettings(searchGroups(), searchQuery(), {
       outlook: outlook(),
       macroComputers: macroComputers().enabled,
+      agentNotifications: agentNotifications().enabled,
     })
   );
 
@@ -168,34 +170,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
       );
     });
   };
-
-  // Helper to navigate to a tab by index
-  function navigateToTabIndex(index: number): boolean {
-    const tabs = navTabs();
-    if (index >= 0 && index < tabs.length) {
-      const tab = tabs[index];
-      if (tab) {
-        selectRoutedTab(tab.tab);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // Register number keys 1-9 for direct tab navigation
-  for (let i = 1; i <= 9; i++) {
-    const keyNum = i;
-    function handleNumberKey() {
-      return navigateToTabIndex(keyNum - 1);
-    }
-    registerHotkey({
-      description: () => t('settingsNav.goToTab', { number: keyNum }),
-      hotkey: `${keyNum}` as ValidHotkey,
-      keyDownHandler: handleNumberKey,
-      scopeId: settingsHotkeyScope,
-      hide: true,
-    });
-  }
 
   const handleTabChange = (value: string) => {
     if (navTabs().some((tab) => tab.tab === value)) {

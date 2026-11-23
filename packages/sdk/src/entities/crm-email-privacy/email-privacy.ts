@@ -12,6 +12,7 @@ import type {
 import { MacroError, paginate, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
+import { type IterationOptions, iterate } from '../../utils/pagination';
 import { AgentSession } from '../agent-sessions/agent-session';
 import { Agent } from '../agents/agent';
 import { Link } from '../email/link';
@@ -160,7 +161,8 @@ export class CrmEmailPrivacyNamespace {
   /**
    * Validate and normalize rules without sharing mail; warnings refer to the returned canonical list.
    * Contact/company targets resolve live; a hidden or deleted target may be inactive.
-   * Validation is not a grant and activation revalidates. Server limits and field errors are preserved.
+   * Validation is not a grant or capacity reservation. Activation repeats the same live-expansion
+   * resource check; a named limit error leaves sharing unchanged. Server limits and field errors are preserved.
    *
    * @readonly
    */
@@ -187,6 +189,8 @@ export class CrmEmailPrivacyNamespace {
    * confirmation; restricted credentials and rollout gates still apply.
    * Reuse the same key, token and rules only for an exact retry. On 409 inspect and
    * decide again; never refresh the token automatically or retry the old decision.
+   * A named resource-limit error refuses this replacement without changing sharing.
+   * Later live growth can exceed the same limits and fail Team email reads; withdrawal stays available.
    * A replayed result records the original commit, not current sharing.
    *
    * @destructive
@@ -306,12 +310,18 @@ export class CrmEmailPrivacyNamespace {
   }
 
   /**
-   * Iterate your audit history lazily, fifty events per page; definitions are separate revision handles.
+   * Iterate your audit history lazily, fifty events per page; `maxItems` caps the total. Definitions are separate revision handles.
    * Agent and session handles identify verified provenance and never fetch their content automatically.
    *
    * @readonly
    */
-  history(): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
+  history(opts?: IterationOptions): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
+    return iterate('crm.emailPrivacy.history', opts, {}, () =>
+      this.historyEvents(),
+    );
+  }
+
+  private historyEvents(): AsyncGenerator<CrmEmailPolicyHistoryEvent> {
     return paginate(async (before) => {
       const page = unwrap(
         await this.client.storage.listCrmEmailPolicyHistory({
@@ -442,11 +452,19 @@ export class CrmEmailPrivacyNamespace {
   }
 
   /**
-   * Iterate only your private thread exceptions lazily; subjects come from your own mailbox.
+   * Iterate only your private thread exceptions lazily; `maxItems` caps the total. Subjects come from your own mailbox.
    *
    * @readonly
    */
-  excludedThreads(): AsyncGenerator<CrmExcludedEmailThread> {
+  excludedThreads(
+    opts?: IterationOptions,
+  ): AsyncGenerator<CrmExcludedEmailThread> {
+    return iterate('crm.emailPrivacy.excludedThreads', opts, {}, () =>
+      this.excludedThreadPages(),
+    );
+  }
+
+  private excludedThreadPages(): AsyncGenerator<CrmExcludedEmailThread> {
     return paginate(async (after) => {
       const page = unwrap(
         await this.client.storage.listCrmExcludedEmailThreads({

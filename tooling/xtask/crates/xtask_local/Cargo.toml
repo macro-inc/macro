@@ -26,6 +26,7 @@ macro_queues = { path = "../../../../crates/macro_queues" }
 serde = { workspace = true }
 # Content-address the init snapshots (`stack up` restore/save keys).
 sha2 = { workspace = true }
+uuid = { workspace = true }
 tokio = { workspace = true }
 # Source of truth for the declared Kafka topics (local-stack provisioning).
 macro_event_topics = { path = "../../../../crates/macro_event_topics", optional = true }
@@ -58,6 +59,7 @@ xtask_local_telemetry = { path = "../xtask_local_telemetry" }
 
 [dev-dependencies]
 jsonwebtoken = { workspace = true }
+lazy-regex = { workspace = true }
 regex = { workspace = true }
 tempfile = { workspace = true }
 

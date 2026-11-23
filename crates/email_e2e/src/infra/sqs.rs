@@ -52,6 +52,12 @@ const QUEUES: &[QueueSpec] = &[
         max_receive_count: 5,
     },
     QueueSpec {
+        override_env: "OVERRIDE_LINK_MAINTENANCE_QUEUE",
+        name: "link-maintenance",
+        visibility_timeout_seconds: 300,
+        max_receive_count: 5,
+    },
+    QueueSpec {
         override_env: "OVERRIDE_EMAIL_SCHEDULED_QUEUE",
         name: "scheduled",
         visibility_timeout_seconds: 30,
@@ -68,6 +74,16 @@ const QUEUES: &[QueueSpec] = &[
         name: "crm-cleanup",
         visibility_timeout_seconds: 60,
         max_receive_count: 5,
+    },
+    // Production also delays each new message by 10 s, which scenarios leave
+    // out so a population doesn't wait on it, and deduplicates per message
+    // group, which changes nothing: every message has a deduplication id of
+    // its own.
+    QueueSpec {
+        override_env: "OVERRIDE_EMAIL_CRM_POPULATION_QUEUE",
+        name: "crm-population.fifo",
+        visibility_timeout_seconds: 60,
+        max_receive_count: 100,
     },
     QueueSpec {
         override_env: "OVERRIDE_SFS_UPLOADER_QUEUE",

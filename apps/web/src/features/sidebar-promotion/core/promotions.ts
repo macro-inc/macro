@@ -41,8 +41,19 @@ export const HOME_SETUP_PROMOTION = {
   secondaryAction: 'Invite team',
 } satisfies PromotionCopy;
 
+const CALENDAR_ACCOUNTS_ID = 'calendar-accounts';
+
+/** The calendar card while an account it names needs attention. */
+type AccountCaseCopy = {
+  /** Dismissal key for this case. */
+  id: string;
+  headline: string;
+  pitch: (emailAddress: string) => string;
+  action: string;
+};
+
 export const CALENDAR_ACCOUNTS_PROMOTION = {
-  id: 'calendar-accounts',
+  id: CALENDAR_ACCOUNTS_ID,
   logos: [logo('Google Calendar', IconGoogleCalendar)],
   /** Joins the logos while the server offers this user Outlook connections. */
   outlookLogo: logo('Outlook', IconOutlook),
@@ -50,14 +61,42 @@ export const CALENDAR_ACCOUNTS_PROMOTION = {
   pitch:
     'Add another account to see your work and personal calendars together.',
   action: 'Connect a calendar',
-  /** Shown instead while one of your accounts lacks calendar access. */
-  enableAction: 'Turn on calendar',
-  /** Shown instead while a calendar grant has expired. */
-  reconnectAction: 'Reconnect calendar',
+  /**
+   * Shown instead while one of your accounts needs attention, in the words of
+   * the calendar view's prompt and the app-wide toast.
+   */
+  accountCases: {
+    /** Calendar access never granted, declined, or turned off. */
+    enable: {
+      id: CALENDAR_ACCOUNTS_ID,
+      headline: 'Enable calendar',
+      pitch: (emailAddress: string) =>
+        `Grant calendar access for ${emailAddress} to turn it on.`,
+      action: 'Turn on calendar',
+    },
+    /**
+     * A calendar that used to sync and lost its access. A new ask, like the
+     * toast's: an older dismissal of this card must not hide it.
+     */
+    stopped: {
+      id: `${CALENDAR_ACCOUNTS_ID}:stopped`,
+      headline: 'Calendar stopped syncing',
+      pitch: (emailAddress: string) =>
+        `Reconnect ${emailAddress} to show its events in Macro again.`,
+      action: 'Reconnect calendar',
+    },
+    /** A calendar grant that has expired. */
+    reconnect: {
+      id: CALENDAR_ACCOUNTS_ID,
+      headline: 'Reconnect calendar',
+      pitch: (emailAddress: string) =>
+        `Reconnect ${emailAddress} to resume calendar sync.`,
+      action: 'Reconnect calendar',
+    },
+  },
 } satisfies PromotionCopy & {
   outlookLogo: PromotionLogo;
-  enableAction: string;
-  reconnectAction: string;
+  accountCases: Record<'enable' | 'stopped' | 'reconnect', AccountCaseCopy>;
 };
 
 export const PULL_REQUEST_REPOSITORIES_PROMOTION = {

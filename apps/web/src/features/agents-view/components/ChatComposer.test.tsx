@@ -60,6 +60,10 @@ const editor = vi.hoisted(() => ({
   connect: undefined as ((markdown: string) => void) | undefined,
   /** The fallback the composer configures with withRestoreFocus. */
   restoreFocus: undefined as RestoreFocusDefault | undefined,
+  /** What the composer does when a mention picks people or agents. */
+  onUserMention: undefined as
+    | ((mention: { mentions: string[] }) => void)
+    | undefined,
 }));
 
 vi.mock(
@@ -71,7 +75,12 @@ vi.mock(
         buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
         withAppLinkResolver: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: {
+          onUserMention?: (mention: { mentions: string[] }) => void;
+        }) => {
+          editor.onUserMention = options.onUserMention;
+          return builder;
+        },
         withEmojis: () => builder,
         withLinks: () => builder,
         withHistory: () => builder,
@@ -273,6 +282,21 @@ describe('Chat session input', () => {
       }
     }
   );
+
+  it('reports each person or agent a mention picks', () => {
+    const mentioned = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        onMentionUser={mentioned}
+        selector={null}
+      />
+    ));
+    editor.onUserMention?.({ mentions: ['bot|cursor', 'macro|ada'] });
+    expect(mentioned.mock.calls).toEqual([['bot|cursor'], ['macro|ada']]);
+  });
 
   it('does not write a sent prompt back into the editor', () => {
     const [draft, setDraft] = createSignal('');
@@ -574,7 +598,7 @@ describe('Chat session input', () => {
     expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
   it.each([false, true])(
-    'places repository settings below desktop and above touch input without remounting the editor (touch: %s)',
+    'keeps settings and editor mounted in desktop controls or the touch drawer (touch: %s)',
     (touch) => {
       vi.mocked(isTouchDevice).mockReturnValue(touch);
       const [mode, setMode] = createSignal('chat');
@@ -589,7 +613,9 @@ describe('Chat session input', () => {
         />
       ));
       const input = screen.getByTestId('editor');
-      const drawer = container.querySelector('.composer-drawer');
+      const drawer = touch
+        ? container.querySelector('.composer-drawer')
+        : container.querySelector('[aria-label="Conversation settings"]');
       const layout = container.querySelector('[data-composer-compact]');
       expect(layout?.getAttribute('data-composer-compact')).toBe('true');
       expect(
@@ -598,20 +624,23 @@ describe('Chat session input', () => {
             ? Node.DOCUMENT_POSITION_FOLLOWING
             : Node.DOCUMENT_POSITION_PRECEDING)
       ).toBeTruthy();
-      expect((drawer as HTMLElement).inert).toBe(true);
-      expect(drawer?.getAttribute('aria-hidden')).toBe('true');
+      if (touch) expect((drawer as HTMLElement).inert).toBe(true);
+      else expect((drawer as HTMLElement).hidden).toBe(true);
       setMode('code');
       expect(screen.getByTestId('editor')).toBe(input);
-      expect((drawer as HTMLElement).inert).toBe(false);
-      expect(drawer?.hasAttribute('data-open')).toBe(true);
+      if (touch) expect((drawer as HTMLElement).inert).toBe(false);
+      else expect((drawer as HTMLElement).hidden).toBe(false);
       expect(layout?.getAttribute('data-composer-compact')).toBe('false');
       expect(editor.clear).not.toHaveBeenCalled();
       setMode('chat');
       expect(layout?.getAttribute('data-composer-compact')).toBe('true');
       expect(screen.getByTestId('editor')).toBe(input);
-      expect((drawer as HTMLElement).inert).toBe(true);
+      if (touch) expect((drawer as HTMLElement).inert).toBe(true);
+      else expect((drawer as HTMLElement).hidden).toBe(true);
       const settings = screen.getByRole('group', { name: 'Composer settings' });
-      expect(settings.textContent).toBe('Agent');
+      expect(
+        settings.contains(screen.getByRole('button', { name: 'Agent' }))
+      ).toBe(true);
     }
   );
   it('does not grow the surface from zero after mounting offscreen', () => {
@@ -674,10 +703,10 @@ describe('Chat session input', () => {
   });
 });
 
-it('expands for a short quote and collapses when replaced with a paragraph', () => {
+it('keeps desktop session controls below both quotes and paragraphs', () => {
   const { container } = render(() => <ChatSessionInput onSend={vi.fn()} />);
   const layout = container.querySelector('[data-composer-compact]');
-  expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+  expect(layout?.getAttribute('data-composer-compact')).toBe('false');
   editor.lexical!.update(
     () => {
       $getRoot()
@@ -695,7 +724,7 @@ it('expands for a short quote and collapses when replaced with a paragraph', () 
     },
     { discrete: true }
   );
-  expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+  expect(layout?.getAttribute('data-composer-compact')).toBe('false');
 });
 
 describe('attachments in the shared composer', () => {
@@ -807,14 +836,14 @@ it('expands mobile controls on focus without replacing the editor or model picke
   const compact = () => input.closest('[data-composer-compact]');
 
   expect(compact()?.getAttribute('data-composer-compact')).toBe('true');
-  expect(model.parentElement?.classList.contains('hidden')).toBe(true);
+  expect(model.closest('.hidden')).not.toBeNull();
   expect(attach.parentElement?.classList.contains('hidden')).toBe(true);
   expect(repository?.getAttribute('aria-hidden')).toBe('true');
   expect(surface?.hasAttribute('data-composer-expanded')).toBe(false);
 
   fireEvent.focusIn(input);
   expect(compact()?.getAttribute('data-composer-compact')).toBe('false');
-  expect(model.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(model.closest('.hidden')).toBeNull();
   expect(attach.parentElement?.classList.contains('hidden')).toBe(false);
   expect(repository?.getAttribute('aria-hidden')).toBe('false');
   expect(surface?.getAttribute('data-composer-expanded')).toBe('true');
@@ -868,9 +897,9 @@ it('reveals the mobile model trigger after focusing the input', () => {
     .getByTestId('editor')
     .closest('[data-composer-compact]');
 
-  expect(trigger.parentElement?.classList.contains('hidden')).toBe(true);
+  expect(trigger.closest('.hidden')).not.toBeNull();
   fireEvent.focusIn(screen.getByTestId('editor'));
-  expect(trigger.parentElement?.classList.contains('hidden')).toBe(false);
+  expect(trigger.closest('.hidden')).toBeNull();
   expect(compact?.getAttribute('data-composer-compact')).toBe('false');
   fireEvent.click(trigger);
   expect(open).toHaveBeenCalledOnce();

@@ -25,11 +25,16 @@ const AGENT_LABEL: &str = "macro.agent";
 /// The herdr app's CLI; optional, so every call to it is best effort.
 const APP_BIN: &str = "herdr-app";
 /// How long a new agent may take to report it is ready for input.
-const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub(super) const AGENT_READY_TIMEOUT: Duration = Duration::from_secs(60);
 const AGENT_READY_POLL: Duration = Duration::from_millis(250);
 /// Polls with an unchanged screen after which an agent that never reports
 /// status counts as ready.
 const SETTLED_POLLS: u32 = 8;
+/// How long a send may keep being refused because the terminal's output
+/// has not settled. herdr-core only refuses that in a terminal's first
+/// seconds, so this outlasts its window.
+const SETTLE_TIMEOUT: Duration = Duration::from_secs(30);
+const SETTLE_RETRY: Duration = Duration::from_millis(500);
 
 #[derive(Debug, Clone)]
 pub(super) struct Core {
@@ -104,42 +109,16 @@ impl Terminal {
 }
 
 impl Core {
-    /// Add a worktree of `source` at `path` on a new branch from the
-    /// freshly fetched main. Core has no worktree concept; git does it.
-    pub(super) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> rootcause::Result<()> {
-        crate::outbound::git::git(
-            source,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                branch,
-                &path.to_string_lossy(),
-                "origin/main",
-            ],
-        )
-        .await
-        .map(drop)
-    }
-
-    /// Start a shell in a new tab, then replace it with the agent, so the
-    /// agent gets the operator's login environment (PATH, direnv) as it
-    /// would in a terminal they opened themselves.
+    /// Start a shell in a tab of a new space, then replace it with the
+    /// agent, so the agent gets the operator's login environment (PATH,
+    /// direnv) as it would in a terminal they opened themselves. Each
+    /// session gets its own space, apart from the operator's own tabs.
     pub(super) async fn launch_agent(
         &self,
         launch: &AgentLaunch<'_>,
     ) -> Result<Window, HerdrError> {
         self.clear(launch.name).await;
-        // A worktree opens as its own space, as herdr's worktree workspaces did.
-        let space = match launch.worktree_source {
-            Some(_) => new_id(),
-            None => self.space().await,
-        };
+        let space = new_id();
         let tab = new_id();
         let terminal = self
             .start(
@@ -162,9 +141,11 @@ impl Core {
         command.extend(launch.args.iter().cloned());
         line.push_str("exec ");
         line.push_str(&shell_words::join(&command));
-        self.run(&["send", &terminal.address, &line]).await?;
+        self.send(&terminal.address, &line).await?;
         self.wait_ready(launch).await?;
         tracing::debug!(terminal = %terminal.address, agent = launch.kind, "agent ready in herdr-core");
+        self.app("space.rename", json!({"id": space, "name": launch.label}))
+            .await;
         self.app("tab.rename", json!({"id": tab, "name": launch.label}))
             .await;
         if launch.focus {
@@ -197,7 +178,24 @@ impl Core {
     }
 
     pub(super) async fn prompt_agent(&self, name: &str, text: &str) -> Result<(), HerdrError> {
-        self.run(&["send", name, text]).await.map(drop)
+        self.send(name, text).await
+    }
+
+    /// Type `text` into a terminal, waiting out herdr-core's refusal while
+    /// a new terminal's output is still settling.
+    async fn send(&self, terminal: &str, text: &str) -> Result<(), HerdrError> {
+        let deadline = tokio::time::Instant::now() + SETTLE_TIMEOUT;
+        let mut refusals = 0u32;
+        loop {
+            match self.run(&["send", terminal, text]).await {
+                Err(error) if error.still_starting() && tokio::time::Instant::now() < deadline => {
+                    refusals += 1;
+                    tracing::debug!(terminal, refusals, "terminal still starting; retrying send");
+                    tokio::time::sleep(SETTLE_RETRY).await;
+                }
+                result => return result.map(drop),
+            }
+        }
     }
 
     pub(super) async fn agent_info(&self, name: &str) -> Result<AgentInfo, HerdrError> {
@@ -259,16 +257,21 @@ impl Core {
         let deadline = tokio::time::Instant::now() + AGENT_READY_TIMEOUT;
         let mut screen = String::new();
         let mut settled = 0u32;
+        // Whether the latest poll read `working`: a status that later goes
+        // away is no longer a busy agent.
+        let mut working = false;
         while tokio::time::Instant::now() < deadline {
             tokio::time::sleep(AGENT_READY_POLL).await;
             let terminal = self.get(launch.name).await?;
             if terminal.state != "live" {
                 return Err(HerdrError::Ended);
             }
+            working = false;
             if let Some(status) = &terminal.status {
                 if status.state != "working" {
                     return Ok(());
                 }
+                working = true;
                 continue;
             }
             if launch.reports_status
@@ -287,7 +290,7 @@ impl Core {
             }
         }
         if launch.reports_status {
-            return Err(HerdrError::NotReady);
+            return Err(not_ready(working));
         }
         Ok(())
     }
@@ -354,4 +357,15 @@ pub(super) fn parse_terminal(command: &str, output: &str) -> Result<Terminal, He
         command: command.to_owned(),
         source,
     })
+}
+
+/// Why an agent that reports status was not ready in time: one whose latest
+/// status reads `working` is busy; one with no status is taken, as before, to
+/// be stopped on a dialog.
+pub(super) fn not_ready(working: bool) -> HerdrError {
+    if working {
+        HerdrError::Busy
+    } else {
+        HerdrError::NotReady
+    }
 }

@@ -11,12 +11,15 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 
 - `src/domain/rows.rs`: the row rules — every notification's home row,
   one message one row, one stack per top-level message and per entity's
-  comments, noise hidden in its natural row.
+  comments, a ping on its entity's own row, noise hidden in
+  its natural row.
 - `src/domain/service.rs`: page, recompute, done (of rows or of one notification of a
   stack), clear, seen and undo.
 - `src/domain/service.rs` (`start_clear`, `run_clear`, `undo_clear`,
   `claim_stalled_clears`): a clear as a stored action applied in chunks. Its
   storage is `notification::domain::bulk_action::BulkActionStore`.
+- `src/domain/service/unread.rs`: the unread rows of the whole inbox by
+  kind, for the sidebar's counts, without paging the inbox.
 - `src/domain/ports.rs` and `src/outbound/`: clear updates to the viewer's
   sessions over the connection gateway (feature `outbound`).
 - `src/domain/policy.rs`: which groups the inbox lists.
@@ -33,7 +36,8 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 
 - Depends on: `attention_feed`, `notification` (the bulk action store port),
   `item_filters`, `filter_ast`, `model_notifications`.
-- Used by: `graphql_notification_inbox`, `document_storage_service`
+- Used by: `graphql_notification_inbox`, `document_storage_service`,
+  `notification_service` (`new_notification_listing`, for pings)
   (composition).
 
 ## Recipes
@@ -56,6 +60,9 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 
 - Groups use `CandidateKeying::FiledEntity`: a channel's group holds its
   threads, so channel rows partition the whole channel's notifications.
+- A ping never gets a row type of its own: `ping_slot` and
+  `ChannelKind::Ping` place it on the row its entity already has, so a new
+  kind of linkable entity needs a slot there or it lands on the agent row.
 - Row types, actor kinds and action kinds only grow: add values, never
   repurpose or remove them; clients skip values they do not know.
 - Only rows have an `id` in GraphQL; the client cache reads any `id` field as
@@ -86,6 +93,13 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.
+- Unread counts come from the same row rules as pages: `unread_rows` asks
+  the feed layer which groups may hold an unread row (an unseen
+  notification, or unread mail whose notifications were seen), reads those
+  groups as a page would and counts rows with `unseen`. Never count from
+  notification state alone; the number would include rows the inbox does
+  not list. An entity type stops being read at `UNREAD_ROWS_COUNTED` rows,
+  and `recount_unread_rows` reads only the groups that changed.
 
 ## Related
 

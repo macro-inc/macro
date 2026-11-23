@@ -19,6 +19,7 @@ import {
   getTaskReferencedEntityIds,
   isTaskEntity,
   type TaskEntityWithProperties,
+  taskCustomPropertyReferences,
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { toPropertyDefinitionDomain } from '@property/utils/transforms';
@@ -116,17 +117,25 @@ function referencesEntity(
 
 /**
  * Whether a task known only locally (an optimistic insert) is associated with
- * the record through its own property. Mention and contact-company matches
- * are known only to the server and arrive with the next fetch.
+ * the record through its own property: the built-in Companies or Contacts
+ * property, or a custom entity property that references the record, as the
+ * server matches them. Mention and contact-company matches are known only to
+ * the server and arrive with the next fetch.
  */
 function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   if (crm.type === 'activity') return false;
-  return getTaskReferencedEntityIds(
+
+  const company = crm.type === 'company';
+  const builtIn = company
+    ? SYSTEM_PROPERTY_IDS.COMPANIES
+    : SYSTEM_PROPERTY_IDS.CONTACTS;
+  if (getTaskReferencedEntityIds(task, builtIn).includes(crm.id)) return true;
+
+  return taskCustomPropertyReferences(
     task,
-    crm.type === 'company'
-      ? SYSTEM_PROPERTY_IDS.COMPANIES
-      : SYSTEM_PROPERTY_IDS.CONTACTS
-  ).includes(crm.id);
+    company ? 'COMPANY' : 'CONTACT',
+    crm.id
+  );
 }
 
 /** A plain copy of the view's facet store, safe to keep in cached options. */

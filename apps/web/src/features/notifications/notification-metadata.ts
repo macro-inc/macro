@@ -21,6 +21,21 @@ export function stoppedAgentsText(
   return `${first} and ${rest.length + 1} others have stopped.`;
 }
 
+/**
+ * What a reaction did, as Slack's Activity words it: "Reacted 👍 to: …".
+ * The reaction leads, so it is never cut off behind the message. A message
+ * with no text (only attachments) is "your message".
+ */
+export function reactionText(content: {
+  emoji: string;
+  messageContent: string;
+}): string {
+  if (!content.messageContent.trim()) {
+    return `Reacted ${content.emoji} to your message`;
+  }
+  return `Reacted ${content.emoji} to: ${content.messageContent}`;
+}
+
 export function getNotificationAction(n: UnifiedNotification): string {
   return (
     match(n.notification_metadata.tag)
@@ -123,6 +138,7 @@ export function getNotificationAction(n: UnifiedNotification): string {
           .with('expired', () => `${agent} sign-in expired`)
           .exhaustive(() => `${agent} sign-in expires soon`);
       })
+      .with('ping', () => 'pinged you')
       .with('runtime_access_removed', () => 'removed your access to')
       // The computer, or the agent teammate it runs, is the actor:
       // "<computer> is ready", "<agent> couldn't be set up".
@@ -200,6 +216,7 @@ export function getNotificationTargetName(
       .with({ tag: 'routine_run_finished' }, () => undefined)
       .with({ tag: 'agent_sign_in_expiry' }, () => undefined)
       .with({ tag: 'computer_setup' }, () => undefined)
+      .with({ tag: 'ping' }, () => undefined)
       .with(
         {
           tag: P.union(
@@ -223,10 +240,7 @@ export function getNotificationContent(
     match(m)
       .with({ tag: 'channel_mention' }, (m) => m.content.messageContent)
       .with({ tag: 'channel_message_send' }, (m) => m.content.messageContent)
-      .with(
-        { tag: 'channel_message_reaction' },
-        (m) => `${m.content.emoji} · ${m.content.messageContent}`
-      )
+      .with({ tag: 'channel_message_reaction' }, (m) => reactionText(m.content))
       .with({ tag: 'ai_response' }, (m) => m.content.summary)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.messageContent)
       .with({ tag: 'call_started' }, () => undefined)
@@ -303,6 +317,7 @@ export function getNotificationContent(
           .exhaustive();
         return `Its ${agent} sign-in ${when}. Sign in again in Settings → Machines.`;
       })
+      .with({ tag: 'ping' }, (m) => m.content.body)
       .with({ tag: 'runtime_access_removed' }, (m) =>
         stoppedAgentsText(m.content.agents, m.content.runtimeName)
       )
@@ -403,6 +418,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'routine_run_finished' }, () => false)
       .with({ tag: 'agent_sign_in_expiry' }, () => false)
       .with({ tag: 'computer_setup' }, () => false)
+      .with({ tag: 'ping' }, () => false)
       .with({ tag: 'runtime_access_removed' }, () => true)
       .with(
         {
@@ -423,6 +439,29 @@ function agentDisplayName(agent: AgentProvider): string {
   return match(agent)
     .with('claude', () => 'Claude')
     .exhaustive();
+}
+
+/**
+ * Who pinged: "<sender> pinged you", where the sender is the agent or person
+ * who sent it. A ping people send themselves from a script has no sender.
+ */
+export function pingedBy(sender: string | undefined): string {
+  return sender ? `${sender} pinged you` : 'You pinged yourself';
+}
+
+/**
+ * What a ping is about, as its row names it: a channel as its messages do,
+ * anything else by its own name. A DM names the other person.
+ */
+export function pingPlace(entity: {
+  type: string;
+  name: string;
+  channelType?: string;
+}): string {
+  return entity.type === 'channel' &&
+    (entity.channelType === 'public' || entity.channelType === 'team')
+    ? `#${entity.name}`
+    : entity.name;
 }
 
 function routineRunFailed(n: UnifiedNotification): boolean {

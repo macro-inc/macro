@@ -104,7 +104,6 @@ export default {
     close: 'Fechar',
     delete: 'Eliminar',
     rename: 'Mudar o nome',
-    more: 'Mais',
     search: 'Pesquisar',
     settings: 'Definições',
   },
@@ -528,6 +527,11 @@ export default {
       other: '{{count}} itens eliminados',
     },
     toastDeleteFailed: 'Não foi possível eliminar',
+    toastPropertySet: {
+      one: '{{property}}: valor definido',
+      many: '{{property}}: valor definido em {{count}} de itens',
+      other: '{{property}}: valor definido em {{count}} itens',
+    },
     toastAddedToFavorites: 'Adicionado aos favoritos',
     toastAddedCountToFavorites: {
       one: '{{count}} item adicionado aos favoritos',
@@ -804,7 +808,6 @@ export default {
       'Nenhuma definição encontrada. Experimente «assinatura», «tema» ou «calendário».',
     backToSettings: 'Voltar às definições',
     closeSettings: 'Fechar definições',
-    goToTab: 'Ir para o separador de definições {{number}}',
     editProfile: 'Editar perfil',
     logOut: 'Terminar sessão',
     yourAccount: 'A sua conta',
