@@ -77,7 +77,7 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
 
 .macro-feature-tile#email .macro-tile-art { height: 520px; min-height: 520px; }
 @media (max-width: 700px) {
- .macro-feature-tile#email .macro-tile-art { height: 550px; min-height: 550px; } 
+ .macro-feature-tile#email .macro-tile-art { height: 550px; min-height: 550px; }
 }
 
 .macro-feature-tile#documents .macro-tile-art { height: 510px; min-height: 510px; }
@@ -129,4 +129,3 @@ html[data-homepage][data-theme-light='true'] .site-nav-demo::after {
 @media (max-width: 699px) {
   .macro-homepage .site-header { inset: 14px 16px auto; width: auto; height: 54px; padding: 0; }
 }
-
