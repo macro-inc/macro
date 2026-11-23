@@ -68,7 +68,7 @@ fn starts_a_lane_fresh_without_a_usable_checkpoint_or_watermark() {
 
 #[test]
 fn starts_membership_and_restart_on_run_lanes_fresh_whatever_they_saved() {
-    let saved = ["tasks-ids", "contacts", "channels", "email-shared"].map(|id| {
+    let saved = ["tasks-ids", "channels", "email-shared"].map(|id| {
         json!({
             "id": id,
             "resume": { "cursor": "c1", "items": 5, "passStartedAt": RUN_STARTED },
@@ -77,7 +77,7 @@ fn starts_membership_and_restart_on_run_lanes_fresh_whatever_they_saved() {
         })
     });
     let lanes = first_pass(json!(saved));
-    for id in ["tasks-ids", "contacts", "channels", "email-shared"] {
+    for id in ["tasks-ids", "channels", "email-shared"] {
         let planned = lane(&lanes, id);
         let input = &planned.variables["input"]["initial"];
         assert!(input.is_object(), "{id}");
@@ -103,7 +103,7 @@ fn leaves_out_lanes_completed_since_the_run_started() {
         "completedSince": RUN_STARTED,
         "lanes": [
             { "id": "tasks", "completedAt": "2026-11-02T11:30:00.000Z", "watermark": RUN_STARTED },
-            { "id": "contacts", "completedAt": "2026-11-02T11:30:00.000Z" },
+            { "id": "task-projects", "completedAt": "2026-11-02T11:30:00.000Z" },
             // Completed before the run: caught up again.
             { "id": "channels", "completedAt": "2026-11-02T10:00:00.000Z" },
             // Completed, then started another pass during the run.
@@ -116,7 +116,7 @@ fn leaves_out_lanes_completed_since_the_run_started() {
     }));
     let ids = ids(&lanes);
     assert!(!ids.contains(&"tasks"));
-    assert!(!ids.contains(&"contacts"));
+    assert!(!ids.contains(&"task-projects"));
     assert!(ids.contains(&"channels"));
     assert!(ids.contains(&"documents-recent"));
 }

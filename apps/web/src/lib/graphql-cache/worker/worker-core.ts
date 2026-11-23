@@ -523,8 +523,7 @@ export class CacheWorkerCore {
   private async admit(request: CacheRequest): Promise<unknown> {
     if (request.kind === 'sync-start')
       return { result: await this.sync.start(request.args) };
-    if (request.kind === 'sync-stop')
-      return { result: await this.sync.stop() };
+    if (request.kind === 'sync-stop') return { result: await this.sync.stop() };
     return await this.enqueue(request);
   }
 

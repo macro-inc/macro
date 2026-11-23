@@ -53,8 +53,8 @@ import type {
 import { workerCacheTelemetry } from '../telemetry-relay';
 import type { CompiledEngineExchange } from './compiled-engine';
 import type { StaleDatabaseRemovalOutcome } from './stale-databases';
-import { compileCacheWasm } from './wasm-compile';
 import type { SyncEngine } from './sync-driver';
+import { compileCacheWasm } from './wasm-compile';
 
 /** Stable, payload-free marker latched on reset-required WASM errors. */
 export interface CacheStorageResetRequiredError extends Error {

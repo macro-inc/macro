@@ -27,7 +27,7 @@ pub(super) const VALIDATED_SQL: [&str; 5] = [
 
 /// Upserts a lane row and adds `members` to it, inside the caller's transaction.
 fn write_lane(
-    connection: &Arc<Connection>,
+    connection: &Db,
     row: &SyncLaneRow,
     members: &[EntityKey<'static>],
 ) -> Result<(), TursoStorageError> {
@@ -46,14 +46,14 @@ fn write_lane(
 }
 
 /// Removes every lane row and member with the rest of the cache.
-pub(super) fn clear(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn clear(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(connection, "DELETE FROM sync_members", Vec::new())?;
     driver::execute(connection, "DELETE FROM sync_lanes", Vec::new())?;
     Ok(())
 }
 
 /// Validates the frozen sync tables, their columns, and their key indexes.
-pub(super) fn validate_schema(connection: &Arc<Connection>) -> Result<(), TursoStorageError> {
+pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> {
     let column = |name, declared_type, not_null, primary_key_position| ColumnSpec {
         name,
         declared_type,
@@ -129,24 +129,10 @@ impl SyncStorage for TursoStorage {
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
-            let entries = prepare_records(records)?;
+            let mut entries = prepare_records(records)?;
             let connection = self.connection();
             driver::write_transaction(&connection, || {
-                let mut statement = driver::prepare(&connection, RECORD_UPSERT)?;
-                for (index, entry) in entries.iter().enumerate() {
-                    require_changed(
-                        driver::execute_prepared(
-                            &mut statement,
-                            vec![
-                                text(&entry.key.typename),
-                                text(&entry.key.id),
-                                Value::from_blob(entry.value.clone()),
-                            ],
-                        )?,
-                        1,
-                    )?;
-                    self.fault_after(TestFaultSite::Put, index)?;
-                }
+                self.insert_records(&connection, &mut entries)?;
                 write_derived_rows(&connection, &entries)?;
                 write_projection_mutations(&connection, projections)?;
                 write_lane(&connection, &lane, &members)

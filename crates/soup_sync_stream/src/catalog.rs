@@ -105,8 +105,6 @@ struct EmailWindow {
     days: i64,
 }
 
-const CONTACTS_QUERY: &str = include_str!("catalog/contacts.graphql");
-const CONTACT_IDS_QUERY: &str = include_str!("catalog/contact_ids.graphql");
 const CHANNELS_QUERY: &str = include_str!("catalog/channels.graphql");
 const CHANNEL_IDS_QUERY: &str = include_str!("catalog/channel_ids.graphql");
 const MINIMAL_TASKS_QUERY: &str = include_str!("catalog/minimal_tasks.graphql");
@@ -125,7 +123,6 @@ pub(crate) const CALENDAR_OPERATION: &str = "CalendarOccurrences";
 
 const TASKS: &str = "tasks";
 const TASK_PROJECTS: &str = "task-projects";
-const CONTACTS: &str = "contacts";
 const CHANNELS: &str = "channels";
 const DOCUMENTS_RECENT: &str = "documents-recent";
 const DOCUMENTS_REST: &str = "documents-rest";
@@ -141,20 +138,10 @@ pub(crate) fn lane_specs(pass: Pass) -> Vec<LaneSpec> {
 
 fn first_pass() -> Vec<LaneSpec> {
     vec![
-        // Small, app-wide lists (mentions, sharing, compose, names) come first.
-        // Neither has a "changed since" filter, and joining a channel or
-        // gaining a contact need not change a timestamp, so both are listed
-        // in full every run.
-        LaneSpec::Soup(SoupLaneSpec {
-            id: CONTACTS,
-            query: CONTACTS_QUERY,
-            operation_name: "SyncContacts",
-            input: contacts_input,
-            kind: SoupLaneKind::Hydrate,
-            restart_on_run: true,
-            max_items: None,
-            coverage: Some(Coverage("contact")),
-        }),
+        // The small, app-wide channel list (mentions, sharing, names) comes
+        // first. It has no "changed since" filter, and joining a channel need
+        // not change a timestamp, so it is listed in full every run. Contacts
+        // are not a lane: the app's contact directory backfill keeps them.
         LaneSpec::Soup(SoupLaneSpec {
             id: CHANNELS,
             query: CHANNELS_QUERY,
@@ -245,13 +232,6 @@ fn first_pass() -> Vec<LaneSpec> {
             "SoupSyncTaskProjectIds",
             |_| rows(task_project_filters(), "CREATED_AT", MEMBERSHIP_PAGE),
             &[TASK_PROJECTS],
-        ),
-        ids_lane(
-            "contacts-ids",
-            CONTACT_IDS_QUERY,
-            "SyncContactIds",
-            contacts_input,
-            &[CONTACTS],
         ),
         ids_lane(
             "channels-ids",
@@ -485,10 +465,6 @@ fn rows(filters: Map<String, Value>, sort_method: &str, limit: u32) -> Map<Strin
         "emailView": "ALL",
         "filters": filters,
     }))
-}
-
-fn contacts_input(_: DateTime<Utc>) -> Map<String, Value> {
-    object(json!({ "limit": HYDRATE_PAGE }))
 }
 
 /// Creation order never changes mid-scan, so a channel cannot be skipped.

@@ -65,6 +65,12 @@ vi.mock('@macro-inc/observability', () => ({
     },
   },
 }));
+// The contact and channel directory work beside the sync has its own tests.
+vi.mock('../../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+vi.mock('../../contacts/top-up', () => ({ useContactTopUp: () => {} }));
+vi.mock('../../contacts/use-context-publisher', () => ({
+  useContactContextPublisher: () => {},
+}));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),

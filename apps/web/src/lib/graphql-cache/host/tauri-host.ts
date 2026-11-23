@@ -1212,11 +1212,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       try {
         await ready;
         // A run lasts as long as its stream, so it has no IPC timeout.
-        return await request<SyncRunOutcome>(
-          SYNC_START_COMMAND,
-          { args },
-          false
-        );
+        return await request<SyncRunOutcome>(SYNC_START_COMMAND, { args });
       } catch (error) {
         // An older native build has no sync; the app keeps its paged backfill.
         if (isMissingCommand(error, SYNC_START_COMMAND)) {
@@ -1237,7 +1233,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       }
       try {
         // Resolves once the run has stopped, which can take one page write.
-        await request<void>(SYNC_STOP_COMMAND, {}, false);
+        await request<void>(SYNC_STOP_COMMAND, {});
       } catch (error) {
         // An older native build never started a run.
         if (!isMissingCommand(error, SYNC_STOP_COMMAND)) throw error;

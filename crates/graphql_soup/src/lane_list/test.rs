@@ -18,16 +18,19 @@ use uuid::Uuid;
 
 use super::*;
 
+/// One scripted Soup answer: its items and next cursor.
+type Chunk = (Vec<SoupItem<()>>, Option<String>);
+
 /// Answers each Soup call with the next scripted chunk and records the
 /// requested page sizes. Items come with facts only from a projection call.
 #[derive(Default)]
 struct ChunkedSoup {
-    chunks: StdMutex<VecDeque<(Vec<SoupItem<()>>, Option<String>)>>,
+    chunks: StdMutex<VecDeque<Chunk>>,
     limits: StdMutex<Vec<u16>>,
 }
 
 impl ChunkedSoup {
-    fn script(&self, chunks: Vec<(Vec<SoupItem<()>>, Option<String>)>) {
+    fn script(&self, chunks: Vec<Chunk>) {
         *self.chunks.lock().unwrap() = chunks.into();
     }
 
@@ -151,6 +154,7 @@ fn created(n: u128) -> DateTime<Utc> {
 
 fn document(n: u128) -> SoupItem<()> {
     SoupItem::Document(SoupDocument {
+        appearance: None,
         id: Uuid::from_u128(n),
         document_version_id: 1,
         owner_id: Owner::from_principal_str("macro|owner@example.com").unwrap(),

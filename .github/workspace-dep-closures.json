@@ -6244,6 +6244,7 @@
       "crates/soup",
       "crates/soup_filter_projection",
       "crates/soup_realtime",
+      "crates/soup_sync_stream",
       "crates/sqs_client",
       "crates/sqs_worker",
       "crates/static_file",
@@ -16262,6 +16263,10 @@
       "crates/unfurl",
       "crates/user_events",
       "crates/user_quota",
+      "crates/workspace-hack"
+    ],
+    "soup_sync_stream": [
+      "crates/soup_sync_stream",
       "crates/workspace-hack"
     ],
     "source_items": [

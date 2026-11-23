@@ -57,7 +57,7 @@ use turso_opfs::{
 };
 
 /// Frozen storage schema version, independent of cache postcard versions.
-pub const STORAGE_SCHEMA_VERSION: u32 = 12;
+pub const STORAGE_SCHEMA_VERSION: u32 = 13;
 
 const QUICK_ACCESS_PROJECTION_VERSION_KEY: &str = "quick_access_projection_version";
 const SEARCH_REBUILD_BATCH_SIZE: i64 = 256;
@@ -3655,7 +3655,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<bool, TursoSt
 /// The digest of `sqlite_schema` in a database this build creates; see
 /// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
 /// the new value whenever the schema or how turso records it changes.
-const FRESH_SCHEMA_DIGEST: u128 = 0xc05ad605542917515f7a3408e414ed25;
+const FRESH_SCHEMA_DIGEST: u128 = 0x64c70a2ac5b6e033ab6fa9a444e08ece;
 
 /// Whether the database holds exactly the schema this build creates.
 fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
@@ -5285,35 +5285,46 @@ impl TursoStorage {
             let mut entries = prepare()?;
             let connection = self.connection();
             driver::write_transaction(&connection, || {
-                // Several records per statement: on a cold write, running one
-                // statement per record cost more than the rows it wrote.
-                let mut written = 0;
-                for size in insert_batches(entries.len()) {
-                    let mut values = Vec::with_capacity(size * 3);
-                    for entry in &mut entries[written..written + size] {
-                        values.extend([
-                            text(&entry.key.typename),
-                            text(&entry.key.id),
-                            Value::from_blob(std::mem::take(&mut entry.value)),
-                        ]);
-                    }
-                    insert_rows(
-                        &connection,
-                        RECORD_UPSERT_PREFIX,
-                        RECORD_UPSERT_SUFFIX,
-                        3,
-                        values,
-                    )?;
-                    for index in written..written + size {
-                        self.fault_after(TestFaultSite::Put, index)?;
-                    }
-                    written += size;
-                }
+                self.insert_records(&connection, &mut entries)?;
                 write_derived_rows(&connection, &entries)?;
                 write_projection_mutations(&connection, projections)
             })
         })();
         self.latch_result(result)
+    }
+
+    /// Upserts encoded records inside the caller's write transaction, taking
+    /// their values. Their derived rows are the caller's to write.
+    fn insert_records(
+        &self,
+        connection: &Db,
+        entries: &mut [EncodedRecord],
+    ) -> Result<(), TursoStorageError> {
+        // Several records per statement: on a cold write, running one
+        // statement per record cost more than the rows it wrote.
+        let mut written = 0;
+        for size in insert_batches(entries.len()) {
+            let mut values = Vec::with_capacity(size * 3);
+            for entry in &mut entries[written..written + size] {
+                values.extend([
+                    text(&entry.key.typename),
+                    text(&entry.key.id),
+                    Value::from_blob(std::mem::take(&mut entry.value)),
+                ]);
+            }
+            insert_rows(
+                connection,
+                RECORD_UPSERT_PREFIX,
+                RECORD_UPSERT_SUFFIX,
+                3,
+                values,
+            )?;
+            for index in written..written + size {
+                self.fault_after(TestFaultSite::Put, index)?;
+            }
+            written += size;
+        }
+        Ok(())
     }
 }
 

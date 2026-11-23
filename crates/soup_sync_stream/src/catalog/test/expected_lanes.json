@@ -1,68 +1,6 @@
 {
  "first": [
   {
-   "id": "contacts",
-   "operationName": "SyncContacts",
-   "input": {
-    "limit": 500
-   },
-   "updatedSince": {
-    "limit": 500,
-    "filters": {
-     "documentFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "projectFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "chatFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "emailFilter": {
-      "tree": {
-       "or": {
-        "left": {
-         "literal": {
-          "updatedAt": {
-           "gte": "2026-10-01T00:00:00.000Z"
-          }
-         }
-        },
-        "right": {
-         "literal": {
-          "viewedAt": {
-           "gte": "2026-10-01T00:00:00.000Z"
-          }
-         }
-        }
-       }
-      }
-     }
-    }
-   },
-   "kind": {
-    "kind": "hydrate"
-   },
-   "maxItems": null,
-   "coverage": {
-    "entity": "contact",
-    "scope": "all"
-   },
-   "restartOnRun": true
-  },
-  {
    "id": "channels",
    "operationName": "SoupBackfillSyncChannels",
    "input": {
@@ -1651,68 +1589,6 @@
     "kind": "membership",
     "scopes": [
      "task-projects"
-    ]
-   },
-   "maxItems": null,
-   "coverage": null,
-   "restartOnRun": false
-  },
-  {
-   "id": "contacts-ids",
-   "operationName": "SyncContactIds",
-   "input": {
-    "limit": 500
-   },
-   "updatedSince": {
-    "limit": 500,
-    "filters": {
-     "documentFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "projectFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "chatFilter": {
-      "literal": {
-       "updatedAt": {
-        "gte": "2026-10-01T00:00:00.000Z"
-       }
-      }
-     },
-     "emailFilter": {
-      "tree": {
-       "or": {
-        "left": {
-         "literal": {
-          "updatedAt": {
-           "gte": "2026-10-01T00:00:00.000Z"
-          }
-         }
-        },
-        "right": {
-         "literal": {
-          "viewedAt": {
-           "gte": "2026-10-01T00:00:00.000Z"
-          }
-         }
-        }
-       }
-      }
-     }
-    }
-   },
-   "kind": {
-    "kind": "membership",
-    "scopes": [
-     "contacts"
     ]
    },
    "maxItems": null,

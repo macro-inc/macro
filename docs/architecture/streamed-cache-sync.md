@@ -1,9 +1,8 @@
 # Streamed cache sync
 
 The streamed cache sync fills the local cache database in the background, so
-tasks, recent email, recent documents, contacts, channels and nearby calendar
-events can be filtered, sorted and grouped locally. One streamed HTTP response
-carries every lane of a pass in priority order. The server owns the lanes: the
+tasks, recent email, recent documents, channels and nearby calendar events can
+be filtered, sorted and grouped locally. One streamed HTTP response carries every lane of a pass in priority order. The server owns the lanes: the
 cache (the browser cache worker or the native cache plugin) names the pass and
 sends its saved lane state, the server plans the stream's lanes from it and
 declares each one before its pages, and cache-core decodes and writes them. So
@@ -73,7 +72,7 @@ The server plans a stream's lanes from the pass's lane catalog
   `maxItems` over the whole pass.
 - A completed hydrate lane (`watermark` and `completedAt`) runs again with
   only what changed since its watermark.
-- Membership lanes and lanes listed whole every run (`contacts`, `channels`,
+- Membership lanes and lanes listed whole every run (`channels`,
   `email-shared`) start fresh; anything else does too.
 - Calendar windows are the months the pass covers, nearest first, in the
   client's time zone, clamped to the range the server materializes, without
@@ -256,7 +255,7 @@ Rules:
 - Each page is one engine write at background priority (the browser worker's
   hydration priority), so reads for open views go first.
 - Lane state and members live in the cache database (`sync_lanes`,
-  `sync_members`, storage schema 12) and are wiped with it.
+  `sync_members`, storage schema 13) and are wiped with it.
 - One run at a time per database; a second start returns `busy`.
 - A run stops on `syncStop`, when the browser engine parks or is disposed, or
   when the native app is suspended. Progress up to the last written page is
@@ -290,12 +289,11 @@ every item.
 The server's catalog (`crates/soup_sync_stream/src/catalog.rs`) holds each
 pass's lanes in this order; the app runs the passes and paces their streams.
 
-First pass (one stream, no `maxPages`): `contacts`, `channels`, `tasks`,
+First pass (one stream, no `maxPages`): `channels`, `tasks`,
 `task-projects`, `email-recent` (60 days, no bodies), `email-shared`,
 `documents-recent` (1,000 most recently viewed or updated), `calendar-near-*`
 (2 months each way), then the membership lanes `tasks-ids`,
-`task-projects-ids`, `contacts-ids`, `channels-ids`, `documents-ids` and
-`email-shared-ids`.
+`task-projects-ids`, `channels-ids`, `documents-ids` and `email-shared-ids`.
 
 Second pass (repeated streams, each resuming from saved state, 2 s apart):
 `crm-contacts`, `core-rest`, `documents-rest`, `calendar-far-*` (12 months
@@ -307,8 +305,10 @@ pages), and a stream still running after 30 s is stopped, keeping its written
 pages (`SECOND_PASS_STREAM` in `apps/web/src/lib/queries/soup/sync/host.ts`).
 
 A completed lane runs again on later passes with "changed since its
-watermark"; membership lanes, contacts, channels and shared email run in full
-every time. Channel messages and threads, and calls, are not synced.
+watermark"; membership lanes, channels and shared email run in full every
+time. Channel messages and threads, and calls, are not synced. Contacts are
+not a lane: the app's contact directory backfill (`queries/contacts`) keeps
+them, beside the sync.
 
 ## App
 

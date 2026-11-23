@@ -24,6 +24,17 @@ import { soupBackfillLaneFailed } from './backfill-checkpoint';
 
 type FetchInput = Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0];
 
+// The streamed sync flag is off unless a test turns it on.
+const featureFlagMocks = vi.hoisted(() => ({
+  useFeatureFlag: vi.fn((_flag: { key: string }) => () => ({
+    enabled: false,
+    payload: undefined,
+  })),
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: featureFlagMocks.useFeatureFlag,
+}));
+
 const graphqlMocks = vi.hoisted(() => ({
   getGraphqlSoupCacheHost: vi.fn(),
   hydrateGraphqlSoup: vi.fn(),

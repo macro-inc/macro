@@ -43,8 +43,8 @@ use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
 mod authority;
 mod calendar;
-mod sync;
 mod people;
+mod sync;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
@@ -882,6 +882,20 @@ impl CacheState {
         result: Result<T, EngineError<TursoStorageError>>,
     ) -> Result<T, JsValue> {
         result.map_err(|error| self.engine_error(error))
+    }
+
+    fn projection_failure(
+        &mut self,
+        failure: soup_filter_cache_adapter::host_projections::ProjectionFailure<TursoStorageError>,
+    ) -> JsValue {
+        use soup_filter_cache_adapter::host_projections::ProjectionFailure;
+        match failure {
+            ProjectionFailure::Engine(error) => self.engine_error(error),
+            ProjectionFailure::Adapter(error) => err_js(error),
+            ProjectionFailure::Passes(WritePassError::Notification(error)) => err_js(error),
+            ProjectionFailure::Passes(WritePassError::Projection(error))
+            | ProjectionFailure::Projection(error) => self.mail_projection_error(error),
+        }
     }
 
     fn mail_projection_error(&mut self, error: MailProjectionError<TursoStorageError>) -> JsValue {

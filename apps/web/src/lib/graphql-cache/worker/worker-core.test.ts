@@ -4172,6 +4172,7 @@ describe('CacheWorkerCore', () => {
       await core.handleRequest(port, { id: 3, kind: 'sync-state' });
 
       expect(messages).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
         kind: 'cache-hydrated',
         revision: '2',
         searchChangedBuckets: ['task'],
@@ -4182,6 +4183,7 @@ describe('CacheWorkerCore', () => {
         result: { ok: true, result },
       });
       expect(messages).toContainEqual({
+        authorityGeneration: TEST_AUTHORITY_GENERATION,
         id: 3,
         ok: true,
         result: [{ id: 'tasks' }],

@@ -65,7 +65,8 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 - Quick Access projection version upgrades rebuild derived rows from retained normalized records; preserve the mutation queue and storage generation (covered by `src/storage/test/search_projection.rs`). Storage schema 12 is a separate, intentionally incompatible covering-index cutover: native reset drops queued writes; browser versioning opens a fresh file. See `../README.md#streaming-text-search`.
 - Streamed-sync lane state and members (`src/storage/sync.rs`) describe cached
   records: every path that drops records (`reset_with_records`, format
-  migration) drops them too.
+  migration) drops them too. Storage schema 13 adds their tables, a cutover
+  like schema 12's: browser versioning opens a fresh file, native resets.
 
 - `#![forbid(unsafe_code)]` and `#![deny(missing_docs)]` — this crate is held to
   a stricter bar than most because it's the single physical-disk commit point.

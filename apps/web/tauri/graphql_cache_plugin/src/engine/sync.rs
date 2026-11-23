@@ -12,8 +12,9 @@ use cache_core::sync::{
 };
 use cache_core::value::EntityKey;
 use cache_turso::{TursoStorage, TursoStorageError};
+use soup_filter_cache_adapter::WriteResponse;
 use soup_filter_cache_adapter::host_projections::{
-    ProjectionFailure, deletion_projections, reuses_stored_identity, write_projections_parsed,
+    ProjectionFailure, deletion_projections, reuses_stored_identity, write_projections,
 };
 use std::collections::BTreeSet;
 use std::sync::Weak;
@@ -45,16 +46,16 @@ impl SyncHooks<TursoStorage> for NativeSyncHooks {
         let reuse = reuses_stored_identity(engine, page.identity)
             .await
             .map_err(ProjectionFailure::Engine)?;
-        write_projections_parsed(
-            engine,
-            page.operation,
+        let schema = engine.schema_snapshot();
+        let response = WriteResponse::with_updates(
+            &schema,
+            page.query,
             page.operation_name,
             page.variables,
             page.data,
             page.updates,
-            reuse,
-        )
-        .await
+        );
+        write_projections(engine, page.operation, &response, reuse).await
     }
 
     async fn deletion_projections(

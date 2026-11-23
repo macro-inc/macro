@@ -7100,6 +7100,7 @@ dependencies = [
  "slack_integration",
  "soup",
  "soup_realtime",
+ "soup_sync_stream",
  "sqlx",
  "sqs_client",
  "sqs_worker",
@@ -9994,6 +9995,7 @@ dependencies = [
  "async-graphql",
  "chrono",
  "entity_access",
+ "futures",
  "graphql_common",
  "macro_user_id",
  "model-entity",
@@ -19984,6 +19986,25 @@ dependencies = [
  "tokio-retry",
  "tracing",
  "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup_sync_stream"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "async-graphql",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "futures",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 

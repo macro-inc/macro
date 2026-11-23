@@ -619,15 +619,15 @@ where
             changed.insert(key.clone());
             to_persist.push((key, merged));
         }
-        // What must outlive the write: refreshed hot entries and loaded catalogs.
+        // What must outlive the write: refreshed hot entries.
         let republish = to_persist
             .iter()
-            .filter(|(key, _)| self.search_catalogs.is_loaded() || self.hot.contains(key))
+            .filter(|(key, _)| self.hot.contains(key))
             .cloned()
             .collect::<Vec<_>>();
 
         let revision_advanced = if changed.is_empty() {
-            self.projection_mutations_change(&projections)
+            self.projection_mutations_change(&projections, None)
                 .await
                 .map_err(SyncWriteError::Engine)?
         } else {
@@ -656,11 +656,8 @@ where
             self.revision
         };
         // Publish only after the write succeeded, like every other write.
-        self.update_loaded_search_catalogs(&republish);
         for (key, record) in republish {
-            if self.hot.contains(&key) {
-                self.hot.put(key, record);
-            }
+            self.hot.put(key, record);
         }
         Ok(SyncPageWritten::Written(HydrationWriteResult {
             search_changed_buckets: search_changed_buckets.clone(),

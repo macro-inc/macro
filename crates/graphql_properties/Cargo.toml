@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+futures = { workspace = true }
 async-graphql = { workspace = true, features = ["dataloader"] }
 chrono = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false }

@@ -47,7 +47,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-either = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 model_owner = { path = "../model_owner" }
 models_properties = { path = "../models_properties" }

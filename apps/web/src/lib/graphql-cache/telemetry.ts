@@ -248,6 +248,9 @@ const CACHE_REQUEST_KINDS: Readonly<Record<CacheRequest['kind'], true>> = {
   'current-authority': true,
   'transition-authority': true,
   'inspect-mutations': true,
+  'sync-start': true,
+  'sync-stop': true,
+  'sync-state': true,
 };
 
 export type CacheTelemetryObservation = {

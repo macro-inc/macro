@@ -118,6 +118,15 @@ pub struct CacheState {
 }
 
 impl CacheState {
+    /// State holding an already initialized cache and no sync run.
+    #[cfg(test)]
+    pub(crate) fn with_cache(cache: InitializedCache) -> Self {
+        Self {
+            cache: Mutex::new(Some(cache)),
+            sync: sync::SyncRuns::default(),
+        }
+    }
+
     /// Installs how streamed sync opens its stream (the app does this at
     /// setup). Until then `graphql_cache_sync_start` answers `unsupported`.
     pub fn install_sync_opener(&self, opener: Arc<dyn sync::SyncStreamOpener>) {

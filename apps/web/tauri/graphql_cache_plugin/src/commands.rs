@@ -26,6 +26,7 @@ use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::query_inspection::{CachedQueryInstance, CachedQueryVariant};
 use cache_core::search::{SearchPage, SearchRequest};
+use cache_core::sync::{SyncLaneState, SyncStartArgs};
 use cache_core::{
     engine::HydrationScope,
     people::{
@@ -33,7 +34,6 @@ use cache_core::{
         PeopleSearchResult,
     },
 };
-use cache_core::sync::{SyncLaneState, SyncStartArgs};
 use cache_turso::TursoFileDatabase;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, Runtime, State};

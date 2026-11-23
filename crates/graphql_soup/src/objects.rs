@@ -639,6 +639,8 @@ where
             Self::ForeignEntity(entity) => &entity.1,
             Self::AgentSession(entity) => &entity.1,
             Self::DatabaseRow(entity) => &entity.1,
+            Self::Harness(entity) => &entity.1,
+            Self::Team(entity) => &entity.1,
             Self::Reminder(entity) => &entity.1,
         }
     }

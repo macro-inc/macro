@@ -127,7 +127,7 @@ projection composition it uses for hydration and server deletions, and the
 clocks. Hydrate lanes record delivered keys as lane members; a completed
 membership listing deletes unlisted members like a server deletion; calendar
 lanes commit their coverage with the lowest per-link watermark. Lane state and
-members live in `sync_lanes` / `sync_members` (storage schema 12), and `clear`,
+members live in `sync_lanes` / `sync_members` (storage schema 13), and `clear`,
 `reset_with_records` and format migration wipe them with the records. The
 browser engine worker drives runs (`worker/sync-driver.ts`); the native plugin
 drives them in Rust (`graphql_cache_plugin/src/sync.rs`) through an HTTP opener
