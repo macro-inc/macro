@@ -439,17 +439,15 @@ function useChannelsDataSource(
     isLoading: () => isEnabled() && query.isLoading && items().length === 0,
     isFetching: () => isEnabled() && query.isFetching,
     // The live query hides a network failure behind its local cache rows,
-    // which are empty when the list was never cached. An empty list after a
-    // failed fetch is unknown, not "no conversations".
+    // which are empty when the list was never cached. Until a cached or
+    // fetched page answers, an empty list after a failed fetch is unknown, not
+    // "no conversations"; a page that answered empty is.
     error: () => {
       if (!isEnabled()) return undefined;
-      return (
-        query.error ??
-        (items().length === 0 || snapshot().source === 'shared-list'
-          ? query.fetchError
-          : null) ??
-        undefined
-      );
+      const unanswered =
+        !query.hasPageData &&
+        (items().length === 0 || snapshot().source === 'shared-list');
+      return query.error ?? (unanswered ? query.fetchError : null) ?? undefined;
     },
     hasMore: () => isEnabled() && query.hasNextPage,
     isLoadingMore: () => isEnabled() && query.isFetchingNextPage,
