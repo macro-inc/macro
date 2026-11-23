@@ -1348,7 +1348,9 @@ There is no separate Browse channels row. Closing search restores the sectioned
 list. Collapsed sections retain unread rows by default; **Display → Unread when
 collapsed** turns those rows off without changing expanded membership. Off-page
 unread rows supplement only collapsed groups with that setting enabled; expanded
-groups keep the source's page order.
+groups keep the source's page order. An unseen invite (being added to a channel)
+makes the channel unread, as it is in Notifications and the Chat badge, until
+Chat opens the channel and marks the invite seen.
 
 Drag a section heading or its name to reorder sections. There is no drag-handle
 icon. Keyboard focus reveals an icon-free **Reorder** control over the heading

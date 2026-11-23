@@ -752,3 +752,73 @@ async fn event_type_filter_limits_unseen_mentions_past_newer_sends(pool: PgPool)
         "reading the mentions clears them"
     );
 }
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Invite {
+    invited_by: String,
+    channel_name: String,
+}
+impl Notification for Invite {
+    const TYPE_NAME: &'static str = "channel_invite";
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn top_level_filter_counts_an_unseen_invite(pool: PgPool) {
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    let channel = EntityType::Channel.with_entity_string(Uuid::now_v7().to_string());
+    let invite = insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Invite {
+            invited_by: "macro|inviter@example.com".into(),
+            channel_name: "general".into(),
+        },
+    )
+    .await;
+    insert(
+        &pool,
+        &viewer,
+        channel.clone(),
+        None,
+        Mention {
+            message_id: "reply".into(),
+            thread_id: Some("root".into()),
+        },
+    )
+    .await;
+    let query = EntityNotificationQuery {
+        states: vec![NotificationState::Unseen],
+        top_level_messages_only: true,
+        limit: Some(1),
+        ..Default::default()
+    };
+    let result = get_filtered_entity_notifications(
+        &pool,
+        viewer.clone(),
+        vec![channel.clone()],
+        query.clone(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        result[&channel]
+            .iter()
+            .map(|row| row.notification_id)
+            .collect::<Vec<_>>(),
+        [invite],
+        "the inbox lists an unseen invite on the channel's top-level row"
+    );
+    pool.mark_notifications_seen(&viewer, &[invite])
+        .await
+        .unwrap();
+    let result = get_filtered_entity_notifications(&pool, viewer, vec![channel.clone()], query)
+        .await
+        .unwrap();
+    assert!(
+        result[&channel].is_empty(),
+        "a seen invite no longer badges the channel"
+    );
+}

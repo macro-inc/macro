@@ -25,7 +25,6 @@ These helpers let each domain append a change inside its own write transaction.
 ## Checks
 
 - `cargo test -p channel_change_db_utils` (`SQLX_OFFLINE` unset).
-- Query plan reproduction: `crates/messages/proofs/README.md`.
 
 ## Gotchas
 
