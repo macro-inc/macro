@@ -45,6 +45,8 @@ impl StaticFileLinks {
     const STATIC_IMAGE: &str = "static/image";
     /// Channel attachment entity type for a video stored as a static file.
     const STATIC_VIDEO: &str = "static/video";
+    /// Channel attachment entity type for a voice memo stored as a static file.
+    const STATIC_AUDIO: &str = "static/audio";
     /// How many files ride a prompt as ACP resource links. Matches the MCP
     /// channel-image budget so a long thread cannot flood the first turn.
     const MAX_PROMPT_ATTACHMENTS: usize = 8;
@@ -70,6 +72,7 @@ impl StaticFileLinks {
         let (kind, mime_type) = match entity_type {
             Self::STATIC_IMAGE => ("image", "image/*"),
             Self::STATIC_VIDEO => ("video", "video/*"),
+            Self::STATIC_AUDIO => ("audio", "audio/*"),
             _ => return None,
         };
         let uri = format!("{}/file/{}", self.base_url, entity_id);
