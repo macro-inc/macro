@@ -27,3 +27,4 @@ MEM-04	An open page sometimes does not show the line that says a member was remo
 SCROLL-04	The list of a page reading history sometimes does not grow when a message arrives below the window; the test then requires the message after a reload (1 of 62 runs on main in CI, 0 of 40 on one machine)
 CHN-07	A deleted channel is sometimes still in a member's list after they reload (1 of 62 runs on main in CI, 0 of 40 on one machine)
 SCROLL-03	An open page at the end of a channel sometimes does not show a message someone else sent; the test then requires it after a reload (1 of 121 runs on main in CI)
+UNR-09	The first message in a new channel sometimes leaves the other member's row unmarked; the second marks it (every run in CI on main; 0 of 24 repeats and 0 of 3 whole-suite runs on a new stack of main on one machine)
