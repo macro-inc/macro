@@ -74,7 +74,7 @@ impl EngineHandle {
     }
 
     pub(super) async fn ready_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.read().await;
         self.resume_retirement(&mut state).await?;
         Ok(state)
     }
@@ -91,6 +91,13 @@ impl EngineHandle {
         self.resume_retirement(&mut state).await?;
         self.check_generation(&mut state).await?;
         Ok(state)
+    }
+
+    /// The checks [`Self::snapshot_hydration`] makes, again, for a hydrate that
+    /// gave the engine to reads and found it changed.
+    pub(super) async fn recheck_hydration(&self, state: &mut EngineState) -> Result<(), String> {
+        self.resume_retirement(state).await?;
+        self.check_generation(state).await
     }
 
     /// Capture the owner generation before a request. This is also the native
