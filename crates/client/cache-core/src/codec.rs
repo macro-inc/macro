@@ -50,15 +50,7 @@ const RECORD_MAX_INFLATED_BYTES: usize = 64 * 1024 * 1024;
 const RECORD_ENCODING_RAW: u8 = 0;
 const RECORD_ENCODING_DEFLATE: u8 = 1;
 
-/// Bump when a GraphQL schema change makes existing normalized records unsafe.
-///
-/// Additive fields do not require a bump: fragment reads only project selected
-/// fields, so older records remain usable until a newly selected field is
-/// fetched. Bump this epoch for incompatible changes to normalized identity,
-/// field storage shape, or other schema-derived cache semantics.
-// File-type facts now preserve raw server text instead of enum-normalizing it.
-// Calendar range tables index cached occurrences, so older caches lack rows.
-pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;
+pub use cache_schema::CACHE_SCHEMA_COMPATIBILITY_EPOCH;
 
 #[derive(Debug, Error)]
 pub enum CodecError {

@@ -297,6 +297,18 @@ impl TursoStorage {
         (version, owner)
     }
 
+    /// Browser-test-only: whether the open-time checks could be skipped, after
+    /// running all of them anyway.
+    #[cfg(feature = "browser-test-hooks")]
+    #[doc(hidden)]
+    pub fn browser_test_run_skippable_open_checks(&self) -> Result<bool, TursoStorageError> {
+        let connection = self.connection();
+        let fresh_schema = has_fresh_schema(&connection)?;
+        validate_frozen_schema(&connection)?;
+        validate_statements(&connection)?;
+        Ok(fresh_schema)
+    }
+
     /// Browser-test-artifact-only helper used by the storage-control worker.
     #[cfg(feature = "browser-test-hooks")]
     #[doc(hidden)]
@@ -3582,7 +3594,9 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
         })
         .map_err(TursoStorageError::initialization)?;
         enable_foreign_keys(connection).map_err(TursoStorageError::initialization)?;
-        validate_frozen_schema(connection)?;
+        if !has_fresh_schema(connection)? {
+            validate_frozen_schema(connection)?;
+        }
         return Ok(Initialized::default());
     }
 
@@ -3590,10 +3604,15 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
     // derived projection performs one bounded rebuild before serving queries.
     // An older storage version is upgraded first, so the checks below hold the
     // upgraded file to exactly what a fresh file has; one this scope does not
-    // own is never upgraded.
+    // own is never upgraded. A schema identical to the one this build creates
+    // passed the structural and statement checks in this build's tests, so
+    // only a different schema pays for them again.
     check_owner(connection, scope)?;
     let storage_upgraded_from = migration::upgrade(connection)?;
-    validate_frozen_schema(connection)?;
+    let fresh_schema = has_fresh_schema(connection)?;
+    if !fresh_schema {
+        validate_frozen_schema(connection)?;
+    }
     let metadata = driver::query(
         connection,
         "SELECT key, value FROM meta WHERE key IN ('scope', 'namespace', 'storage_schema_version') ORDER BY key ASC",
@@ -3632,6 +3651,75 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
         }
         None => false,
     };
+    if !fresh_schema {
+        validate_statements(connection)?;
+    }
+    validate_queue_consistency(connection)?;
+    validate_optimistic_shadow_consistency(connection)?;
+    page_retention::compact_legacy_pages(connection)?;
+    ensure_search_projection_version(connection)?;
+    calendar::ensure_projection_version(connection)?;
+    people_sql::open(connection)?;
+    Ok(Initialized {
+        format_migrated,
+        storage_upgraded_from,
+    })
+}
+
+/// The digest of `sqlite_schema` in a database this build creates; see
+/// [`schema_digest`]. `fresh_database_has_the_pinned_schema_digest` fails with
+/// the new value whenever the schema or how turso records it changes.
+const FRESH_SCHEMA_DIGEST: u128 = 0xc05ad605542917515f7a3408e414ed25;
+
+/// Whether the database holds exactly the schema this build creates.
+fn has_fresh_schema(connection: &Db) -> Result<bool, TursoStorageError> {
+    Ok(schema_digest(connection)? == Some(FRESH_SCHEMA_DIGEST))
+}
+
+/// FNV-1a over every `sqlite_schema` row's type, name, table and SQL, in a
+/// fixed order. Root pages are left out: they differ between databases with
+/// the same schema. `None` when a column holds something other than text or
+/// null, which no schema this build accepts has.
+fn schema_digest(connection: &Db) -> Result<Option<u128>, TursoStorageError> {
+    const OFFSET: u128 = 0x6c62272e07bb014262b821756295c58d;
+    const PRIME: u128 = 0x0000000001000000000000000000013b;
+    fn feed(hash: &mut u128, bytes: &[u8]) {
+        for byte in bytes {
+            *hash ^= u128::from(*byte);
+            *hash = hash.wrapping_mul(PRIME);
+        }
+    }
+    let rows = driver::query(
+        connection,
+        "SELECT type, name, tbl_name, sql FROM sqlite_schema ORDER BY type ASC, name ASC",
+        Vec::new(),
+    )
+    .map_err(TursoStorageError::initialization)?;
+    let mut hash = OFFSET;
+    feed(&mut hash, &(rows.len() as u64).to_le_bytes());
+    for row in &rows {
+        if row.len() != 4 {
+            return Ok(None);
+        }
+        for value in row {
+            match value {
+                Value::Null => feed(&mut hash, &[0]),
+                Value::Text(text) => {
+                    let text = text.as_str().as_bytes();
+                    feed(&mut hash, &[1]);
+                    feed(&mut hash, &(text.len() as u64).to_le_bytes());
+                    feed(&mut hash, text);
+                }
+                _ => return Ok(None),
+            }
+        }
+    }
+    Ok(Some(hash))
+}
+
+/// Prepares every statement the storage runs, so a schema that cannot run
+/// them requests a reset at open instead of failing a later read or write.
+fn validate_statements(connection: &Db) -> Result<(), TursoStorageError> {
     for sql in [
         RECORD_GET,
         RECORD_UPSERT,
@@ -3671,16 +3759,7 @@ fn initialize(connection: &Db, scope: &str, fresh: bool) -> Result<Initialized, 
     {
         driver::validate(connection, sql).map_err(TursoStorageError::initialization)?;
     }
-    validate_queue_consistency(connection)?;
-    validate_optimistic_shadow_consistency(connection)?;
-    page_retention::compact_legacy_pages(connection)?;
-    ensure_search_projection_version(connection)?;
-    calendar::ensure_projection_version(connection)?;
-    people_sql::open(connection)?;
-    Ok(Initialized {
-        format_migrated,
-        storage_upgraded_from,
-    })
+    Ok(())
 }
 
 fn save_search_projection_version(connection: &Db) -> Result<(), TursoStorageError> {

@@ -989,7 +989,7 @@ describe('coordinator runtime protocol', () => {
     });
     expect(CACHE_STORAGE_VERSION).toEqual({
       schemaCompatibilityEpoch: rustConstant(
-        'crates/client/cache-core/src/codec.rs',
+        'crates/client/cache-schema/src/lib.rs',
         'CACHE_SCHEMA_COMPATIBILITY_EPOCH'
       ),
       formatVersion: rustConstant(

@@ -114,6 +114,19 @@ fn watch_patches_reject_unsafe_integers_like_hits() {
 }
 
 #[wasm_bindgen_test]
+fn bundled_schema_tables_decode_to_the_schema_its_sdl_parses_to() {
+    // Stored projections carry the schema hash: the tables must give engines
+    // exactly the schema that parsing the SDL at startup gave them.
+    let parsed = cache_core::meta::Schema::from_sdl(cache_core::meta::BUNDLED_SCHEMA_SDL).unwrap();
+    let decoded = decode_bundled_schema().unwrap();
+    assert_eq!(decoded.hash(), parsed.hash());
+    assert_eq!(
+        serde_json::to_value(decoded.artifact()).unwrap(),
+        serde_json::to_value(parsed.artifact()).unwrap()
+    );
+}
+
+#[wasm_bindgen_test]
 fn build_info_reports_compiled_versions_without_opening_storage() {
     let info: serde_json::Value =
         serde_wasm_bindgen::from_value(cache_build_info().unwrap()).unwrap();

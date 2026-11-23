@@ -458,7 +458,7 @@
         # filtered Cargo source used by crane.
         cargoRoot = ../.;
         cargoLock = ../apps/web/tauri/Cargo.lock;
-        # cache-core's build script generates metadata from the GraphQL schema.
+        # cache-schema embeds and fingerprints the GraphQL schema at build time.
         # Non-Cargo inputs must be added explicitly to crane's app fileset.
         extraFileset = lib.fileset.unions [
           ../static_assets/schema.graphql

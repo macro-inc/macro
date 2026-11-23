@@ -1,4 +1,6 @@
-//! Immutable runtime schema metadata, supplied by the frontend bundle.
+//! Immutable runtime schema metadata: the lookup tables the GraphQL cache
+//! derives from the SDL. Split from `cache-core` so `cache-wasm`'s build script
+//! can build the tables without compiling the engine.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, LazyLock};
@@ -117,13 +119,7 @@ impl Schema {
     }
     /// Validate metadata and compute its canonical identity.
     pub fn from_artifact(mut artifact: SchemaArtifact) -> Result<Arc<Self>, SchemaError> {
-        if artifact.format_version != 1
-            || artifact.compatibility_epoch != crate::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH
-        {
-            return Err(SchemaError(
-                "unsupported format or compatibility epoch; a native update is required".into(),
-            ));
-        }
+        check_version(&artifact)?;
         artifact.types.sort_by(|a, b| a.name.cmp(&b.name));
         for ty in &mut artifact.types {
             ty.fields.sort_by(|a, b| a.name.cmp(&b.name));
@@ -137,6 +133,27 @@ impl Schema {
         let bytes = serde_json::to_vec(&schema.artifact).map_err(|e| SchemaError(e.to_string()))?;
         let hash = format!("{:x}", Sha256::digest(bytes));
         Ok(Arc::new(Self { hash, ..schema }))
+    }
+    /// Rebuilds the schema a build script wrote out (`artifact()` and `hash()` of
+    /// one `Schema`, as `cache-wasm/build.rs` does) without sorting, validating
+    /// or hashing it again. Only the format and epoch are checked; anything that
+    /// is not that build output goes through `from_artifact`.
+    pub fn from_build_output(
+        artifact: SchemaArtifact,
+        hash: String,
+    ) -> Result<Arc<Self>, SchemaError> {
+        check_version(&artifact)?;
+        #[cfg(debug_assertions)]
+        {
+            let canonical = Self::from_artifact(artifact.clone())?;
+            assert!(
+                canonical.hash == hash
+                    && serde_json::to_vec(&canonical.artifact).ok()
+                        == serde_json::to_vec(&artifact).ok(),
+                "build output is one validated schema's canonical artifact and hash"
+            );
+        }
+        Ok(Arc::new(Self { artifact, hash }))
     }
     /// Combines compatible bundle versions, retaining definitions needed by queued work.
     /// Shape and identity changes require an explicit engine/storage migration.
@@ -309,7 +326,29 @@ impl Schema {
                 .is_some_and(|t| t.possible_types.iter().any(|name| name == concrete))
     }
 }
-/// SDL embedded for legacy callers and tests; production hosts supply bundle SDL.
+/// Rejects artifacts of another format or compatibility epoch.
+fn check_version(artifact: &SchemaArtifact) -> Result<(), SchemaError> {
+    if artifact.format_version != 1
+        || artifact.compatibility_epoch != CACHE_SCHEMA_COMPATIBILITY_EPOCH
+    {
+        return Err(SchemaError(
+            "unsupported format or compatibility epoch; a native update is required".into(),
+        ));
+    }
+    Ok(())
+}
+/// Bump when a GraphQL schema change makes existing normalized records unsafe.
+///
+/// Additive fields do not require a bump: fragment reads only project selected
+/// fields, so older records remain usable until a newly selected field is
+/// fetched. Bump this epoch for incompatible changes to normalized identity,
+/// field storage shape, or other schema-derived cache semantics.
+// File-type facts now preserve raw server text instead of enum-normalizing it.
+// Calendar range tables index cached occurrences, so older caches lack rows.
+pub const CACHE_SCHEMA_COMPATIBILITY_EPOCH: u32 = 4;
+/// SDL embedded in this build. The browser engine's build script turns it into
+/// lookup tables (`cache-wasm/build.rs`); native hosts supply their bundle's SDL;
+/// tests and legacy callers parse it here.
 pub const BUNDLED_SCHEMA_SDL: &str = include_str!("../../../../static_assets/schema.graphql");
 /// Fingerprint of the SDL embedded in this build, for diagnostics.
 pub const SCHEMA_HASH: &str = env!("CACHE_BUNDLED_SCHEMA_HASH");

@@ -103,7 +103,13 @@ type QueuedEngineRequest = {
   priority: number;
   readSignature?: string;
   waiters: RequestWaiter[];
+  /** When the first of its waiters arrived, on the core's monotonic clock. */
+  enqueuedAt: number;
 };
+
+// A page gives up on a request after 10 s; reporting from 1 s shows what held
+// the engine on the way there.
+const SLOW_REQUEST_MS = 1_000;
 
 export interface CacheWorkerCoreOptions {
   /** Atomically recovery-wipes before any Turso open during initialization. */
@@ -537,6 +543,7 @@ export class CacheWorkerCore {
         priority,
         readSignature: signature,
         waiters: [{ resolve, reject }],
+        enqueuedAt: this.now(),
       });
       this.collectArrivalsThenDrain();
     });
@@ -587,9 +594,12 @@ export class CacheWorkerCore {
     const [queued] = this.queue.splice(index, 1);
     if (!queued) return;
     this.running = true;
+    const startedAt = this.now();
+    const queueDepth = this.queue.length;
     void this.dispatch(queued.request)
       .then(
         async (result) => {
+          this.recordSlowRequest(queued, startedAt, queueDepth);
           // Resolve the cache result before the bounded observation checkpoint.
           for (const waiter of queued.waiters) waiter.resolve(result);
           if (isStorageTransactionRequest(queued.request)) {
@@ -597,6 +607,7 @@ export class CacheWorkerCore {
           }
         },
         (error) => {
+          this.recordSlowRequest(queued, startedAt, queueDepth, { error });
           for (const waiter of queued.waiters) waiter.reject(error);
         }
       )
@@ -690,6 +701,31 @@ export class CacheWorkerCore {
   }
 
   /**
+   * Reports a request answered a second or more after it arrived, split into
+   * the time it waited behind others and the time it ran, so a page timeout
+   * can be traced to the request that held the engine.
+   */
+  private recordSlowRequest(
+    queued: QueuedEngineRequest,
+    startedAt: number,
+    queueDepth: number,
+    failure?: { error: unknown }
+  ): void {
+    const finishedAt = this.now();
+    if (finishedAt - queued.enqueuedAt < SLOW_REQUEST_MS) return;
+    this.telemetry.record({
+      name: 'graphql_cache.slow_request',
+      operationCategory: operationCategoryForRequest(queued.request),
+      requestKind: queued.request.kind,
+      outcome: failure ? 'error' : 'success',
+      errorCode: failure ? classifyCacheError(failure.error) : 'none',
+      queueWaitMs: startedAt - queued.enqueuedAt,
+      durationMs: finishedAt - startedAt,
+      queueDepth,
+    });
+  }
+
+  /**
    * A typed search registers nothing and writes nothing, so the generation
    * checks and operation teardowns that fence other reads do not order it.
    * After an engine restart those fences sit between it and the head of the
@@ -780,11 +816,15 @@ export class CacheWorkerCore {
         const [queued] = this.queue.splice(index, 1);
         if (!queued) break;
         ran = true;
+        const startedAt = this.now();
+        const queueDepth = this.queue.length;
         try {
           const result = await this.dispatch(queued.request);
+          this.recordSlowRequest(queued, startedAt, queueDepth);
           for (const waiter of queued.waiters) waiter.resolve(result);
         } catch (error) {
           this.executingAuthority = authority;
+          this.recordSlowRequest(queued, startedAt, queueDepth, { error });
           for (const waiter of queued.waiters) waiter.reject(error);
         }
       }

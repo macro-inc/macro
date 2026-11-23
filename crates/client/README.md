@@ -8,6 +8,7 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | Crate | Purpose |
 |---|---|
 | `cache-core` | Pure engine: normalize/denormalize, LRU hot tier, dependency index, durable ordered optimistic-mutation queue, async `Storage` trait |
+| `cache-schema` | Schema metadata derived from the GraphQL SDL (`cache_core::meta`); kept apart so `cache-wasm`'s build script can build the tables without the engine |
 | `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
@@ -23,11 +24,16 @@ Tauri's Linux desktop stack needs its WebKitGTK/DBus system libraries).
 
 Desktop and mobile keep the cache engine and Turso storage in the native binary.
 The frontend bundle supplies the original `static_assets/schema.graphql` SDL as
-text. Native startup and browser workers pass it to the same Rust
-`Schema::from_sdl` parser, which validates it with `apollo-compiler` and derives
-the cache's internal lookup tables. There is no TypeScript schema generator or
-intermediate JSON asset. Browser workers configure SDL through
-`configureCacheSchema` before opening storage.
+text, and native startup passes it to the Rust `Schema::from_sdl` parser, which
+validates it with `apollo-compiler` and derives the cache's internal lookup
+tables. There is no TypeScript schema generator or intermediate JSON asset.
+
+The browser engine is built together with the web bundle, so `cache-wasm`'s
+`build.rs` runs the same parser when the engine is compiled and embeds the
+resulting tables (postcard). A browser worker decodes them in under a
+millisecond instead of parsing about 270 KB of SDL each time it starts.
+`configureCacheSchema` still installs a different SDL before storage opens, but
+the app's worker does not call it.
 
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
@@ -748,6 +754,31 @@ A copy that ran is reported as `graphql_cache.wal_checkpoint` with
 in the WAL when it ran; a count below it is a partial copy). A failed copy is
 reported with its error class and retried once the next request has run; it
 leaves the WAL whole and resets the cache only when the error means corruption.
+
+## Slow request telemetry
+
+The engine worker reports each request that answers **1 s or more** after it
+arrived as `graphql_cache.slow_request`, unsampled. A page gives up on a
+request after 10 s; these spans say what held the engine meanwhile. Search
+Datadog spans for `service:web-app resource_name:graphql_cache.slow_request`:
+
+- `cache.request_kind`: the protocol request kind (`read`, `hydrate`, `init`...).
+- `cache.queue_wait_ms`: time queued in the engine worker before it ran.
+- `cache.duration_ms`: time it ran, from start to its answer.
+- `cache.queue_depth`: requests still queued when it started.
+- `cache.outcome`, `cache.error_code`: `success`/`none`, or the error class.
+
+A stall shows as one request with a long `duration_ms` and the requests behind
+it with long `queue_wait_ms`.
+
+Only requests that reach the engine worker's queue are covered. Two waits are
+not in `queue_wait_ms`:
+
+- A message that arrives while the engine is inside a wasm call is stamped only
+  when that call returns; the wait shows in the running request's
+  `duration_ms`.
+- Time the coordinator holds a request before any engine has it (owner
+  handoff, a parked or draining engine) is not reported here.
 
 ## Key policy
 
