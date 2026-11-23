@@ -222,9 +222,11 @@ fn project_with_facts(
         integer_facts: times.clone(),
         sort_facts: times,
     };
-    // The Inbox view's sort key, only on threads it can show.
-    if let Some(fact) = vocabulary::INBOX_VIEW_DERIVATION.derive(&document) {
-        document.sort_facts.push(fact);
+    // The Inbox and Important views' sort keys, only on threads they can show.
+    for derivation in item_filter_index::SORT_FACT_DERIVATIONS {
+        if let Some(fact) = derivation.derive(&document) {
+            document.sort_facts.push(fact);
+        }
     }
     Some(document)
 }
