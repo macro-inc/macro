@@ -22,6 +22,19 @@
   text-wrap: pretty;
 }
 
+.macro-homepage .product-feature-intro { container-type: inline-size; }
+.macro-homepage .product-feature-intro p { text-wrap: balance; }
+.macro-homepage .subheading-phrase { display: inline-block; max-width: 100%; }
+
+/* Wider reading columns have room to balance the whole paragraph. */
+@container (min-width: 500px) {
+  .macro-homepage .subheading-phrase { display: inline; }
+}
+
+@media (max-width: 350px) {
+  .macro-homepage .product-feature-intro p { font-size: clamp(16px, 5vw, 17.5px); }
+}
+
 .macro-homepage .homepage-section-caption {
   width: var(--product-feature-intro-width);
   margin: 22px auto 0;

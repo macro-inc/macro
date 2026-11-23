@@ -32,6 +32,8 @@ then gives each product one
 `FeaturePageSection` in the feature pages' 640px reading column with a centered
 graphic up to 720px wide and 16:9 on desktop. Use the product page's hero heading and two or three sentences above
 the capture, with a “Learn about [feature] →” link where the product has a page.
+Group homepage subheading copy into phrases of at least five visible words
+that fit the phone reading column. Wider screens can place multiple phrases on one line.
 Let the heading wrap at its normal size. Follow each capture with two short
 sentences in the same type as the introduction. Draw on the founder's letter,
 the repository README, and the competitor notes for the reason we built the

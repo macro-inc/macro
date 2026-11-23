@@ -128,6 +128,10 @@ html[data-homepage][data-theme-light='true'] :is(.site-nav-demo, .macro-home-dem
   .macro-home-actions a { min-height: 48px; }
 }
 
+@media (max-width: 340px) {
+  .macro-homepage .macro-home-hero { padding-inline: 16px; }
+}
+
 /* Match the deployed mobile landing navigation spacing. */
 @media (max-width: 699px) {
   .macro-homepage .site-header { inset: 14px 16px auto; width: auto; height: 54px; padding: 0; }
