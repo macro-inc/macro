@@ -7,8 +7,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { classify, sameInstant } from './classify.ts';
 import { closureOf } from './closed.ts';
-import { compareSnapshots, refCheck, type Snapshot } from './compare.ts';
-import { heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels } from './dom-held.ts';
+import { authRefreshTimeoutClass, compareSnapshots, refCheck, type Snapshot } from './compare.ts';
+import { heldApartFromShared, homeCheckClosure, onlyStaleTimeLabels, withoutDayRollover } from './dom-held.ts';
 import { parseRowId } from './dom.ts';
 import { generateReads } from './gen.ts';
 import { MUTANTS } from './mutants.ts';
@@ -110,6 +110,19 @@ describe('comparison', () => {
     expect(sigs(snap(base), failed('TimeoutError: signal timed out', 'graphql'))).toEqual(['reload spec0 error:new']);
     expect(closureOf('reload spec0 error:old:deadline')?.id).toBe('T9');
     for (const open of ['reload spec0 error:old', 'raw spec1 error:new', 'reload spec0 error:new:deadline']) expect(closureOf(open), open).toBeUndefined();
+  });
+
+  it('names a session refresh that gave up, on either side, and nothing else', () => {
+    const failed = (error: string, transport = 'rest'): Snapshot => ({ ...snap([]), error, transport });
+    const sigs = (a: Snapshot, b: Snapshot) => compareSnapshots(a, b, { label: 'reload spec0' }).map((d) => d.signature);
+    expect(sigs(failed('Authentication refresh timed out'), snap(base))).toEqual(['reload spec0 error:old:auth-refresh-timeout']);
+    expect(sigs(snap(base), failed('Authentication refresh timed out', 'graphql'))).toEqual(['reload spec0 error:new:auth-refresh-timeout']);
+    expect(sigs(failed('Authentication refresh cancelled'), snap(base))).toEqual(['reload spec0 error:old']);
+    expect(closureOf('reload spec0 error:old:auth-refresh-timeout')?.id).toBe('T10');
+    expect(authRefreshTimeoutClass('reload spec0 error:old', ['old=Authentication refresh timed out new=null'])).toBe('reload spec0 error:old:auth-refresh-timeout');
+    expect(authRefreshTimeoutClass('reload spec0 error:old', ['old=Network error occurred new=null'])).toBe('reload spec0 error:old');
+    expect(authRefreshTimeoutClass('reload spec0 error:old', [])).toBe('reload spec0 error:old');
+    expect(authRefreshTimeoutClass('reload spec0 field:x', ['old=Authentication refresh timed out new=null'])).toBe('reload spec0 field:x');
   });
 
   it('catches a dropped row, a swapped pair and an altered notification time', () => {
@@ -280,6 +293,31 @@ describe('homeCheckClosure with branch-only initiatives', () => {
       newReload: ['# Today', row('initiative', 'i', '2h'), ...reload.slice(1)],
     };
     expect(homeCheckClosure(e, ['seq home touch signal dom:text'])?.suffix).toBe('dom:stale-mail-label');
+  });
+});
+
+describe('withoutDayRollover', () => {
+  const r = (type: string, id: string, bucket: string, text: string) => `${type}/${id}/${bucket}/u ${text}`;
+  const mountedOld = ['# Today', r('channel', 'a', 'today', 'A7m'), r('document', 'b', 'today', 'B1h'), '# Older', r('project', 'p', 'older', 'P3w')];
+  const mountedNew = ['# Today', r('calendar_event', 'c', 'today', 'C1m'), r('channel', 'a', 'today', 'A7m'), r('document', 'b', 'today', 'B1h'), '# Older', r('project', 'p', 'older', 'P3w')];
+  const reload = ['# Yesterday', r('calendar_event', 'c', 'yesterday', 'C1m'), r('channel', 'a', 'yesterday', 'A7m'), r('document', 'b', 'yesterday', 'B1h'), '# Older', r('project', 'p', 'older', 'P3w')];
+  it('sets the date buckets aside when both mounted Homes kept Today and both reloads moved it to Yesterday', () => {
+    const e = { oldMounted: mountedOld, newMounted: mountedNew, oldReload: reload, newReload: reload };
+    expect(withoutDayRollover(e).newMounted).toEqual(withoutDayRollover(e).newReload);
+    expect(heldApartFromShared(e)).toMatchObject({ newHeld: true, oldHeld: false });
+    expect(homeCheckClosure(e, ['seq home touch signal dom:row-id'])?.suffix).toBe('dom:old-behind-reload');
+  });
+  it('keeps order and text', () => {
+    const swapped = [mountedNew[0], mountedNew[2], mountedNew[1], ...mountedNew.slice(3)];
+    expect(heldApartFromShared({ oldMounted: mountedOld, newMounted: swapped, oldReload: reload, newReload: reload }).newHeld).toBe(false);
+    const renamed = mountedNew.map((row) => row.replace('B1h', 'Renamed1h'));
+    expect(heldApartFromShared({ oldMounted: mountedOld, newMounted: renamed, oldReload: reload, newReload: reload }).newHeld).toBe(false);
+  });
+  it('leaves the buckets alone when no day rolled over', () => {
+    const e = { oldMounted: mountedOld, newMounted: mountedNew, oldReload: mountedNew, newReload: mountedNew };
+    expect(withoutDayRollover(e)).toBe(e);
+    const one = { oldMounted: mountedOld, newMounted: reload, oldReload: reload, newReload: reload };
+    expect(withoutDayRollover(one)).toBe(one);
   });
 });
 

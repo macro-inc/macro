@@ -82,6 +82,22 @@ const erase = (path: string) => path.replace(/\[\d+\]/g, '[]');
 /** What main's REST Soup reader reports when its request deadline fires. */
 export const OLD_DEADLINE = /TimeoutError: signal timed out|AbortError: The user aborted a request\./;
 
+/** What either side reports when its session refresh gives up
+ * (apps/web/src/lib/core/auth/session-refresh.ts REFRESH_TIMEOUT_MS): the
+ * read never reached Soup, so it holds no answer to compare (closure T10). */
+export const AUTH_REFRESH_TIMEOUT = /Authentication refresh timed out/;
+
+/**
+ * The class an error difference recorded with `details` (`old=… new=…`)
+ * moves to when its error is a session refresh that gave up: `error:old` or
+ * `error:new` gains `:auth-refresh-timeout`. compareSnapshots names it so
+ * itself; report.ts and partial.ts apply it to runs recorded before it did.
+ */
+export function authRefreshTimeoutClass(cls: string, details: readonly string[]): string {
+  if (!/(^|\s)error:(old|new)$/.test(cls) || !details.length) return cls;
+  return details.every((d) => AUTH_REFRESH_TIMEOUT.test(d)) ? `${cls}:auth-refresh-timeout` : cls;
+}
+
 export function compareSnapshots(
   oldSnap: Snapshot,
   newSnap: Snapshot,
@@ -96,8 +112,10 @@ export function compareSnapshots(
     // (Chromium then says AbortError, dbg-body-timeout.ts). Named apart so
     // it closes on its own; every other error stays open.
     const deadline = oldSnap.error !== null && oldSnap.transport === 'rest' && OLD_DEADLINE.test(oldSnap.error);
+    const authTimeout = AUTH_REFRESH_TIMEOUT.test(oldSnap.error ?? newSnap.error ?? '');
+    const suffix = deadline ? ':deadline' : authTimeout ? ':auth-refresh-timeout' : '';
     diffs.push({
-      signature: `${label}error:${oldSnap.error ? 'old' : 'new'}${deadline ? ':deadline' : ''}`,
+      signature: `${label}error:${oldSnap.error ? 'old' : 'new'}${suffix}`,
       kind: 'error',
       detail: `old=${oldSnap.error} new=${newSnap.error}`,
     });

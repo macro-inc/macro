@@ -80,7 +80,8 @@ const HOME_TYPES = ['documents', 'tasks', 'email', 'channels', 'agents', 'folder
 
 // A read that got no answer: the browser gave up on a request (the REST and
 // GraphQL clients report it as these messages), or the probe never settled.
-const NO_ANSWER = /Network error occurred|Failed to fetch|did not settle in time/;
+// A session refresh that gave up never reached Soup either (closure T10).
+const NO_ANSWER = /Network error occurred|Failed to fetch|did not settle in time|Authentication refresh timed out/;
 const retries: Record<string, number> = {};
 onRequestFailure((failure) => record('requestfailed.jsonl', failure));
 

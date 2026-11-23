@@ -6,6 +6,7 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLOSURES, closureOf } from './lib/closed.ts';
 import { homeCheckClosure, type CompactDom } from './lib/dom-held.ts';
+import { authRefreshTimeoutClass } from './lib/compare.ts';
 
 type ClassEntry = { n: number; example: unknown };
 type RefEntry = { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown };
@@ -51,7 +52,39 @@ function reclassifyHeldDom(run: string, classes: Record<string, ClassEntry>): { 
   return moved;
 }
 
-const outDir = join(import.meta.dirname, 'out');
+/**
+ * A run recorded before compare.ts named a session refresh that gave up
+ * (closure T10) kept it as a plain `error:old` or `error:new`. Moves each
+ * reload error whose recorded detail (`checks.reload<i>errors`) is that
+ * timeout to its named class, as compareSnapshots now does live.
+ */
+function reclassifyAuthTimeouts(run: string, classes: Record<string, ClassEntry>): { lane: string; step: number; from: string; to: string }[] {
+  const path = join(outDir, run, 'steps.jsonl');
+  if (!existsSync(path)) return [];
+  const moved: { lane: string; step: number; from: string; to: string }[] = [];
+  for (const line of readFileSync(path, 'utf8').split('\n').filter(Boolean)) {
+    const step = JSON.parse(line) as { lane: string; step: number; checks?: Record<string, unknown> };
+    for (const [key, value] of Object.entries(step.checks ?? {})) {
+      const m = /^reload(\d+)$/.exec(key);
+      if (!m || !Array.isArray(value)) continue;
+      const details = (step.checks?.[`reload${m[1]}errors`] as string[] | undefined) ?? [];
+      for (const from of value as string[]) {
+        const to = authRefreshTimeoutClass(from, details);
+        const entry = classes[from];
+        if (to === from || !entry) continue;
+        entry.n -= 1;
+        if (entry.n <= 0) delete classes[from];
+        classes[to] ??= { n: 0, example: { lane: step.lane, step: step.step, from, details } };
+        classes[to].n += 1;
+        moved.push({ lane: step.lane, step: step.step, from, to });
+      }
+    }
+  }
+  return moved;
+}
+
+const outDir
+ = join(import.meta.dirname, 'out');
 const runs = readdirSync(outDir).filter((name) => existsSync(join(outDir, name, 'summary.json')));
 const report: Record<string, unknown> = {};
 for (const run of runs.sort()) {
@@ -60,6 +93,7 @@ for (const run of runs.sort()) {
   const open: Record<string, ClassEntry & { phase: string }> = {};
   const closedBy: Record<string, number> = {};
   const reclassified = summary.sequences?.classes ? reclassifyHeldDom(run, summary.sequences.classes) : [];
+  const authTimeouts = summary.sequences?.classes ? reclassifyAuthTimeouts(run, summary.sequences.classes) : [];
   for (const phase of ['reads', 'dom', 'sequences']) {
     const classes: Record<string, ClassEntry> = summary[phase]?.classes ?? {};
     for (const [cls, entry] of Object.entries(classes)) {
@@ -80,6 +114,7 @@ for (const run of runs.sort()) {
     sequences: summary.sequences && { sequences: summary.sequences.sequences, steps: summary.sequences.steps, stepOutcomes: summary.sequences.stepOutcomes, live: summary.sequences.live, storageResets: summary.sequences.storageResets, liveReopens: summary.sequences.liveReopens },
     retries: summary.retries ?? {},
     reclassified,
+    authTimeouts,
     closedBy,
     open,
   };

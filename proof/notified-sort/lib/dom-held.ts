@@ -38,7 +38,31 @@ function withoutKeys(list: string[], drop: Set<string>): string[] {
   return kept.filter((row, i) => !row.startsWith('# ') || (kept[i + 1] !== undefined && !kept[i + 1].startsWith('# '))).map(norm);
 }
 
-export function heldApartFromShared(e: CompactDom): { newHeld: boolean; oldHeld: boolean; shared: string[] } {
+/** `type/id/bucket…` → its bucket. */
+const bucketOf = (row: string) => (row.startsWith('# ') ? null : row.split(' ')[0].split('/')[2]?.replace(/\*$/, '') ?? null);
+
+/**
+ * The rows with their date buckets and headers dropped when the day rolled
+ * over between the mounted read and the reload: Home buckets rows by the
+ * viewer's day when it renders them and does not re-bucket a mounted list at
+ * midnight, on main as on the branch (both mounted sides keep "Today"). It
+ * rolled over when a row both mounted sides show under Today both reloads show
+ * under Yesterday, and no reload shows Today. Order and every row's text,
+ * time label included, still count.
+ */
+export function withoutDayRollover(e: CompactDom): CompactDom {
+  const today = (rows: string[]) => rows.includes('# Today');
+  if (!today(e.oldMounted) || !today(e.newMounted) || today(e.oldReload) || today(e.newReload)) return e;
+  const buckets = (rows: string[]) => new Map(rows.flatMap((row) => (keyOf(row) ? [[keyOf(row)!, bucketOf(row)] as const] : [])));
+  const [om, nm, or, nr] = [e.oldMounted, e.newMounted, e.oldReload, e.newReload].map(buckets);
+  const rolled = [...om].some(([k, b]) => b === 'today' && nm.get(k) === 'today' && or.get(k) === 'yesterday' && nr.get(k) === 'yesterday');
+  if (!rolled) return e;
+  const strip = (rows: string[]) => rows.filter((row) => !row.startsWith('# ')).map((row) => row.replace(/^([a-z_]+\/[^/ ]+)\/[^/ *]+/, '$1'));
+  return { oldMounted: strip(e.oldMounted), newMounted: strip(e.newMounted), oldReload: strip(e.oldReload), newReload: strip(e.newReload) };
+}
+
+export function heldApartFromShared(input: CompactDom): { newHeld: boolean; oldHeld: boolean; shared: string[] } {
+  const e = withoutDayRollover(input);
   const om = rowsByKey(e.oldMounted), nm = rowsByKey(e.newMounted), or = rowsByKey(e.oldReload), nr = rowsByKey(e.newReload);
   const keys = new Set([...om.keys(), ...nm.keys(), ...or.keys(), ...nr.keys()]);
   const shared = new Set<string>();
