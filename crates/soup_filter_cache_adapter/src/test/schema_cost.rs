@@ -207,6 +207,10 @@ fn schema_change_cost_on_a_retained_cache() {
             retyped(thread, "isRead", "String!"),
         ),
         (
+            "channel isParticipant to String! (a few documents' facts read it)",
+            retyped("GraphqlSoupChannel", "isParticipant", "String!"),
+        ),
+        (
             "notification state to Int (every document's facts read it)",
             retyped("GraphqlNotification", "state", "Int"),
         ),
