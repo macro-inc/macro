@@ -42,6 +42,15 @@ pub struct WalCheckpoint {
     pub backfilled_frames: u64,
 }
 
+/// Where the WAL ends: every commit to the file moves it, and nothing else
+/// does until a write starts the log over. Two equal positions mean nothing
+/// was committed to the file in between, through any connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalPosition {
+    checkpoint_seq_no: u32,
+    max_frame: u64,
+}
+
 /// A connection and the statements prepared on it.
 ///
 /// Clones share one statement cache. Cached statements hold their connection,
@@ -169,6 +178,20 @@ impl Db {
             Err(LimboError::Busy | LimboError::BusySnapshot) => Ok(outcome),
             Err(_) => Err(TursoStorageError::Database),
         }
+    }
+
+    /// The end of the WAL. A read first moves this connection's view to the
+    /// end of the log, so a commit through another connection shows too.
+    pub(crate) fn wal_position(&self) -> Result<WalPosition, TursoStorageError> {
+        query_each(self, "SELECT 1 FROM meta LIMIT 1", Vec::new(), |_| Ok(()))?;
+        let wal = self
+            .connection
+            .wal_state()
+            .map_err(|_| TursoStorageError::Database)?;
+        Ok(WalPosition {
+            checkpoint_seq_no: wal.checkpoint_seq_no,
+            max_frame: wal.max_frame,
+        })
     }
 
     /// Drops every cached statement, and with it their connection references.
@@ -735,6 +758,15 @@ pub(crate) fn take_control_trace() -> Vec<TestControlPhase> {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 pub(crate) fn take_control_io_trace() -> Vec<TestControlPhase> {
     CONTROL_IO_TRACE.with(|trace| std::mem::take(&mut *trace.borrow_mut()))
+}
+
+impl From<WalPosition> for cache_core::store::WritePosition {
+    fn from(position: WalPosition) -> Self {
+        Self {
+            epoch: u64::from(position.checkpoint_seq_no),
+            offset: position.max_frame,
+        }
+    }
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
