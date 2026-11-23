@@ -7,6 +7,93 @@ use crate::domain::mailbox::projection_recovery::ProjectionRecoveryRepository;
 use std::time::Duration;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_projection_inserted_after_the_first_wake_is_woken_after_commit(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        Uuid::now_v7(),link
+    ).execute(&db).await.unwrap();
+    let ProjectionClaim::Acquired(head) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the first event must be leased")
+    };
+    // An AFTER UPDATE statement trigger pauses after the first wake has found
+    // no successor, without changing the real table, indexes or claim plans.
+    sqlx::query!(
+        r#"CREATE FUNCTION pause_after_projection_wake() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF current_setting('application_name')='projection-finish-race' THEN
+                PERFORM pg_advisory_xact_lock_shared(91,6);
+            END IF;
+            RETURN NULL;
+        END $$"#
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "CREATE TRIGGER pause_after_projection_wake AFTER UPDATE ON email_projection_outbox FOR EACH STATEMENT EXECUTE FUNCTION pause_after_projection_wake()"
+    ).execute(&db).await.unwrap();
+    let options = (*db.connect_options())
+        .clone()
+        .application_name("projection-finish-race");
+    let finish_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await
+        .unwrap();
+    let finisher = PgMailboxSync::new(finish_pool.clone());
+    let mut gate = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(91,6)")
+        .fetch_one(&mut *gate)
+        .await
+        .unwrap();
+    let finish = tokio::spawn(async move { finisher.finish_projection(&head, None).await });
+    let paused = tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let paused = sqlx::query_scalar!(
+                r#"SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+                    AND application_name='projection-finish-race' AND wait_event_type='Lock') AS "paused!""#
+            ).fetch_one(&db).await.unwrap();
+            if paused { break; }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+    }).await;
+    assert!(
+        paused.is_ok(),
+        "the real finish must pause after its first wake"
+    );
+    let next = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO email_projection_outbox (id,link_id,generation,payload) VALUES ($1,$2,1,'{\"kind\":\"link_changed\"}')",
+        next,link
+    ).execute(&db).await.unwrap();
+    assert!(matches!(
+        repo.claim_projection(Uuid::now_v7()).await.unwrap(),
+        ProjectionClaim::Progress
+    ));
+    gate.commit().await.unwrap();
+    finish.await.unwrap().unwrap();
+    let blocked = sqlx::query_scalar!(
+        "SELECT blocked_until FROM email_projection_outbox WHERE id=$1",
+        next
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        blocked.is_none(),
+        "the post-commit wake must clear a successor deferred during the first commit window"
+    );
+    let ProjectionClaim::Acquired(successor) = repo.claim_projection(Uuid::now_v7()).await.unwrap()
+    else {
+        panic!("the newly inserted successor must be immediately claimable")
+    };
+    assert_eq!(successor.id, next);
+    finish_pool.close().await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_cancelled_projection_probe_retains_its_attempt_fields(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     sqlx::query!(
@@ -211,7 +298,7 @@ async fn projection_finishes_serialize_before_taking_any_child_row_lock(db: PgPo
     };
     let mut fence = db.begin().await.unwrap();
     sqlx::query!(
-        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1::uuid::text,0))",
+        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.projection.finish:' || $1::uuid::text,0))",
         link
     )
     .fetch_one(&mut *fence)

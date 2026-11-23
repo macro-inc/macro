@@ -742,9 +742,12 @@ tools — hexagonal, heavily feature-gated.
   A bounded deferral returns `Progress`; poll again without the idle sleep,
   yielding every 32 pages and checking cancellation. Store FIFO deferral in
   `blocked_until`, preserving real retry times in `available_at`. Finish and
-  release take the link advisory lock before child locks and wake exactly the
-  next event atomically; a jittered one-to-two-hour deadline rechecks
-  successors whose head was finished by an old binary without a wake. Activation clears one FIFO page atomically,
+  release take the namespaced link advisory lock before child locks and wake the
+  next event in their transaction, then wake it once more after commit in a new
+  transaction using plain `FOR UPDATE`. This catches inserts after the first
+  wake's snapshot and waits out a claimer's deferral. A crash or failed wake
+  between the transactions, or an old binary without either wake, needs the
+  jittered one-to-two-hour backstop. Activation clears one FIFO page atomically,
   then bounded pages after commit. The separately fenced projection recovery
   sweep walks parked links every five minutes, including old-binary activations;
   dead-link cost is one index probe per cycle, independent of backlog size.

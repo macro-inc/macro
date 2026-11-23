@@ -81,13 +81,8 @@ impl MailboxProjectionRepository for PgMailboxSync {
         retry: Option<MessageRetry>,
     ) -> Result<(), MailboxError> {
         let mut tx = self.begin().await.map_err(db_error)?;
-        sqlx::query!(
-            "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1::uuid::text,0))",
-            lease.mailbox.link_id
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(db_error)?;
+        self.lock_projection_finish(&mut tx, lease.mailbox.link_id)
+            .await?;
         let changed = match retry {
             None | Some(MessageRetry::Abandon) => {
                 let deleted = sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
@@ -119,8 +114,42 @@ impl MailboxProjectionRepository for PgMailboxSync {
             // Wake exactly the successor, atomically with the fenced outcome.
             // Its own retry floor stays intact. A released head still blocks it
             // through the unfinished-sibling check until that head completes.
-            sqlx::query!(
-                r#"
+            self.wake_projection_successor(&mut tx, lease.mailbox.link_id, lease.id)
+                .await?;
+        }
+        tx.commit().await.map_err(db_error)?;
+        if changed == 1 {
+            // A producer can insert a successor after the first wake snapshot
+            // but before commit. A fresh transaction waits for any claim on it
+            // and clears that claim's deferral. A crash here needs the backstop.
+            self.wake_projection_after_commit(lease.mailbox.link_id, lease.id)
+                .await?;
+        }
+        Ok(())
+    }
+}
+
+impl PgMailboxSync {
+    async fn lock_projection_finish(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        link: Uuid,
+    ) -> Result<(), MailboxError> {
+        sqlx::query!(
+            "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.projection.finish:' || $1::uuid::text,0))",
+            link
+        ).fetch_one(&mut **tx).await.map_err(db_error)?;
+        Ok(())
+    }
+
+    async fn wake_projection_successor(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        link: Uuid,
+        exclude: Uuid,
+    ) -> Result<(), MailboxError> {
+        sqlx::query!(
+            r#"
                 WITH successor AS MATERIALIZED (
                     SELECT id FROM email_projection_outbox
                     WHERE link_id=$1 AND id<>$2
@@ -129,19 +158,32 @@ impl MailboxProjectionRepository for PgMailboxSync {
                 UPDATE email_projection_outbox o SET blocked_until=NULL
                 FROM successor s WHERE o.id=s.id
                 "#,
-                lease.mailbox.link_id,
-                lease.id
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
-        }
+            link,
+            exclude
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all,name="email.projection.wake_after_commit",fields(
+        projection.link_id=tracing::field::Empty,
+    ),err)]
+    async fn wake_projection_after_commit(
+        &self,
+        link: Uuid,
+        exclude: Uuid,
+    ) -> Result<(), MailboxError> {
+        tracing::Span::current().record("projection.link_id", link.to_string());
+        let mut tx = self.begin().await.map_err(db_error)?;
+        self.lock_projection_finish(&mut tx, link).await?;
+        self.wake_projection_successor(&mut tx, link, exclude)
+            .await?;
         tx.commit().await.map_err(db_error)?;
         Ok(())
     }
-}
 
-impl PgMailboxSync {
     /// Hold the bounded window before the eligibility statement takes its
     /// fresh READ COMMITTED snapshot. A concurrent finish either commits before
     /// that snapshot or waits on these locks and overwrites the deferral later.
