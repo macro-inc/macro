@@ -590,6 +590,7 @@ struct QueueIdentity {
 /// overlays, and the keys their aliases lead to.
 fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
     let mut named = BTreeSet::new();
+    let mut bindings = Vec::new();
     for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
         let layer = parse_queue_row(&row)?.optimistic.ok_or_else(invariant)?;
         let source =
@@ -597,9 +598,10 @@ fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
         named.extend(
             source
                 .identity_bindings
-                .into_iter()
-                .map(|binding| binding.local_key),
+                .iter()
+                .map(|binding| binding.local_key.clone()),
         );
+        bindings.extend(source.identity_bindings);
         named.extend(
             source
                 .projection_mutations
@@ -643,7 +645,7 @@ fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
     }
     // Each alias leads to the end of its chain, as the engine reads it; a
     // cycle stops where it would repeat.
-    let aliases = targets
+    let mut aliases = targets
         .keys()
         .map(|local| {
             let mut target = &targets[local];
@@ -656,6 +658,9 @@ fn queue_identity(connection: &Db) -> Result<QueueIdentity, TursoStorageError> {
             (local.clone(), target.clone())
         })
         .collect();
+    // Settlement stores an alias for the created record alone, and moves the
+    // shadows of the records a binding says share its ID too.
+    identity::expand_reference_identities(&bindings, &mut aliases);
     Ok(QueueIdentity { aliases, metadata })
 }
 

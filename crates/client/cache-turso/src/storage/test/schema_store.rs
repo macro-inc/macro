@@ -557,12 +557,18 @@ async fn settle_a_create(storage: &mut TursoStorage) {
         .await
         .unwrap();
     let owner = storage.load_mutation_queue().await.unwrap()[2].id;
-    let server_key = PredicateRecordKey::new("Note:server").unwrap();
+    put_shadow(storage, "Note:server", owner).await;
+}
+
+/// Writes the index shadow `owner`'s queued write gives `key`, as
+/// settlement composes it where it moved the write's projection.
+async fn put_shadow(storage: &mut TursoStorage, key: &str, owner: MutationId) {
+    let record_key = PredicateRecordKey::new(key).unwrap();
     let mutations = [OptimisticProjectionMutation::Replace(
-        authoritative_projection("Note:server", "queued"),
+        authoritative_projection(key, "queued"),
     )];
     let shadow = cache_core::predicate::compose_effective_optimistic_projection(
-        &server_key,
+        &record_key,
         None,
         &[cache_core::predicate::ProjectionMutationLayer {
             owner,
@@ -572,7 +578,7 @@ async fn settle_a_create(storage: &mut TursoStorage) {
     .unwrap()
     .unwrap();
     storage
-        .replace_optimistic_layers(&[], &[server_key], &[shadow])
+        .replace_optimistic_layers(&[], &[record_key], &[shadow])
         .await
         .unwrap();
 }
@@ -651,6 +657,49 @@ fn a_kept_records_shadow_under_its_server_key_is_composed_there() {
         assert_eq!(shadows(&storage, "Note:server"), 1);
         assert_eq!(shadows(&storage, "Note:local"), 0);
         assert!(!is_retired(&sources(&mut storage).await[2]));
+    });
+}
+
+#[test]
+fn a_shadow_moved_to_a_related_records_server_key_is_composed_there() {
+    block_on(async {
+        let mut storage =
+            populate(TursoStorage::open_in_memory("schema-related-identity").unwrap()).await;
+        // A settled create aliased its own record; a later write that binds
+        // it names a record sharing its ID, whose shadow settlement moved.
+        storage
+            .put_batch(vec![
+                (
+                    key("Thing:local"),
+                    cache_core::identity::alias_record(&key("Thing:server")),
+                ),
+                (key("Thing:server"), record("thing")),
+            ])
+            .await
+            .unwrap();
+        let mut edit = pending(
+            "EditPreview",
+            "mutation EditPreview { edit(id: \"local\") { id value } }",
+            serde_json::json!({ "edit": { "id": "local", "value": "edited" } }),
+            &["Note:local"],
+        );
+        let mut source = decode_optimistic_source(&edit.optimistic.optimistic_data_json).unwrap();
+        source.identity_bindings = vec![cache_core::identity::IdentityBinding {
+            local_key: key("Thing:local"),
+            delete_record: false,
+            response_path: Vec::new(),
+            reference_fields: vec!["Note.id".into()],
+            revalidation_variables: Vec::new(),
+        }];
+        edit.optimistic.optimistic_data_json = encode_optimistic_source(&source);
+        storage.enqueue_mutation(edit).await.unwrap();
+        let owner = storage.load_mutation_queue().await.unwrap()[2].id;
+        put_shadow(&mut storage, "Note:server", owner).await;
+
+        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::none());
+        assert_eq!(adoption.change, types(&["Thing"], false));
+        assert_eq!(shadows(&storage, "Note:server"), 1);
+        assert_eq!(shadows(&storage, "Note:local"), 0);
     });
 }
 
