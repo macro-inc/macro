@@ -29,6 +29,7 @@ events to the `macro.properties` Kafka topic.
 - Cleanup locks UUID TASK/DOCUMENT roots even without edges or subtype metadata; discover all neighbors, lock them, and validate discovery. Non-document cleanup skips graph locks.
 - Treat malformed pre-write neighbor values as absent metadata so cleanup and link repair can finish; keep canonical post-write decoding strict.
 - Preserve `PropertiesErr::DependencyContended` for PostgreSQL 40001 and stale snapshots; return HTTP 409 and GraphQL `DEPENDENCY_BUSY` with `retryable: true`.
+- Await link transactions through COMMIT; use database statement/lock timeouts instead of an outer Tokio deadline that can discard committed reciprocal receipts.
 - Preserve `PropertiesErr::TaskCompletionBlocked` across replacement and option writes; transport adapters map the typed variant, not its display text.
 
 ## Scope

@@ -38,9 +38,9 @@ pub async fn targets(
     }
 }
 
-/// Replace one direction after confirming that authorization covered the exact
-/// snapshot which is modified. Shared endpoint locks serialize reciprocal writes
-/// and direct-cycle admission without serializing unrelated tasks.
+/// Replace one direction after checking the expected edge snapshot. Shared
+/// endpoint locks serialize reciprocal writes and direct-cycle admission without
+/// serializing unrelated tasks.
 #[tracing::instrument(skip(pool, expected, desired), fields(task_id = %task_id, property_definition_id = %property_definition_id, endpoint_count = desired.len()), err)]
 pub async fn link(
     pool: &Pool<Postgres>,
@@ -49,15 +49,12 @@ pub async fn link(
     expected: Vec<Uuid>,
     desired: Vec<Uuid>,
 ) -> anyhow::Result<TaskDependencyLinkOutcome> {
-    tokio::time::timeout(
-        std::time::Duration::from_secs(10),
-        link_transaction(pool, task_id, property_definition_id, expected, desired),
-    )
-    .await
-    .map_err(|_| anyhow::anyhow!("Task dependency transaction timed out; retry"))?
+    // Database timeouts bound statements without abandoning COMMIT and losing
+    // receipts for an edit that the server has already committed.
+    link_transaction(pool, task_id, property_definition_id, expected, desired).await
 }
 
-/// Keep endpoint locks and all edge work within one cancellable deadline.
+/// Keep endpoint locks and all edge work within one database transaction.
 async fn link_transaction(
     pool: &Pool<Postgres>,
     task_id: Uuid,
