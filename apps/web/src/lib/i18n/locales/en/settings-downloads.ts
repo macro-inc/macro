@@ -5,7 +5,7 @@ export default {
   desktopTitle: 'Desktop app (Alpha)',
   desktopDownload: 'Download Macro Alpha',
   macosRequirement:
-    'Requires macOS 13 (Ventura) or later on a Mac with Apple silicon.',
+    'Requires macOS 14 (Sonoma) or later on a Mac with Apple silicon.',
   linuxRequirement: 'For 64-bit Linux, as an AppImage.',
   desktopPlatforms: 'Available for macOS and Linux.',
   downloadForMacos: 'Download for macOS',
