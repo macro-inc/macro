@@ -879,6 +879,7 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
             ),
             ("macro|sammy@example.com", "Sammy Mail", &["outlook"][..]),
             ("macro|isam@example.com", "Isam", &["teammates"][..]),
+            ("macro|desk.sam@example.com", "Desk", &["teammates"][..]),
         ] {
             rows.push((key(user), listed_record(user, name, lists)));
         }
@@ -981,6 +982,7 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
                 ("macro|sammy@example.com".to_owned(), 2),
                 ("macro|nobody@example.com".to_owned(), 3),
                 ("macro|isam@example.com".to_owned(), 1),
+                ("macro|desk.sam@example.com".to_owned(), 0),
             ]
         );
         request.list_priority = vec![];
@@ -993,6 +995,7 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
                 ("macro|samantha@example.com".to_owned(), 2),
                 ("macro|sammy@example.com".to_owned(), 2),
                 ("macro|isam@example.com".to_owned(), 1),
+                ("macro|desk.sam@example.com".to_owned(), 0),
             ]
         );
     });
