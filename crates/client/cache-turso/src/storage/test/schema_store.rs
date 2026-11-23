@@ -21,7 +21,9 @@ fn schema(sdl: &str) -> Arc<Schema> {
 }
 
 fn adopt(storage: &TursoStorage, sdl: &str, inputs: &ProjectionInputs) -> SchemaAdoption {
-    storage.adopt_schema(&schema(sdl), inputs, None).unwrap()
+    storage
+        .adopt_schema(&schema(sdl), inputs, Unrecorded::Guess)
+        .unwrap()
 }
 
 fn types(names: &[&str], every_document: bool) -> Option<Tier> {
@@ -277,7 +279,8 @@ fn a_changed_type_drops_its_rows_and_keeps_other_types_warm() {
         );
 
         // Both writes stay queued; only the one returning a `Thing` loses
-        // its overlay, and both keep their projections and shadows.
+        // its overlay. The projection of the dropped `Thing` goes with its
+        // document; the `Note`'s stays, and so does its shadow.
         let after = storage.load_mutation_queue().await.unwrap();
         assert_eq!(
             after
@@ -290,14 +293,18 @@ fn a_changed_type_drops_its_rows_and_keeps_other_types_warm() {
         let sources = sources(&mut storage).await;
         assert!(is_retired(&sources[0]));
         assert!(!is_retired(&sources[1]));
-        assert!(
-            sources
-                .iter()
-                .all(|source| source.projection_mutations.len() == 1)
+        assert!(sources[0].projection_mutations.is_empty());
+        assert_eq!(sources[1].projection_mutations.len(), 1);
+        assert_eq!(
+            count(
+                &storage,
+                "SELECT count(*) FROM optimistic_index_documents WHERE record_key = 'Note:1'"
+            ),
+            1
         );
         assert_eq!(
             count(&storage, "SELECT count(*) FROM optimistic_index_documents"),
-            2
+            1
         );
 
         assert_eq!(
@@ -488,11 +495,17 @@ fn a_reset_keeps_the_identity_and_the_queue() {
                 .collect::<Vec<_>>(),
             commands
         );
-        assert!(sources(&mut storage).await.iter().all(is_retired));
+        let sources = sources(&mut storage).await;
+        assert!(sources.iter().all(is_retired));
+        assert!(
+            sources
+                .iter()
+                .all(|source| source.projection_mutations.is_empty()),
+            "every projected record went"
+        );
         assert_eq!(
             count(&storage, "SELECT count(*) FROM optimistic_index_documents"),
-            2,
-            "shadows are composed again over no authority"
+            0
         );
         storage.try_close().unwrap();
 
@@ -503,6 +516,131 @@ fn a_reset_keeps_the_identity_and_the_queue() {
             None
         );
         storage.try_close().unwrap();
+    });
+}
+
+#[test]
+fn queued_writes_without_records_are_still_sorted() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("schema-queue-only").unwrap();
+        storage
+            .enqueue_mutation(pending(
+                "Rename",
+                "mutation Rename { rename(id: \"1\") { id value } }",
+                serde_json::json!({ "rename": { "id": "1", "value": "renamed" } }),
+                "Thing:1",
+            ))
+            .await
+            .unwrap();
+        let adoption = storage
+            .adopt_schema(
+                &schema(RETYPED),
+                &ProjectionInputs::none(),
+                Unrecorded::Known(schema(OLD)),
+            )
+            .unwrap();
+        assert_eq!(adoption.change, types(&["Thing"], false));
+        assert_eq!(adoption.retired_overlays, 1);
+        let sources = sources(&mut storage).await;
+        assert!(is_retired(&sources[0]));
+        assert!(sources[0].projection_mutations.is_empty());
+    });
+}
+
+#[test]
+fn a_change_that_fails_drops_every_record_and_keeps_the_queue() {
+    block_on(async {
+        let mut storage = populate(TursoStorage::open_in_memory("schema-failed").unwrap()).await;
+        // Dropping every document's facts keeps the others in a table of
+        // this name, so the change's own tier fails.
+        raw_execute(
+            &storage,
+            "CREATE TABLE schema_change_kept_exact_facts (planted)",
+            vec![],
+        );
+        let adoption = adopt(&storage, RETYPED, &ProjectionInputs::every());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Failed)));
+        assert_eq!(adoption.outcome(), "reset");
+        assert_eq!(
+            adoption.reset_reason().map(<&'static str>::from),
+            Some("failed")
+        );
+        assert_eq!(adoption.schema.hash(), schema(RETYPED).hash());
+        assert_eq!(adoption.retired_overlays, 2);
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
+        assert_eq!(storage.load_mutation_queue().await.unwrap().len(), 2);
+        assert!(sources(&mut storage).await.iter().all(is_retired));
+    });
+}
+
+/// `scope`'s namespace under the compatibility epoch before this build's.
+fn previous_epoch_namespace(scope: &str) -> String {
+    format!(
+        "graphql-cache:{scope}:s{}:v{}",
+        cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH - 1,
+        cache_core::codec::CACHE_FORMAT_VERSION
+    )
+}
+
+#[test]
+fn another_epochs_cache_keeps_its_queue_and_drops_its_records() {
+    block_on(async {
+        let database = TursoMemoryDatabase::new("schema-epoch.db");
+        let storage = populate(database.open("scope").unwrap()).await;
+        let commands = storage
+            .load_mutation_queue()
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|queued| (queued.id, queued.mutation.request))
+            .collect::<Vec<_>>();
+        raw_execute(
+            &storage,
+            "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+            vec![text(&previous_epoch_namespace("scope"))],
+        );
+        storage.try_close().unwrap();
+
+        let mut storage = database.open("scope").unwrap();
+        let namespace = driver::query(
+            &storage.connection(),
+            "SELECT value FROM meta WHERE key = 'namespace'",
+            vec![],
+        )
+        .unwrap();
+        assert_eq!(
+            required_text(&namespace[0], 0).unwrap(),
+            cache_namespace("scope")
+        );
+        let adoption = adopt(&storage, OLD, &ProjectionInputs::none());
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 1);
+        assert_eq!(
+            storage
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .into_iter()
+                .map(|queued| (queued.id, queued.mutation.request))
+                .collect::<Vec<_>>(),
+            commands
+        );
+        assert!(sources(&mut storage).await.iter().all(is_retired));
+        storage.try_close().unwrap();
+
+        // Another scope's namespace under another epoch is still not ours.
+        let database = TursoMemoryDatabase::new("schema-epoch-other.db");
+        let storage = database.open("scope").unwrap();
+        raw_execute(
+            &storage,
+            "UPDATE meta SET value = ?1 WHERE key = 'namespace'",
+            vec![text(&previous_epoch_namespace("other"))],
+        );
+        storage.try_close().unwrap();
+        assert_eq!(
+            database.open("scope").unwrap_err().physical_reset_reason(),
+            Some(PhysicalResetReason::Compatibility)
+        );
     });
 }
 
@@ -537,11 +675,31 @@ fn records_without_a_stored_schema_are_sorted_against_the_hint() {
                 .adopt_schema(
                     &schema(incoming),
                     &ProjectionInputs::none(),
-                    Some(schema(OLD)),
+                    Unrecorded::Known(schema(OLD)),
                 )
                 .unwrap();
             assert_eq!(adoption.change, expected, "{incoming}");
         }
+    });
+}
+
+#[test]
+fn records_the_host_cannot_say_the_writer_of_reset() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("schema-unrecorded-unreadable").unwrap();
+        storage
+            .put_batch(vec![(key("Thing:0"), record("thing"))])
+            .await
+            .unwrap();
+        let adoption = storage
+            .adopt_schema(
+                &schema(OLD),
+                &ProjectionInputs::none(),
+                Unrecorded::Unreadable,
+            )
+            .unwrap();
+        assert_eq!(adoption.change, Some(Tier::Reset(ResetReason::Unreadable)));
+        assert_eq!(count(&storage, "SELECT count(*) FROM records"), 0);
     });
 }
 
@@ -582,7 +740,11 @@ fn a_storage_12_cache_upgrades_and_sorts_its_records_against_the_hint() {
         assert_eq!(count(&storage, "SELECT count(*) FROM cache_schema"), 0);
         assert_eq!(rows_but_schema(&storage), rows);
         let adoption = storage
-            .adopt_schema(&schema(ADDED), &ProjectionInputs::none(), Some(schema(OLD)))
+            .adopt_schema(
+                &schema(ADDED),
+                &ProjectionInputs::none(),
+                Unrecorded::Known(schema(OLD)),
+            )
             .unwrap();
         assert_eq!(adoption.change, Some(Tier::Compatible));
         assert_eq!(rows_but_schema(&storage), rows);

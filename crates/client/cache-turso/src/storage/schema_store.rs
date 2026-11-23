@@ -10,11 +10,14 @@
 //!
 //! - [`Tier::Compatible`] stores the new schema and nothing else.
 //! - [`Tier::Types`] drops the records of the changed types with every row
-//!   derived from them, takes the overlay off each queued write that wrote one,
-//!   and starts the backfill over (it drops the storage generation).
+//!   derived from them and every queued projection of them, takes the overlay
+//!   off each queued write that wrote one, and starts the backfill over (it
+//!   drops the storage generation).
 //! - [`Tier::Reset`] drops every record but the identity and authority, by
-//!   dropping and creating each table again, and takes the overlay off every
-//!   queued write.
+//!   dropping and creating each table again, with every queued projection
+//!   and overlay. A tier that fails rolls back and resets instead
+//!   ([`ResetReason::Failed`]); so does a native file of another schema
+//!   compatibility epoch ([`leave_epoch`]).
 //!
 //! Queued writes are always kept: their mutations are still sent. Their
 //! index shadows are composed again over what is left.
@@ -26,7 +29,7 @@ use cache_core::normalize::RecordUpdates;
 use cache_core::queue::{decode_optimistic_source, encode_optimistic_source};
 use cache_core::schema_change::{
     ProjectionInputs, ResetReason, SchemaChange, Tier, decode_stored_schema, encode_stored_schema,
-    overlay_fits, retire_overlay, unrecorded_schema,
+    is_retired, overlay_fits, retire_overlay, unrecorded_schema,
 };
 
 pub(super) const CREATE_TABLE: &str = "CREATE TABLE cache_schema (slot INTEGER PRIMARY KEY, hash TEXT NOT NULL, incoming_hash TEXT NOT NULL, artifact BLOB NOT NULL)";
@@ -35,6 +38,10 @@ pub(super) const TABLE: &str = "cache_schema";
 const SELECT: &str = "SELECT hash, incoming_hash, artifact FROM cache_schema WHERE slot = 0";
 const UPSERT: &str = "INSERT INTO cache_schema (slot, hash, incoming_hash, artifact) VALUES (0, ?1, ?2, ?3) ON CONFLICT (slot) DO UPDATE SET hash = excluded.hash, incoming_hash = excluded.incoming_hash, artifact = excluded.artifact";
 const SET_INCOMING: &str = "UPDATE cache_schema SET incoming_hash = ?1 WHERE slot = 0";
+/// The hashes of a stored schema [`leave_epoch`] made unreadable, which no
+/// build's schema has.
+const UNREADABLE: &str = "unreadable";
+const NAMESPACE_UPDATE: &str = "UPDATE meta SET value = ?1 WHERE key = 'namespace'";
 
 /// The incoming hash of a cache that builds with different schemas wrote
 /// under one engine. It names no build, so the next open of any build sorts
@@ -44,6 +51,7 @@ const SEVERAL_BUILDS: &str = "several-builds";
 
 /// Whether the cache holds a record besides storage's own metadata.
 const ANY_RECORD: &str = "SELECT 1 FROM records WHERE __typename <> '__meta' LIMIT 1";
+const ANY_QUEUED: &str = "SELECT 1 FROM mutation_queue LIMIT 1";
 const TYPE_RECORDS_DELETE: &str = "DELETE FROM records WHERE __typename = ?1";
 const TYPE_SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE __typename = ?1";
 /// A type's index documents, by the `Typename:` prefix of their record keys
@@ -151,6 +159,30 @@ pub struct SchemaAdoption {
     pub retired_overlays: u64,
 }
 
+/// What wrote a cache that stores no schema yet, an older build's, as the
+/// host knows it.
+#[derive(Clone, Debug, Default)]
+pub enum Unrecorded {
+    /// The host kept nothing; the schema bundled with this build's sources
+    /// is the guess ([`unrecorded_schema`]).
+    #[default]
+    Guess,
+    /// The host kept it.
+    Known(Arc<Schema>),
+    /// The host kept it and cannot read it, so every record goes.
+    Unreadable,
+}
+
+impl Unrecorded {
+    fn schema(&self) -> Option<Arc<Schema>> {
+        match self {
+            Self::Guess => unrecorded_schema(),
+            Self::Known(schema) => Some(Arc::clone(schema)),
+            Self::Unreadable => None,
+        }
+    }
+}
+
 impl SchemaAdoption {
     fn unchanged(schema: Arc<Schema>) -> Self {
         Self {
@@ -205,13 +237,13 @@ pub(super) fn validate_schema(connection: &Db) -> Result<(), TursoStorageError> 
 }
 
 /// Brings the stored records and queued writes to `incoming`, whose index
-/// projections read `inputs`. `unrecorded` is what wrote a cache that stores
-/// no schema, when the host knows better than [`unrecorded_schema`].
+/// projections read `inputs`. `unrecorded` says what wrote a cache that
+/// stores no schema.
 pub(super) fn adopt(
     connection: &Db,
     incoming: &Arc<Schema>,
     inputs: &ProjectionInputs,
-    unrecorded: Option<Arc<Schema>>,
+    unrecorded: &Unrecorded,
 ) -> Result<SchemaAdoption, TursoStorageError> {
     if let Some(row) = load(connection)? {
         if row.hash == incoming.hash() {
@@ -223,52 +255,116 @@ pub(super) fn adopt(
             return Ok(SchemaAdoption::unchanged(stored));
         }
     }
-    driver::write_transaction(connection, || {
+    let sorted = driver::write_transaction(connection, || {
         let stored = match load(connection)? {
             Some(row) => decode_stored_schema(&row.artifact).ok(),
-            None if driver::query(connection, ANY_RECORD, Vec::new())?.is_empty() => {
+            None if is_empty(connection)? => {
                 store(connection, incoming, incoming.hash())?;
                 return Ok(SchemaAdoption::unchanged(Arc::clone(incoming)));
             }
-            None => unrecorded.clone().or_else(unrecorded_schema),
+            None => unrecorded.schema(),
         };
-        let change = SchemaChange::classify(stored.as_deref(), incoming, inputs);
-        let mut adoption = SchemaAdoption::unchanged(Arc::clone(&change.stored));
-        match &change.tier {
-            Tier::Compatible => {}
-            Tier::Types {
-                changed,
-                every_document,
-            } => {
-                // Facts go before the documents, which would otherwise
-                // cascade to them one document at a time.
-                if *every_document {
-                    keep_only_facts(connection, DOCUMENTS_KEEPING_FACTS, Vec::new())?;
-                } else {
-                    drop_facts(connection, changed)?;
-                }
-                adoption.dropped_records = drop_types(connection, changed)?;
-                if *every_document {
-                    let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
-                    adoption.incomplete_documents =
-                        u64::try_from(marked).map_err(|_| invariant())?;
-                }
-                adoption.retired_overlays = retire_overlays(connection, |request, source| {
-                    overlay_fits(&change.stored, changed, request, source)
-                })?;
-                recompose_queued_shadows(connection)?;
-                driver::execute(connection, STORAGE_GENERATION_DELETE, Vec::new())?;
-            }
-            Tier::Reset(_) => {
-                adoption.dropped_records = clear_records(connection)?;
-                recreate_tables(connection, &SHADOW_TABLES)?;
-                adoption.retired_overlays = retire_overlays(connection, |_, _| false)?;
-                recompose_queued_shadows(connection)?;
-            }
+        apply(
+            connection,
+            SchemaChange::classify(stored.as_deref(), incoming, inputs),
+            incoming,
+        )
+    });
+    match sorted {
+        // The tier rolled back. Dropping every record reads none of them.
+        Err(error) if !error.requires_physical_reset() => {
+            driver::write_transaction(connection, || {
+                let reset = SchemaChange {
+                    tier: Tier::Reset(ResetReason::Failed),
+                    stored: Arc::clone(incoming),
+                };
+                apply(connection, reset, incoming)
+            })
         }
-        store(connection, &change.stored, incoming.hash())?;
-        adoption.change = Some(change.tier);
-        Ok(adoption)
+        sorted => sorted,
+    }
+    .map_err(TursoStorageError::initialization)
+}
+
+/// Whether the cache holds no record and no queued write: nothing a schema
+/// shaped.
+fn is_empty(connection: &Db) -> Result<bool, TursoStorageError> {
+    Ok(
+        driver::query(connection, ANY_RECORD, Vec::new())?.is_empty()
+            && driver::query(connection, ANY_QUEUED, Vec::new())?.is_empty(),
+    )
+}
+
+/// Applies `change`'s tier and stores its schema, inside the caller's
+/// transaction.
+fn apply(
+    connection: &Db,
+    change: SchemaChange,
+    incoming: &Schema,
+) -> Result<SchemaAdoption, TursoStorageError> {
+    let mut adoption = SchemaAdoption::unchanged(Arc::clone(&change.stored));
+    match &change.tier {
+        Tier::Compatible => {}
+        Tier::Types {
+            changed,
+            every_document,
+        } => {
+            // Facts go before the documents, which would otherwise cascade
+            // to them one document at a time.
+            if *every_document {
+                keep_only_facts(connection, DOCUMENTS_KEEPING_FACTS, Vec::new())?;
+            } else {
+                drop_facts(connection, changed)?;
+            }
+            adoption.dropped_records = drop_types(connection, changed)?;
+            if *every_document {
+                let marked = driver::execute(connection, EVERY_DOCUMENT_DIRTY, Vec::new())?;
+                adoption.incomplete_documents = u64::try_from(marked).map_err(|_| invariant())?;
+            }
+            let queue = conform_queue(
+                connection,
+                |request, source| overlay_fits(&change.stored, changed, request, source),
+                |key| {
+                    key.as_str()
+                        .split_once(':')
+                        .is_some_and(|(typename, _)| changed.contains(typename))
+                },
+            )?;
+            adoption.retired_overlays = queue.retired;
+            recompose_queued_shadows(connection, queue.projected)?;
+            driver::execute(connection, STORAGE_GENERATION_DELETE, Vec::new())?;
+        }
+        Tier::Reset(_) => {
+            adoption.dropped_records = clear_records(connection)?;
+            // No queued projection is left to compose a shadow from.
+            recreate_tables(connection, &SHADOW_TABLES)?;
+            adoption.retired_overlays = conform_queue(connection, |_, _| false, |_| true)?.retired;
+        }
+    }
+    store(connection, &change.stored, incoming.hash())?;
+    adoption.change = Some(change.tier);
+    Ok(adoption)
+}
+
+/// Moves a native file written under another schema compatibility epoch to
+/// this build's `namespace`, with its stored schema made unreadable, so the
+/// adoption after the open resets it and keeps its queued writes
+/// ([`ResetReason::Unreadable`]). A file from before storage 13 stores no
+/// schema, and the bundled guess would keep its records. One transaction, so
+/// an interrupted open leaves the old namespace.
+pub(super) fn leave_epoch(connection: &Db, namespace: &str) -> Result<(), TursoStorageError> {
+    driver::write_transaction(connection, || {
+        driver::execute(
+            connection,
+            UPSERT,
+            vec![
+                text(UNREADABLE),
+                text(UNREADABLE),
+                Value::from_blob(vec![0]),
+            ],
+        )?;
+        driver::execute(connection, NAMESPACE_UPDATE, vec![text(namespace)])?;
+        Ok(())
     })
     .map_err(TursoStorageError::initialization)
 }
@@ -308,6 +404,9 @@ fn drop_facts(connection: &Db, changed: &BTreeSet<String>) -> Result<(), TursoSt
     let mut dropping = 0_u64;
     for range in &ranges {
         dropping += count(connection, TYPE_DOCUMENT_COUNT, range.clone())?;
+    }
+    if dropping == 0 {
+        return Ok(());
     }
     if dropping.saturating_mul(2) <= count(connection, DOCUMENT_COUNT, Vec::new())? {
         for range in &ranges {
@@ -416,22 +515,52 @@ fn count(connection: &Db, sql: &str, parameters: Vec<Value>) -> Result<u64, Turs
     u64::try_from(required_i64(row, 0)?).map_err(|_| invariant())
 }
 
+/// What [`conform_queue`] did to the queued writes.
+struct ConformedQueue {
+    /// Overlays taken off.
+    retired: u64,
+    /// Every record a queued write projected, before any projection went.
+    projected: BTreeSet<PredicateRecordKey>,
+}
+
 /// Takes the optimistic overlay off each queued write that does not `fit`,
-/// keeping its mutation. Returns how many it took off.
-fn retire_overlays(
+/// keeping its mutation, and drops its projections of the records `dropped`
+/// holds for: their documents went with them, and a shadow composed from
+/// one would show a record the cache no longer holds, as the build before
+/// shaped it.
+fn conform_queue(
     connection: &Db,
     fits: impl Fn(&MutationRequest, &cache_core::queue::OptimisticSource) -> bool,
-) -> Result<u64, TursoStorageError> {
-    let mut retired = 0_u64;
+    dropped: impl Fn(&PredicateRecordKey) -> bool,
+) -> Result<ConformedQueue, TursoStorageError> {
+    let mut queue = ConformedQueue {
+        retired: 0,
+        projected: BTreeSet::new(),
+    };
     for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
         let row = parse_queue_row(&row)?;
         let layer = row.optimistic.ok_or_else(invariant)?;
         let mut source =
             decode_optimistic_source(&layer.optimistic_data_json).map_err(|_| invariant())?;
-        if cache_core::schema_change::is_retired(&source) || fits(&row.mutation.request, &source) {
+        let projections = source.projection_mutations.len();
+        queue.projected.extend(
+            source
+                .projection_mutations
+                .iter()
+                .map(|mutation| mutation.record_key().clone()),
+        );
+        source
+            .projection_mutations
+            .retain(|mutation| !dropped(mutation.record_key()));
+        let updates = if !is_retired(&source) && !fits(&row.mutation.request, &source) {
+            retire_overlay(&mut source);
+            queue.retired += 1;
+            RecordUpdates::new()
+        } else if source.projection_mutations.len() == projections {
             continue;
-        }
-        retire_overlay(&mut source);
+        } else {
+            layer.normalized_updates
+        };
         require_changed(
             driver::execute(
                 connection,
@@ -439,32 +568,21 @@ fn retire_overlays(
                 vec![
                     Value::from_i64(mutation_id_to_sql(row.id)?),
                     text(&encode_optimistic_source(&source)),
-                    Value::from_blob(encode_record_updates(&RecordUpdates::new())),
+                    Value::from_blob(encode_record_updates(&updates)),
                 ],
             )?,
             1,
         )?;
-        retired += 1;
     }
-    Ok(retired)
+    Ok(queue)
 }
 
-/// Composes the index shadow of every record a queued write projects again,
-/// over the stored projections left.
-fn recompose_queued_shadows(connection: &Db) -> Result<(), TursoStorageError> {
-    let mut keys = BTreeSet::new();
-    for row in driver::query(connection, QUEUE_SELECT, Vec::new())? {
-        let row = parse_queue_row(&row)?;
-        let source =
-            decode_optimistic_source(&row.optimistic.ok_or_else(invariant)?.optimistic_data_json)
-                .map_err(|_| invariant())?;
-        keys.extend(
-            source
-                .projection_mutations
-                .iter()
-                .map(|mutation| mutation.record_key().clone()),
-        );
-    }
+/// Composes the index shadow of each of `keys` again, from the queued
+/// projections left over the stored projections left.
+fn recompose_queued_shadows(
+    connection: &Db,
+    keys: BTreeSet<PredicateRecordKey>,
+) -> Result<(), TursoStorageError> {
     let keys = keys.into_iter().collect::<Vec<_>>();
     let states = keys
         .iter()

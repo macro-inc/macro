@@ -33,7 +33,7 @@ use cache_core::{
         PeopleSearchResult,
     },
 };
-use cache_turso::{SchemaAdoption, TursoFileDatabase, TursoStorage, TursoStorageError};
+use cache_turso::{SchemaAdoption, TursoFileDatabase, TursoStorage, TursoStorageError, Unrecorded};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::sync::Arc;
@@ -183,9 +183,10 @@ const LEGACY_SCHEMA_FILE: &str = "schema.json";
 
 /// Opens the cache in `dir` for `scope` and brings its records and queued
 /// writes to `incoming`, this webview's schema, returning the schema the
-/// engine runs with. A cache that cannot take it is replaced and opened
-/// empty. An older build's schema file names what wrote a cache that stores
-/// no schema yet, and goes once the cache stores one.
+/// engine runs with. A tier that fails resets the cache, and only one that
+/// cannot even reset is replaced and opened empty. An older build's schema
+/// file names what wrote a cache that stores no schema yet, and goes once the
+/// cache stores one.
 pub(crate) fn open_cache(
     dir: &Path,
     scope: &str,
@@ -194,7 +195,8 @@ pub(crate) fn open_cache(
     let legacy = dir.join(LEGACY_SCHEMA_FILE);
     let unrecorded = std::fs::read_to_string(&legacy)
         .ok()
-        .and_then(|json| Schema::from_json(&json).ok());
+        .and_then(|json| Schema::from_json(&json).ok())
+        .map_or(Unrecorded::Guess, Unrecorded::Known);
     let database = TursoFileDatabase::new(dir.join("cache.turso")).map_err(|e| e.to_string())?;
     let storage = open_storage(&database, scope)?;
     let opened = match adopt_schema(&storage, incoming, unrecorded) {
@@ -203,7 +205,8 @@ pub(crate) fn open_cache(
             storage.try_close().map_err(|e| e.to_string())?;
             database.physical_reset().map_err(|e| e.to_string())?;
             let storage = open_storage(&database, scope)?;
-            let adoption = adopt_schema(&storage, incoming, None).map_err(|e| e.to_string())?;
+            let adoption =
+                adopt_schema(&storage, incoming, Unrecorded::Guess).map_err(|e| e.to_string())?;
             (storage, adoption)
         }
         Err(error) => return Err(error.to_string()),
@@ -264,7 +267,7 @@ fn open_storage(database: &TursoFileDatabase, scope: &str) -> Result<TursoStorag
 fn adopt_schema(
     storage: &TursoStorage,
     incoming: &Arc<Schema>,
-    unrecorded: Option<Arc<Schema>>,
+    unrecorded: Unrecorded,
 ) -> Result<SchemaAdoption, TursoStorageError> {
     let started = std::time::Instant::now();
     let adoption = storage.adopt_schema(

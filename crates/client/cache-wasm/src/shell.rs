@@ -23,7 +23,7 @@ use cache_core::store::QueueDiagnosticsAvailability;
 use cache_core::value::EntityKey;
 use cache_turso::{
     PhysicalResetReason, QueuedMutationCount, SchemaAdoption, TursoStorage,
-    TursoStorageCloseOutcome, TursoStorageError, TursoStorageOpenOutcome, WalPosition,
+    TursoStorageCloseOutcome, TursoStorageError, TursoStorageOpenOutcome, Unrecorded, WalPosition,
     count_queued_mutations,
 };
 use predicate_index::RecordKey;
@@ -1069,29 +1069,30 @@ async fn adopted_engine(
     let inputs = soup_filter_cache_adapter::projection_inputs();
     let started = js_sys::Date::now();
     let OpenedStorage { storage, outcome } = opened;
-    let (storage, outcome, adoption) = match storage.adopt_schema(&incoming, &inputs, None) {
-        Ok(adoption) => (storage, outcome, adoption),
-        Err(error) if error.requires_physical_reset() => {
-            let reset = error
-                .physical_reset_reason()
-                .map_or(CacheOpenOutcome::ResetIncompatible, recovery_outcome);
-            let owner = close_storage(wrap_storage(storage), true).await?;
-            let OpenedStorage { storage, .. } = open_storage(scope, owner).await?;
-            match storage.adopt_schema(&incoming, &inputs, None) {
-                Ok(adoption) => (storage, reset, adoption),
-                Err(_) => {
-                    let owner = close_storage(wrap_storage(storage), true).await?;
-                    owner.release().await.map_err(err_js)?;
-                    return Err(reset_required_js_error());
+    let (storage, outcome, adoption) =
+        match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
+            Ok(adoption) => (storage, outcome, adoption),
+            Err(error) if error.requires_physical_reset() => {
+                let reset = error
+                    .physical_reset_reason()
+                    .map_or(CacheOpenOutcome::ResetIncompatible, recovery_outcome);
+                let owner = close_storage(wrap_storage(storage), true).await?;
+                let OpenedStorage { storage, .. } = open_storage(scope, owner).await?;
+                match storage.adopt_schema(&incoming, &inputs, Unrecorded::Guess) {
+                    Ok(adoption) => (storage, reset, adoption),
+                    Err(_) => {
+                        let owner = close_storage(wrap_storage(storage), true).await?;
+                        owner.release().await.map_err(err_js)?;
+                        return Err(reset_required_js_error());
+                    }
                 }
             }
-        }
-        Err(error) => {
-            let owner = close_storage(wrap_storage(storage), false).await?;
-            owner.release().await.map_err(err_js)?;
-            return Err(err_js(error));
-        }
-    };
+            Err(error) => {
+                let owner = close_storage(wrap_storage(storage), false).await?;
+                owner.release().await.map_err(err_js)?;
+                return Err(err_js(error));
+            }
+        };
     let change = JsSchemaChange::new(&adoption, js_sys::Date::now() - started);
     let engine = Engine::with_schema(
         wrap_storage(storage),

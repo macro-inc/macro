@@ -86,7 +86,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
   never use the current schema constants, which a later version changes. Each
   step gets a test beside the 11 to 12 one in `test/migration.rs`. A missing
   chain, a newer version, or a failing step still resets.
-- Storage 13 adds `cache_schema`; its step creates the table empty, and the first `adopt_schema` stores a schema, reading an unrecorded cache as `cache_core::schema_change::unrecorded_schema`. Dropping rows for a schema change is logical, not a physical reset: never drop or recreate `records`, `mutation_queue` or the identity/authority meta in `schema_store.rs`.
+- Storage 13 adds `cache_schema`; its step creates the table empty, and the first `adopt_schema` stores a schema, reading an unrecorded cache as `cache_core::schema_change::unrecorded_schema`. Dropping rows for a schema change is logical, not a physical reset: `schema_store.rs` may recreate `records` and the tables derived from it, but must put the identity and authority records back, and never touches `mutation_queue` or `meta`. A native file of another schema compatibility epoch is moved to this build's namespace with its stored schema marked unreadable (`leave_epoch`), so adoption resets it and keeps the queue.
 - The other exception is a cache format version listed in
   `MIGRATABLE_CACHE_FORMAT_VERSIONS`: `migrate_previous_format` drops the
   refetchable records, search projections, index facts, and calendar ranges in

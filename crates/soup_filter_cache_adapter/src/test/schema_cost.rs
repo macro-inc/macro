@@ -5,7 +5,7 @@
 
 use crate::projection_inputs;
 use cache_core::meta::{BUNDLED_SCHEMA_SDL, Schema, bundled_schema};
-use cache_turso::TursoFileDatabase;
+use cache_turso::{TursoFileDatabase, Unrecorded};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -129,7 +129,7 @@ fn measured<T>(run: impl FnOnce() -> T) -> (T, Cost) {
 
 /// Opens `path`, brings it to `schema`, and says what the open and the
 /// adoption each cost and what the adoption did.
-fn timed_open(path: &Path, schema: &Arc<Schema>, unrecorded: Option<Arc<Schema>>) -> String {
+fn timed_open(path: &Path, schema: &Arc<Schema>, unrecorded: Unrecorded) -> String {
     let inputs = projection_inputs();
     let database = TursoFileDatabase::new(path).unwrap();
     let (storage, open) = measured(|| database.open(BENCH_SCOPE).unwrap());
@@ -153,7 +153,9 @@ fn timed_reset(path: &Path, schema: &Arc<Schema>) -> String {
     let (storage, cost) = measured(|| {
         database.physical_reset().unwrap();
         let storage = database.open(BENCH_SCOPE).unwrap();
-        storage.adopt_schema(schema, &inputs, None).unwrap();
+        storage
+            .adopt_schema(schema, &inputs, Unrecorded::Guess)
+            .unwrap();
         storage
     });
     storage.try_close().unwrap();
@@ -177,7 +179,11 @@ fn schema_change_cost_on_a_retained_cache() {
     copy_pair(&source, &stored);
     eprintln!(
         "first open, storing the schema: {}",
-        timed_open(&stored, &bundled_schema(), Some(bundled_schema()))
+        timed_open(
+            &stored,
+            &bundled_schema(),
+            Unrecorded::Known(bundled_schema())
+        )
     );
     // CACHE_SCHEMA_OUT=<file> keeps that database, which the browser
     // measurement (cache-wasm's `schema_cost`) opens.
@@ -218,8 +224,8 @@ fn schema_change_cost_on_a_retained_cache() {
                 continue;
             }
             copy_pair(&stored, &live);
-            let open = timed_open(&live, schema, None);
-            let reopen = timed_open(&live, schema, None);
+            let open = timed_open(&live, schema, Unrecorded::Guess);
+            let reopen = timed_open(&live, schema, Unrecorded::Guess);
             eprintln!("run {run} {name}: {open}; reopen {reopen}");
         }
         if selected("reset") {

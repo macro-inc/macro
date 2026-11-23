@@ -3,7 +3,7 @@ use crate::key::RecordKey;
 use crate::{PhysicalResetReason, TursoStorageError};
 use cache_core::codec::{
     MIGRATABLE_CACHE_FORMAT_VERSIONS, cache_namespace, cache_namespace_at, decode_record,
-    decode_record_updates, encode_record, encode_record_updates,
+    decode_record_updates, encode_record, encode_record_updates, namespace_epoch,
 };
 use cache_core::predicate::reconciliation::{
     PredicateBaselineEntry, PredicateReconciliation, predicate_membership,
@@ -67,7 +67,7 @@ const SEARCH_REBUILD_RECORDS_AFTER: &str =
 
 #[cfg(feature = "migration-test-hooks")]
 pub use migration::test_hooks as migration_test_hooks;
-pub use schema_store::SchemaAdoption;
+pub use schema_store::{SchemaAdoption, Unrecorded};
 
 /// Coarse outcome of validating a Turso database.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -977,20 +977,19 @@ impl TursoStorage {
     /// build's GraphQL schema, whose index projections read `inputs`, and
     /// returns the schema an engine over this storage runs with
     /// (`storage/schema_store.rs`). Run it once after opening, before the
-    /// engine. `unrecorded` is what wrote a cache that stores no schema, when
-    /// the host knows better than the bundled guess.
+    /// engine. `unrecorded` says what wrote a cache that stores no schema.
     pub fn adopt_schema(
         &self,
         incoming: &Arc<cache_core::meta::Schema>,
         inputs: &cache_core::schema_change::ProjectionInputs,
-        unrecorded: Option<Arc<cache_core::meta::Schema>>,
+        unrecorded: Unrecorded,
     ) -> Result<SchemaAdoption, TursoStorageError> {
         self.require_healthy()?;
         self.latch_result(schema_store::adopt(
             &self.connection,
             incoming,
             inputs,
-            unrecorded,
+            &unrecorded,
         ))
     }
 
@@ -3639,7 +3638,8 @@ fn check_owner(connection: &Db, scope: &str) -> Result<(), TursoStorageError> {
     };
     let namespace = meta_value(namespace, "namespace")?;
     let owned = meta_value(stored_scope, "scope")? == scope
-        && (namespace == cache_namespace(scope) || migratable_namespace(scope, &namespace));
+        && (namespace_epoch(scope, &namespace).is_some()
+            || migratable_namespace(scope, &namespace));
     owned
         .then_some(())
         .ok_or_else(|| TursoStorageError::reset(PhysicalResetReason::Compatibility))
@@ -3769,7 +3769,8 @@ fn initialize(
             return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
         }
         if value != expected_value {
-            // Only the namespace may differ, and only for a migratable format.
+            // Only the namespace may differ: by its epoch, or for a
+            // migratable format.
             if key != "namespace" {
                 return Err(TursoStorageError::reset(PhysicalResetReason::Compatibility));
             }
@@ -3777,6 +3778,10 @@ fn initialize(
         }
     }
     let format_migrated = match previous_namespace {
+        Some(previous_namespace) if namespace_epoch(scope, &previous_namespace).is_some() => {
+            schema_store::leave_epoch(connection, &cache_namespace(scope))?;
+            false
+        }
         Some(previous_namespace) => {
             migrate_previous_format(connection, scope, &previous_namespace)?;
             true
