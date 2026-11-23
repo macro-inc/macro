@@ -56,7 +56,8 @@ export function toBoardTask(
     isBlocked: task.isBlocked,
     dueDate: getTaskDueDate(task),
     closed: isTaskClosed(task),
-    subtypeCompleted: isTaskCompleted(task),
+    subtypeCompleted: task.subType?.is_completed === true,
+    completed: isTaskCompleted(task),
     deadline: calendar
       ? taskDueDateBucket(getTaskDueDate(task), calendar)
       : undefined,

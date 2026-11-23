@@ -45,6 +45,8 @@ export type TaskBoardTask = {
   dueDate?: string;
   closed?: boolean;
   subtypeCompleted?: boolean;
+  /** Completion for display; a present Status assignment overrides subtype hints. */
+  completed?: boolean;
   deadline?: TaskDueDateBucket;
   isBlocked?: boolean;
 };

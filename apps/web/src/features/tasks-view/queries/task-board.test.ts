@@ -11,6 +11,7 @@ import { makeGroupComparator } from '@queries/soup/grouped/api';
 import type { GroupMeta } from '@queries/soup/grouped/types';
 import { describe, expect, it } from 'vitest';
 import { sortTasks } from '../constants';
+import { movedTask } from '../core/task-board-optimism';
 import {
   createDateBucketBoundaries,
   TASK_DUE_DATE_BUCKETS,
@@ -131,6 +132,32 @@ describe('board query projection', () => {
       const projected = toBoardTask(task);
       expect(projected.closed).toBe(true);
     }
+  });
+
+  it('keeps the subtype hint separate when reopening a completed Status', () => {
+    const task = boardEntity('reopen', [
+      boardProperty(
+        SYSTEM_PROPERTY_IDS.STATUS,
+        { type: 'SelectOption', value: [PROPERTY_OPTION_IDS.STATUS.COMPLETED] },
+        'SELECT_STRING'
+      ),
+    ]);
+    const projected = toBoardTask(task);
+    expect(projected).toMatchObject({
+      subtypeCompleted: false,
+      completed: true,
+      closed: true,
+    });
+    const reopened = movedTask(projected, 'status', {
+      id: task.id,
+      fromLane: PROPERTY_OPTION_IDS.STATUS.COMPLETED,
+      toLane: PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS,
+    });
+    expect(reopened).toMatchObject({
+      subtypeCompleted: false,
+      completed: false,
+      closed: false,
+    });
   });
 
   it('deduplicates multi-assignee search placements and preserves hit order when filtering', () => {

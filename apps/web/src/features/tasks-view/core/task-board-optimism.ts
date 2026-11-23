@@ -36,6 +36,7 @@ export function movedTask(
       return {
         ...task,
         statusId: move.toLane || undefined,
+        completed: move.toLane === PROPERTY_OPTION_IDS.STATUS.COMPLETED,
         closed:
           task.subtypeCompleted ||
           move.toLane === PROPERTY_OPTION_IDS.STATUS.COMPLETED ||

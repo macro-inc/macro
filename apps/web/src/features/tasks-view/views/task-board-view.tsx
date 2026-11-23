@@ -211,9 +211,10 @@ export function TaskBoardView(props: {
       <TaskBlockedBadge
         blocked={task().isBlocked}
         completed={
-          task().statusId
+          task().completed ??
+          (task().statusId
             ? task().statusId === PROPERTY_OPTION_IDS.STATUS.COMPLETED
-            : task().subtypeCompleted === true
+            : task().subtypeCompleted === true)
         }
       />
       <TaskBoard.CardFields>
