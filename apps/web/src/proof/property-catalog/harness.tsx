@@ -704,13 +704,14 @@ const sent = (r: Outcome) =>
 const outcome = async <T,>(f: () => Promise<T>) => sent(await result(f));
 
 // A failed write's contract: what the hook's callers branch on. The create
-// dialog asks whether a name was reserved; the tag picker and Settings ask
-// for the colliding tag of a refused share; the rest is the toasts.
+// dialog asks whether a name was reserved, and nothing else asks it, so only
+// a failed create answers it; the tag picker and Settings ask for the
+// colliding tag of a refused share; the rest is the toasts.
 type Conflict = (x: unknown) => {
   message: string;
   conflicting_option: unknown;
 } | null;
-function failureContract(e: unknown) {
+function failureContract(name: string, e: unknown) {
   const reserved = exp<(x: unknown) => boolean>(
     definitionsModule,
     'isPropertyNameReserved'
@@ -720,7 +721,12 @@ function failureContract(e: unknown) {
     exp<Conflict>(propertiesClientModule, 'parseTagNameConflict');
   const c = conflict?.(e) ?? null;
   return {
-    reservedName: reserved ? reserved(e) : 'no predicate',
+    reservedName:
+      name !== 'createDef'
+        ? 'not asked'
+        : reserved
+          ? reserved(e)
+          : 'no predicate',
     tagConflict: c
       ? { message: c.message, conflictingOption: plain(c.conflicting_option) }
       : null,
@@ -968,7 +974,7 @@ window.__h = {
     if (r.ok) return { ok: true, value: r.value, toasts: shown };
     return {
       ok: false,
-      contract: failureContract(r.cause),
+      contract: failureContract(name, r.cause),
       toasts: shown,
       error: r.error,
       message: r.message,
