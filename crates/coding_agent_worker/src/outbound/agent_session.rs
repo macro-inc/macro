@@ -109,6 +109,7 @@ impl HarnessApi {
         let response = self
             .http
             .post(format!("{}/agent-sessions", self.base))
+            .headers(crate::telemetry::trace_headers(None))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, acting_user.as_ref())
             .json(request)
@@ -153,6 +154,7 @@ impl HarnessApi {
         let response = self
             .http
             .post(format!("{}/agent-sessions/{session}/control", self.base))
+            .headers(crate::telemetry::trace_headers(None))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
             .json(&ControlRequest {

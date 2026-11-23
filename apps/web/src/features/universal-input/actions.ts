@@ -25,7 +25,7 @@ import { useChatInputContext } from '@core/component/AI/context';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useAddInboxFlow } from '@core/email-link';
 import { recipientEntityMapper } from '@core/user/combinedRecipient';
@@ -36,6 +36,7 @@ import {
 } from '@queries/auth/account-scope';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { useCreateCalendarEventMutation } from '@queries/calendar/mutations';
+import { toChannelListItem } from '@queries/channel/directory-core';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -98,12 +99,18 @@ export function createInputActions(
   const group = useGetOrCreatePrivateChannelMutation();
   const sendMessage = useSendMessageMutation();
   const history = useUpsertToHistoryMutation();
-  const channelContext = useChannelsContext();
+  const directory = useChannelDirectory();
+  // Bots count as members, as they did in the REST channel list.
   const messageChannels = createMemo(() =>
-    channelContext
+    directory
       .channels()
-      .filter((channel) => channel.participants.length > 2)
-      .map(recipientEntityMapper('channel'))
+      .filter(
+        (channel) =>
+          channel.participants.length + channel.botParticipants.length > 2
+      )
+      .map((channel) =>
+        recipientEntityMapper('channel')(toChannelListItem(channel))
+      )
   );
   const destinations = createMemo(() =>
     messageChannels().map(

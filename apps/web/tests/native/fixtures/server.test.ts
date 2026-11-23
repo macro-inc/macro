@@ -474,6 +474,21 @@ test('matrix fixtures validate against the production backfill selections', asyn
   }
 });
 
+test('startup notification settings have no overrides', async () => {
+  server = startFixtureServer();
+  const channels = await fetch(
+    `${server.origin}/notification/notification_settings/channels`
+  );
+  const sections = await fetch(
+    `${server.origin}/notification/notification_settings/sections`
+  );
+  expect(channels.status).toBe(200);
+  expect(await channels.json()).toEqual({ channels: [] });
+  expect(sections.status).toBe(200);
+  expect(await sections.json()).toEqual({ sections: [] });
+  expect(server.requests.filter((request) => request.error)).toEqual([]);
+});
+
 test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {
   server = startFixtureServer();
   expect((await fetch(`${server.origin}/unimplemented`)).status).toBe(501);
