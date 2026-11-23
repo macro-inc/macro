@@ -32,7 +32,10 @@ export class ConnectedApp {
     readonly execution: CodeExecution,
     /** `app` for a connected app, `custom` for a custom MCP server. */
     readonly kind: ConnectedAppKind,
-    /** The app's slug, e.g. `slack`, or the custom server's key. */
+    /**
+     * The app's slug, e.g. `slack`, or a custom MCP server's opaque id;
+     * find a custom server by `name`.
+     */
     readonly key: string,
     /** Display name, e.g. `Slack`. */
     readonly name: string,
