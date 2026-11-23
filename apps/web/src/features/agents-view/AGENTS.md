@@ -58,7 +58,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Keep model-selector cards and sheets in the composer's active interaction lifetime; dismiss them when navigation removes or hides their trigger, and unmount the card while a phone sheet owns focus.
 - Scope model discovery by account, preserve kept models while discovery is pending, and retire them only against a successful catalog for that account.
 - Reuse AgentAvatar for selector agent identities at the specified sizes; keep the agents-view circular surface-1 fill and muted glyph rather than the person-avatar treatment.
-- Give every More models row its provider logo and keep provider headings text-only; render Auto as a standalone row without a group wrapper.
+- Give every More models row its provider logo and keep provider headings text-only; render matching Auto as a standalone row without a group wrapper on the main, More models, and agent-model pages, including search results.
 - Keep focus on the stable popover before replacing a desktop page, and wait for the phone sheet's final focus callback before remounting the card.
 - Render search misses as the shared centered query/icon/Clear search state on every selector page; clearing refocuses the field without scrolling the page.
 - Use shared grouped Tabs for the compact phone accessory and Home's track tabs for full new-session views; keep the Auto gate and host mode state unchanged.

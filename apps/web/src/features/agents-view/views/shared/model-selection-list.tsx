@@ -42,8 +42,9 @@ export function ModelSelectionList(props: {
     modelSelection(catalog(), agents(), nav.query(), true)
   );
   const searching = () => Boolean(nav.query().trim());
-  const auto = () =>
-    catalog().find((model) => model.id.toLowerCase() === 'auto');
+  const auto = () => filtered().auto;
+  const searchModels = () =>
+    filtered().allModels.filter((model) => model !== auto());
   const savedModels = () =>
     (state.recentModelIds ?? []).flatMap(
       (id) =>
@@ -309,7 +310,7 @@ export function ModelSelectionList(props: {
               </Show>
             </div>
           </Show>
-          <Show when={!searching() && auto()}>
+          <Show when={auto()}>
             {(option) => (
               <ModelRows
                 class="mx-2 mt-4 mb-2 w-[calc(100%-1rem)]"
@@ -323,7 +324,7 @@ export function ModelSelectionList(props: {
               />
             )}
           </Show>
-          <Show when={searching() && filtered().allModels.length > 0}>
+          <Show when={searching() && searchModels().length > 0}>
             <div
               class="px-2 pb-2"
               classList={{ 'mt-4': bubbles().length > 0 }}
@@ -334,7 +335,7 @@ export function ModelSelectionList(props: {
                 {t('agentControls.models')}
               </div>
               <ModelRows
-                models={filtered().allModels}
+                models={searchModels()}
                 mobile={props.mobile}
                 selected={
                   state.suggestedSelected !== false ? state.model : undefined
@@ -411,6 +412,20 @@ export function ModelSelectionList(props: {
           </Show>
         </Show>
         <Show when={nav.page() === 'all'}>
+          <Show when={auto()}>
+            {(option) => (
+              <ModelRows
+                class="mx-2 mb-2 w-[calc(100%-1rem)]"
+                models={[option()]}
+                mobile={props.mobile}
+                selected={
+                  state.suggestedSelected !== false ? state.model : undefined
+                }
+                disabled={state.disabled || state.suggestedDisabled}
+                onPick={pickModel}
+              />
+            )}
+          </Show>
           <For each={filtered().allProviders}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>
@@ -475,6 +490,18 @@ export function ModelSelectionList(props: {
           </For>
         </Show>
         <Show when={nav.page() === 'agentModels'}>
+          <Show when={agentModels().auto}>
+            {(option) => (
+              <ModelRows
+                class="mx-2 mb-2 w-[calc(100%-1rem)]"
+                models={[option()]}
+                mobile={props.mobile}
+                selected={state.model}
+                disabled={state.disabled}
+                onPick={(id) => pickModel(id, true)}
+              />
+            )}
+          </Show>
           <For each={agentModels().allProviders}>
             {(group) => (
               <div class="px-2 pb-2" role="group" aria-label={group.label}>

@@ -1665,6 +1665,80 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('button', { name: 'GPT-5' })).toBeTruthy();
   });
 
+  it.each([
+    ['list', false],
+    ['all', false],
+    ['agentModels', false],
+    ['list', true],
+    ['all', true],
+    ['agentModels', true],
+  ] as const)(
+    'keeps Auto standalone and selectable on %s (touch: %s)',
+    async (target, touch) => {
+      mocks.touch = touch;
+      const user = userEvent.setup();
+      const onModel = vi.fn();
+      const models = [
+        { id: 'auto', label: 'Auto' },
+        { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+      ];
+      const agent = buildAgentRoster({
+        agents: [],
+        runtimes: [],
+        cursorConnected: true,
+        cursorNeedsConnection: false,
+      }).find((entry) => entry.id === CURSOR_BOT_ID);
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'openai/gpt-5.6',
+            models,
+            suggestedModels: models,
+            agent: target === 'agentModels' ? agent : undefined,
+            onModel,
+            onEffort: () => {},
+            onSpeed: () => {},
+          }}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
+      if (target === 'all') {
+        fireEvent.click(screen.getByRole('button', { name: 'More models' }));
+      }
+      const search = await screen.findByRole('textbox');
+      const choices = within(
+        screen
+          .getByRole('button', { name: 'Auto' })
+          .closest<HTMLElement>('.overflow-y-auto')!
+      );
+      expect(choices.getAllByRole('button', { name: 'Auto' })).toHaveLength(1);
+      expect(
+        choices.getByRole('button', { name: 'Auto' }).closest('[role="group"]')
+      ).toBeNull();
+      expect(choices.queryByRole('group', { name: 'Automatic' })).toBeNull();
+      fireEvent.input(search, { target: { value: 'Automatic' } });
+      expect(choices.queryByRole('status')).toBeNull();
+      expect(
+        choices.getByRole('button', { name: 'Auto' }).closest('[role="group"]')
+      ).toBeNull();
+      expect(choices.queryByRole('button', { name: 'GPT-5.6' })).toBeNull();
+      fireEvent.input(search, { target: { value: 'openai' } });
+      expect(choices.queryByRole('button', { name: 'Auto' })).toBeNull();
+      expect(choices.getByRole('button', { name: 'GPT-5.6' })).toBeTruthy();
+      if (target !== 'list') {
+        expect(choices.getByRole('group', { name: 'OpenAI' })).toBeTruthy();
+      }
+      fireEvent.input(search, { target: { value: 'not-a-model' } });
+      expect(choices.getByRole('status')).toBeTruthy();
+      fireEvent.input(search, { target: { value: 'Auto' } });
+      await user.click(choices.getByRole('button', { name: 'Auto' }));
+      expect(onModel).toHaveBeenCalledWith('auto');
+    }
+  );
+
   it.each([false, true])(
     'keeps rejected async model selections open (touch: %s)',
     async (touch) => {

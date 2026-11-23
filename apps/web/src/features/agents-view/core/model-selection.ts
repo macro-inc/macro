@@ -29,12 +29,21 @@ export function modelSelection(
       ),
     }))
     .filter((provider) => provider.options.length > 0);
+  const allModels = allProviders.flatMap((provider) => provider.options);
+  const auto = allModels.find((option) => option.id.toLowerCase() === 'auto');
   return {
     suggested: (search ? options : suggested).filter((option) =>
       matchesModelQuery(option, search)
     ),
-    allProviders,
-    allModels: allProviders.flatMap((provider) => provider.options),
+    auto,
+    // Keep Auto searchable while presenting it outside every provider group.
+    allProviders: allProviders
+      .map((provider) => ({
+        ...provider,
+        options: provider.options.filter((option) => option !== auto),
+      }))
+      .filter((provider) => provider.options.length > 0),
+    allModels,
     agents: agents.filter((agent) =>
       agent.name.toLocaleLowerCase().includes(search)
     ),
