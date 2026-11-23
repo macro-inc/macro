@@ -46,6 +46,7 @@ import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
 import teamMembers from './en/team-members';
+import timeTracking from './en/time-tracking';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -102,6 +103,7 @@ export default {
   tabs,
   teamAgents,
   teamMembers,
+  timeTracking,
   tutorials,
   viewMenus,
 };
