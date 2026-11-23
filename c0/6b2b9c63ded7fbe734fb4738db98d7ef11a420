@@ -1,0 +1,19 @@
+apps/web/src/features/agent-permissions/views/agent-permissions-form.tsx
+  s_9aaadd038e8bff::t_4586d6e21c0b69 4,113-114
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "c06b2b9c63ded7fbe734fb4738db98d7ef11a420",
+  "prompts": {},
+  "sessions": {
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
