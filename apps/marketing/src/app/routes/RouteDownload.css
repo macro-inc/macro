@@ -58,6 +58,54 @@
   color: #000;
 }
 
+.downloads-action .site-nav-start,
+.downloads-action .site-nav-demo {
+  width: 220px;
+  min-height: 44px;
+  font-size: 15px;
+}
+
+.downloads-installers {
+  --nav-ink: #fff;
+  --nav-muted: #b8b8bd;
+  --nav-surface: rgb(18 18 20 / 78%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.downloads-installers li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+
+.downloads-installers span,
+.downloads-page .downloads-note {
+  color: #777;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.downloads-page .downloads-note {
+  margin-top: 20px;
+}
+
+.downloads-note a {
+  color: #ccc;
+}
+
+.downloads-page .documentation-body {
+  margin-top: 56px;
+}
+
 .downloads-release {
   margin-top: 25px !important;
   text-align: center;
