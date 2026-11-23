@@ -385,6 +385,11 @@ async function editCompanyDomain(
     );
     if (!canCache()) return company;
 
+    // A read already in flight would answer with the domains before the
+    // write and replace these.
+    await deps.client.cancelQueries({
+      queryKey: crmKeys.company(companyId).queryKey,
+    });
     deps.client.setQueryData<CrmCompanyResponse>(
       crmKeys.company(companyId).queryKey,
       (current) => current && { ...current, domains: company.domains }

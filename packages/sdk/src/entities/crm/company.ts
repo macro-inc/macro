@@ -206,9 +206,9 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   }
 
   /**
-   * Add a domain the organization also uses (a school's `.edu` and `.com`,
-   * say), so mail and new contacts from it are filed under this company
-   * instead of a separate one. The company keeps its name and primary domain;
+   * Add another domain the organization uses. Mail and new contacts from it
+   * are then filed under this company instead of a separate one (a school's
+   * `.edu` and `.com`, say). The company keeps its name and primary domain;
    * contacts already filed elsewhere stay where they are. Rejects a personal
    * email provider (400) and a domain another company of the team tracks
    * (409, naming that company when the caller can see it).
@@ -226,8 +226,8 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   }
 
   /**
-   * Remove a domain, for one added by mistake. Contacts and mail stay; later
-   * mail from the domain is filed as it was before it was added. The domain
+   * Remove one of the company's domains. Contacts and mail stay; later mail
+   * from the domain is filed as it was before it was added. The domain
    * the company is named after stays until the company is {@link rename}d,
    * and only a team admin can remove a domain while email sync is off.
    *

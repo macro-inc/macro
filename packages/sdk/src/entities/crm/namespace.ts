@@ -110,9 +110,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Search the caller's current team's CRM contacts whose email or name
-   * contains `query` (case-insensitive), most recently interacted first.
-   * An empty query lists the most recent contacts.
+   * Search the caller's team's CRM contacts by email or name, most recently
+   * interacted first. Matches contain `query`, case-insensitive; an empty
+   * query lists the most recent contacts.
    *
    * @param opts.limit Maximum contacts to return (1-500, default 20).
    *
@@ -243,8 +243,8 @@ export class CrmNamespace {
   }
 
   /**
-   * Create the companies a CSV lists (CSV text, or a CSV document), keyed by
-   * domain; companies the team already has are counted, not duplicated. When
+   * Create the companies a CSV lists, keyed by domain. The CSV is text or a
+   * CSV document; companies the team already has are counted, not duplicated. When
    * the CSV has Stage, Owner or Revenue columns, those go on entries of
    * `pipeline` (a company pipeline), or of a new pipeline (private unless
    * `newPipeline.sharing` is `team`, named after the file unless named).
