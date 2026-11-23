@@ -162,8 +162,10 @@ fn storage_11_cache_is_upgraded_in_place_keeping_records_queue_and_generation() 
             stored_storage_version(&connection),
             i64::from(STORAGE_SCHEMA_VERSION)
         );
-        // Byte-identical definitions, so a digest of sqlite_schema matches too.
+        // Byte-identical definitions, so the upgraded file opens without the
+        // schema checks from then on, as a fresh one does.
         assert_eq!(schema_rows(&connection), fresh_schema);
+        assert!(has_fresh_schema(&connection).unwrap());
         assert_eq!(schema_fingerprint(&connection), fresh_fingerprint);
         assert_eq!(table_rows(&connection), rows);
         assert_eq!(storage.load_mutation_queue().await.unwrap(), pending);
