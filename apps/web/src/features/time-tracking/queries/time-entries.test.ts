@@ -136,7 +136,9 @@ function queuedClient() {
 function sent(operations: Operation[]) {
   const [operation] = operations;
   const optimistic = optimisticContextOf(operation);
-  if (!optimistic) throw new Error('the write must be optimistic');
+  if (!optimistic || !operation.variables) {
+    throw new Error('the write must be optimistic, with variables');
+  }
   return { variables: operation.variables, optimistic };
 }
 
