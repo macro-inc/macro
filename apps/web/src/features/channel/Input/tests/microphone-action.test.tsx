@@ -89,3 +89,59 @@ describe('memo microphone', () => {
     expect(test.start).not.toHaveBeenCalled();
   });
 });
+
+describe('desktop microphone menu', () => {
+  it('keeps Dictate available when the draft has no room for a memo', async () => {
+    const dictate = vi.fn(async () => {});
+    const memo: VoiceMemoController = {
+      phase: () => 'idle',
+      active: () => false,
+      volumeHistory: () => [],
+      elapsedMs: () => 0,
+      notice: () => undefined,
+      clearNotice: () => {},
+      // A full attachment tracker: no room for the recording.
+      disabled: () => true,
+      start: vi.fn(async () => {}),
+      stop: async () => {},
+      retry: async () => {},
+      cancel: () => {},
+    };
+    const dictation: DictationController = {
+      phase: () => 'idle',
+      active: () => false,
+      volumeHistory: () => [],
+      elapsedMs: () => 0,
+      limitReached: () => false,
+      message: () => '',
+      messageTone: () => 'info',
+      clearMessage: () => {},
+      label: () => 'Start dictation',
+      disabled: () => false,
+      start: dictate,
+      confirm: async () => {},
+      cancel: () => {},
+    };
+    render(() => (
+      <MicrophoneAction
+        dictation={dictation}
+        memo={memo}
+        showDictation
+        showMemo
+      />
+    ));
+    const trigger = screen.getByRole('button', { name: 'Dictate or record' });
+    expect(trigger.hasAttribute('disabled')).toBe(false);
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' });
+    const memoItem = await screen.findByRole('menuitem', {
+      name: 'Voice memo',
+    });
+    expect(memoItem.hasAttribute('data-disabled')).toBe(true);
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Dictate' })
+        .hasAttribute('data-disabled')
+    ).toBe(false);
+  });
+});

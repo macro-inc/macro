@@ -97,7 +97,9 @@ function MicrophoneMenu(props: {
         variant="ghost"
         size="icon-md"
         class="text-composer-ink"
-        disabled={props.memo.disabled() || props.dictation.disabled()}
+        // Each item answers for itself: a draft with no room for a memo
+        // still dictates.
+        disabled={props.memo.disabled() && props.dictation.disabled()}
       >
         <MicrophoneIcon class="size-5 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
@@ -113,6 +115,7 @@ function MicrophoneMenu(props: {
       >
         <Dropdown.Group>
           <Dropdown.Item
+            disabled={props.dictation.disabled()}
             onSelect={() => {
               pending = () =>
                 fireAndForget(props.dictation.start(), 'dictation');
@@ -126,6 +129,7 @@ function MicrophoneMenu(props: {
             </Dropdown.ItemLabel>
           </Dropdown.Item>
           <Dropdown.Item
+            disabled={props.memo.disabled()}
             onSelect={() => {
               pending = props.onMemo;
             }}

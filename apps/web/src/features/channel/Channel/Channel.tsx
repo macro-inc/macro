@@ -1343,6 +1343,9 @@ export function Channel(props: ChannelProps) {
                                     .reply_count ?? 0) > 0
                                 }
                                 plain={isDefaultCallThread()}
+                                // A call's thread stays as the call chat
+                                // was: dictation only.
+                                voiceMemos={!isDefaultCallThread()}
                                 placeholder={
                                   isDefaultCallThread()
                                     ? t('calls.messageThisCall')
