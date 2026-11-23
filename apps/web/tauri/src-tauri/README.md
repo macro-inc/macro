@@ -653,6 +653,19 @@ exist. Promotions are serialized and reject older/equal versions; unrelated SDK
 or daemon releases cannot move the desktop update feed. A brief missing manifest
 during replacement is treated as a retryable check error.
 
+Public download links never name a version. While `desktop-stable` serves a
+release's `latest.json`, the next step of the same job copies that release's
+installers onto `desktop-stable` as `Macro-macos-arm64.dmg` and
+`Macro-linux-x86_64.AppImage`, so they always match what auto-update installs. Each
+copy is uploaded under a staging name and then renamed over the old one, so the
+link is never missing for the length of an upload; an installer whose bytes are
+already there is skipped, and reruns of an older tag change nothing. Customers
+use `https://macro.com/download/mac` and `/download/linux`, which the website's
+edge redirects to those assets (`apps/marketing/seo/download-redirects.json`), so
+the hosting can move without changing the links. A new platform (Intel Mac,
+Windows) adds a fixed name in `publish_desktop_download_links.sh` and a redirect
+in that manifest.
+
 Bootstrap requires one manual native upgrade: older binaries cannot acquire the
 Rust updater through a frontend OTA. Before promoting the first release, test two
 consecutive signed builds on installed macOS and Linux apps, including offline
