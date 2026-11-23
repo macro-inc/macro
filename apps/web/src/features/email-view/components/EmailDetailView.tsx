@@ -50,7 +50,14 @@ export function EmailDetailView(props: {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
-  usePending('email.thread', () => threadQuery.isLoading);
+  // The route keys this view to one thread.
+  const phaseAttributes = { 'email.thread_id': threadId() };
+  usePending(
+    'email.thread.identity',
+    () => threadQuery.isResolvingIdentity,
+    phaseAttributes
+  );
+  usePending('email.thread', () => threadQuery.isLoading, phaseAttributes);
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
   const title = () => {
