@@ -3251,18 +3251,132 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     });
 
-    it('fails a strict refresh that joins a failed rebuild, and does not retry it', async () => {
+    const offline = () =>
+      new CombinedError({ networkError: new Error('offline') });
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+    /** Answers every execution not answered yet from the list a, b, c, by
+     * its cursor, until `done` holds. */
+    async function serve(
+      fake: { executions: FakeExecution[] },
+      answered: Set<number>,
+      done: () => boolean
+    ) {
+      await vi.waitFor(() => {
+        fake.executions.forEach((execution, index) => {
+          if (answered.has(index)) return;
+          answered.add(index);
+          const cursor = cursorOf(execution);
+          if (cursor === null) execution.next(page('a', 'after-a'));
+          else if (cursor === 'after-a') execution.next(page('b', 'after-b'));
+          else execution.next(page('c', null));
+        });
+        expect(done()).toBe(true);
+      });
+    }
+
+    /** Starts the rebuild and fails it at its first replaced page (the
+     * second page, now read from 'after-a'): the chain stops there. */
+    async function failRebuild(
+      fake: { executions: FakeExecution[] },
+      at: number
+    ) {
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(at + 1));
+      expect(cursorOf(fake.executions[at])).toBeNull();
+      fake.executions[at].next(page('a', 'after-a'));
+      await vi.waitFor(() => expect(fake.executions).toHaveLength(at + 2));
+      expect(cursorOf(fake.executions[at + 1])).toBe('after-a');
+      const error = offline();
+      fake.executions[at + 1].fail(error);
+      return error;
+    }
+
+    it('reads after a rebuild a strict refresh finds running, and fails with that read', async () => {
       const { fake, query, ids, dispose } = await breakChain();
       try {
         await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
-        const strict = query.refresh();
-        fake.executions[3].fail(
-          new CombinedError({ networkError: new Error('offline') })
-        );
+        let settled = false;
+        const watch = async () => {
+          try {
+            await query.refresh();
+          } finally {
+            settled = true;
+          }
+        };
+        const strict = watch();
+        await failRebuild(fake, 3);
+        // The rebuild failed; the refresh reads again instead of taking its
+        // answer, and fails with its own read.
+        await failRebuild(fake, 5);
         await expect(strict).rejects.toBeDefined();
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        expect(fake.executions).toHaveLength(4);
+        expect(settled).toBe(true);
+        await settle();
+        expect(fake.executions).toHaveLength(7);
         expect(ids()).toEqual(['a', 'b']);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('reports a rebuilt page that failed as the list error', async () => {
+      const { fake, query, dispose } = await breakChain();
+      try {
+        const error = await failRebuild(fake, 3);
+        await vi.waitFor(() => expect(query.fetchError?.()).toBe(error));
+      } finally {
+        dispose();
+      }
+    });
+
+    it('rebuilds again on a later result after a failed rebuild', async () => {
+      const { fake, dispose } = await breakChain();
+      try {
+        await failRebuild(fake, 3);
+        await settle();
+        expect(fake.executions).toHaveLength(5);
+        // The first page read again, with the same answer.
+        fake.executions[3].next(page('a', 'after-a'));
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+        expect(cursorOf(fake.executions[5])).toBeNull();
+      } finally {
+        dispose();
+      }
+    });
+
+    it('loads the next page a caller asked for during a failed rebuild', async () => {
+      const { fake, query, ids, dispose } = await breakChain();
+      try {
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(4));
+        const more = query.fetchNextPage();
+        await failRebuild(fake, 3);
+        await vi.waitFor(() => expect(fake.executions).toHaveLength(6));
+        expect(cursorOf(fake.executions[5])).toBe('after-b');
+        fake.executions[5].next(page('c', null));
+        await more;
+        expect(ids()).toEqual(['a', 'b', 'c']);
+      } finally {
+        dispose();
+      }
+    });
+
+    it('rebuilds every break of a mounted list, however many', async () => {
+      const { fake, query, ids, dispose } = await breakChain();
+      const answered = new Set([0, 1, 2]);
+      const abc = () => ids()?.join() === 'a,b,c' && !query.isFetching();
+      try {
+        await serve(fake, answered, abc);
+        for (let round = 0; round < 4; round += 1) {
+          const before = fake.executions.length;
+          const first = fake.executions.findLast(
+            (execution) => cursorOf(execution) === null
+          );
+          // A row joins above, and the first page read again ends on it.
+          first?.next(page(`new-${round}`, `after-new-${round}`));
+          await vi.waitFor(() =>
+            expect(fake.executions.length).toBeGreaterThan(before)
+          );
+          await serve(fake, answered, abc);
+        }
       } finally {
         dispose();
       }

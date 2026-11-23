@@ -319,6 +319,9 @@ export function createSoupLiveQuery(
   });
   const [baselineGeneration, setBaselineGeneration] = createSignal<number>();
   const [baselineInputKey, setBaselineInputKey] = createSignal<string>();
+  /** Network answers a notified list's pages have had, counted to tell a
+   * later answer from the one a failed chain rebuild saw. */
+  const [networkAnswers, setNetworkAnswers] = createSignal(0);
   let previousInitialInput: GraphqlSoupInput | undefined;
   let networkAuthorityInput: GraphqlSoupInput | undefined;
   // The server page fetched only to keep the server pages as deep as a local
@@ -536,8 +539,10 @@ export function createSoupLiveQuery(
           forgetUnpersistedPage(page.pageIndex);
           return;
         }
-        if (firstInput?.initial.sortMethod === 'NOTIFIED_AT')
+        if (firstInput?.initial.sortMethod === 'NOTIFIED_AT') {
           recordNetworkEmailTimes(firstInputKey, page.pageParam, result.data);
+          setNetworkAnswers((count) => count + 1);
+        }
         if (metadata.persistence) {
           if (
             page.pageIndex === inStepPageIndex &&
@@ -596,6 +601,9 @@ export function createSoupLiveQuery(
   });
   loadedCursors = () => query.data?.pageParams ?? [];
 
+  /** The chain rebuild in flight, which settles whether or not it read. */
+  let repair: Promise<void> | undefined;
+
   const refresh = async () => {
     const input = firstPageInput();
     if (input === undefined) return;
@@ -613,6 +621,9 @@ export function createSoupLiveQuery(
       if (query.error) throw query.error;
       return;
     }
+    // A chain rebuild may have started before the caller's write: read after
+    // it rather than share its answer (or its unthrown failure).
+    while (repair) await repair;
     // An explicit list refresh rebuilds the cursor chain in order. The
     // notification queue observes isFetching and waits for this to finish.
     await query.refetch({
@@ -627,9 +638,8 @@ export function createSoupLiveQuery(
   // revalidation replays every page's variables, can end on another row once
   // a row above it left or joined the list: the next page then repeats a row
   // the list already shows, or starts past one it now skips. Such a chain is
-  // read again in order, as an explicit refresh does (and through it, so a
-  // strict caller that joins the read still sees its failure).
-  const brokenChain = createMemo((): string | undefined => {
+  // read again in order, as an explicit refresh does.
+  const brokenChain = createMemo((): boolean => {
     const current = options();
     if (
       firstPageInput()?.initial.sortMethod !== 'NOTIFIED_AT' ||
@@ -638,47 +648,58 @@ export function createSoupLiveQuery(
       current.networkPaused ||
       query.isFetching
     )
-      return;
+      return false;
     const data = query.data;
-    if (!data || baselineInputKey() !== inputKey()) return;
-    const broken = data.pageParams.some((cursor, index) => {
+    if (!data || baselineInputKey() !== inputKey()) return false;
+    return data.pageParams.some((cursor, index) => {
       const ended = data.nextCursors[index - 1];
       return index > 0 && ended !== undefined && ended !== cursor;
     });
-    if (!broken) return;
-    return JSON.stringify([inputKey(), data.pageParams, data.nextCursors]);
-  });
-  // Each repair answers one broken state; a state a repair leaves broken
-  // (its read failed, or the server moved again meanwhile) waits for the
-  // next result that changes it, and a run of repairs stops at the bound.
-  let repairing = false;
+  }, false);
+  // Rebuilds in a row, until the chain agrees; a rebuild that finds it still
+  // broken (it shared a read that was ending, or the server moved meanwhile)
+  // goes again, up to the bound. A failed one waits for the next network
+  // answer.
   let repairs = 0;
-  const repairChain = async () => {
-    const chain = brokenChain();
-    if (chain === undefined || repairing) return;
-    if (repairs >= MAX_CHAIN_REPAIRS) return;
-    repairing = true;
+  let failedAt: number | undefined;
+  const rebuildChain = async () => {
     repairs += 1;
+    let failed: boolean;
     try {
-      await refresh();
+      const result = await query.refetch({ requestPolicy: 'network-only' });
+      failed = Boolean(result.error);
     } catch {
-      // The rows already shown stay; the next revalidation reads them again.
+      failed = true;
     } finally {
-      repairing = false;
+      repair = undefined;
     }
-    const after = brokenChain();
-    if (after !== undefined && after !== chain) chainRepair.request();
+    if (!brokenChain()) {
+      repairs = 0;
+      return;
+    }
+    if (failed) {
+      failedAt = networkAnswers();
+      return;
+    }
+    chainRepair.request();
   };
-  const chainRepair = createHiddenDeferral(() =>
-    fireAndForget(repairChain(), 'soup-live-query')
-  );
+  const repairChain = () => {
+    if (repair || !brokenChain() || repairs >= MAX_CHAIN_REPAIRS) return;
+    repair = rebuildChain();
+    fireAndForget(repair, 'soup-live-query');
+  };
+  const chainRepair = createHiddenDeferral(repairChain);
   onCleanup(chainRepair.dispose);
   createEffect(
-    on(brokenChain, (chain) => {
-      if (chain === undefined) {
-        if (!query.isFetching) repairs = 0;
+    on([brokenChain, networkAnswers], ([broken, answers]) => {
+      if (!broken) {
+        if (query.isFetching) return;
+        repairs = 0;
+        failedAt = undefined;
         return;
       }
+      if (failedAt === answers) return;
+      failedAt = undefined;
       chainRepair.request();
     })
   );
