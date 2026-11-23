@@ -24,8 +24,10 @@ pub(super) fn sanitize_shared_filename(name: &str) -> Option<&str> {
 pub(super) const UNCLAIMED_SHARE_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Shared files in the App Group container that no open app has taken yet,
-/// oldest first. The Share Extension stamps each file's modification time when
-/// it saves it; files older than `max_age` are removed instead of returned.
+/// oldest first. The Share Extension writes each file elsewhere, stamps its
+/// modification time, and only then gives it its `share_` name, so every file
+/// seen here is complete. Files older than `max_age` are removed instead of
+/// returned.
 pub(super) fn collect_unclaimed_shared_files(
     container: &Path,
     now: SystemTime,
@@ -64,20 +66,6 @@ pub(super) fn collect_unclaimed_shared_files(
     }
     files.sort();
     files.into_iter().map(|(_, name)| name).collect()
-}
-
-/// The link's files first, in the link's order, then any other unclaimed files.
-pub(super) fn merge_pending_share_filenames(
-    linked: Vec<String>,
-    unclaimed: Vec<String>,
-) -> Vec<String> {
-    let mut merged = linked;
-    for name in unclaimed {
-        if !merged.contains(&name) {
-            merged.push(name);
-        }
-    }
-    merged
 }
 
 pub(super) fn share_filenames_from_url(url: &Url) -> Vec<String> {
@@ -183,25 +171,6 @@ mod tests {
         assert!(
             collect_unclaimed_shared_files(&missing, SystemTime::now(), UNCLAIMED_SHARE_MAX_AGE)
                 .is_empty()
-        );
-    }
-
-    #[test]
-    fn merge_pending_share_filenames_keeps_link_order_then_adds_unclaimed() {
-        assert_eq!(
-            merge_pending_share_filenames(
-                vec!["share_b.png".to_string(), "share_a.png".to_string()],
-                vec![
-                    "share_old.jpg".to_string(),
-                    "share_a.png".to_string(),
-                    "share_b.png".to_string(),
-                ],
-            ),
-            vec![
-                "share_b.png".to_string(),
-                "share_a.png".to_string(),
-                "share_old.jpg".to_string(),
-            ]
         );
     }
 

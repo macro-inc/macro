@@ -53,6 +53,8 @@ beforeEach(() => {
   });
 });
 
+afterEach(cleanup);
+
 function renderProvider(os: 'android' | 'ios') {
   let context: ReturnType<typeof useShareTarget>;
   function CaptureContext() {
@@ -72,58 +74,82 @@ function pendingTokens(target: NonNullable<ReturnType<typeof useShareTarget>>) {
   return target.pendingShareFiles().map((file) => file.token);
 }
 
-function setPageHidden(hidden: boolean) {
-  Object.defineProperty(document, 'hidden', {
-    configurable: true,
-    get: () => hidden,
-  });
-  document.dispatchEvent(new Event('visibilitychange'));
+function invokedCommands(command: string) {
+  return invoke.mock.calls.filter(([name]) => name === command);
 }
 
-describe('iOS share pickup', () => {
-  afterEach(() => {
-    Reflect.deleteProperty(document, 'hidden');
-  });
-
-  it('loads a share once when its link and the return to the foreground overlap', async () => {
+describe('iOS share loading', () => {
+  it('picks up a waiting share when none is open', async () => {
     const target = renderProvider('ios');
-    await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
-
-    nativePending = ['share_a.png'];
-    onIosFilesReady?.();
-    setPageHidden(false);
-
-    await vi.waitFor(() =>
-      expect(pendingTokens(target)).toEqual(['share_a.png'])
-    );
-    await vi.waitFor(() =>
-      expect(
-        invoke.mock.calls.filter(
-          ([command]) => command === 'get_pending_share_filenames'
-        )
-      ).toHaveLength(3)
-    );
-    expect(pendingTokens(target)).toEqual(['share_a.png']);
-    expect(
-      invoke.mock.calls.filter(([command]) => command === 'clear_shared_files')
-    ).toEqual([]);
-  });
-
-  it('shows a share whose link never arrived when Macro comes to the foreground', async () => {
-    const target = renderProvider('ios');
-    await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
-
     nativePending = ['share_unlinked.jpg'];
-    setPageHidden(true);
-    expect(pendingTokens(target)).toEqual([]);
-    setPageHidden(false);
+
+    await target.pickUpPendingShareFiles();
+
+    expect(pendingTokens(target)).toEqual(['share_unlinked.jpg']);
+  });
+
+  it('never replaces an open share on pickup', async () => {
+    const target = renderProvider('ios');
+    nativePending = ['share_open.png'];
+    await target.pickUpPendingShareFiles();
+
+    nativePending = ['share_waiting.png'];
+    await target.pickUpPendingShareFiles();
+
+    expect(pendingTokens(target)).toEqual(['share_open.png']);
+    expect(nativePending).toEqual(['share_waiting.png']);
+    expect(invokedCommands('clear_shared_files')).toEqual([]);
+  });
+
+  it('replaces the open share when a new link arrives', async () => {
+    const target = renderProvider('ios');
+    await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
+    nativePending = ['share_first.png'];
+    onIosFilesReady?.();
+    await vi.waitFor(() =>
+      expect(pendingTokens(target)).toEqual(['share_first.png'])
+    );
+
+    nativePending = ['share_second.png'];
+    onIosFilesReady?.();
 
     await vi.waitFor(() =>
-      expect(pendingTokens(target)).toEqual(['share_unlinked.jpg'])
+      expect(pendingTokens(target)).toEqual(['share_second.png'])
     );
+    expect(invokedCommands('clear_shared_files')).toEqual([
+      ['clear_shared_files', { tokens: ['share_first.png'] }],
+    ]);
+  });
+
+  it('finishes links in the order they arrived', async () => {
+    const target = renderProvider('ios');
+    await vi.waitFor(() => expect(onIosFilesReady).toBeDefined());
+    const firstLookup = Promise.withResolvers<string[]>();
+    const lookups = [firstLookup.promise, Promise.resolve(['share_newer.png'])];
+    const popped = vi.fn(async (args: { filenames: string[] }) =>
+      args.filenames.map((name) => ({
+        token: name,
+        name,
+        mime_type: 'image/png',
+        size: 3,
+      }))
+    );
+    invoke.mockImplementation(async (command, args) => {
+      if (command === 'get_pending_share_filenames') return lookups.shift();
+      if (command === 'pop_shared_files') return popped(args);
+    });
+
+    onIosFilesReady?.();
+    onIosFilesReady?.();
+    // The second link's lookup answers first; the first one answers late.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    firstLookup.resolve(['share_older.png']);
+
+    await vi.waitFor(() => expect(popped).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(pendingTokens(target)).toEqual(['share_newer.png']);
   });
 });
-afterEach(cleanup);
 
 describe('share batch acknowledgement', () => {
   it.each(['android', 'ios'] as const)(

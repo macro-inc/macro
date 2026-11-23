@@ -471,6 +471,25 @@ export function NativeShareSheet() {
     fireAndForget(shareTarget?.clearPendingShareFiles(), 'native-share-sheet');
   };
 
+  // Pick up a share that never reached the app through its link (iOS did not
+  // let the Share Extension open Macro). This sheet mounts only when signed
+  // in, so files aren't taken out of the native layer on the sign-in page.
+  onMount(() => {
+    const pickUp = () =>
+      fireAndForget(
+        shareTarget?.pickUpPendingShareFiles(),
+        'native-share-sheet'
+      );
+    const onVisibilityChange = () => {
+      if (!document.hidden) pickUp();
+    };
+    pickUp();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onCleanup(() =>
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    );
+  });
+
   return (
     <Show when={tauri?.os === 'ios' || tauri?.os === 'android'}>
       <MobileDrawer
