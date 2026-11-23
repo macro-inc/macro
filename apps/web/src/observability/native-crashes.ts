@@ -15,7 +15,8 @@ import type {
  * answer, so the ack is a guess that delivery went through: a crash or quit
  * within this window resends the report at the next start, and the event's
  * fixed uuid and timestamp let PostHog drop the copy. A PostHog outage that
- * lasts past the window loses the report (posthog-js retries only in memory).
+ * lasts past the window may lose the report: posthog-js retries only in
+ * memory, while this webview stays open.
  */
 const ACK_DELAY_MS = 15_000;
 

@@ -97,8 +97,8 @@ fn scrubs_values_out_of_panic_messages() {
         "invalid password: <token> for api_key: <token>, Authorization:Bearer <token>"
     );
     assert_eq!(
-        scrub("connect 10.0.0.5 failed; fe80::1 at app_lib::v2::h1"),
-        "connect <ip> failed; <ip> at app_lib::v2::h1"
+        scrub("connect 10.0.0.5 failed; fe80::1, fe80::abcd%en0 at app_lib::v2::h1"),
+        "connect <ip> failed; <ip>, <ip> at app_lib::v2::h1"
     );
     assert_eq!(
         scrub("(«https://x/y») —http://a/b éhttp://x/y"),

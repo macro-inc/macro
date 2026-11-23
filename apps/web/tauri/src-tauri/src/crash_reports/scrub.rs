@@ -243,9 +243,12 @@ fn is_ip_address(host: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-/// `fe80::1`: hex digits and colons, with a digit and at least two colons. A
-/// Rust path has a non-hex letter (`v2::h1`) or no digit (`a::b`).
+/// `fe80::1` or `fe80::abcd%en0`: hex digits and colons, with a digit and at
+/// least two colons. A Rust path has a non-hex letter (`v2::h1`) or no digit
+/// (`a::b`), which is why a digit-free address like `a::b` is kept: it can't
+/// be told apart from a module path.
 fn is_ipv6_address(word: &str) -> bool {
+    let word = word.split('%').next().unwrap_or_default();
     word.matches(':').count() >= 2
         && word.chars().any(|c| c.is_ascii_digit())
         && word.chars().all(|c| c.is_ascii_hexdigit() || c == ':')

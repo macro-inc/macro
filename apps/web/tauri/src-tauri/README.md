@@ -344,7 +344,7 @@ the ones PostHog accepted 15 seconds later; the native app then deletes their
 files. A report not yet acked (the app crashed again, or quit) returns at the
 next launch, and PostHog drops the resent copy. Delivery is best effort: the
 ack doesn't wait for PostHog's answer, so a report sent during a PostHog outage
-longer than that is lost. The Vite dev server and builds without
+longer than that may be lost. The Vite dev server and builds without
 `VITE_POSTHOG_API_KEY` never start PostHog, so they leave reports on disk. A renderer
 crash is reported by the document that replaces it, without a relaunch.
 
