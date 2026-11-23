@@ -122,15 +122,15 @@ host lives in `../block-calendar/`.
 - Browse calendar foundations at `/app/component/ui?ui=date-tile`,
   `?ui=calendar-swatch`, `?ui=busy-indicator`, `?ui=value-pill`, and `?ui=time-input`; sheet parts use
   `?ui=mobile-sheet-parts` and `?ui=wheel-picker`.
-- Compose the desktop `MonthYearPicker` from Header, Grid and Footer parts, inline or inside its 296px popover. Keep browsing, year pages and date search in `primitives/create-month-picker.ts`; only explicit picks reach the host. Share the popover between the toolbar and mini through Calendar's optional month-control slot, leaving every other date picker unchanged. Today and grid T only reset browsing; stop T before app navigation. Bind Go to date to Y under `TOKENS.calendar.goToDate`, never the app's G navigation leader. Keep grid paging and scroll timing in
+- Compose the desktop `MonthYearPicker` from Header, Grid and Footer parts, inline or inside its 296px popover. Keep browsing, year pages and validated native-date submission in `primitives/create-month-picker.ts`; only explicit picks reach the host. Compose Go to date from `InputGroup` and native `type="date"`, with a calendar icon and hidden browser picker indicator. Share the popover between the toolbar and mini through Calendar's optional month-control slot, leaving every other date picker unchanged. Today and grid T only reset browsing; stop T before app navigation. Bind Go to date to Y under `TOKENS.calendar.goToDate`, never the app's G navigation leader. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`; `SnapPager` owns native horizontal scrolling on phone
-  and desktop. Desktop horizontal-dominant wheel bursts jump one period instantly, re-arming after 180ms of quiet; button bursts use a 300ms animation re-arm and one aggregate settlement. Keep phone swipes native. Disable snapping during native momentum; align smoothly after
+  and desktop. Desktop horizontal-dominant wheel bursts jump one period instantly, re-arming after 180ms of quiet; desktop buttons ignore active animations before changing date anchors; idle button bursts use a 300ms animation re-arm and one aggregate settlement. Keep phone swipes native. Disable snapping during native momentum; align smoothly after
   `scrollend`, then recycle pages and resume queued FullCalendar work. Slow drags
   require half a page; clear flicks can commit sooner. Retain native scrolling
   on old engines with a 350ms quiet fallback. Share active vertical scroll with all
   buffers, and lock horizontal paging during FullCalendar drag/resize.
   Recover a no-scroll contact after 150ms only if neither a scroll event nor a
-  scrollLeft change occurred; late scrolling reclaims native ownership.
+  scrollLeft change occurred; late scrolling reclaims native ownership. Capture contact start/end so consumed child releases cannot leave the pager held.
   Prepare only the hidden destination for an explicit date, then update the date anchor at settlement.
   Accumulate rapid period commands in SnapPager and prepare only the quiet final
   range; headers follow the requested date immediately. Calendar history captures
@@ -139,7 +139,7 @@ host lives in `../block-calendar/`.
   Preserve the committed page through resize-driven scrolling; re-snap to its new
   measured width and restore the last user hour position after FullCalendar resizes.
   Phone `/calendar/search` uses the shared search control without a grid navigation
-  provider; its header owns the input mount. Keep desktop search in the popover.
+  provider; place its full-width input below the header and safe-area inset. Keep desktop search in the popover.
 - Compose the desktop date-navigation/tabs/search row above the scale-sized month title
   and creation actions; the touch header uses separate shell menu, month,
   Today, and circular Search islands. Keep its loading skeleton aligned. The desktop month
@@ -182,7 +182,7 @@ host lives in `../block-calendar/`.
   vertical padding, and rounded-4xl card corners.
 - Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
   the timed card, with day headers and all-day lanes above it. The active grid
-  supplies a stationary, opaque panel-colored gutter through `create-mobile-grid-axis.ts`;
+  supplies a stationary, opaque panel-colored gutter through `create-mobile-grid-axis.ts`; extend its background above the date row while clipping labels to the timed viewport;
   synchronize its vertical scroll without fading the hour labels or showing an
   All day gutter label. Reveal only the timed card's shared 32px fade past the opening offset.
   Keep timed-card grid lines below the all-day row and do not shade weekends in any view.

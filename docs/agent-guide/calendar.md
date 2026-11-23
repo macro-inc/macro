@@ -34,7 +34,9 @@ Grid lines start below the all-day row, and no view shades weekends. Hours scrol
 vertically with the active grid while its columns and day headers swipe horizontally.
 Midnight remains fully visible at scroll zero. The current-time line crosses the
 card with an accent time in its gutter. Only the timed card has the shared 32px top
-fade past the opening scroll position; the hour gutter never fades. Bottom clearance
+fade past the opening scroll position; the hour gutter never fades. Its opaque
+panel background extends up through the date row, above swiping headers, while
+hour labels stay clipped to the timed viewport. Bottom clearance
 is limited to the floating New row and a small gap.
 Calendar grid boundaries use the theme's quieter tertiary border in both loading
 and live grids. Day/Week have hourly boundaries only, without half-hour sublines;
@@ -44,13 +46,16 @@ weekday header; time grids omit the leading border beside their first day.
 Day, 3 days, Week, and Month share a five-page ring. Desktop horizontal-dominant
 wheel gestures jump one period instantly, grouping inertia until 180ms of quiet;
 vertical-dominant scrolling does not change periods. A first arrow or hotkey
-animates; further presses within 300ms, or during an unfinished animation, jump
-straight to the combined target. A wheel gesture also interrupts that animation.
+animates; presses during that animation are ignored without changing the requested
+date. After it ends, every idle press navigates, jumping instantly inside a 300ms
+burst and re-arming animation after quiet. A wheel gesture can interrupt animation.
 Only the final quiet target prepares data. Phone swipes remain native: snapping
 stays disabled until `scrollend`, slow drags require half a page, and clear flicks
 can commit sooner. Native alignment finishes before rotation. Old engines use a
 350ms quiet fallback. No-scroll contacts recover after 150ms of unchanged position;
-late scrolling reclaims native ownership. Reduced motion skips animation. Each page keeps its own
+late scrolling reclaims native ownership. Passive capture listeners track contact
+release even when a child or sheet consumes it, so a missed bubbling release cannot
+leave Month held and block both swipes and month selection. Reduced motion skips animation. Each page keeps its own
 vertical scroller, synchronized to the active one. Event drag/resize temporarily
 locks horizontal paging. The external hour gutter does not move horizontally.
 Desktop and phone all-day rows start at one 24px lane, grow for overlapping events,
@@ -79,7 +84,8 @@ measured cell height; when events overflow,
 the last available row becomes `+N`, counting all hidden events. Hiding weekends
 widens the five remaining columns. Tapping the count or its day opens the full
 event list in the existing phone sheet without leaving Month. Selecting a sheet
-event opens its details; the title opens Day and + creates on that date. A day
+event opens its details; the larger title-sized date opens Day and the rounded
+Add action matches the event sheet and creates on that date. A day
 tap or sheet dismissal cancels older pending event focus, so late data cannot
 reopen the previous day. Each date announces every event title, including
 hidden events. Dates outside the supported occurrence range are disabled.
@@ -255,11 +261,14 @@ On desktop, click the month title to open the month/year picker. The year pill
 switches between four-column month and 12-year grids. Arrows and PageUp/PageDown
 browse without navigation; Shift+PageUp/PageDown moves ten years in month mode.
 Today or T inside the grid returns browsing to today's month without navigating.
-Y opens the toolbar picker with Go to date focused; natural-language dates submit
-with Enter. G H and G I remain app navigation. Escape leaves years first, then
+Y opens the toolbar picker with Go to date focused: a native segmented date input
+with a calendar icon and no browser picker button. Native typing, segment arrows,
+and paste remain available; Enter rejects incomplete or impossible dates and
+submits a valid local date. G H and G I remain app navigation. Escape leaves years first, then
 closes and restores the trigger; Escape in Go to date closes directly. The mini
 uses the same popover, but month picks and Go to date move only the mini's month.
-Other date pickers remain unchanged. On phones the month island opens month/year
+Other date pickers remain unchanged. On phones the month island shows both month
+and year and opens month/year
 wheels over the visible calendar. Month loops independently of the bounded
 1970–2100 year wheel; either applies on scroll stop without closing. Week changes
 retain the visible week's position in the chosen month. Today navigates to today
@@ -716,7 +725,9 @@ text. Availability lives in the desktop sidebar's Needs reply section and
 in the mobile header.
 
 Desktop date navigation, Day/Week/Month/Agenda tabs, and search occupy the first
-header row. The scale-sized month title sits below them, beside Booking links and New.
+header row. The collapsed sidebar control lives inside that row at the same 32px
+height and inset, rather than beside the whole two-row header. The scale-sized month
+title sits below them, beside Booking links and New.
 The month title opens a 296px picker with 36px month/year choices and the shared
 selected fill. Y focuses Go to date, and Escape restores the title's focus.
 The desktop search field stays visible without taking focus when the view opens.
@@ -727,7 +738,8 @@ while room allows, then becomes an icon. The loading skeleton uses the same
 two-row desktop geometry.
 Touch devices use separate shell menu, month selector, Today, and Search islands.
 Search opens `/app/calendar/search` as a full page, with Back and an initially
-focused search field in its header. It reuses the same filters, debounced query,
+focused, full-width search field below its header island and safe area. It reuses
+the same filters, debounced query,
 loading/empty/error states, result actions, and read-only out-of-range preview as
 the desktop popover. Results are full-width rows. Back restores the previous
 calendar view, date, and grid scroll or Agenda day offset. Direct phone links
