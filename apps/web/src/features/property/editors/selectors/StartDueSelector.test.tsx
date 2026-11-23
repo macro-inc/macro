@@ -120,6 +120,25 @@ describe('StartDueSelector', () => {
     expect(screen.getByText('December 2026')).toBeTruthy();
   });
 
+  it('shows no time on an end saved as a whole day', () => {
+    renderSelector(
+      {
+        start: new Date(2026, 10, 20, 19),
+        due: new Date(2026, 10, 30, 15),
+        timed: true,
+        wholeDay: 'start',
+      },
+      'due'
+    );
+
+    expect(screen.getByRole('button', { name: /^Start/ }).textContent).toBe(
+      'StartFri, Nov 20'
+    );
+    expect(screen.getByRole('button', { name: /^Due/ }).textContent).toBe(
+      'DueMon, Nov 303:00 PM'
+    );
+  });
+
   it('makes a due day before the start the new start instead', () => {
     const { changes, onClose } = renderSelector(
       { start: new Date(2026, 10, 23), due: new Date(2026, 10, 27) },

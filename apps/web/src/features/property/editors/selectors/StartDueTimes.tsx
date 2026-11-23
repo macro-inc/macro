@@ -194,11 +194,13 @@ export function StartDueTimes(props: StartDueTimesProps) {
         <Show
           when={!showCalendar()}
           fallback={
-            <DatePickerUI
-              value={value() ?? props.dates.start ?? new Date()}
-              range={{ start: props.dates.start, end: props.dates.due }}
-              onChange={pickDay}
-            />
+            <div class="flex justify-center">
+              <DatePickerUI
+                value={value() ?? props.dates.start ?? new Date()}
+                range={{ start: props.dates.start, end: props.dates.due }}
+                onChange={pickDay}
+              />
+            </div>
           }
         >
           <div

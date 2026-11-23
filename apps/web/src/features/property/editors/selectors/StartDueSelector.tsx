@@ -107,7 +107,9 @@ export function StartDueSelector(props: StartDueSelectorProps) {
         <span class={cn('truncate', !value() && 'text-ink-muted')}>
           {value() ? FIELD_DAY_FORMAT.format(value()!) : 'None'}
         </span>
-        <Show when={props.dates.timed && value()}>
+        <Show
+          when={props.dates.timed && props.dates.wholeDay !== end && value()}
+        >
           {(at) => <span class="text-ink-muted">{fieldTime(at())}</span>}
         </Show>
       </button>

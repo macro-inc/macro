@@ -27,8 +27,10 @@ export function StartDueEditor(props: StartDueEditorProps) {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen() && isDateProperty(ctx.property())}>
-      {/* The two fields and the footer need more room than a single date's calendar. */}
-      <EditorPopover class="max-h-[28rem]">
+      {/* The two fields and the footer need more room than a single date's
+          calendar. Capped at the room the popper has, so adding times near the
+          screen's edge scrolls the time list instead of pushing the footer off. */}
+      <EditorPopover class="max-h-[min(28rem,var(--kb-popper-content-available-height,28rem))] *:min-h-0">
         <StartDueEditorBody {...props} />
       </EditorPopover>
     </Show>
@@ -103,7 +105,12 @@ function StartDueEditorBody(
         (error) => error
       );
       if (result.isOk()) {
-        saved = { ...saved, [field]: next[field], timed: next.timed };
+        saved = {
+          ...saved,
+          [field]: next[field],
+          timed: next.timed,
+          wholeDay: saved.wholeDay === field ? undefined : saved.wholeDay,
+        };
         continue;
       }
       // mutation onError owns toast
@@ -114,6 +121,7 @@ function StartDueEditorBody(
         start: restore.includes('start') ? saved.start : shown.start,
         due: restore.includes('due') ? saved.due : shown.due,
         timed: restore.length > 0 ? saved.timed : shown.timed,
+        wholeDay: restore.length > 0 ? saved.wholeDay : shown.wholeDay,
       }));
       return;
     }
@@ -139,7 +147,12 @@ function StartDueEditorBody(
         due: end('due').displayName,
       }}
       onChange={(next, changed) => {
-        setDates(next);
+        // An end edited with times on is saved with its time.
+        setDates(
+          next.wholeDay && changed.includes(next.wholeDay)
+            ? { ...next, wholeDay: undefined }
+            : next
+        );
         fireAndForget(enqueue(next, changed), 'property-editor');
       }}
       onClose={() => ctx.closeEditor()}
