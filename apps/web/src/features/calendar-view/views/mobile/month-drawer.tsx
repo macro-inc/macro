@@ -73,9 +73,10 @@ function MonthWheels(props: { month: Date; weekStart?: Date }) {
       </div>
       <div class="pt-1">
         <MobileDrawer.Close
-          as="button"
-          type="button"
-          class="flex h-11 w-full items-center justify-center rounded-full bg-ink/6 text-[15px] font-medium leading-5 text-ink"
+          as={Button}
+          variant="secondary"
+          size="sheet"
+          fullWidth
           onClick={() => {
             picker.resetToToday();
             navigation.navigateToToday();
