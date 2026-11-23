@@ -3,25 +3,92 @@ export const DESKTOP_RELEASE_URL =
 export const DESKTOP_RELEASE_API_URL =
   'https://api.github.com/repos/macro-inc/macro/releases?per_page=100';
 
-export type DesktopPlatform = 'macos' | 'linux';
+export const IOS_APP_STORE_URL =
+  'https://apps.apple.com/us/app/macro-app/id6743133649';
+export const ANDROID_PLAY_STORE_URL =
+  'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile';
+
+/** Desktop platforms with published installers, in default display order. */
+export const DESKTOP_PLATFORMS = ['macos', 'linux'] as const;
+
+export type DesktopPlatform = (typeof DESKTOP_PLATFORMS)[number];
 
 export type DesktopDownloadUrls = Record<DesktopPlatform, string>;
 
-export function detectDesktopPlatform(userAgent: string): DesktopPlatform {
-  return /linux/i.test(userAgent) && !/android|cros/i.test(userAgent)
-    ? 'linux'
-    : 'macos';
+export const DESKTOP_PLATFORM_DETAILS: Record<
+  DesktopPlatform,
+  { label: string; requirement: string }
+> = {
+  macos: {
+    label: 'macOS',
+    requirement:
+      'Requires macOS 14 (Sonoma) or later on a Mac with Apple silicon.',
+  },
+  linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
+};
+
+export type VisitorPlatform = DesktopPlatform | 'windows';
+
+/** The visitor's desktop operating system; phones and others are undefined. */
+export function detectVisitorPlatform(
+  userAgent: string
+): VisitorPlatform | undefined {
+  if (/android|iphone|ipad|ipod|cros/i.test(userAgent)) return undefined;
+  if (/macintosh|mac os x/i.test(userAgent)) return 'macos';
+  if (/windows/i.test(userAgent)) return 'windows';
+  if (/linux/i.test(userAgent)) return 'linux';
+  return undefined;
+}
+
+export type PhonePlatform = 'ios' | 'android';
+
+export const PHONE_PLATFORM_DETAILS: Record<
+  PhonePlatform,
+  { label: string; store: string; url: string }
+> = {
+  ios: { label: 'iOS', store: 'App Store', url: IOS_APP_STORE_URL },
+  android: {
+    label: 'Android',
+    store: 'Google Play',
+    url: ANDROID_PLAY_STORE_URL,
+  },
+};
+
+/** The visitor's phone operating system, if the browser is on one. */
+export function detectPhonePlatform(
+  userAgent: string
+): PhonePlatform | undefined {
+  if (/android/i.test(userAgent)) return 'android';
+  if (/iphone|ipad|ipod/i.test(userAgent)) return 'ios';
+  return undefined;
+}
+
+/** Mobile apps with the visitor's own phone platform first, iOS by default. */
+export function phonePlatformOrder(
+  phone: PhonePlatform | undefined
+): PhonePlatform[] {
+  return phone === 'android' ? ['android', 'ios'] : ['ios', 'android'];
+}
+
+/** Desktop installers with the visitor's own platform first. */
+export function desktopPlatformOrder(
+  visitor: VisitorPlatform | undefined
+): DesktopPlatform[] {
+  return [...DESKTOP_PLATFORMS].sort(
+    (a, b) => Number(b === visitor) - Number(a === visitor)
+  );
 }
 
 export function desktopReleaseVersion(downloadUrl: string): string | undefined {
   return downloadUrl.match(/\/releases\/download\/([^/]+)\//)?.[1];
 }
 
+/** Verified installers, used before and if the GitHub releases API answers. */
 export const FALLBACK_DOWNLOAD_URLS: DesktopDownloadUrls = {
   macos:
-    'https://github.com/macro-inc/macro/releases/download/v2026.11.6.1/Macro-2026.1106.1-aarch64-darwin.dmg',
+    'https://github.com/macro-inc/macro/releases/download/v2026.11.19.1/Macro-2026.1119.1-aarch64-darwin.dmg',
   linux:
-    'https://github.com/macro-inc/macro/releases/download/v2026.10.6.0/Macro-2.5.0-x86_64-linux.AppImage',
+    'https://github.com/macro-inc/macro/releases/download/v2026.11.19.1/Macro-2026.1119.1-x86_64-linux.AppImage',
 };
 
 interface ReleaseAsset {
@@ -52,4 +119,21 @@ export function releaseDownloadUrls(
     macos: findAsset('-aarch64-darwin.dmg') ?? FALLBACK_DOWNLOAD_URLS.macos,
     linux: findAsset('-x86_64-linux.AppImage') ?? FALLBACK_DOWNLOAD_URLS.linux,
   };
+}
+
+/** Latest stable installer URLs; the verified fallbacks if GitHub fails. */
+export async function fetchDesktopDownloadUrls(
+  signal?: AbortSignal
+): Promise<DesktopDownloadUrls> {
+  try {
+    const response = await fetch(DESKTOP_RELEASE_API_URL, {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal,
+    });
+    if (!response.ok) return FALLBACK_DOWNLOAD_URLS;
+    return releaseDownloadUrls(await response.json());
+  } catch {
+    // Keep direct installer links usable if GitHub is unavailable or rate-limited.
+    return FALLBACK_DOWNLOAD_URLS;
+  }
 }

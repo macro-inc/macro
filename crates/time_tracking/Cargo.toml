@@ -22,9 +22,11 @@ outbound = [
   "dep:system_properties",
   "dep:tokio-util",
 ]
+toolset = ["inbound", "dep:ai_toolset", "dep:schemars"]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
+ai_toolset = { path = "../ai_toolset", optional = true }
 async-trait = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
@@ -39,6 +41,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rootcause = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }
 serde_with = { workspace = true, optional = true }

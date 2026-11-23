@@ -13,7 +13,8 @@
 //!
 //! - **domain**: models, ports, events, the activity mapping and the service
 //!   (permission rules, timer semantics, the over-limit refusal).
-//! - **inbound**: the Axum HTTP router (feature `inbound`).
+//! - **inbound**: the Axum HTTP router (feature `inbound`) and the AI tools
+//!   (feature `toolset`).
 //! - **outbound**: Postgres storage, the event broker publisher, the
 //!   connection gateway hint to the person's open sessions and the rollout
 //!   gate (feature `outbound`).

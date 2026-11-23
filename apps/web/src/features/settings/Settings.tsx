@@ -27,6 +27,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { isPlatform } from '@core/util/platform';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useMacroComputersRollout } from '@queries/computers/computers';
 import { useSearchParams } from '@solidjs/router';
@@ -125,6 +126,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
     searchSettings(searchGroups(), searchQuery(), {
       outlook: outlook(),
       macroComputers: macroComputers().enabled,
+      desktopDownload: !isPlatform('desktop'),
       agentNotifications: agentNotifications().enabled,
     })
   );

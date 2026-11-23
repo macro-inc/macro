@@ -15,6 +15,7 @@ import { queryReadyGate } from '@queries/gate';
 import { detect } from 'detect-browser';
 import { match } from 'ts-pattern';
 import type { AuthContext, AuthSession } from './context/auth-context';
+import { reportMobileWebSignupLead } from './mobile-signup-lead';
 import {
   exchangeSessionCode,
   sendEmailCode,
@@ -109,15 +110,7 @@ export function createAppAuthContext(): AuthContext {
         setOnce: user.setOnce,
       }),
     trackMobileSignupLead: (email) => {
-      // Lead feeds an existing custom conversion; Meta's Maximize Value
-      // campaigns need CompleteRegistration, so both fire.
-      const lead = {
-        content_name: 'mobile_web_signup',
-        value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
-        currency: 'USD',
-      };
-      analytics.trackMeta('Lead', lead);
-      analytics.trackMeta('CompleteRegistration', lead);
+      reportMobileWebSignupLead(analytics);
       analytics.trackGoogleConversion('mobile_web_lead', {
         value: MOBILE_WEB_SIGNUP_LEAD_VALUE,
         currency: 'USD',
