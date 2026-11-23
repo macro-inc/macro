@@ -64,11 +64,7 @@ import {
   type SetStoreFunction,
   type Store,
 } from 'solid-js/store';
-import {
-  TASK_DEFAULT_GROUP_BY,
-  withoutStartDateGrouping,
-  withoutStartDateSort,
-} from './constants';
+import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
 import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
@@ -85,6 +81,7 @@ import {
   type TaskSavedViewDraft,
 } from './primitives/create-task-saved-view-draft';
 import { createTasksViewSearch } from './primitives/create-tasks-view-search';
+import { withStartDateFallback } from './primitives/start-date-fallback';
 import {
   type TasksDataSource,
   type TasksDataSourceItem,
@@ -270,8 +267,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [persistedState, setState] = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
+  const viewSettings = withStartDateFallback(persistedState, startDatesOff);
   // Rollout fallbacks must not overwrite saved tab or layout selections.
-  const state = mergeProps(persistedState, {
+  const state = mergeProps(viewSettings, {
     get savedViewActive() {
       return Boolean(
         props.savedViewSource && (newSavedView() || tabSearch.savedView)
@@ -287,23 +285,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return persistedState.layout;
     },
     get groupBy() {
-      const groupBy = startDatesOff()
-        ? withoutStartDateGrouping(persistedState.groupBy, persistedState.tab)
-        : persistedState.groupBy;
       if (state.layout !== 'board') {
-        return groupBy;
+        return viewSettings.groupBy;
       }
 
-      return toTaskBoardGrouping(groupBy);
-    },
-    get sort() {
-      return startDatesOff()
-        ? withoutStartDateSort(persistedState.sort)
-        : persistedState.sort;
-    },
-    // A start-date filter from a URL or saved view has no control with start dates off.
-    get startDate() {
-      return startDatesOff() ? undefined : persistedState.startDate;
+      return toTaskBoardGrouping(viewSettings.groupBy);
     },
     get tab(): TasksTab {
       return persistedState.tab;
