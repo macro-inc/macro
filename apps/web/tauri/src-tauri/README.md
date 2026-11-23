@@ -79,13 +79,27 @@ you fetch.
 
 ## OTA bundle storage
 
-On iOS, the bundle updater stores downloads and their persistence markers in
+Both mobile platforms can delete cache files when storage runs low, and they can
+take some of a bundle's files while leaving the rest. On iOS the bundle updater
+therefore stores downloads and their persistence markers in
 `Library/Application Support/<bundle-identifier>/bundle-updates`, not the
-purgeable `Library/Caches` directory. The directory is excluded from backup
-because the server can supply the bundles again. The updater deliberately
-ignores legacy cache contents: the first launch uses embedded assets and checks
-for a fresh download. Other platforms retain their existing cache location.
-This storage change requires a native app release.
+purgeable `Library/Caches` directory, excluded from backup because the server
+can supply the bundles again. On Android it stores them in the app's data
+directory (`/data/data/<package>/bundle-updates`), not its cache directory;
+the manifest's backup rules already exclude app data from backups. On both, the
+updater deliberately ignores legacy cache contents: the first launch uses
+embedded assets and checks for a fresh download. Desktop platforms retain their
+existing cache location. A storage change requires a native app release.
+
+Each extraction also writes a completion record beside the bundle directory
+(`<n>.complete`) that lists every extracted file and its size, except the
+downloaded archive. Before startup serves a saved or completed bundle, and
+before a download is reused, the updater checks that every listed file is still
+there at that size; otherwise it falls back to the embedded bundle (rejection
+`files_missing`) and downloads again. Without this check, a bundle that lost a
+startup chunk still has its `index.html`, so the document loads, its scripts
+404, and the app shows a blank screen with no telemetry. Records written before
+the file list hold only the bundle build and are trusted as before.
 
 ## File saving and sharing
 
@@ -187,12 +201,15 @@ held: `none`, `unreadable`, `embedded`, or `ota`),
 `native_bundle_startup_read_error` (the I/O error kind, such as `NotFound` or
 `PermissionDenied`), and `native_bundle_startup_dirs_found` /
 `native_bundle_startup_dirs_removed` (numbered bundle directories before and
-after startup cleanup). A user who was on an OTA bundle and starts a new launch
-on the embedded one without a reload dispatch lost it at startup: `none` with
-no directories means bundle storage was emptied, `unreadable` means the files
-were there but could not be read, and a rejection names the failed check. On
-iOS, the first launch of the release that moved bundles out of `Library/Caches`
-also reports `none`, because it ignores the old location. An older
+after startup cleanup), and `native_bundle_startup_check_ms` (time spent
+checking a saved OTA bundle, including its file list). A user who was on an OTA
+bundle and starts a new launch on the embedded one without a reload dispatch
+lost it at startup: `none` with no directories means bundle storage was
+emptied, `unreadable` means the files were there but could not be read, and a
+rejection names the failed check (`files_missing`: a listed file was gone or
+had changed size). On iOS and Android, the first launch of the release that
+moved bundles out of the cache directory also reports `none`, because it
+ignores the old location. An older
 release's embedded bundle predates these fields, but the record lives for the
 whole launch, so the document an update reload brings up reports it. Missing
 fields mean an older binary or a build with automatic updates disabled.
