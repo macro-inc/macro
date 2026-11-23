@@ -9,11 +9,14 @@ import Squares from '@icon/system/regular/squares-four.svg';
 import X from '@icon/system/regular/x.svg';
 import { Button, Input } from '@ui';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, onMount, Show } from 'solid-js';
+import { createMemo, For, onCleanup, onMount, Show } from 'solid-js';
 import { AgentAvatar } from '../../components/AgentGlyph';
 import { AgentBubble } from '../../components/agent-bubble/agent-bubble';
 import { ModelRows } from '../../components/unified-model-selector/model-rows';
-import { useUnifiedModelSelector } from '../../components/unified-model-selector/root';
+import {
+  type SelectorActionResult,
+  useUnifiedModelSelector,
+} from '../../components/unified-model-selector/root';
 import { agentPickerGroups } from '../../core/agent-picker-groups';
 import { modelSelection } from '../../core/model-selection';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../../core/roster';
@@ -74,7 +77,7 @@ export function ModelSelectionList(props: {
   );
   const clearSearch = () => {
     nav.setQuery('');
-    search?.focus();
+    search?.focus({ preventScroll: true });
   };
   const noMatches = () => {
     if (!searching()) return false;
@@ -97,26 +100,38 @@ export function ModelSelectionList(props: {
     });
     return ordered.slice(0, props.mobile ? 4 : 5);
   };
+  let selection = 0;
+  onCleanup(() => selection++);
+  const finishPick = (result: SelectorActionResult) => {
+    const version = ++selection;
+    const page = nav.page();
+    const finish = (applied: void | boolean) => {
+      if (
+        applied !== false &&
+        version === selection &&
+        nav.open() &&
+        nav.page() === page
+      )
+        props.onPick();
+    };
+    if (result instanceof Promise) {
+      const settle = async () => finish(await result);
+      fireAndForget(settle(), 'agents.model-selector');
+    } else finish(result);
+  };
   const pickModel = (id: string, override = false) => {
     if (state.disabled || (!override && state.suggestedDisabled)) return;
-    const result = (
-      override ? state.onModel : (state.onSuggestedModel ?? state.onModel)
-    )(id);
-    if (result instanceof Promise)
-      fireAndForget(result, 'agents.model-selector');
-    props.onPick();
+    finishPick(
+      (override ? state.onModel : (state.onSuggestedModel ?? state.onModel))(id)
+    );
   };
   const pickAgent = (agent: RosterAgent) => {
     if (state.disabled) return;
     if (agent.unavailableReason) {
       if (!agent.connectLabel) return;
       state.onConnect?.(agent);
-    } else {
-      const result = state.onAgent?.(agent);
-      if (result instanceof Promise)
-        fireAndForget(result, 'agents.model-selector');
-    }
-    props.onPick();
+      props.onPick();
+    } else finishPick(state.onAgent?.(agent));
   };
   const focusRow = (last = false) => {
     const rows = root?.querySelectorAll<HTMLButtonElement>(
@@ -125,7 +140,7 @@ export function ModelSelectionList(props: {
     (last ? rows?.[rows.length - 1] : rows?.[0])?.focus();
   };
   onMount(() => {
-    if (!props.mobile) search?.focus();
+    if (!props.mobile) search?.focus({ preventScroll: true });
   });
   return (
     <div
@@ -146,14 +161,14 @@ export function ModelSelectionList(props: {
             '[data-model-choice]:not(:disabled)'
           ) ?? []
         );
-        const index = buttons.findIndex(
-          (button) => button === document.activeElement
-        );
+        const active = document.activeElement;
+        const index =
+          active instanceof HTMLButtonElement ? buttons.indexOf(active) : -1;
         if (index < 0) return;
         if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
           event.preventDefault();
           const next = index + (event.key === 'ArrowDown' ? 1 : -1);
-          if (next < 0) search?.focus();
+          if (next < 0) search?.focus({ preventScroll: true });
           else buttons[next % buttons.length]?.focus();
         } else if (event.key === 'Home' || event.key === 'End') {
           event.preventDefault();
@@ -253,7 +268,7 @@ export function ModelSelectionList(props: {
                   )}
                   onClick={() => {
                     nav.setPage('agents');
-                    if (!props.mobile) search?.focus();
+                    if (!props.mobile) search?.focus({ preventScroll: true });
                   }}
                 >
                   {t('agentControls.seeAll')}
@@ -377,7 +392,7 @@ export function ModelSelectionList(props: {
                 )}
                 onClick={() => {
                   nav.setPage('all');
-                  if (!props.mobile) search?.focus();
+                  if (!props.mobile) search?.focus({ preventScroll: true });
                 }}
               >
                 <Squares class={props.mobile ? 'size-[18px]' : 'size-4'} />

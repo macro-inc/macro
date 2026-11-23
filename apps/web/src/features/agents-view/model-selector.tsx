@@ -1,11 +1,11 @@
 import { startUiOperation } from '@app/observability/ui-operation';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, mergeProps, Show } from 'solid-js';
 import { createRecentAgentSelections } from '../block-agent/context/recent-agent-selections';
 import { createRecentModelSelections } from '../block-agent/context/recent-model-selections';
 import {
+  type SelectorActionResult,
   UnifiedModelSelectorRoot,
   type UnifiedModelSelectorState,
 } from './components/unified-model-selector/root';
@@ -22,7 +22,7 @@ export function UnifiedModelSelector(props: {
   const track = (
     action: string,
     attributes: Record<string, string>,
-    run: () => unknown,
+    run: () => SelectorActionResult,
     applied?: () => void
   ) => {
     const account = userId();
@@ -30,15 +30,16 @@ export function UnifiedModelSelector(props: {
     const finish = (result: unknown) => {
       if (userId() !== account) {
         operation.cancel();
-        return;
+        return false;
       }
       if (result === false) {
         operation.span.error('Selector action was not applied');
         operation.finish('error');
-        return;
+        return false;
       }
       applied?.();
       operation.afterPaint();
+      return true;
     };
     const fail = (error: unknown) => {
       operation.span.error(error);
@@ -49,13 +50,15 @@ export function UnifiedModelSelector(props: {
       if (result instanceof Promise) {
         const settle = async () => {
           try {
-            finish(await result);
+            return finish(await result);
           } catch (error) {
             fail(error);
+            return false;
           }
         };
-        fireAndForget(settle(), 'agents.model-selector');
-      } else finish(result);
+        return settle();
+      }
+      return finish(result);
     } catch (error) {
       fail(error);
       throw error;
@@ -126,7 +129,7 @@ export function UnifiedModelSelector(props: {
         props.state.onOpenChange?.(false);
         return;
       }
-      track(
+      return track(
         'agents.model_selector.open',
         { 'model.id': props.state.model ?? '' },
         () => {

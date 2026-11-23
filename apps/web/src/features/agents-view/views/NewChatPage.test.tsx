@@ -19,6 +19,7 @@ import {
   type PersistedAgentLike,
   type RuntimeLike,
 } from '../core/roster';
+import { UnifiedModelSelector } from '../model-selector';
 import {
   createPersistedComposerDraft,
   HOME_CONVERSATION_ATTACHMENTS_KEY,
@@ -1663,6 +1664,48 @@ describe('agent-led new conversation', () => {
     expect(screen.getByRole('textbox', { name: 'Search models' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'GPT-5' })).toBeTruthy();
   });
+
+  it.each([false, true])(
+    'keeps rejected async model selections open (touch: %s)',
+    async (touch) => {
+      mocks.touch = touch;
+      let settle: ((applied: boolean) => void) | undefined;
+      const pending = new Promise<boolean>((resolve) => {
+        settle = resolve;
+      });
+      const onOpenChange = vi.fn();
+      render(() => (
+        <UnifiedModelSelector
+          state={{
+            model: 'openai/gpt-5.6',
+            models: [
+              { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+              { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
+            ],
+            suggestedModels: [
+              { id: 'openai/gpt-5.6', label: 'GPT-5.6' },
+              { id: 'anthropic/claude-sonnet-5-5', label: 'Sonnet 5.5' },
+            ],
+            onModel: () => pending,
+            onEffort: () => {},
+            onSpeed: () => {},
+            onOpenChange,
+          }}
+        />
+      ));
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose an agent or model' })
+      );
+      fireEvent.click(await screen.findByRole('button', { name: 'GPT-5.6' }));
+      const search = await screen.findByRole('textbox');
+      fireEvent.click(screen.getByRole('button', { name: 'Sonnet 5.5' }));
+      expect(screen.getByRole('textbox')).toBe(search);
+      settle?.(false);
+      await pending;
+      await waitFor(() => expect(screen.getByRole('textbox')).toBe(search));
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    }
+  );
 
   it('focuses the shared search and filters the selected agent catalog', async () => {
     page(true, [], false, [], 'code');
