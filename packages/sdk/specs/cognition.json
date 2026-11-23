@@ -5344,6 +5344,125 @@
           }
         }
       },
+      "HubspotLoss": {
+        "type": "string",
+        "description": "Something a HubSpot import cannot carry into Macro CRM, counted on the\nreview card and in the final report.",
+        "enum": [
+          "owner_not_member",
+          "deal_without_company",
+          "deal_without_pipeline",
+          "extra_company_links",
+          "domain_rejected",
+          "unsupported_currency",
+          "additional_domains",
+          "company_owner",
+          "merged_company",
+          "merged_contact",
+          "contact_without_company"
+        ]
+      },
+      "HubspotLossCount": {
+        "type": "object",
+        "description": "How many records lost one thing.",
+        "required": ["loss", "count"],
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records affected.",
+            "minimum": 0
+          },
+          "loss": {
+            "$ref": "#/components/schemas/HubspotLoss",
+            "description": "What was lost."
+          }
+        }
+      },
+      "HubspotReport": {
+        "type": "object",
+        "description": "What a HubSpot plan holds, for the review card.",
+        "required": [
+          "pipelines",
+          "companies",
+          "contacts",
+          "deals",
+          "owners",
+          "ownersMatched",
+          "alreadyImported",
+          "losses",
+          "customProperties"
+        ],
+        "properties": {
+          "alreadyImported": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records already in Macro from an earlier import, left as they are.",
+            "minimum": 0
+          },
+          "companies": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Companies.",
+            "minimum": 0
+          },
+          "contacts": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Contacts.",
+            "minimum": 0
+          },
+          "created": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import created in the CRM.",
+            "minimum": 0
+          },
+          "customProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Portal-defined property names whose values stay in HubSpot."
+          },
+          "deals": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deals, each becoming an entry in its pipeline.",
+            "minimum": 0
+          },
+          "linked": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Records this import matched to ones already in the CRM (same domain,\naddress or deal) or to a teammate's import, instead of creating them.",
+            "minimum": 0
+          },
+          "losses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HubspotLossCount"
+            },
+            "description": "What cannot be carried over, by kind."
+          },
+          "owners": {
+            "type": "integer",
+            "format": "int32",
+            "description": "HubSpot owners named by the planned records.",
+            "minimum": 0
+          },
+          "ownersMatched": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Of those, owners matched to a team member by email.",
+            "minimum": 0
+          },
+          "pipelines": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Deal pipelines, each becoming a Macro pipeline.",
+            "minimum": 0
+          }
+        }
+      },
       "ImportEntitiesResponse": {
         "type": "object",
         "description": "The caller's ledger rows.",
@@ -5464,7 +5583,11 @@
           "jira_issue",
           "jira_project",
           "jira_epic",
-          "channel"
+          "channel",
+          "hubspot_pipeline",
+          "hubspot_company",
+          "hubspot_contact",
+          "hubspot_deal"
         ]
       },
       "ImportNotionPageRequest": {
@@ -5552,7 +5675,7 @@
       "ImportSource": {
         "type": "string",
         "description": "External systems items can be imported from.",
-        "enum": ["linear", "jira", "notion", "slack"]
+        "enum": ["linear", "jira", "notion", "slack", "hubspot"]
       },
       "ImportState": {
         "type": "object",
@@ -5952,6 +6075,17 @@
               "$ref": "#/components/schemas/NotionReportItem"
             },
             "description": "Objects that need handling by hand, with reasons."
+          },
+          "hubspot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HubspotReport",
+                "description": "A HubSpot plan's counts, owners and losses."
+              }
+            ]
           },
           "imported": {
             "type": "integer",
