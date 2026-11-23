@@ -919,3 +919,242 @@ fn native_cache_parity_dump() {
         }
     });
 }
+
+/// How a read of the stall pass ended for its caller.
+#[derive(Clone, Copy, PartialEq)]
+enum Outcome {
+    Answered,
+    TimedOut,
+    /// An error or a panic before the deadline: neither answered nor late.
+    Failed,
+}
+
+/// One read of the stall pass's mix.
+#[derive(Clone)]
+enum StallRead {
+    Thread(String),
+    Inbox,
+    Search(&'static str),
+}
+
+/// Runs one read the way Tauri runs a command: on a task of its own that
+/// nobody can cancel, so a caller that stops waiting leaves it running.
+fn spawn_read(
+    handle: &EngineHandle,
+    docs: &BTreeMap<String, String>,
+    read: &StallRead,
+    request_id: String,
+) -> tauri::async_runtime::JoinHandle<bool> {
+    let handle = reading(handle, request_id);
+    let (document, read) = (docs["EmailThreadPage"].clone(), read.clone());
+    tauri::async_runtime::spawn(async move {
+        // Whether it succeeded; an abandoned read fails after its caller left.
+        match read {
+            StallRead::Thread(thread) => handle
+                .read(
+                    None,
+                    document,
+                    Some("EmailThreadPage".into()),
+                    serde_json::from_value(
+                        serde_json::json!({ "threadId": thread, "offset": 0, "limit": 20 }),
+                    )
+                    .unwrap(),
+                    vec![],
+                )
+                .await
+                .map(drop),
+            StallRead::Inbox => handle
+                .entity_filter(mail_args(50, "INBOX", None))
+                .await
+                .map(drop),
+            StallRead::Search(query) => handle.search(search(query)).await.map(drop),
+        }
+        .is_ok()
+    })
+}
+
+/// The handle a read with this request id runs on.
+fn reading(handle: &EngineHandle, request_id: String) -> EngineHandle {
+    handle.clone().abandonable(Some(request_id))
+}
+
+/// What a caller does with a read it stopped waiting for.
+fn abandon(handle: &EngineHandle, request_id: &str) {
+    handle.abandon(request_id);
+}
+
+/// Readers that each wait up to `CACHE_BENCH_STALL_DEADLINE_MS` (100) for a
+/// read, then give up and send the next, while the engine is held for
+/// `CACHE_BENCH_STALL_MS` (1000), as a slow command holds it. Measures how
+/// the reads issued after the stall fare: a read left running after its
+/// caller gave up still takes its turn on the engine.
+#[test]
+#[ignore = "benchmark: needs CACHE_BENCH_DATA with a database native_cache_bench seeded"]
+fn native_stall_bench() {
+    let env_ms = |name: &str, default: u64| {
+        std::env::var(name)
+            .ok()
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(default)
+    };
+    let deadline = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_DEADLINE_MS", 100));
+    let stall = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_MS", 1000));
+    let after = std::time::Duration::from_millis(env_ms("CACHE_BENCH_STALL_AFTER_MS", 4000));
+    let readers = env_ms("CACHE_BENCH_STALL_READERS", 8) as usize;
+    let rounds = env_ms("CACHE_BENCH_RUNS", 3) as usize;
+    let data = PathBuf::from(std::env::var_os("CACHE_BENCH_DATA").expect("CACHE_BENCH_DATA"));
+    let docs: Arc<BTreeMap<String, String>> =
+        Arc::new(serde_json::from_slice(&std::fs::read(data.join("docs.json")).unwrap()).unwrap());
+    let meta: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(data.join("meta.json")).unwrap()).unwrap();
+    let mut mix: Vec<StallRead> = meta["threadIds"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .take(5)
+        .map(|id| StallRead::Thread(id.as_str().unwrap().to_owned()))
+        .collect();
+    mix.extend([
+        StallRead::Inbox,
+        StallRead::Search("pro"),
+        StallRead::Search("project update"),
+    ]);
+    let mix = Arc::new(mix);
+    // A copy, so the stall pass never changes the database the main bench reuses.
+    let dir = tempfile::tempdir().unwrap();
+    for entry in std::fs::read_dir(data.join("native")).unwrap() {
+        let entry = entry.unwrap();
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("cache.turso")
+        {
+            std::fs::copy(entry.path(), dir.path().join(entry.file_name())).unwrap();
+        }
+    }
+    let path = dir.path().join("cache.turso");
+
+    tauri::async_runtime::block_on(async move {
+        let handle = open(&path);
+        handle
+            .entity_filter(mail_args(50, "INBOX", None))
+            .await
+            .unwrap();
+        // (ms after the stall ended at issue, outcome, ms)
+        let mut reads: Vec<(f64, Outcome, f64)> = Vec::new();
+        let mut timed_out_during = 0usize;
+        for round in 0..rounds {
+            let stop = Arc::new(AtomicBool::new(false));
+            let stall_start: Arc<std::sync::OnceLock<Instant>> = Arc::default();
+            let stall_end: Arc<std::sync::OnceLock<Instant>> = Arc::default();
+            let tasks: Vec<_> = (0..readers)
+                .map(|reader| {
+                    let (handle, docs, mix, stop, stall_start, stall_end) = (
+                        handle.clone(),
+                        Arc::clone(&docs),
+                        Arc::clone(&mix),
+                        Arc::clone(&stop),
+                        Arc::clone(&stall_start),
+                        Arc::clone(&stall_end),
+                    );
+                    tauri::async_runtime::spawn(async move {
+                        let mut out = Vec::new();
+                        let mut during = 0usize;
+                        let mut n = reader;
+                        while !stop.load(Ordering::SeqCst) {
+                            let id = format!("bench:{round}:{reader}:{n}");
+                            let read = &mix[n % mix.len()];
+                            n += readers;
+                            let issued = Instant::now();
+                            let task = spawn_read(&handle, &docs, read, id.clone());
+                            let outcome = match tokio::time::timeout(deadline, task).await {
+                                Ok(Ok(true)) => Outcome::Answered,
+                                Ok(_) => Outcome::Failed,
+                                Err(_) => {
+                                    abandon(&handle, &id);
+                                    Outcome::TimedOut
+                                }
+                            };
+                            let ms = issued.elapsed().as_secs_f64() * 1000.0;
+                            match (stall_start.get(), stall_end.get()) {
+                                (_, Some(end)) if issued >= *end => out.push((
+                                    issued.duration_since(*end).as_secs_f64() * 1000.0,
+                                    outcome,
+                                    ms,
+                                )),
+                                (Some(start), _) if issued >= *start => {
+                                    during += usize::from(outcome == Outcome::TimedOut);
+                                }
+                                // Issued before the engine was held: warm-up.
+                                _ => {}
+                            }
+                        }
+                        (out, during)
+                    })
+                })
+                .collect();
+            tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+            {
+                let _held = handle.inner.write().await;
+                let _ = stall_start.set(Instant::now());
+                tokio::time::sleep(stall).await;
+                let _ = stall_end.set(Instant::now());
+            }
+            tokio::time::sleep(after).await;
+            stop.store(true, Ordering::SeqCst);
+            for task in tasks {
+                let (out, during) = task.await.unwrap();
+                reads.extend(out);
+                timed_out_during += during;
+            }
+            // Let reads still running drain before the next round.
+            let _ = handle.inner.write().await;
+        }
+        let answered: Vec<f64> = {
+            let mut ms: Vec<f64> = reads
+                .iter()
+                .filter(|r| r.1 == Outcome::Answered)
+                .map(|r| r.2)
+                .collect();
+            ms.sort_by(f64::total_cmp);
+            ms
+        };
+        let quantile = |q: f64| -> f64 {
+            answered
+                .get(((q * answered.len() as f64).ceil() as usize).saturating_sub(1))
+                .map_or(f64::NAN, |ms| (ms * 10.0).round() / 10.0)
+        };
+        // Per round, the issue time of the last read after the stall that
+        // timed out: until then the engine still served reads nobody waited for.
+        let timed_out: Vec<f64> = reads
+            .iter()
+            .filter(|r| r.1 == Outcome::TimedOut)
+            .map(|r| (r.0 * 10.0).round() / 10.0)
+            .collect();
+        let last_timeout = timed_out.iter().copied().fold(0.0_f64, f64::max);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&serde_json::json!({
+                "readers": readers,
+                "deadlineMs": deadline.as_millis() as u64,
+                "stallMs": stall.as_millis() as u64,
+                "afterMs": after.as_millis() as u64,
+                "rounds": rounds,
+                "timedOutDuringStall": timed_out_during,
+                "afterStall": {
+                    "issued": reads.len(),
+                    "answered": answered.len(),
+                    "timedOut": timed_out.len(),
+                    "failed": reads.iter().filter(|r| r.1 == Outcome::Failed).count(),
+                    "lastTimeoutIssuedMs": last_timeout,
+                    "answeredMs": { "p50": quantile(0.5), "p90": quantile(0.9), "p99": quantile(0.99) },
+                },
+                "answeredAfterStallMs": answered,
+                "timedOutIssuedAtMs": timed_out,
+            }))
+            .unwrap()
+        );
+        // Reads given up on may still hold clones; the copy goes with the temp dir.
+        drop(handle);
+    });
+}
