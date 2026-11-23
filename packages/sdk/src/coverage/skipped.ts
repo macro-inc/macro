@@ -502,17 +502,8 @@ export const storageExcluded = [
   'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // Time entries and the running timer, wrapped by the time tracking SDK methods.
-  'deleteTimeEntry',
-  'discardTimer',
-  'getTimer',
-  'listTimeEntries',
-  'logTime',
-  'startTimer',
-  'stopTimer',
-  'updateTimeEntry',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',

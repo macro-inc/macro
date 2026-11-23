@@ -86,10 +86,10 @@ export function packageEntityDocs(
           : directory.replace(/-([a-z])/g, (_, letter: string) =>
               letter.toUpperCase()
             ),
-      // Task templates share the task routing sentence; other namespaces
-      // retain their own discovery topics.
+      // Task templates and time tracking share the task routing sentence;
+      // other namespaces retain their own discovery topics.
       prefixes: (directory === 'tasks'
-        ? ['tasks', 'task-templates']
+        ? ['tasks', 'task-templates', 'time']
         : [directory]
       ).map((value) => `src/entities/${value}/`),
     })),

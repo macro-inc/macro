@@ -19276,6 +19276,7 @@ export const SetEntityProperty = z.object({
   date_value: z
     .union([z.string().datetime({ offset: true }), z.null()])
     .optional(),
+  date_has_time: z.union([z.boolean(), z.null()]).optional(),
   date_range_value: z
     .union([
       z.object({

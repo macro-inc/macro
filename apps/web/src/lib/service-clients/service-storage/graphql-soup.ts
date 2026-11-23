@@ -1170,10 +1170,14 @@ function mapGraphqlPropertyValue(
       type: 'String' as const,
       value: stringValue,
     }))
-    .with({ __typename: 'GraphqlDatePropertyValue' }, ({ dateValue }) => ({
-      type: 'Date' as const,
-      value: dateValue,
-    }))
+    .with(
+      { __typename: 'GraphqlDatePropertyValue' },
+      ({ dateValue, dateHasTime }) => ({
+        type: 'Date' as const,
+        value: dateValue,
+        ...(dateHasTime ? { has_time: true } : {}),
+      })
+    )
     .with(
       { __typename: 'GraphqlDateRangePropertyValue' },
       ({ rangeStart, rangeEnd }) => ({
