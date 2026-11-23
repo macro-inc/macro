@@ -41,6 +41,7 @@ pub mod localstack;
 pub mod mailpit;
 pub mod microsoft_emulator;
 pub mod model_emulator;
+pub mod openbao;
 pub mod opensearch;
 pub mod passwords_vault;
 pub mod portmap;
@@ -1217,6 +1218,11 @@ fn bring_up_infra(
     infra?;
     fusionauth_started.transpose()?;
     localstack_ready?;
+    if spec.runs_local_infra {
+        // Passwords needs an initialized vault. Without this gate a crash-looping
+        // OpenBao still lets the bring-up report success.
+        openbao::wait_ready(stage, instance, env)?;
+    }
 
     if spec.migrates_db && init == InfraInit::Full {
         // Postgres is ready (`--wait`); create + migrate the freshly-wiped DB.

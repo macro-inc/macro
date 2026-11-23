@@ -13,9 +13,11 @@ with node ID `macro-local` and cluster address `https://127.0.0.1:8201`. On firs
 `start.sh` generates a raw 32-byte seal key from `/dev/urandom` at
 `/openbao/file/seal.key`, starts the server, and initializes it once. The static
 seal uses key ID `macro-local-v1` and automatically unseals on subsequent starts.
+Startup waits for a listener response before attempting initialization.
 Initialization writes the root bootstrap token and recovery keys to
 `/openbao/file/bootstrap.json` with mode `0600`; they never enter git or application
-service environments. No manual unseal or team reseed is needed after a container
+service environments. A failed initialization exits the container non-zero, so
+`just stack up` fails, and the next start retries it. No manual unseal or team reseed is needed after a container
 restart, stack restart, or host reboot.
 
 The encrypted vault, its seal key, and initialization credentials share the local

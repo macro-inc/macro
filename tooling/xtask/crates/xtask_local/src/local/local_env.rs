@@ -137,9 +137,11 @@ impl LocalEnv {
     pub fn to_env(&self) -> BTreeMap<String, String> {
         let mut env = BTreeMap::new();
         env.insert("ENVIRONMENT".into(), self.environment.into());
-        // The services are debug builds: a request that goes deep (a mailbox's
-        // first backfill, a Soup query) overflows a worker thread's default
-        // stack and aborts the process.
+        // The services are unoptimized debug builds, whose async state machines
+        // and frames are far larger than release ones. A request that goes deep
+        // (document storage's first Soup query after a login, an agent harness
+        // turn, a mailbox's first backfill) overflows tokio's 2 MiB worker stack
+        // and aborts the process. Tokio sizes its workers from this.
         env.insert("RUST_MIN_STACK".into(), "67108864".into());
         env.insert("OPENBAO_ADDRESS".into(), "http://openbao:8200".into());
         env.insert("PASSWORDS_JWT_ISSUER".into(), PASSWORDS_JWT_ISSUER.into());

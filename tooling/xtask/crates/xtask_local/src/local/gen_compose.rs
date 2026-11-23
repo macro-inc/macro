@@ -535,6 +535,8 @@ fn add_local_infra(
                 interval: Some("5s".to_string()),
                 timeout: Some("3s".to_string()),
                 retries: 10,
+                // `start.sh` allows its first initialization 60 seconds.
+                start_period: Some("60s".to_string()),
                 ..Default::default()
             }),
             networks: net_aliases(&[("services", &["openbao"])]),

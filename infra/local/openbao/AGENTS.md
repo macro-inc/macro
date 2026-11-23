@@ -15,6 +15,7 @@ stack generator owns the container, instance volumes, and generated credentials.
   `../../openbao/openbao_provisioning.py`, which the hosted dev provisioning shares.
 - `../../../tooling/xtask/crates/xtask_local/src/local/gen_compose.rs`: container
   and named-volume wiring; `local_env.rs` owns the service JWT signing identity;
+  `openbao.rs` gates startup on initialized/unsealed health;
   `passwords_vault.rs` provisions every team after stack up and backs
   `just passwords_provision` for teams created later.
 
@@ -39,6 +40,8 @@ stack generator owns the container, instance volumes, and generated credentials.
 - xtask stages `start.sh` and `local.hcl` into `infra/local/generated/<instance>/openbao/`
   with mode 0644 and mounts those copies, so private (umask 077) checkouts work;
   add any new mounted config file to `passwords_vault::CONFIG_FILES`.
+- Keep the OpenBao startup wait bounded; a restarting container may never become unhealthy.
+- Wait for a real status response before initialization; `operator init -status` also returns 2 when the listener is unreachable.
 
 - Preserve `/openbao/file/data`, `seal.key`, and `bootstrap.json` together on the
   named volume; Postgres stores metadata only and cannot reconstruct lost

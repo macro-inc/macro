@@ -31,25 +31,46 @@ trap 'exit 0' INT TERM
 # The listener must be ready before init; initialization output never reaches logs.
 attempt=0
 while :; do
-    status=0
-    bao operator init -status >/dev/null 2>&1 || status=$?
-    case "$status" in
-        0)
-            if [ ! -e "$state/bootstrap.json" ] && [ -s "$state/bootstrap.json.tmp" ]; then
-                mv "$state/bootstrap.json.tmp" "$state/bootstrap.json"
-            fi
-            break
-            ;;
-        2)
-            # Raft may report uninitialized briefly while loading existing data.
-            if [ ! -e "$state/bootstrap.json" ] && [ ! -e "$state/bootstrap.json.tmp" ]; then
-                bao operator init -recovery-shares=1 -recovery-threshold=1 -format=json > "$state/bootstrap.json.tmp"
-                mv "$state/bootstrap.json.tmp" "$state/bootstrap.json"
-                echo 'Initialized local OpenBao; bootstrap credentials remain in /openbao/file/bootstrap.json.'
+    # init -status returns 2 for both uninitialized and unreachable servers.
+    # status returns 1 on a transport error, so do not initialize before a
+    # listener response (0 when unsealed, 2 when sealed).
+    listener_status=0
+    bao status >/dev/null 2>&1 || listener_status=$?
+    if [ "$listener_status" = 0 ] || [ "$listener_status" = 2 ]; then
+        status=0
+        bao operator init -status >/dev/null 2>&1 || status=$?
+        case "$status" in
+            0)
+                if [ ! -e "$state/bootstrap.json" ] && [ -s "$state/bootstrap.json.tmp" ]; then
+                    mv "$state/bootstrap.json.tmp" "$state/bootstrap.json"
+                fi
                 break
-            fi
-            ;;
-    esac
+                ;;
+            2)
+                # An empty file holds no credentials: an earlier init failed before
+                # writing any, so retry it.
+                if [ -e "$state/bootstrap.json.tmp" ] && [ ! -s "$state/bootstrap.json.tmp" ]; then
+                    rm -f "$state/bootstrap.json.tmp"
+                fi
+                # Raft may report uninitialized briefly while loading existing data.
+                if [ ! -e "$state/bootstrap.json" ] && [ ! -e "$state/bootstrap.json.tmp" ]; then
+                    init_status=0
+                    bao operator init -recovery-shares=1 -recovery-threshold=1 -format=json > "$state/bootstrap.json.tmp" || init_status=$?
+                    if [ "$init_status" != 0 ] || [ ! -s "$state/bootstrap.json.tmp" ]; then
+                        # Partial output may hold the only copy of the credentials.
+                        if [ ! -s "$state/bootstrap.json.tmp" ]; then
+                            rm -f "$state/bootstrap.json.tmp"
+                        fi
+                        echo 'Local OpenBao initialization failed.' >&2
+                        exit 1
+                    fi
+                    mv "$state/bootstrap.json.tmp" "$state/bootstrap.json"
+                    echo 'Initialized local OpenBao; bootstrap credentials remain in /openbao/file/bootstrap.json.'
+                    break
+                fi
+                ;;
+        esac
+    fi
     if ! kill -0 "$server_pid" 2>/dev/null || [ "$attempt" -ge 60 ]; then
         echo 'Local OpenBao did not become ready for initialization.' >&2
         exit 1
