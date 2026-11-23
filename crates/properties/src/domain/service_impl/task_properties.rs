@@ -29,7 +29,7 @@ use crate::domain::service_impl::PropertiesServiceImpl;
 pub(crate) struct TaskRelationshipMutation {
     /// The edited task's persisted assignment.
     pub property: EntityProperty,
-    /// The authorized pre-write graph snapshot.
+    /// The complete pre-write graph snapshot.
     pub previous_value: Option<PropertyValue>,
     /// Canonical changed inverse assignments, read before commit.
     pub reciprocal: Vec<crate::domain::model::EntityPropertyMutationSnapshot>,
@@ -90,12 +90,21 @@ where
         access: &EditReceipt,
         referenced_task_ids: &[Uuid],
     ) -> Result<(), PropertiesErr> {
-        self.check_referenced_edit_access(
-            access,
-            entity_access::domain::models::EntityType::Document,
-            referenced_task_ids,
-        )
-        .await
+        let user_id = match access.auth() {
+            EntityAccessAuth::Internal => return Ok(()),
+            EntityAccessAuth::Unauthenticated => return Err(PropertiesErr::PermissionDenied),
+            EntityAccessAuth::Authenticated(_) | EntityAccessAuth::Bot(_) => access
+                .acting_user_id()
+                .ok_or(PropertiesErr::PermissionDenied)?,
+        };
+        if referenced_task_ids.is_empty() {
+            return Ok(());
+        }
+        self.permission_service()?
+            .mint_document_edit_receipts(user_id, referenced_task_ids)
+            .await
+            .map_err(|_| PropertiesErr::PermissionDenied)?;
+        Ok(())
     }
 
     /// Require the acting user's edit access to every referenced entity.
@@ -285,15 +294,15 @@ where
                         .map(|id| EntityReference::new(id.to_string(), EntityType::Task))
                         .collect(),
                 ));
-                // Authorize the full pre-write snapshot as well as the desired
-                // endpoints. The repository compares that snapshot under a lock.
-                let mut touched: HashSet<Uuid> = current.iter().copied().collect();
-                touched.extend(&desired);
-                self.check_referenced_task_edit_access(
-                    access,
-                    &touched.into_iter().collect::<Vec<_>>(),
-                )
-                .await?;
+                // Only changed edges mutate inverse properties. Keep the full
+                // snapshot for the repository's endpoint locks and stale check.
+                let current_set: HashSet<Uuid> = current.iter().copied().collect();
+                let touched = current_set
+                    .symmetric_difference(&desired)
+                    .copied()
+                    .collect::<Vec<_>>();
+                self.check_referenced_task_edit_access(access, &touched)
+                    .await?;
 
                 match self
                     .repository

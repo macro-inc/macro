@@ -368,7 +368,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         property_definition_id: Uuid,
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
-    /// Replace a task's dependencies or dependents using the authorized snapshot.
+    /// Replace a task's dependencies or dependents using the complete expected snapshot.
     /// The repository serializes writers and checks the snapshot and cycles.
     fn link_task_dependencies(
         &self,
@@ -524,6 +524,14 @@ pub trait PermissionService: Send + Sync + 'static {
         entity_id: &str,
         entity_type: AccessEntityType,
     ) -> impl Future<Output = Result<EditReceipt, Self::Err>> + Send;
+
+    /// Mint edit receipts for every document, preserving each actual permission level.
+    /// Errors if any document is omitted or lacks edit access.
+    fn mint_document_edit_receipts<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        document_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EditReceipt>, Self::Err>> + Send;
 
     /// Grant edit permissions to users for a task.
     /// This is used when task assignees are updated to ensure they can edit the task.

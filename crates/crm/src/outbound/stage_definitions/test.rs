@@ -39,6 +39,14 @@ impl PermissionService for NoPermissions {
         unimplemented!("stage definitions never mint edit receipts")
     }
 
+    async fn mint_document_edit_receipts<'a>(
+        &self,
+        _user_id: &MacroUserIdStr<'a>,
+        _document_ids: &[Uuid],
+    ) -> Result<Vec<EditReceipt>, Self::Err> {
+        unreachable!("stage definitions never mint document edit receipts")
+    }
+
     async fn grant_permissions_to_task<'a>(
         &self,
         _user_ids: &[MacroUserIdStr<'a>],

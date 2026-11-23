@@ -1,9 +1,12 @@
 //! Permission service implementation for properties.
 
-use std::sync::Arc;
+#[cfg(test)]
+mod test;
+
+use std::{collections::HashMap, sync::Arc};
 
 use entity_access::domain::models::{
-    AccessError, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
+    AccessError, EditAccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
     EntityType as AccessEntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
@@ -116,6 +119,25 @@ fn access_receipt<T: entity_access::domain::models::RequiredPermission>(
     )
 }
 
+/// Bulk view receipts retain actual access levels; upgrading enforces edit access
+/// without applying the property-view owner/deletion preprocessing.
+fn document_edit_receipts(
+    document_ids: &[String],
+    receipts: HashMap<String, ViewReceipt>,
+) -> anyhow::Result<Vec<EditReceipt>> {
+    document_ids
+        .iter()
+        .map(|id| {
+            receipts
+                .get(id)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("Access denied"))?
+                .try_into_requirement::<EditAccessLevel>()
+                .map_err(anyhow::Error::from)
+        })
+        .collect()
+}
+
 impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> {
     type Err = anyhow::Error;
 
@@ -195,6 +217,20 @@ impl<Svc: EntityAccessService> PermissionService for PermissionServiceImpl<Svc> 
             )?),
             Some(_) | None => anyhow::bail!("Access denied"),
         }
+    }
+
+    #[tracing::instrument(skip(self, user_id, document_ids), fields(document_count = document_ids.len()), err)]
+    async fn mint_document_edit_receipts<'a>(
+        &self,
+        user_id: &MacroUserIdStr<'a>,
+        document_ids: &[Uuid],
+    ) -> Result<Vec<EditReceipt>, Self::Err> {
+        let document_ids = document_ids.iter().map(Uuid::to_string).collect::<Vec<_>>();
+        let receipts = self
+            .entity_access_service
+            .generate_document_view_access_receipts(user_id, &document_ids)
+            .await?;
+        document_edit_receipts(&document_ids, receipts)
     }
 
     #[tracing::instrument(skip(self), fields(task_id = %task_id, user_count = user_ids.len()), err)]

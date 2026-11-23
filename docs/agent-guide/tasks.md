@@ -6,7 +6,7 @@ Search uses the same 40px glass island as Filters. Tasks and Projects lists rese
 ## Dependencies and blocked tasks
 
 - Edit **Depends On** to choose prerequisite tasks, or **Blocking** to choose tasks that depend on the current task. Both directions use the existing task picker in the properties panel.
-- Adding or removing a link updates both tasks immediately. Failed writes roll back both sides. Editing either direction requires edit access to every affected task, including removed tasks.
+- Adding or removing a link updates both tasks immediately. Failed writes roll back both sides. Editing either direction requires edit access to added and removed tasks only. Retained inaccessible tasks do not prevent unrelated edits.
 - A task shows **Blocked** while at least one existing prerequisite is not Completed. Canceled tasks still block. Completing or reopening a prerequisite updates the dependent tasks.
 - Desktop rows, phone rows, and board cards share the Blocked badge. Task details show status icons only for accessible prerequisites; unavailable tasks reveal no name or individual completion state. The task's aggregate Blocked state remains visible across prerequisite access boundaries.
 - Team admins can enable **Prevent completing blocked tasks** in **Settings → Team → General**. The default is off. When enabled, completion is rejected by every backend Status writer; **Open blocker** opens an unfinished prerequisite after rollback.

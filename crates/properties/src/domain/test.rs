@@ -1545,6 +1545,21 @@ fn create_mock_permission_service() -> MockPermissionService {
             Box::pin(async move { Ok(receipt) })
         });
     perm_checker
+        .expect_mint_document_edit_receipts()
+        .returning(|_, ids| {
+            let receipts = ids
+                .iter()
+                .map(|id| {
+                    EditReceipt::dangerously_assert_authenticated_user(
+                        caller_user_id(),
+                        &id.to_string(),
+                        entity_access::domain::models::EntityType::Document,
+                    )
+                })
+                .collect();
+            Box::pin(async move { Ok(receipts) })
+        });
+    perm_checker
 }
 
 #[tokio::test]
@@ -1820,8 +1835,8 @@ async fn entity_property_event_task_permission_and_transaction_failures_publish_
     permission_repo.expect_link_parent_task().times(0);
     let mut permission_service = MockPermissionService::new();
     permission_service
-        .expect_mint_edit_receipt()
-        .return_once(|_, _, _| Box::pin(async { Err(anyhow!("permission denied")) }));
+        .expect_mint_document_edit_receipts()
+        .return_once(|_, _| Box::pin(async { Err(anyhow!("permission denied")) }));
     let permission_broker = RecordingEventBroker::default();
     let service = PropertiesServiceImpl::new(
         permission_repo,
@@ -1952,8 +1967,8 @@ async fn test_link_parent_task_requires_edit_on_parent() {
 
     let mut perm_service = MockPermissionService::new();
     perm_service
-        .expect_mint_edit_receipt()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+        .expect_mint_document_edit_receipts()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("Access denied")) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);
@@ -2167,8 +2182,8 @@ async fn test_link_subtasks_requires_edit_on_subtasks() {
 
     let mut perm_service = MockPermissionService::new();
     perm_service
-        .expect_mint_edit_receipt()
-        .returning(|_, _, _| Box::pin(async { Err(anyhow!("Access denied")) }));
+        .expect_mint_document_edit_receipts()
+        .returning(|_, _| Box::pin(async { Err(anyhow!("Access denied")) }));
 
     let service =
         PropertiesServiceImpl::new(repo, Some(perm_service), None::<MockNotificationService>);

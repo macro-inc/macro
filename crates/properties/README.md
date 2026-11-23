@@ -146,8 +146,9 @@ updated task.
 Depends On and Blocking are reciprocal task-only system properties. Indexed
 `task_dependency_edges` and their JSON assignments change in one transaction;
 foreign-key cleanup removes references from surviving tasks. Writers authorize
-both the old and new endpoints before comparing that snapshot under the graph
-lock. Self-dependencies and direct two-task cycles are rejected; longer cycles
+only added and removed endpoints through bulk document edit receipts. Retained
+inaccessible references do not block unrelated edits. The transaction still locks
+the source and all old/new endpoints and compares the complete expected snapshot. Self-dependencies and direct two-task cycles are rejected; longer cycles
 remain allowed so each request uses bounded reverse-edge probes rather than a
 tenant-sized recursive walk. Edits accept up to 1,000 references and have a
 transaction deadline. Statement-level transition tables rebuild each changed

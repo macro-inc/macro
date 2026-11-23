@@ -333,6 +333,13 @@ impl properties::PermissionService for NoPermissions {
     ) -> Result<properties::domain::model::EditReceipt, Self::Err> {
         unreachable!("creation does not edit properties")
     }
+    async fn mint_document_edit_receipts<'a>(
+        &self,
+        _: &MacroUserIdStr<'a>,
+        _: &[uuid::Uuid],
+    ) -> Result<Vec<properties::domain::model::EditReceipt>, Self::Err> {
+        unreachable!("creation does not edit task relationships")
+    }
     async fn grant_permissions_to_task<'a>(
         &self,
         _: &[MacroUserIdStr<'a>],
