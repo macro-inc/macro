@@ -23,23 +23,16 @@ export const DESKTOP_PLATFORM_DETAILS: Record<
   linux: { label: 'Linux', requirement: 'x86_64 AppImage' },
 };
 
-export type VisitorPlatform = DesktopPlatform | 'windows' | 'ios' | 'android';
+export type VisitorPlatform = DesktopPlatform | 'windows';
 
-/**
- * The visitor's operating system, when it is one the download page treats
- * differently. iPadOS Safari reports a Mac user agent, so a touch screen
- * distinguishes it from a Mac.
- */
+/** The visitor's desktop operating system; phones and others are undefined. */
 export function detectVisitorPlatform(
-  userAgent: string,
-  maxTouchPoints = 0
+  userAgent: string
 ): VisitorPlatform | undefined {
-  if (/android/i.test(userAgent)) return 'android';
-  if (/iphone|ipad|ipod/i.test(userAgent)) return 'ios';
-  if (/macintosh|mac os x/i.test(userAgent))
-    return maxTouchPoints > 1 ? 'ios' : 'macos';
+  if (/android|iphone|ipad|ipod|cros/i.test(userAgent)) return undefined;
+  if (/macintosh|mac os x/i.test(userAgent)) return 'macos';
   if (/windows/i.test(userAgent)) return 'windows';
-  if (/linux/i.test(userAgent) && !/cros/i.test(userAgent)) return 'linux';
+  if (/linux/i.test(userAgent)) return 'linux';
   return undefined;
 }
 

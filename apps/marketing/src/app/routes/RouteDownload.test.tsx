@@ -1,11 +1,7 @@
 import { MemoryRouter, Route } from '@solidjs/router';
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  ANDROID_PLAY_STORE_URL,
-  FALLBACK_DOWNLOAD_URLS,
-  IOS_APP_STORE_URL,
-} from '../../features/marketing/core/desktopDownloads';
+import { FALLBACK_DOWNLOAD_URLS } from '../../features/marketing/core/desktopDownloads';
 import { RouteDownload } from './RouteDownload';
 
 const latest = {
@@ -13,13 +9,8 @@ const latest = {
   linux: 'https://example.com/Macro-latest-x86_64-linux.AppImage',
 };
 
-function visitWith(userAgent: string, maxTouchPoints = 0) {
+function visitWith(userAgent: string) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
-  // jsdom has no maxTouchPoints to spy on.
-  Object.defineProperty(navigator, 'maxTouchPoints', {
-    configurable: true,
-    value: maxTouchPoints,
-  });
   render(() => (
     <MemoryRouter>
       <Route path="/" component={RouteDownload} />
@@ -64,7 +55,6 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  Reflect.deleteProperty(navigator, 'maxTouchPoints');
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -94,17 +84,5 @@ describe('RouteDownload', () => {
     visitWith('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     expect(downloadLinks()[0]?.[0]).toBe('Download for macOS');
     expect(screen.getByText(/Windows is not supported yet/)).toBeTruthy();
-  });
-
-  it('leads with the mobile app on phones', () => {
-    visitWith('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 5);
-    expect(
-      screen.getAllByRole('link', { name: 'Download for iOS' })[0]
-    ).toHaveProperty('href', IOS_APP_STORE_URL);
-    cleanup();
-    visitWith('Mozilla/5.0 (Linux; Android 14; Pixel 8)', 5);
-    expect(
-      screen.getAllByRole('link', { name: 'Download for Android' })[0]
-    ).toHaveProperty('href', ANDROID_PLAY_STORE_URL);
   });
 });

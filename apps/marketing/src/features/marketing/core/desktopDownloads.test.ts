@@ -19,17 +19,16 @@ const linux = {
 
 describe('detectVisitorPlatform', () => {
   it.each([
-    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 0, 'macos'],
-    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 5, 'ios'],
-    ['Mozilla/5.0 (X11; Linux x86_64)', 0, 'linux'],
-    ['Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0)', 0, 'linux'],
-    ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', 5, 'android'],
-    ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', 5, 'ios'],
-    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 0, 'windows'],
-    ['Mozilla/5.0 (X11; CrOS x86_64)', 0, undefined],
-    ['', 0, undefined],
-  ])('detects %s with %i touch points', (userAgent, touchPoints, platform) => {
-    expect(detectVisitorPlatform(userAgent, touchPoints)).toBe(platform);
+    ['Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', 'macos'],
+    ['Mozilla/5.0 (X11; Linux x86_64)', 'linux'],
+    ['Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0)', 'linux'],
+    ['Mozilla/5.0 (Windows NT 10.0; Win64; x64)', 'windows'],
+    ['Mozilla/5.0 (Linux; Android 14; Pixel 8)', undefined],
+    ['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', undefined],
+    ['Mozilla/5.0 (X11; CrOS x86_64)', undefined],
+    ['', undefined],
+  ])('detects %s', (userAgent, platform) => {
+    expect(detectVisitorPlatform(userAgent)).toBe(platform);
   });
 });
 
@@ -40,7 +39,7 @@ describe('desktopPlatformOrder', () => {
   });
 
   it('keeps the default order for other platforms', () => {
-    for (const visitor of ['windows', 'ios', 'android', undefined] as const)
+    for (const visitor of ['windows', undefined] as const)
       expect(desktopPlatformOrder(visitor)).toEqual(['macos', 'linux']);
   });
 });

@@ -21,9 +21,8 @@ import './RouteDownload.css';
 
 export function RouteDownload() {
   setPageSeo({
-    title: 'Download Macro',
-    description:
-      'Download the Macro desktop app for macOS and Linux, or get Macro on iOS and Android.',
+    title: 'Download Macro Alpha',
+    description: 'Download the Macro alpha desktop app for macOS and Linux.',
     path: '/download',
   });
 
@@ -32,14 +31,11 @@ export function RouteDownload() {
   );
   const [visitor, setVisitor] = createSignal<VisitorPlatform>();
   const platforms = () => desktopPlatformOrder(visitor());
-  const onPhone = () => visitor() === 'ios' || visitor() === 'android';
   const releaseVersion = () =>
     desktopReleaseVersion(downloads()[platforms()[0]]);
 
   onMount(() => {
-    setVisitor(
-      detectVisitorPlatform(navigator.userAgent, navigator.maxTouchPoints)
-    );
+    setVisitor(detectVisitorPlatform(navigator.userAgent));
     const controller = new AbortController();
     void fetchDesktopDownloadUrls(controller.signal).then(setDownloads);
     onCleanup(() => controller.abort());
@@ -52,39 +48,21 @@ export function RouteDownload() {
           <div class="downloads-app-icon" aria-hidden="true">
             <MacroLogo />
           </div>
-          <h1>Download Macro</h1>
-          <p>
-            <Show
-              when={onPhone()}
-              fallback="The desktop app for macOS and Linux."
-            >
-              Get Macro on your phone, or open this page on a computer for the
-              desktop app.
-            </Show>
-          </p>
+          <h1>Download Macro Alpha</h1>
+          <p>Available for macOS and Linux</p>
         </header>
 
+        <p class="downloads-phone-note">
+          Open this page on a Mac or Linux computer to download the desktop app.
+        </p>
+
         <div class="downloads-action">
-          <Show when={visitor() === 'ios'}>
-            <a class="site-nav-start" href={IOS_APP_STORE_URL}>
-              Download for iOS
-            </a>
-          </Show>
-          <Show when={visitor() === 'android'}>
-            <a class="site-nav-start" href={ANDROID_PLAY_STORE_URL}>
-              Download for Android
-            </a>
-          </Show>
           <ul class="downloads-installers" aria-label="Desktop installers">
             <For each={platforms()}>
               {(platform, index) => (
                 <li>
                   <a
-                    class={
-                      index() === 0 && !onPhone()
-                        ? 'site-nav-start'
-                        : 'site-nav-demo'
-                    }
+                    class={index() === 0 ? 'site-nav-start' : 'site-nav-demo'}
                     href={downloads()[platform]}
                   >
                     Download for {DESKTOP_PLATFORM_DETAILS[platform].label}
@@ -132,8 +110,8 @@ export function RouteDownload() {
           <h2 id="ios">iOS</h2>
           <p>
             <a href={IOS_APP_STORE_URL}>Download Macro from the App Store</a>.
-            You can also open <strong>Settings → Mobile App</strong> in Macro
-            and scan the QR code.
+            You can also open <strong>Settings → Downloads</strong> in Macro and
+            scan the QR code.
           </p>
           <h2 id="android">Android</h2>
           <p>

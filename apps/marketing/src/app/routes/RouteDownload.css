@@ -148,3 +148,24 @@
     height: 38px;
   }
 }
+
+/* Phones are not offered the desktop installers. */
+.downloads-page .downloads-phone-note {
+  display: none;
+  color: #999;
+  font-size: 15px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+@media (max-width: 767px) {
+  .downloads-page .downloads-phone-note {
+    display: block;
+  }
+  .downloads-action,
+  .downloads-note,
+  .downloads-release,
+  .downloads-page .downloads-version {
+    display: none;
+  }
+}
