@@ -267,7 +267,11 @@ indexes retain old unprefixed indexes during rolling updates. An interrupted
 concurrent build needs its INVALID index inspected and removed before retry.
 
 `email_links.mailbox_issue` and `mailbox_retry_at` are nullable sync-health
-projections, separate from `needs_reauth`; old binaries ignore them.
+projections, separate from `needs_reauth`; old binaries ignore them. Migration
+259 installs these and the three ordered IMAP-notification fields in one
+nullable, metadata-only ALTER, so the parent queues one exclusive lock. The
+undeployed 260/267 files were folded into it; preserve the documented local
+checksum/missing-version disposition.
 
 Work provider columns use a constant Outlook default without a heap rewrite.
 Streams were Outlook-only; legacy reconciliation may include Gmail cleanup.
