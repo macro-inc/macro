@@ -146,7 +146,7 @@ async fn known_nonmembers<S: PredicateIndexStorage>(
         ("isSignal", "mail-signal"),
     ] {
         let selection = RecordSelection::parse(
-            cache_core::meta::bundled_schema_ref(),
+            engine.schema(),
             &format!("fragment MailState on GraphqlSoupEmailThread {{ {field} }}"),
             "MailState",
         )

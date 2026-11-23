@@ -3,7 +3,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Granola's app slug in Pipedream.
+/// Granola's app in the connectors catalog.
 pub const GRANOLA_APP: &str = "granola";
 
 /// Webhook access scope. Sync always asks for the widest scope the key accepts:
@@ -44,7 +44,6 @@ pub struct Connection {
     /// Stable import namespace, retained when credentials or webhooks change.
     pub namespace: Uuid,
     pub user_id: MacroUserIdStr<'static>,
-    pub account_id: String,
     pub scope: Scope,
     pub enabled: bool,
     pub endpoint_id: Option<String>,
@@ -107,7 +106,7 @@ pub struct Job {
 /// Why a sync is not healthy, stored as the connection's `last_error`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
 pub enum SyncIssue {
-    /// The account went away; a reconnect restarts sync at once.
+    /// The connection went away; a reconnect restarts sync at once.
     #[strum(serialize = "Sync stopped")]
     Stopped,
     /// Webhook registration failed; retried after a delay.
@@ -122,7 +121,6 @@ pub enum SyncIssue {
 pub struct SyncState {
     pub id: Uuid,
     pub user_id: MacroUserIdStr<'static>,
-    pub account_id: String,
     pub scope: Scope,
     pub enabled: bool,
     pub has_endpoint: bool,

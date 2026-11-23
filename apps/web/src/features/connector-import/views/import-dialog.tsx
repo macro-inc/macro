@@ -72,26 +72,23 @@ function ImportDialogBody(props: {
   function rowState(provider: ImportProvider): ProviderRowState {
     if (connecting() === provider.appSlug) return 'connecting';
     if (!connections.ready()) return 'unknown';
-    return connections.connected().has(provider.appSlug)
+    if (!connections.connected().has(provider.appSlug)) return 'disconnected';
+    return connections.importable().has(provider.appSlug)
       ? 'connected'
-      : 'disconnected';
+      : 'connected-no-import';
   }
 
   async function connect(provider: ImportProvider) {
     if (connecting()) return;
     setConnecting(provider.appSlug);
     try {
-      const outcome = await context.connect(
+      await context.connect(
         {
           appSlug: provider.appSlug,
           name: provider.name,
-          mcpUrl: provider.mcpUrl,
         },
         props.container()
       );
-      if (outcome === 'unsupported') {
-        toast.failure('Connectors are not available on this deployment');
-      }
     } catch {
       toast.failure(`Couldn't connect ${provider.name}`);
     } finally {

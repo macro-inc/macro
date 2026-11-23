@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO user_last_seen (user_id, seen_at)\n                SELECT DISTINCT seen.id, $2::timestamptz\n                FROM unnest($1::text[]) AS seen(id)\n                WHERE EXISTS (SELECT 1 FROM \"User\" WHERE \"User\".id = seen.id)\n                ORDER BY seen.id\n                ON CONFLICT (user_id) DO UPDATE SET seen_at = EXCLUDED.seen_at\n                WHERE user_last_seen.seen_at < EXCLUDED.seen_at\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51b3acfbc2db4fb446bb1dc8e7bfbe7cd1da064e0680efe378b1dbcf58cc67e4"
+}

@@ -2,7 +2,7 @@
 
 ## What it is
 
-Shared read-only issue tracker contracts and Pipedream transport. Used by the reviewed workspace importer in `crates/import`.
+Shared read-only issue tracker contracts and the transport over a connected app's API. Used by the reviewed workspace importer in `crates/import`.
 
 ## Start here
 
@@ -12,7 +12,7 @@ Shared read-only issue tracker contracts and Pipedream transport. Used by the re
 ## Boundaries
 
 Provider adapters read only. Planning, authorization, approval and writes to
-Macro belong to `import`; credentials belong to `pipedream_mcp`.
+Macro belong to `import`; credentials belong to `connectors`.
 
 ## Checks
 

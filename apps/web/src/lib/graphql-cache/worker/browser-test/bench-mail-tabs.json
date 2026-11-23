@@ -1,0 +1,220 @@
+{
+  "important": {
+    "limit": 100,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "sortDirection": "DESC",
+    "emailView": "INBOX",
+    "filters": {
+      "calendarEventFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "documentFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "projectFilter": {
+        "literal": {
+          "projectId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "chatFilter": {
+        "literal": {
+          "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "emailFilter": {
+        "tree": {
+          "and": {
+            "left": {
+              "literal": {
+                "importance": true
+              }
+            },
+            "right": {
+              "literal": {
+                "shared": "EXCLUDE"
+              }
+            }
+          }
+        }
+      },
+      "channelFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "channelThreadFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "callFilter": {
+        "literal": {
+          "callId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "crmCompanyFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "foreignEntityFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "agentSessionFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      }
+    }
+  },
+  "noise": {
+    "limit": 100,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "sortDirection": "DESC",
+    "emailView": "INBOX",
+    "filters": {
+      "calendarEventFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "documentFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "projectFilter": {
+        "literal": {
+          "projectId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "chatFilter": {
+        "literal": {
+          "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "emailFilter": {
+        "tree": {
+          "and": {
+            "left": {
+              "literal": {
+                "importance": false
+              }
+            },
+            "right": {
+              "literal": {
+                "shared": "EXCLUDE"
+              }
+            }
+          }
+        }
+      },
+      "channelFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "channelThreadFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "callFilter": {
+        "literal": {
+          "callId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "crmCompanyFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "foreignEntityFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "agentSessionFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      }
+    }
+  },
+  "all": {
+    "limit": 100,
+    "expand": true,
+    "sortMethod": "UPDATED_AT",
+    "sortDirection": "DESC",
+    "emailView": "ALL",
+    "filters": {
+      "calendarEventFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "documentFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "projectFilter": {
+        "literal": {
+          "projectId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "chatFilter": {
+        "literal": {
+          "chatId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "emailFilter": {
+        "tree": {
+          "not": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000"
+            }
+          }
+        }
+      },
+      "channelFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "channelThreadFilter": {
+        "literal": {
+          "channelId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "callFilter": {
+        "literal": {
+          "callId": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "crmCompanyFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "foreignEntityFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      },
+      "agentSessionFilter": {
+        "literal": {
+          "id": "00000000-0000-0000-0000-000000000000"
+        }
+      }
+    }
+  }
+}
