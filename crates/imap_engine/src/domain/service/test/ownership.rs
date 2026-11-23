@@ -36,6 +36,8 @@ async fn an_owner_lost_during_sync_queue_never_starts_provider_work() {
             })),
         });
         let engine = Engine::new(
+            crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
+                .unwrap(),
             repository.clone(),
             Arc::new(TestCipher),
             transport,
@@ -95,6 +97,7 @@ async fn queued_actor_renews_ownership_before_the_lease_can_expire() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,
@@ -164,6 +167,7 @@ async fn failed_heartbeat_keeps_inflight_work_alive_until_its_lease_is_released(
         provider_work: Some(control.clone()),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,
@@ -229,6 +233,7 @@ async fn real_owner_loss_aborts_provider_work_and_releases_the_command_lease() {
         })),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,
@@ -287,6 +292,7 @@ async fn ownership_loss_drains_acquisition_before_releasing_without_provider_wor
         })),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,
@@ -346,6 +352,7 @@ async fn a_stalled_heartbeat_does_not_suspend_the_round_or_its_cleanup() {
         provider_work: Some(control.clone()),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,

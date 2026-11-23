@@ -413,6 +413,7 @@ async fn real_tls_mail_after_snapshot_commit_is_indexed_without_an_idle_timeout(
     // The repository and cipher are test adapters; all mailbox commands and
     // headers below cross verified TLS to the real Dovecot lab.
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(LabCipher(credentials.clone())),
         transport.clone(),

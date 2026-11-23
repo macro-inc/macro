@@ -28,6 +28,7 @@ async fn unchanged_ten_thousand_message_sync_preserves_the_committed_revision(po
     let repository = Arc::new(PgRepository::new(pool));
     let notifier = Arc::new(RecordingNotifier::default());
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         Arc::new(SnapshotTransport(std::sync::Mutex::new(

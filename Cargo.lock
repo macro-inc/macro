@@ -11474,6 +11474,7 @@ dependencies = [
  "email_api_client",
  "futures",
  "hickory-resolver",
+ "hmac 0.12.1",
  "imap-proto",
  "lazy-regex",
  "macro_env_var",

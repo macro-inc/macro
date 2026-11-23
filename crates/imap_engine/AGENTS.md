@@ -201,7 +201,7 @@ the typed size issue with durable backoff. `enable-imap-connections` defaults of
 resumable paging and incremental scans belong to stacked follow-up
 `mac-imap-smtp.23`, not this initial bounded-snapshot implementation.
 
-Pass the service TaskTracker and shutdown token explicitly to Engine::new.
+Pass the service TaskTracker, shutdown token and VerificationScopeKey explicitly to Engine::new.
 Keep Submit tracked after an HTTP request disappears. Reject unadmitted sends
 when shutdown starts, preserving a prior sticky outcome instead of claiming
 non-delivery. Persist Unknown before provider work; renew concurrently after
@@ -227,3 +227,10 @@ UIDNEXT, MODSEQ and other physical baselines without a callback when mailbox
 metadata and journals are unchanged. Keep Sent reconciliation on quiet rounds;
 leave earlier pending hints to the independent retry worker without resetting
 their revision, age or callback backoff. Health-only recovery uses save_health.
+
+Derive VerificationScopeKey once at startup from INTERNAL_AUTH_KEY with the
+macro/imap/verification-scope/v1 HMAC context. Retain only zeroized derived
+bytes; domain-separate owner and login HMACs and preserve exact usernames
+with lower-case hosts. Keep the 15-minute owner (10), host (1000) and shared login (10) caps.
+The first keyed rollout or auth-key rotation resets owner and login buckets once;
+host buckets remain unchanged. Old rows use the existing bounded cleanup.

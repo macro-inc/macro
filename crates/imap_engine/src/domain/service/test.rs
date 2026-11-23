@@ -316,6 +316,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
         grant_generation: 1,
     };
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),
@@ -373,6 +374,7 @@ async fn uncertain_send_is_persisted_before_io_and_is_not_sent_again_after_resta
     .unwrap();
     assert_eq!(first, SubmissionOutcome::Unknown);
     let restarted = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport.clone(),
@@ -468,6 +470,7 @@ async fn a_send_deadline_pauses_other_attempts_but_never_replays_the_unknown_one
         grant_generation: 1,
     };
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),
@@ -741,6 +744,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         state.messages.insert(id.clone(), fallback.clone());
     }
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),
@@ -768,6 +772,7 @@ async fn ambiguous_sent_append_is_fenced_across_restart_even_with_blind_search_a
         }
     }
     let restarted = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),
@@ -819,6 +824,7 @@ async fn an_actor_that_loses_its_first_owner_claim_exits_instead_of_holding_capa
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport.clone(),
@@ -876,6 +882,7 @@ async fn a_definite_refusal_clears_the_unknown_fence_without_persisting_new_outc
         grant_generation: 1,
     };
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),

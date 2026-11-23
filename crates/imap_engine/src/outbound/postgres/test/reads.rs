@@ -178,6 +178,7 @@ async fn scoped_reads_share_a_snapshot_and_cannot_mutate_or_outlive_access(pool:
         provider_work: Some(control.clone()),
     });
     let engine = crate::domain::service::Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         Arc::new(PgRepository::new(one.clone())),
         Arc::new(TestCipher),
         transport,

@@ -79,6 +79,7 @@ fn fixture(failure: Error) -> Fixture {
         })),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         cipher.clone(),
         transport.clone(),

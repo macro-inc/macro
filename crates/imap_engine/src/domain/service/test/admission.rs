@@ -27,6 +27,7 @@ async fn submission_admission_wait_is_bounded_without_marking_or_sending() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),
@@ -86,6 +87,7 @@ async fn smtp_receives_the_original_deadline_after_waiting_for_admission() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport.clone(),
@@ -159,6 +161,7 @@ async fn interactive_message_lookup_is_not_queued_behind_sync_admission() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,
@@ -276,6 +279,8 @@ async fn ingestion_burst_does_not_queue_a_user_message_read() {
             provider_work: Some(control),
         });
         let engine = Engine::new(
+            crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
+                .unwrap(),
             repository,
             Arc::new(TestCipher),
             transport,
@@ -369,6 +374,7 @@ async fn queued_accounts_rotate_after_stalled_and_cancelled_sync_rounds() {
         })),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,
@@ -466,6 +472,7 @@ async fn configured_sync_capacity_bounds_started_rounds_without_limiting_binding
         assert!(matches!(SyncConcurrency::new(invalid), Err(Error::Invalid)));
     }
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,
@@ -523,6 +530,7 @@ async fn sync_state_loading_counts_toward_the_round_work_budget() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,
@@ -597,6 +605,7 @@ async fn saturation_is_exportable_while_the_admission_wait_is_still_pending() {
         provider_work: None,
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,

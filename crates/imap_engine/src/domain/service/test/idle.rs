@@ -78,6 +78,7 @@ async fn a_planned_idle_restart_stays_stable_and_rearms_without_rescanning() {
         provider_work: Some(control.clone()),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(TestCipher),
         transport,
@@ -184,6 +185,7 @@ async fn an_unavailable_baseline_backs_off_full_scans_to_the_periodic_walk() {
         })),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport.clone(),

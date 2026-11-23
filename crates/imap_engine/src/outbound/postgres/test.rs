@@ -3,6 +3,7 @@ mod reads;
 mod restart;
 mod send_lifetime;
 mod sync_cost;
+mod verification;
 use super::*;
 use chrono::{Duration, Utc};
 
@@ -136,6 +137,7 @@ async fn two_replicas_serialize_commands_and_reject_stale_or_other_provider_bind
         Err(Error::AccountBusy)
     ));
     let reader = crate::domain::service::Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         std::sync::Arc::new(PgRepository::new(pool.clone())),
         std::sync::Arc::new(crate::domain::service::test::TestCipher),
         std::sync::Arc::new(crate::outbound::protocol::ProtocolTransport::new(

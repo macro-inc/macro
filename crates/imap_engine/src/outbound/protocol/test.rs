@@ -492,6 +492,7 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
     };
     let cipher = Arc::new(FixedCredentials(credentials));
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         cipher.clone(),
         Arc::new(proxy.transport()),
@@ -549,6 +550,7 @@ async fn lost_real_smtp_final_reply_is_unknown_and_a_restarted_engine_never_retr
     );
     assert_eq!(proxy.accepted.load(Ordering::Acquire), 1);
     let restarted = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         cipher,
         Arc::new(proxy.transport()),

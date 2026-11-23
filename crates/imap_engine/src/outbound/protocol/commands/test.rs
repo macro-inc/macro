@@ -315,6 +315,7 @@ fn indexed_engine(transport: Arc<ProtocolTransport>) -> Arc<crate::domain::servi
         acquire_gate: None,
     });
     Arc::new(crate::domain::service::Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository,
         Arc::new(PeerCipher),
         transport,

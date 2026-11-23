@@ -47,6 +47,8 @@ impl PendingSubmission {
             provider_work: None,
         });
         let engine = Arc::new(Engine::new(
+            crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key")
+                .unwrap(),
             repository.clone(),
             Arc::new(TestCipher),
             transport.clone(),

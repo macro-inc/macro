@@ -27,6 +27,16 @@ models, settings responses and logs. The service client reuses redacting source
 models in its generated API. Disconnect removes credentials and provider state;
 old notifications and receipts cannot revive the link.
 
+Verification admission retains three limits per fifteen-minute window: ten
+per owner, one thousand per host and ten per host/login across owners. Owner
+and login pseudonyms use separate HMAC-SHA256 purpose labels. The login input
+is an unambiguous tuple of lower-case host and exact username. At startup, HMAC-SHA256 derives its subkey
+from INTERNAL_AUTH_KEY with the context `macro/imap/verification-scope/v1`;
+Engine retains only the zeroized, redacted subkey. No new secret is configured.
+The first keyed rollout and any auth-key rotation reset owner and login buckets
+once, while host buckets remain unchanged. Earlier rows are left to the
+existing bounded age-based cleanup.
+
 ## Mail transport and state
 
 Transport resolves and validates every remote address through the shared

@@ -20,7 +20,7 @@ shutdown. User-facing routes live in email_service.
 - Reject IMAP test endpoint/trust-root overrides outside Environment::Local.
 - The service requires a dedicated KMS key and internal key. It has no public
   gateway route and cannot decrypt credentials owned by another link or user.
-- Pass the actual service shutdown token and tracker into Engine; refuse new
+- Pass the actual service shutdown token, tracker and derived VerificationScopeKey into Engine; refuse new
   unadmitted sends during shutdown without replacing a prior Unknown outcome.
   Track admitted Submit work with scheduler tasks, independently of HTTP cancellation.
   Give HTTP and tracked-work shutdown one shared thirty-second drain, below the
@@ -40,3 +40,8 @@ reviewed code change only after measuring round duration and memory; no new
 Doppler configuration is required. It limits active
 rounds, not IDLE actors or mailbox coverage. Queue depth/wait and saturation are
 visible in `imap.admission`; H3 paging is required to shrink long initial rounds.
+
+Derive the verification subkey from the required INTERNAL_AUTH_KEY once at
+startup; do not retain another copy of the bearer key in Engine or add a new
+configuration secret. Rotation starts fresh owner and login verification buckets
+without resetting host quotas.

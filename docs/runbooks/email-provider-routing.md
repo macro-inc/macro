@@ -28,7 +28,8 @@ rows. Production counts require explicit permission and remain unmeasured.
 ## Earlier local preview revisions
 
 These unmerged revisions were never deployed. Removing migrations 250,
-253–256, 261 and 262 and editing 251/252 makes SQLx reject local databases that
+253–256, 261 and 262 and editing 251/252 or the metadata comment in
+20261119060448_imap_verification_limits makes SQLx reject local databases that
 already applied the old set: applied-but-missing versions and changed checksums
 are both errors. Full migration requires a fresh database or an explicitly
 approved reset of a disposable database. Never edit the migration ledger to

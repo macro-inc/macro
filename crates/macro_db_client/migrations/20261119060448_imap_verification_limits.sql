@@ -1,6 +1,6 @@
 SET LOCAL lock_timeout = '5s';
 
--- Only salted scope digests and attempt counts; no addresses or credentials.
+-- Public-host hashes and keyed owner/login pseudonyms with attempt counts; no raw credentials.
 CREATE TABLE imap_verification_limits (
     scope_hash TEXT NOT NULL,
     window_start TIMESTAMPTZ NOT NULL,

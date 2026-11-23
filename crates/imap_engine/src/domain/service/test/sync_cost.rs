@@ -114,6 +114,7 @@ fn fixture(snapshots: Vec<Vec<RemoteFolder>>) -> Fixture {
     });
     let notifier = Arc::new(RecordingNotifier::default());
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         Arc::new(SnapshotTransport(std::sync::Mutex::new(snapshots.into()))),

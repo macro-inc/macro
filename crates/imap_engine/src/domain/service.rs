@@ -35,6 +35,7 @@ enum AdmissionOutcome {
 
 /// Engine orchestrator. Authorization and state transitions live here, not in HTTP handlers.
 pub struct Engine {
+    verification_key: VerificationScopeKey,
     submission_tasks: TaskTracker,
     shutdown: CancellationToken,
     repository: Arc<dyn Repository>,
@@ -57,6 +58,7 @@ pub struct Engine {
 impl Engine {
     /// Construct with replaceable infrastructure ports.
     pub fn new(
+        verification_key: VerificationScopeKey,
         repository: Arc<dyn Repository>,
         cipher: Arc<dyn CredentialCipher>,
         transport: Arc<dyn MailTransport>,
@@ -64,6 +66,7 @@ impl Engine {
         shutdown: CancellationToken,
     ) -> Self {
         Self {
+            verification_key,
             submission_tasks,
             shutdown,
             repository,
@@ -198,32 +201,7 @@ impl Engine {
         {
             return Err(Error::Forbidden);
         }
-        let mut scopes = vec![(
-            format!("{:x}", Sha256::digest(format!("owner:{}", input.user_id))),
-            10,
-        )];
-        for endpoint in [&input.imap.endpoint, &input.smtp.endpoint] {
-            scopes.push((
-                format!(
-                    "{:x}",
-                    Sha256::digest(format!("host:{}", endpoint.host.to_ascii_lowercase()))
-                ),
-                1000,
-            ));
-            scopes.push((
-                format!(
-                    "{:x}",
-                    Sha256::digest(format!(
-                        "login:{}:{}",
-                        endpoint.host.to_ascii_lowercase(),
-                        endpoint.username
-                    ))
-                ),
-                10,
-            ));
-        }
-        scopes.sort_by(|a, b| a.0.cmp(&b.0));
-        scopes.dedup_by(|a, b| a.0 == b.0);
+        let scopes = verification::scopes(&input, &self.verification_key)?;
         self.repository.admit_verification(&scopes).await?;
         let mut credentials = Credentials {
             features: None,
@@ -918,8 +896,10 @@ mod admission;
 mod organization;
 mod send;
 mod sync;
+pub(crate) mod verification;
 mod watchers;
 use sync::{changes, merge_snapshot};
+pub use verification::VerificationScopeKey;
 
 #[cfg(test)]
 pub(crate) mod test;

@@ -26,6 +26,7 @@ async fn an_expired_submit_lease_allows_other_mail_but_never_resends_the_unknown
         .execute(&pool).await.unwrap();
     let first_repository = Arc::new(PgRepository::new(pool.clone()));
     let first = Arc::new(Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         first_repository.clone(),
         Arc::new(TestCipher),
         fixture.transport.clone(),
@@ -93,6 +94,7 @@ async fn an_expired_submit_lease_allows_other_mail_but_never_resends_the_unknown
     });
     let second_repository = Arc::new(PgRepository::new(pool.clone()));
     let second = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         second_repository.clone(),
         Arc::new(TestCipher),
         second_transport.clone(),

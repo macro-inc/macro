@@ -1,5 +1,5 @@
 use imap_engine::{
-    domain::service::Engine,
+    domain::service::{Engine, VerificationScopeKey},
     inbound::http::{ApiState, router},
     outbound::{
         crypto::KmsCipher,
@@ -84,6 +84,7 @@ async fn main() -> Result<(), rootcause::Report> {
     let cancel = CancellationToken::new();
     let engine = Arc::new(
         Engine::new(
+            VerificationScopeKey::derive(config.internal_auth_key.as_ref())?,
             repository.clone(),
             Arc::new(KmsCipher::new(
                 aws_sdk_kms::Client::new(&aws),

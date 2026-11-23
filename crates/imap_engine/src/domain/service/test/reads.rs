@@ -86,6 +86,7 @@ fn read_fixture(
         provider_work: Some(control.clone()),
     });
     let engine = Engine::new(
+        crate::domain::service::VerificationScopeKey::derive("synthetic-test-auth-key").unwrap(),
         repository.clone(),
         Arc::new(TestCipher),
         transport,
