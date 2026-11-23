@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::models::Schedule;
+use crate::domain::{booking_link_models::BookingAccount, models::Schedule};
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolResult,
 };
@@ -34,6 +34,10 @@ pub struct ListBookingLinksResult {
     pub revision: i64,
     /// Reusable availability to copy into a new draft.
     pub schedules: Vec<Schedule>,
+    /// Connected accounts a personal link can book on: set one's
+    /// `emailLinkId` on the draft to have bookings land on that account's
+    /// calendar with invitations from its address. Empty for a team.
+    pub accounts: Vec<BookingAccount>,
     /// Matching links including their complete drafts.
     pub links: Vec<BookingLinkResult>,
 }
@@ -64,6 +68,7 @@ impl<Scheduling: BookingLinks> AsyncTool<BookingLinkToolContext<Scheduling>> for
             profile_id: result.profile_id,
             revision: result.revision,
             schedules: result.schedules,
+            accounts: result.accounts,
             links: result
                 .links
                 .into_iter()

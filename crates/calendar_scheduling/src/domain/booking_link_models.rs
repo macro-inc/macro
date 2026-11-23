@@ -28,6 +28,13 @@ pub struct BookingLinkEvent {
     pub macro_call: bool,
     /// Generate a Google Meet conference. Mutually exclusive with `macroCall`.
     pub google_meet: bool,
+    /// The connected account, an `emailLinkId` from the listing's `accounts`,
+    /// whose primary calendar takes this link's bookings and sends their
+    /// invitations from its address. Omit to book on the host's primary
+    /// account. Personal links only; team links book on each host's primary
+    /// account. Google Meet needs a Google account.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email_link_id: Option<Uuid>,
     /// Whether new bookings are accepted.
     pub enabled: bool,
     /// Host assignment policy.
@@ -114,8 +121,24 @@ pub struct BookingLinkListing {
     pub revision: i64,
     /// Reusable schedules, even when no links match.
     pub schedules: Vec<Schedule>,
+    /// Connected accounts a personal link can book on, as its `emailLinkId`;
+    /// empty for a team.
+    pub accounts: Vec<BookingAccount>,
     /// Links whose title, slug or description matches the search, including paused links.
     pub links: Vec<BookingLink>,
+}
+
+/// A connected account whose primary calendar the host can write, so a
+/// personal link can book on it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "ai_tools", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BookingAccount {
+    /// Connected inbox identity, set as a link's `emailLinkId`.
+    pub email_link_id: Uuid,
+    /// The account's address, which invitations for its bookings come from.
+    pub email_address: String,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -134,6 +157,7 @@ impl BookingLinkDraft {
                 location: event.location.clone(),
                 macro_call: event.macro_call,
                 google_meet: event.google_meet,
+                email_link_id: event.email_link_id,
                 enabled: event.enabled,
                 mode: event.mode,
                 hosts: event.hosts.clone(),
@@ -166,6 +190,7 @@ impl BookingLinkDraft {
                 location: self.event.location,
                 macro_call: self.event.macro_call,
                 google_meet: self.event.google_meet,
+                email_link_id: self.event.email_link_id,
                 enabled: self.event.enabled,
                 mode: self.event.mode,
                 hosts: self.event.hosts,

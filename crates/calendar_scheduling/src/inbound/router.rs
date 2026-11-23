@@ -48,7 +48,7 @@ impl<R, C, D, A> RouterState<R, C, D, A> {
 /// Scheduling API mounted beneath `/calendar/scheduling`.
 pub fn router<
     R: Repository,
-    C: Calendars,
+    C: Calendars + BookingAccounts,
     D: Directory,
     A: MacroAuthorizationService,
     T: Send + Sync + 'static,
@@ -371,7 +371,7 @@ async fn book<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationSe
 ) -> Result<Json<ReceiptResponse>, ApiError> {
     let r = s.service.book(profile, event, request).await?;
     Ok(Json(ReceiptResponse {
-        booking: r.booking,
+        booking: for_booker(r.booking),
         token: r.token,
         schedule_time_zone: r.schedule.time_zone,
     }))
@@ -383,7 +383,7 @@ async fn receipt<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizatio
 ) -> Result<Json<ReceiptResponse>, ApiError> {
     let r = s.service.receipt(id, booking_token(&headers)?).await?;
     Ok(Json(ReceiptResponse {
-        booking: r.booking,
+        booking: for_booker(r.booking),
         token: r.token,
         schedule_time_zone: r.schedule.time_zone,
     }))
@@ -394,8 +394,18 @@ async fn cancel_public<R: Repository, C: Calendars, D: Directory, A: MacroAuthor
     Json(q): Json<Token>,
 ) -> Result<Json<BookingResponse>, ApiError> {
     Ok(Json(BookingResponse {
-        booking: s.service.cancel(id, Some(q.token), None).await?,
+        booking: for_booker(s.service.cancel(id, Some(q.token), None).await?),
     }))
+}
+
+/// A booking as its booker sees it, without the hosts: a Macro user identity
+/// carries the host's sign-in address, which a link booking on another
+/// connected account must not reveal.
+fn for_booker(booking: Booking) -> Booking {
+    Booking {
+        hosts: Vec::new(),
+        ..booking
+    }
 }
 
 async fn replacement_slots<
@@ -423,7 +433,7 @@ async fn reschedule<R: Repository, C: Calendars, D: Directory, A: MacroAuthoriza
 ) -> Result<Json<ReceiptResponse>, ApiError> {
     let r = s.service.reschedule(id, q.token, q.starts_at).await?;
     Ok(Json(ReceiptResponse {
-        booking: r.booking,
+        booking: for_booker(r.booking),
         token: r.token,
         schedule_time_zone: r.schedule.time_zone,
     }))
@@ -502,7 +512,12 @@ pub async fn host_slots<R: Repository, C: Calendars, D: Directory, A: MacroAutho
 
 /// List and search booking links with their full drafts and reusable schedules.
 #[utoipa::path(get, path = "/scheduling/links", operation_id = "list_booking_links", params(LinkSearch), responses((status = 200, body = BookingLinkListing), (status = 403)), tag = "scheduling")]
-pub async fn list_links<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+pub async fn list_links<
+    R: Repository,
+    C: Calendars + BookingAccounts,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Query(q): Query<LinkSearch>,
@@ -522,7 +537,7 @@ pub async fn list_links<R: Repository, C: Calendars, D: Directory, A: MacroAutho
 #[utoipa::path(post, path = "/scheduling/links", operation_id = "create_booking_link", params(Scope), request_body = CreateBookingLinkRequest, responses((status = 200, body = BookingLink), (status = 400), (status = 403), (status = 409)), tag = "scheduling")]
 pub async fn create_link<
     R: Repository,
-    C: Calendars,
+    C: Calendars + BookingAccounts,
     D: Directory,
     A: MacroAuthorizationService,
 >(
@@ -545,7 +560,12 @@ pub async fn create_link<
 
 /// Replace one booking link's configuration at the profile revision it was read with.
 #[utoipa::path(put, path = "/scheduling/links/{id}", operation_id = "edit_booking_link", params(("id" = Uuid, Path, description = "Booking link (event type) identity"), Scope), request_body = EditBookingLinkRequest, responses((status = 200, body = BookingLink), (status = 400), (status = 403), (status = 404), (status = 409)), tag = "scheduling")]
-pub async fn edit_link<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
+pub async fn edit_link<
+    R: Repository,
+    C: Calendars + BookingAccounts,
+    D: Directory,
+    A: MacroAuthorizationService,
+>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,
     Path(id): Path<Uuid>,

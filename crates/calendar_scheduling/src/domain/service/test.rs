@@ -237,10 +237,20 @@ struct Calendar {
     lose_cancel_response: AtomicBool,
     events: Mutex<HashMap<Uuid, Uuid>>,
     busy: Mutex<Vec<BusyRange>>,
+    /// The inbox each availability read was told the booking lands on.
+    busy_inboxes: Mutex<Vec<Option<Uuid>>>,
+}
+/// The calendar the fake pins for a host's booking: one per host, or one per
+/// connected inbox when the link names one.
+fn pinned_calendar(host: &str, inbox: Option<Uuid>) -> Uuid {
+    match inbox {
+        Some(inbox) => Uuid::new_v5(&Uuid::NAMESPACE_OID, inbox.as_bytes()),
+        None => Uuid::new_v5(&Uuid::NAMESPACE_OID, host.as_bytes()),
+    }
 }
 impl Calendars for Arc<Calendar> {
-    async fn creation_calendar(&self, host: &str) -> Result<Uuid, Error> {
-        Ok(Uuid::new_v5(&Uuid::NAMESPACE_OID, host.as_bytes()))
+    async fn creation_calendar(&self, host: &str, inbox: Option<Uuid>) -> Result<Uuid, Error> {
+        Ok(pinned_calendar(host, inbox))
     }
     async fn busy(
         &self,
@@ -248,7 +258,9 @@ impl Calendars for Arc<Calendar> {
         _: DateTime<Utc>,
         _: DateTime<Utc>,
         _: Option<Uuid>,
+        inbox: Option<Uuid>,
     ) -> Result<Vec<BusyRange>, Error> {
+        self.busy_inboxes.lock().unwrap().push(inbox);
         Ok(self.busy.lock().unwrap().clone())
     }
     async fn create(&self, record: &BookingRecord, _: &EventType) -> Result<(Uuid, String), Error> {
@@ -336,6 +348,7 @@ fn profile(team: Option<Uuid>) -> Profile {
         location: String::new(),
         macro_call: false,
         google_meet: false,
+        email_link_id: None,
         enabled: true,
         schedule_id: schedule.id,
         mode: if team.is_some() {
@@ -474,11 +487,7 @@ async fn concurrent_round_robin_bookings_use_distinct_hosts_and_calendars() {
     for record in [&a, &b] {
         assert_eq!(
             record.calendar_id,
-            Some(
-                cal.creation_calendar(&record.booking.hosts[0])
-                    .await
-                    .unwrap()
-            )
+            Some(pinned_calendar(&record.booking.hosts[0], None))
         );
     }
     assert_eq!(cal.creates.load(Ordering::SeqCst), 2);
@@ -1682,10 +1691,24 @@ async fn attaching_booking_targets_requires_current_access_and_an_enabled_saved_
 }
 
 impl AttachmentReadiness for Arc<Calendar> {
-    async fn ready(&self, _: &str) -> Result<(), Error> {
+    async fn ready(&self, _: &str, _: Option<Uuid>) -> Result<(), Error> {
         Ok(())
     }
 }
+impl BookingAccounts for Arc<Calendar> {
+    async fn booking_accounts(
+        &self,
+        _: &str,
+    ) -> Result<Vec<crate::domain::booking_link_models::BookingAccount>, Error> {
+        Ok(vec![crate::domain::booking_link_models::BookingAccount {
+            email_link_id: WORK_INBOX,
+            email_address: "work@example.com".into(),
+        }])
+    }
+}
+/// A connected inbox other than the host's primary one.
+const WORK_INBOX: Uuid = Uuid::from_u128(0x7);
+mod booking_account;
 mod booking_links;
 
 mod management;
