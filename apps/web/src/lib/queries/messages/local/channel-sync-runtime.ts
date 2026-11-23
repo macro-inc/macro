@@ -426,11 +426,18 @@ export function createChannelSyncRuntime(
     // that holds the fence too long cannot keep the channel from resetting.
     yield* Effect.tryPromise(() =>
       whileNoFills(
-        () =>
-          deps.host.channelTimelineCommit(
-            { channelId, reset: true },
-            generation
-          ),
+        async () => {
+          try {
+            return await deps.host.channelTimelineCommit(
+              { channelId, reset: true },
+              generation
+            );
+          } finally {
+            // Counted again once it answers, for a fill that read after the
+            // fence let it go.
+            noteChannelReset(deps.host, channelId);
+          }
+        },
         { orRun: true, waitMs: RESET_FENCE_WAIT_MS }
       )
     );

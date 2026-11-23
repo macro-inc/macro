@@ -14,7 +14,9 @@ import {
   serverPageCoverage,
 } from '../channel-pages';
 import {
+  DELETE_HOLD_LIMIT_MS,
   FILL_HOLD_LIMIT_MS,
+  holdAgainstDeletes,
   noteChannelReset,
   noteChannelsEvicted,
   whileNoFills,
@@ -342,6 +344,34 @@ describe('loadChannelPage across tabs', () => {
       storeRecords();
       expect(await loaded.stored).toEqual({ kind: 'yielded' });
       expect(host.commits).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets fills back in once a delete has held the fence too long', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      vi.stubGlobal('navigator', { locks: fakeLocks() });
+      // The device never answers the delete, as a parked engine may not.
+      let finishDelete!: (value: string) => void;
+      const deleting = whileNoFills(
+        () =>
+          new Promise<string>((resolve) => {
+            finishDelete = resolve;
+          })
+      );
+      await vi.advanceTimersByTimeAsync(DELETE_HOLD_LIMIT_MS - 1);
+      expect(await holdAgainstDeletes()).toBeNull();
+
+      await vi.advanceTimersByTimeAsync(1);
+      const hold = await holdAgainstDeletes();
+      expect(hold).not.toBeNull();
+      hold?.release();
+
+      // The delete still answers its caller.
+      finishDelete('done');
+      expect(await deleting).toBe('done');
     } finally {
       vi.useRealTimers();
     }

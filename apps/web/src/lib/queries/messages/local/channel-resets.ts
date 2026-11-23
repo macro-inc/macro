@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 
 /**
  * Counts, per host, the commits this page sends that delete what a channel
@@ -40,13 +41,19 @@ export function unchangedSince(
   return channelResetMark(host, channelId) === mark;
 }
 
-/** Call right before sending a commit that deletes the channel's records. */
+/**
+ * Call right before sending a commit that deletes the channel's records, and
+ * again once it answers.
+ */
 export function noteChannelReset(host: object, channelId: string): void {
   const entry = countsOf(host);
   entry.channels.set(channelId, (entry.channels.get(channelId) ?? 0) + 1);
 }
 
-/** Call right before sending an eviction, which can take any channel. */
+/**
+ * Call right before sending an eviction, which can take any channel, and again
+ * once it answers.
+ */
 export function noteChannelsEvicted(host: object): void {
   countsOf(host).all += 1;
 }
@@ -71,6 +78,15 @@ export const RESET_FENCE_WAIT_MS = 30_000;
  * that stopped waiting never meets coverage for records it erased.
  */
 export const FILL_HOLD_LIMIT_MS = 20_000;
+
+/**
+ * How long a delete keeps the fence. The device may not answer it for a
+ * while (an engine parked in a hidden tab); fills in every tab stand aside
+ * until it does, so past this they come back in. A delete that answers later
+ * is counted again by its caller, so a fill that read meanwhile commits no
+ * coverage after it.
+ */
+export const DELETE_HOLD_LIMIT_MS = 20_000;
 
 /**
  * A fill's place in the fence; release it once its coverage is sent. Send
@@ -160,7 +176,9 @@ export async function afterDeletes(signal: AbortSignal): Promise<boolean> {
 /**
  * Runs a delete once no fill in any tab is between its store and its
  * coverage. `busy` when fills held the fence past `waitMs`; `orRun` then runs
- * the delete anyway, for one that cannot wait for a later pass.
+ * the delete anyway, for one that cannot wait for a later pass. The delete
+ * keeps the fence until it answers or `DELETE_HOLD_LIMIT_MS` passes; it
+ * answers its caller either way.
  */
 export async function whileNoFills<T>(
   run: () => Promise<T>,
@@ -169,16 +187,41 @@ export async function whileNoFills<T>(
   const manager = locks();
   if (!manager) return run();
   const waited = AbortSignal.timeout(options.waitMs ?? DELETE_FENCE_WAIT_MS);
+  let granted: { answer: Promise<T> };
   try {
-    return await manager.request(
+    granted = await manager.request(
       DELETE_FENCE,
       { mode: 'exclusive', signal: waited },
-      run
+      async () => {
+        const answer = run();
+        await heldAtMost(answer, DELETE_HOLD_LIMIT_MS);
+        return { answer };
+      }
     );
   } catch (error) {
     // Only the wait timed out; a failed delete is the caller's to handle.
     if (!waited.aborted || error !== waited.reason) throw error;
     return options.orRun ? run() : 'busy';
+  }
+  return await granted.answer;
+}
+
+const LAPSED = Symbol('lapsed');
+
+/** Settles with `answer`, or after `ms` when it has not answered by then. */
+async function heldAtMost(answer: Promise<unknown>, ms: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const lapsed = new Promise<typeof LAPSED>((resolve) => {
+    timer = setTimeout(() => resolve(LAPSED), ms);
+  });
+  try {
+    if ((await Promise.race([answer, lapsed])) === LAPSED) {
+      Telemetry.error(new Error('channel delete held the fence too long'), {
+        surface: 'channel-local-sync',
+      });
+    }
+  } finally {
+    clearTimeout(timer);
   }
 }
 

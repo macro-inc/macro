@@ -529,7 +529,9 @@ describe('createLocalChannelTimeline', () => {
       await deleting;
       await waitFor(() => covered().length > 0);
       // The same older page, read again and covered this time.
-      expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+      expect(fetchPage.mock.calls[1]?.[0]).toEqual(
+        fetchPage.mock.calls[0]?.[0]
+      );
       expect(fetchPage.mock.calls[0]?.[0]).toHaveProperty('before');
       mounted.dispose();
     } finally {

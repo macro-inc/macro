@@ -242,14 +242,19 @@ export const evictIdleChannels = (deps: {
       const result = yield* Effect.tryPromise({
         try: async () => {
           const removed = await whileNoFills(
-            () => {
+            async () => {
               // Counted before it is sent: a fill in flight must not cover
-              // what it removes.
+              // what it removes. Counted again once it answers, for a fill
+              // that read after the fence let it go.
               noteChannelsEvicted(host);
-              return host.channelTimelineEvict({
-                touchedBeforeMs,
-                maxChannels: MAX_EVICTED_CHANNELS,
-              });
+              try {
+                return await host.channelTimelineEvict({
+                  touchedBeforeMs,
+                  maxChannels: MAX_EVICTED_CHANNELS,
+                });
+              } finally {
+                noteChannelsEvicted(host);
+              }
             },
             { waitMs: deps.fenceWaitMs }
           );

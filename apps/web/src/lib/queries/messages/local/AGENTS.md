@@ -58,7 +58,9 @@ TanStack path in `../` runs untouched.
   its fetch until its coverage is sent (`holdAgainstDeletes`), and eviction and
   resets take it exclusive (`whileNoFills`): eviction gives up after 5 s and
   tries next round, a reset runs anyway after 30 s. A fill holds the lock at
-  most 20 s (`FILL_HOLD_LIMIT_MS`). A fill that finds a delete waiting, or
+  most 20 s (`FILL_HOLD_LIMIT_MS`), and a delete too (`DELETE_HOLD_LIMIT_MS`): one
+  the device has not answered by then lets fills back in, and is counted
+  again once it answers. A fill that finds a delete waiting, or
   outlived its hold, commits no coverage and reports `yielded`: the open
   timeline or thread shows what it read, waits for the delete
   (`afterDeletes`) and reads again, at most twice.
