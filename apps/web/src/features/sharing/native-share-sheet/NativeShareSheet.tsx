@@ -13,15 +13,18 @@ import {
 import { ChannelInputContainer } from '@channel/Input/ChannelInputContainer';
 import { buildPostMessageRequest } from '@channel/Input/message-payload';
 import { hasSendableInputContent } from '@channel/Input/utils/sendable-content';
+import {
+  createMessageRecipients,
+  postToExistingChannel,
+} from '@channel/message-recipients';
 import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
-import type { WithCustomUserInput } from '@core/user';
+import { useSendMessageToPeople } from '@core/util/channels';
 import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -31,18 +34,7 @@ import {
 } from '@core/util/upload';
 import type { PendingShareFile } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
-import { refreshChannelDirectory } from '@queries/channel/directory';
-import {
-  useGetOrCreateDirectMessageMutation,
-  useGetOrCreatePrivateChannelMutation,
-} from '@queries/channel/get-or-create-dm';
 import { usePrepareSharedMediaMutation } from '@queries/channel/share-upload';
-import { useCombinedRecipientSource } from '@queries/contacts/recipient-source';
-import { requestContactRefresh } from '@queries/contacts/refresh';
-import {
-  newMessageId,
-  useSendMessageMutation,
-} from '@queries/messages/mutations';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
 import {
@@ -123,21 +115,16 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
   const batchTokens = (shareTarget?.pendingShareFiles() ?? []).map(
     (file) => file.token
   );
-  const userId = useUserId();
-  const sendMessage = useSendMessageMutation();
   const attachmentTracker = createInputAttachmentTracker();
   const prepareMedia = usePrepareSharedMediaMutation();
   const composerId = crypto.randomUUID();
   const mentionsTracker = createMentionsTracker();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
-  const getOrCreatePrivateChannelMutation =
-    useGetOrCreatePrivateChannelMutation();
+  const { sendToChannel, sendToUsers } = useSendMessageToPeople();
   let clearComposer = () => {};
 
-  const [selectedOptions, setSelectedOptions] = createSignal<
-    WithCustomUserInput<'user' | 'contact' | 'channel'>[]
-  >([]);
+  // The new-message composer's To field: people, or one existing channel.
+  const recipients = createMessageRecipients();
 
   const [failedFiles, setFailedFiles] = createSignal<PendingShareFile[]>([]);
   const [uploading, setUploading] = createSignal(false);
@@ -178,45 +165,8 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     );
   });
 
-  const resolveDestinationChannelId = async () => {
-    const options = selectedOptions();
-
-    if (options.length === 0) {
-      toast.failure('Select a recipient');
-      throw new Error('No recipient selected for native share sheet');
-    }
-
-    const destination = getDestinationFromOptions(options);
-
-    if (destination.type === 'channel') {
-      return destination.id;
-    }
-
-    if (destination.users.length === 0) {
-      toast.failure('Select a valid recipient');
-      throw new Error('No valid recipients selected for native share sheet');
-    }
-
-    try {
-      const result =
-        destination.users.length === 1
-          ? await getOrCreateDmMutation.mutateAsync({
-              recipient_id: destination.users[0],
-            })
-          : await getOrCreatePrivateChannelMutation.mutateAsync({
-              recipients: destination.users,
-            });
-      return result.channel_id;
-    } catch {
-      toast.failure('Failed to open channel');
-      throw new Error('Failed to resolve share destination channel');
-    }
-  };
-
   const sendShare = createNativeShareSend<InputSnapshot>({
     clear: async () => {
-      fireAndForget(refreshChannelDirectory(), 'native-share-sheet');
-      requestContactRefresh();
       await shareTarget?.clearPendingShareFiles(batchTokens);
     },
     send: async (snapshot) => {
@@ -225,21 +175,48 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
           'Finish uploading the shared attachments before sending'
         );
       }
-      const senderId = userId();
-      if (!senderId) {
-        toast.failure('Failed to send message');
-        throw new Error('Missing sender id for native share sheet send');
+      const options = recipients.selected();
+      if (options.length === 0) {
+        toast.failure('Select a recipient');
+        throw new Error('No recipient selected for native share sheet');
+      }
+      const destination = getDestinationFromOptions(options);
+      const { content, mentions, attachments } = buildPostMessageRequest({
+        snapshot,
+      });
+
+      // The share stays on the current view: the sheet closes once it's sent.
+      if (destination.type === 'channel') {
+        try {
+          await postToExistingChannel(sendToChannel, {
+            span: 'channels.share_sheet_send_to_channel',
+            channelId: destination.id,
+            content,
+            mentions,
+            attachments,
+          });
+        } catch (error) {
+          toast.failure('Failed to send message');
+          throw error;
+        }
+        return;
       }
 
-      const channelId = await resolveDestinationChannelId();
-      const message = buildPostMessageRequest({ snapshot });
-
-      await sendMessage.mutateAsync({
-        parent: { type: 'channel', id: channelId },
-        message,
-        senderId,
-        optimisticId: newMessageId(),
+      if (destination.users.length === 0) {
+        toast.failure('Select a valid recipient');
+        throw new Error('No valid recipients selected for native share sheet');
+      }
+      const sent = await sendToUsers({
+        users: destination.users,
+        content,
+        mentions,
+        attachments,
+        navigate: { navigate: false },
       });
+      if (!sent) {
+        toast.failure('Failed to send message');
+        throw new Error('Native share sheet send failed');
+      }
     },
   });
 
@@ -309,7 +286,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
     sendShare.canSend() &&
     !uploading() &&
     failedFiles().length === 0 &&
-    selectedOptions().length > 0 &&
+    recipients.selected().length > 0 &&
     !inputState.view().hasPendingAttachments &&
     hasSendableInputContent(inputState.view());
 
@@ -355,11 +332,12 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
         <MobileDrawer.Label>Recipients</MobileDrawer.Label>
         <MobileDrawer.Section>
           <div class="shrink-0 p-2">
-            <RecipientSelector<'user' | 'contact' | 'channel'>
-              placeholder="To: Email or group"
-              setSelectedOptions={setSelectedOptions}
-              selectedOptions={selectedOptions()}
-              createSource={useCombinedRecipientSource}
+            <RecipientSelector<'user' | 'contact' | 'agent' | 'channel'>
+              placeholder="To: People, channels, or email addresses"
+              setSelectedOptions={recipients.select}
+              selectedOptions={recipients.selected()}
+              createSource={recipients.createSource}
+              full={recipients.isFull()}
               triggerMode="input"
               hideBorder
               noPadding
