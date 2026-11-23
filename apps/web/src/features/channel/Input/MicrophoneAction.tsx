@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MicrophoneIcon from '@icon/system/regular/microphone.svg?component-solid';
 import TextAaIcon from '@icon/system/regular/text-aa.svg?component-solid';
@@ -22,12 +21,13 @@ export function MicrophoneAction(props: {
   showMemo: boolean;
 }) {
   const startMemo = () => fireAndForget(props.memo.start(), 'voice-memo');
+  // Dictation is unavailable on touch devices, whose keyboards dictate.
   const canDictate = () =>
     props.showDictation && props.dictation.phase() !== 'unavailable';
 
   return (
     <Switch>
-      <Match when={props.showMemo && (isTouchDevice() || !canDictate())}>
+      <Match when={props.showMemo && !canDictate()}>
         <Button
           aria-label={t('channelComposer.recordVoiceMemo')}
           tooltip={t('channelComposer.recordVoiceMemo')}
