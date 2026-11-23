@@ -1053,3 +1053,5 @@ fn saved_view_contract_is_composed_under_authenticated_user_and_mutations() {
         "membership tokens are internal"
     );
 }
+
+mod task_dependencies;

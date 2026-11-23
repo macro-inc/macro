@@ -7,12 +7,6 @@ fragment TaskDependencyStateFields on GraphqlTaskDependencyState {
   properties { ...SoupPropertyFields }
 }
 
-# Realtime blocker patches carry their immediate dependents' state too.
-fragment TaskDependencyStateWithDependentsFields on GraphqlTaskDependencyState {
-  ...TaskDependencyStateFields
-  dependentTasks { ...TaskDependencyStateFields }
-}
-
 query TaskDependencies($input: SoupEntityInput!) {
   user {
     id
@@ -43,7 +37,8 @@ query RepairTaskDependencies($input: SoupEntityInput!) {
       __typename
       id
       ... on GraphqlSoupDocument {
-        taskDependencies { ...TaskDependencyStateWithDependentsFields }
+        taskDependencies { ...TaskDependencyStateFields }
+        dependentTasks { ...TaskDependencyStateFields }
       }
     }
   }

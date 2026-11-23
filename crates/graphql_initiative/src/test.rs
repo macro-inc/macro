@@ -96,6 +96,13 @@ impl SoupEntityEdges for TestSoupEdges {
     ) -> async_graphql::Result<Option<bool>> {
         Ok(None)
     }
+
+    async fn resolve_dependent_tasks(
+        _ctx: &Context<'_>,
+        _task_id: uuid::Uuid,
+    ) -> async_graphql::Result<Vec<bool>> {
+        Ok(vec![])
+    }
     type EmailThreadEdges = TestEmailThreadEdges;
     type CrmRecordEdges = TestEmailThreadEdges;
     type AgentSessionEdges = TestAgentSessionEdges;

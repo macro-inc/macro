@@ -495,6 +495,8 @@ where
             RegisteredWorkSubscriptionRoot::default(),
         ),
     )
+    // Authored operations peak at depth 10; retain headroom without unbounded nesting.
+    .limit_depth(32)
     .finish()
 }
 

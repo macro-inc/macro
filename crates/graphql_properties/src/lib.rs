@@ -40,6 +40,6 @@ pub use objects::{
 };
 pub use task_dependencies::{
     GraphqlTaskDependencyState, PropertiesTaskDependencyReader, TaskDependencyLoader,
-    TaskDependencyReader, load_task_dependencies, load_task_dependency_batch,
+    TaskDependencyReader, load_dependent_tasks, load_task_dependencies, load_task_dependency_batch,
     task_dependency_loader,
 };

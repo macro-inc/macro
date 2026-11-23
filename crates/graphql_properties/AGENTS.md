@@ -1,5 +1,7 @@
 # graphql_properties
 
+- Keep `GraphqlTaskDependencyState` flat with canonical task IDs; `load_dependent_tasks` authorizes the root and one hop through the same request loader and visibility budget.
+
 ## What it is
 
 Shared infrastructure for features that attach custom properties to entities

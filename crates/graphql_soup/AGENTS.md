@@ -1,5 +1,7 @@
 # graphql_soup
 
+- Expose one-hop `dependentTasks` on task documents only; keep the subtype guard and delegate authorization to `SoupEntityEdges::resolve_dependent_tasks`.
+
 ## What it is
 
 Backs the Soup feature (the app's unified entity search/home surface): the

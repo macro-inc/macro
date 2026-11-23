@@ -765,3 +765,51 @@ fn unreadable_prerequisites_remain_conservative_until_all_are_removed() {
         );
     });
 }
+
+#[test]
+fn one_hop_repair_updates_the_same_canonical_states_as_direct_reads() {
+    block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        seed(
+            &mut engine,
+            vec![state("a", &[], &["b"]), state("b", &["a"], &[])],
+        )
+        .await;
+        let a = state("a", &[], &["b"]);
+        let mut b = state("b", &["a"], &[])["taskDependencies"].clone();
+        b["isBlocked"] = json!(false);
+        b["openBlockerIds"] = json!([]);
+        engine
+            .write_query(
+                None,
+                MUTATION,
+                Some("RepairTaskDependencies"),
+                &variables(),
+                &json!({"user":{"id":"viewer","soupEntity":{
+                    "__typename":"GraphqlSoupDocument","id":"a",
+                    "taskDependencies":a["taskDependencies"],"dependentTasks":[b]
+                }}}),
+                None,
+            )
+            .await
+            .unwrap();
+        let cached = tasks(&mut engine).await;
+        assert_eq!(cached[1]["taskDependencies"]["isBlocked"], false);
+        assert_eq!(cached[1]["taskDependencies"]["openBlockerIds"], json!([]));
+
+        // A direct read updates the state reached through the document's one-hop edge.
+        seed(&mut engine, vec![state("b", &["a"], &[])]).await;
+        let ReadResult::Hit { data } = engine
+            .read_query(None, MUTATION, Some("RepairTaskDependencies"), &variables())
+            .await
+            .unwrap()
+        else {
+            panic!("repair remains readable")
+        };
+        assert_eq!(
+            data["user"]["soupEntity"]["dependentTasks"][0]["isBlocked"],
+            true
+        );
+        assert_eq!(data["user"]["soupEntity"]["dependentTasks"][0]["id"], "b");
+    });
+}

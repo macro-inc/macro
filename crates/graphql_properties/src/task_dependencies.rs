@@ -5,7 +5,7 @@ mod test;
 
 use crate::{EntityPropertyReader, GraphqlProperty, PropertiesEntityPropertyReader};
 use async_graphql::{
-    ComplexObject, Context, ID, SimpleObject,
+    Context, ID, SimpleObject,
     dataloader::{DataLoader, Loader},
 };
 use entity_access::domain::ports::EntityAccessService;
@@ -30,11 +30,7 @@ use uuid::Uuid;
 
 /// A task's dependency state, normalized by the task's canonical identity.
 #[derive(SimpleObject)]
-#[graphql(complex)]
 pub struct GraphqlTaskDependencyState {
-    /// Indexed reverse endpoints, retained for lazy dependent-state hydration.
-    #[graphql(skip)]
-    dependent_ids: Vec<Uuid>,
     /// Canonical task identifier.
     pub id: ID,
     /// Whether any existing blocker is unfinished.
@@ -63,7 +59,6 @@ impl GraphqlTaskDependencyState {
     pub fn new(value: TaskDependencyData) -> Self {
         let visibility = value.facts.visible_state(&value.blocker_receipts);
         Self {
-            dependent_ids: value.facts.dependent_ids,
             id: ID(value.facts.task_id.to_string()),
             is_blocked: visibility.is_blocked,
             open_blocker_ids: visibility
@@ -93,23 +88,28 @@ impl GraphqlTaskDependencyState {
     }
 }
 
-#[ComplexObject]
-impl GraphqlTaskDependencyState {
-    /// Hydrate dependent facts in the same batch when a blocker changes remotely.
-    async fn dependent_tasks(
-        &self,
-        ctx: &Context<'_>,
-    ) -> async_graphql::Result<Vec<GraphqlTaskDependencyState>> {
-        let loader = ctx.data::<DataLoader<TaskDependencyLoader>>()?;
-        let loaded = loader
-            .load_many(self.dependent_ids.clone())
-            .await
-            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
-        Ok(loaded
-            .into_values()
-            .map(GraphqlTaskDependencyState::new)
-            .collect())
-    }
+/// Load one hop of dependent states after authorizing the root and each dependent.
+/// Reuse the request loader so all reads share visibility quotas and deadlines.
+pub async fn load_dependent_tasks(
+    ctx: &Context<'_>,
+    task_id: Uuid,
+) -> async_graphql::Result<Vec<GraphqlTaskDependencyState>> {
+    let loader = ctx.data::<DataLoader<TaskDependencyLoader>>()?;
+    let Some(root) = loader
+        .load_one(task_id)
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?
+    else {
+        return Ok(vec![]);
+    };
+    let loaded = loader
+        .load_many(root.facts.dependent_ids)
+        .await
+        .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+    Ok(loaded
+        .into_values()
+        .map(GraphqlTaskDependencyState::new)
+        .collect())
 }
 
 /// Object-safe adapter boundary for the request-scoped dependency loader.

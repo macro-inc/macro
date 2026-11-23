@@ -1,5 +1,7 @@
 # complete_graph — schema conventions
 
+- Keep task dependency states non-recursive and compose document `dependentTasks` through the shared properties helper; schema depth is capped at 32 (139 authored operations peaked at depth 10).
+
 ## What it is
 
 Part of the web client's shared infrastructure: this crate composes the

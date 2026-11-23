@@ -89,6 +89,13 @@ where
         graphql_properties::load_task_dependencies(ctx, task_id).await
     }
 
+    async fn resolve_dependent_tasks(
+        ctx: &Context<'_>,
+        task_id: Uuid,
+    ) -> async_graphql::Result<Vec<Self::TaskDependencyState>> {
+        graphql_properties::load_dependent_tasks(ctx, task_id).await
+    }
+
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
         Self {
             permission_entity: entity.clone(),

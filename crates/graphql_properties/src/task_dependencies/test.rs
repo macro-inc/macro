@@ -45,6 +45,14 @@ impl TaskDependencyReader for Reader {
 struct Query;
 #[Object]
 impl Query {
+    async fn dependents(
+        &self,
+        ctx: &Context<'_>,
+        id: ID,
+    ) -> async_graphql::Result<Vec<GraphqlTaskDependencyState>> {
+        load_dependent_tasks(ctx, Uuid::parse_str(id.as_str())?).await
+    }
+
     async fn states(
         &self,
         ctx: &Context<'_>,
@@ -198,5 +206,47 @@ async fn readable_task_exposes_only_authorized_open_ids_without_narrowing_aggreg
                 .collect::<Vec<_>>(),
             expected.iter().map(ToString::to_string).collect::<Vec<_>>()
         );
+    }
+}
+
+#[tokio::test]
+async fn dependent_states_authorize_both_hops_and_reject_recursive_selection() {
+    let root = Uuid::from_u128(1);
+    let dependent = Uuid::from_u128(2);
+    for visible in [vec![root, dependent], vec![root], vec![dependent]] {
+        let calls = Arc::new(Mutex::new(vec![]));
+        let schema = Schema::build(Query, EmptyMutation, EmptySubscription)
+            .data(task_dependency_loader(
+                MacroUserIdStr::parse_from_str("macro|viewer@example.com").unwrap(),
+                Reader {
+                    visible: visible.clone(),
+                    calls: calls.clone(),
+                    dependent: Some(dependent),
+                },
+            ))
+            .finish();
+        let response = schema
+            .execute(format!(
+                r#"{{ dependents(id:"{root}") {{ __typename id isBlocked }} }}"#
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let states = data["dependents"].as_array().unwrap();
+        if visible.contains(&root) && visible.contains(&dependent) {
+            assert_eq!(states.len(), 1);
+            assert_eq!(states[0]["id"], dependent.to_string());
+            assert_eq!(states[0]["__typename"], "GraphqlTaskDependencyState");
+        } else {
+            assert!(states.is_empty());
+        }
+        let before = calls.lock().unwrap().len();
+        let invalid = schema
+            .execute(format!(
+                r#"{{ states(ids:["{root}"]) {{ dependentTasks {{ id }} }} }}"#
+            ))
+            .await;
+        assert!(!invalid.errors.is_empty());
+        assert_eq!(calls.lock().unwrap().len(), before);
     }
 }

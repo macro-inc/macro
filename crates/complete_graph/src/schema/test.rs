@@ -63,6 +63,7 @@ mod registered_work;
 mod scheduled_actions;
 mod soup_patches;
 mod stale_client;
+mod task_dependencies;
 mod team_activity;
 mod work_feed;
 

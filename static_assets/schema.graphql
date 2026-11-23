@@ -9502,6 +9502,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	"""
 	taskDependencies: GraphqlTaskDependencyState
 	"""
+	One hop of authorized dependent states; ordinary documents return no states.
+	"""
+	dependentTasks: [GraphqlTaskDependencyState!]!
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -10918,10 +10922,6 @@ type GraphqlTaskDependencyState {
 	Canonical Status, Depends On, and Blocking assignments.
 	"""
 	properties: [GraphqlProperty!]!
-	"""
-	Hydrate dependent facts in the same batch when a blocker changes remotely.
-	"""
-	dependentTasks: [GraphqlTaskDependencyState!]!
 }
 
 """
