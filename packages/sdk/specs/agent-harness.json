@@ -10450,13 +10450,13 @@
           {
             "type": "object",
             "description": "A team's.",
-            "required": ["team_id", "kind"],
+            "required": ["teamId", "kind"],
             "properties": {
               "kind": {
                 "type": "string",
                 "enum": ["team"]
               },
-              "team_id": {
+              "teamId": {
                 "type": "string",
                 "format": "uuid",
                 "description": "The team."

@@ -3840,7 +3840,7 @@ export type ToolPermissionSourceScope = {
     /**
      * The team.
      */
-    team_id: string;
+    teamId: string;
 };
 
 /**

@@ -12,5 +12,5 @@ import type { ToolPermissionSourceScopeOneOfThreeKind } from './toolPermissionSo
 export type ToolPermissionSourceScopeOneOfThree = {
   kind: ToolPermissionSourceScopeOneOfThreeKind;
   /** The team. */
-  team_id: string;
+  teamId: string;
 };
