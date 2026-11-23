@@ -1,0 +1,38 @@
+apps/web/src/features/email-view/components/EmailControls.tsx
+  s_1a305126e29b2f::t_6dc2d63aa4af16 9,20-21,50-84
+apps/web/src/lib/core/signal/create-label-collapse.ts
+  s_1a305126e29b2f::t_6b92659c63f9ca 28-32,35-37
+apps/web/tests/native/README.md
+  s_1a305126e29b2f::t_4e5a923141da2c 36-39
+apps/web/tests/native/runner.ts
+  s_1a305126e29b2f::t_6fb0e483e4ad23 267-274
+  s_1a305126e29b2f::t_24d4a67c88aa6f 9
+  s_1a305126e29b2f::t_6ef4876881ca4e 257,260-261,263
+  s_1a305126e29b2f::t_70db091bd99881 129-133,136,138,262
+  s_1a305126e29b2f::t_a967c46af7e692 264-266
+  s_1a305126e29b2f::t_401290bc670eb4 128,134-135,137,139-151,258-259
+  s_1a305126e29b2f::t_61c9a93d67f924 275
+docs/agent-guide/ui-conventions.md
+  s_1a305126e29b2f::t_dc90d19a647afe 56-57
+apps/web/tests/native/driver.ts
+  s_1a305126e29b2f::t_27a2817c90a31f 190-222
+apps/web/src/features/email-view/components/EmailHeader.tsx
+  s_1a305126e29b2f::t_6dc2d63aa4af16 41-43,134-140,186,239
+  s_1a305126e29b2f::t_8c1cef6292ab8f 16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "14bd61dfcca7437eb56772b4bbfa3d1b526e2ebd",
+  "prompts": {},
+  "sessions": {
+    "s_1a305126e29b2f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "268fc09b-96a7-4932-9edb-a3d21b534515",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
