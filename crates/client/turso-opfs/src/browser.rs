@@ -1888,7 +1888,12 @@ fn connect_turso_database(database: &Arc<Database>) -> turso_core::Result<Arc<Co
     {
         return Err(LimboError::CompletionError(error));
     }
-    database.connect()
+    // Turso's checkpoint in COMMIT, and the log restart it enables, change
+    // the WAL's state, and the connection then drops its page cache at the
+    // next read. cache-turso copies the WAL itself, at fewer points.
+    let connection = database.connect()?;
+    connection.wal_auto_actions_disable();
+    Ok(connection)
 }
 
 #[cfg(test)]
