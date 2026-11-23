@@ -19,6 +19,12 @@ use contacts::{
     domain::{list_writes::ListWritesGate, service::SqsContactsIngress},
     outbound::ingress::SqsContactsQueue,
 };
+
+/// The contacts ingress whose list-aware messages wait for `contacts-list-writes`.
+pub(crate) type GatedContactsIngress = ListWritesGate<
+    SqsContactsIngress<SqsContactsQueue>,
+    feature_flags::outbound::posthog::PostHogFeatureFlags,
+>;
 use entity_access::domain::service::EntityAccessServiceImpl;
 use entity_access::outbound::PgAccessRepository;
 use foreign_entity::domain::service::ForeignEntityServiceImpl;
@@ -83,12 +89,7 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             PgChannelSideEffectContext,
             ConnectionGatewayChannelRealtimePublisher,
             NotificationChannelSender<NotificationIngressType>,
-            ContactsChannelDispatcher<
-                ListWritesGate<
-                    SqsContactsIngress<SqsContactsQueue>,
-                    feature_flags::outbound::posthog::PostHogFeatureFlags,
-                >,
-            >,
+            ContactsChannelDispatcher<GatedContactsIngress>,
             AuthenticationEventBroker,
         >,
     >,
@@ -124,7 +125,14 @@ pub(crate) type SubscriptionStatusServiceType =
 
 pub(crate) type DomainNoticeServiceType = teams::domain::domain_notice::DomainNoticeServiceImpl<
     teams::outbound::colleague_directory::ContactsColleagueDirectory<
-        contacts::outbound::repository::DbContactsRepository,
+        contacts::domain::list_reads::FlaggedContactReads<
+            contacts::domain::service::ContactsDomainService<
+                contacts::outbound::repository::DbContactsRepository,
+                Option<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+            >,
+            contacts::outbound::repository::DbContactsRepository,
+            feature_flags::outbound::posthog::PostHogFeatureFlags,
+        >,
     >,
     teams::domain::join_announcement::JoinAnnouncementServiceImpl<
         teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl,
@@ -141,9 +149,7 @@ pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
     teams::outbound::crm_enqueuer::SqsCrmEnqueuer,
     teams::outbound::team_crm_settings_repo::TeamCrmSettingsRepositoryImpl,
     teams::outbound::team_analytics::AnalyticsClientTeamAnalytics,
-    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<
-        SqsContactsIngress<SqsContactsQueue>,
-    >,
+    teams::outbound::contacts_enqueuer::ContactsIngressEnqueuer<GatedContactsIngress>,
     AuthenticationEventBroker,
     AiBillingServiceType,
     crate::outbound::team_owned_entity_cleanup::TeamOwnedEntityCleanupAdapter<
@@ -296,6 +302,7 @@ pub(crate) struct ApiContext {
         crate::outbound::user_deletion::UserDeletionAdapter<
             TeamsServiceType,
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo,
+            GatedContactsIngress,
         >,
     >,
     pub email_service_client: Arc<email::outbound::EmailServiceHttpClient>,

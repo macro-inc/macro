@@ -19,6 +19,8 @@ import {
 
 export type MoreMenuProps = {
   gates: NavItemGates;
+  /** Rail items that don't fit the window's height, listed before hidden ones. */
+  overflowItems: SidebarNextMenuItem[];
 };
 
 function navigateToItem(
@@ -29,8 +31,9 @@ function navigateToItem(
 ) {
   analytics.track('sidebar_click', { view: item.id });
   navigateToSidebarView({
-    viewId: item.id,
+    viewId: item.viewId ?? item.id,
     params: item.params,
+    search: item.search,
     shiftKey,
     openWithSplit,
     referredFrom: 'sidebar',
@@ -40,15 +43,19 @@ function navigateToItem(
 
 /**
  * The "More" menu button in the sidebar rail, shown below the main nav.
- * Lists hidden items and Scheduling, and opens the Customize sidebar modal.
+ * Lists rail items that don't fit, hidden items and Scheduling, and opens the
+ * Customize sidebar modal.
  */
 export function MoreMenu(props: MoreMenuProps) {
   const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const preloadItem = (item: SidebarNextMenuItem) =>
-    layout.preloadContent(sidebarContent(item.id, item.params));
-  const hiddenItems = () => moreMenuItems(props.gates);
+    layout.preloadContent(sidebarContent(item.viewId ?? item.id, item.params));
+  const menuItems = () => [
+    ...props.overflowItems,
+    ...moreMenuItems(props.gates),
+  ];
 
   // Capture shift key before onSelect fires (which omits the event)
   let shiftHeld = false;
@@ -71,9 +78,9 @@ export function MoreMenu(props: MoreMenuProps) {
           <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-[14rem]">
-          <Show when={hiddenItems().length > 0}>
+          <Show when={menuItems().length > 0}>
             <Dropdown.Group>
-              <For each={hiddenItems()}>
+              <For each={menuItems()}>
                 {(item) => (
                   <Dropdown.Item
                     class="gap-2"

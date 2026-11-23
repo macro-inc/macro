@@ -23,8 +23,7 @@ export const channelKeys = createQueryKeys('channel', {
   channelBots: (channelID: string) => ({
     queryKey: [channelID],
   }),
-  activity: (userId: string | undefined) => ({ queryKey: [userId] }),
-  listChannels: (userId: string | undefined) => ({ queryKey: [userId] }),
+  directory: (userId: string) => ({ queryKey: [userId] }),
   quickAccessGraphql: (
     cacheClientId: string,
     userId: string | undefined,

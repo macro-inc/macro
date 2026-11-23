@@ -1,5 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
@@ -233,14 +233,14 @@ function startRingingLoop(
  * election.
  *
  * Mount once near the app root, inside `<CallProvider>` and
- * `<ChannelsContextProvider>`. The backend already excludes the caller from
+ * `<ChannelDirectoryProvider>`. The backend already excludes the caller from
  * the broadcast (`call_service::send_call_event` filters on
  * `triggered_by_user_id`), but we additionally skip when the user is already
  * in the call as a defensive guard against same-user multi-device delivery.
  */
 export function CallStartedNotifier() {
   const callCtx = useCallContext();
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
   const notif = usePlatformNotificationState();
   const userId = useUserId();
 
@@ -332,7 +332,8 @@ export function CallStartedNotifier() {
           channelId,
           callId,
           createdBy,
-          channelName: channelsCtx.channelsById()[channelId]?.name ?? undefined,
+          channelName:
+            loadedChannel(directory.lookup(channelId))?.name ?? undefined,
           notif,
           isJoined: () => callCtx.activeCallId() === callId,
         }),

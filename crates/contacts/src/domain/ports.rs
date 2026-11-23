@@ -1,3 +1,7 @@
+use crate::domain::models::backfill::{
+    ChannelMember, ChannelRecord, ChannelSnapshot, InboxContact, InboxOwner, LegacyEdge,
+    OrphanCheck, OrphanKind,
+};
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::invalidation::ContactsInvalidation;
 use crate::domain::models::list::InboxSource;
@@ -6,8 +10,11 @@ use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
 };
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
-use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
+use crate::domain::models::people::{
+    NamedPeopleQuery, PeopleSearchLimit, PeopleSearchQuery, PersonMatch,
+};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -32,7 +39,8 @@ pub trait ContactsRepository: Send + Sync + 'static {
 /// idempotent and reports only the rows it added, so a repeat reports nothing.
 pub trait ContactListRepository: Send + Sync + 'static {
     /// Add every user and every peer to each other's `interacted` list,
-    /// skipping self-pairs. Returns the added (owner, contact) pairs.
+    /// skipping self-pairs and ids with no profile (a deleted account).
+    /// Returns the added (owner, contact) pairs.
     fn record_interactions(
         &self,
         users: &[MacroUserIdStr<'static>],
@@ -50,8 +58,25 @@ pub trait ContactListRepository: Send + Sync + 'static {
         contacts: &[MacroUserIdStr<'static>],
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 
+    /// Add `contact` to `owner`'s `invited` list, skipping a self-invite.
+    /// Directed: the contact's directory is unchanged. Returns whether the row
+    /// was added.
+    fn record_invite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        contact: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
+    /// The ids among `ids` that have no profile (deleted accounts).
+    fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
     /// Remove the user's own lists and every list entry naming them. Returns
-    /// the other owners who lost them.
+    /// the other owners who lost them. Fails while the user's profile still
+    /// exists, so a queued deletion is received again once nothing can add
+    /// them back.
     fn delete_user_lists(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -61,8 +86,8 @@ pub trait ContactListRepository: Send + Sync + 'static {
 /// Bounded reads of the directed, list-aware directory: a person is in a
 /// viewer's directory when they are in one of the viewer's stored lists or
 /// inboxes, on the viewer's current team, or the viewer. Ids are canonical, so
-/// pages are in plain byte order. Not read by any caller yet; it replaces
-/// [`ContactsPageRepository`] behind a flag.
+/// pages are in plain byte order. It replaces [`ContactsPageRepository`] and
+/// [`PeopleSearchRepository`] behind the `contacts-list-reads` flag.
 pub trait ContactListReader: Send + Sync + 'static {
     /// One page of the viewer's directory, including the viewer, in contact-id
     /// order after the cursor.
@@ -96,6 +121,37 @@ pub trait ContactListReader: Send + Sync + 'static {
         after: Option<&ContactCursor>,
         limit: ContactPageSize,
     ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+
+    /// Match `needle` (lowercase, at least two characters) against the email
+    /// and Macro profile name of everyone in the viewer's directory. Rank
+    /// teammates first, then `interacted` and `invited`, then inbox contacts,
+    /// then anyone else (the viewer without a team); within a group, prefix
+    /// matches first. Each match carries its lists. Return at most `limit`.
+    fn search_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        needle: &str,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
+    /// Everyone in the viewer's directory whom `query` names (it names
+    /// anyone), by the name the directory shows. Rank `interacted` and
+    /// `invited` first, then teammates, then inbox contacts, then anyone else;
+    /// within a group exact names first, then by id. Each match carries its
+    /// lists. Return at most `limit`.
+    fn name_listed_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
+    /// Everyone the viewer knows through a connected inbox (the `gmail` and
+    /// `outlook` lists), each once, in no particular order.
+    fn inbox_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.
@@ -149,6 +205,17 @@ pub trait PeopleSearchRepository: Send + Sync + 'static {
         needle: &str,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+
+    /// The viewer's contacts, self and current teammates whom `query` names
+    /// (it names anyone), by the name the directory shows. Rank teammates
+    /// first; within each group exact names first, then by id. Return at most
+    /// `limit`.
+    fn name_people(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
 }
 
 /// Ranked people search for authenticated inbound adapters.
@@ -161,6 +228,31 @@ pub trait PeopleSearchService: Send + Sync + 'static {
         query: &PeopleSearchQuery,
         limit: PeopleSearchLimit,
     ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// The people typed text names, for authenticated inbound adapters.
+pub trait PeopleNamingService: Send + Sync + 'static {
+    /// Everyone in the authenticated viewer's whole directory whom `query`
+    /// names exactly or by word starts, by the name the directory shows,
+    /// ranked by list group, then exact names, then id. Text that names
+    /// nobody returns no people without reading storage.
+    fn people_named(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        query: &NamedPeopleQuery,
+        limit: PeopleSearchLimit,
+    ) -> impl Future<Output = Result<Vec<PersonMatch>, Report>> + Send;
+}
+
+/// The people a user has corresponded with by email.
+pub trait CorrespondentsService: Send + Sync + 'static {
+    /// The user's email correspondents, the user excluded, in no particular
+    /// order. The legacy graph records no provenance, so there it is the
+    /// user's whole directory.
+    fn correspondents(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 }
 
 /// Resolves names only for the authorized, bounded IDs selected by the directory.
@@ -303,10 +395,34 @@ pub trait ContactsService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
 
+    /// The requested ids that are in the user's contacts, the user included.
+    /// By default the whole directory is read and filtered; an implementation
+    /// that can look ids up directly should.
+    fn query_contacts_among(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send {
+        async move {
+            let wanted: HashSet<_> = ids.iter().collect();
+            let mut contacts = self.query_contacts(user_id).await?;
+            contacts.retain(|contact| wanted.contains(contact));
+            Ok(contacts)
+        }
+    }
+
     /// Adds a contact connection between n users as a complete graph.
     fn add_contact_nodes(
         &self,
         nodes: ContactsNodes,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Records a referral invite: `invitee` joins `inviter`'s `invited` list,
+    /// and only the inviter is told to re-read them.
+    fn invite_contact(
+        &self,
+        inviter: MacroUserIdStr<'static>,
+        invitee: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
@@ -332,4 +448,84 @@ pub(crate) trait ContactsBackfillOutboxRepo: Send + Sync + 'static {
         &self,
         id: u64,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+/// Reads the legacy directory and the sources the backfill derives lists
+/// from. Every read is one bounded page; callers page by the cursor each
+/// returns.
+pub trait LegacyDirectorySource: Send + Sync + 'static {
+    /// Channels with an id after `after`, in id order.
+    fn channel_page(
+        &self,
+        after: Uuid,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelRecord>, Report>> + Send;
+
+    /// The Macro members of these channels, without bots or deleted accounts.
+    fn channel_members(
+        &self,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ChannelMember>, Report>> + Send;
+
+    /// `contacts_backfill_outbox` rows with an id after `after`, in id order.
+    fn snapshot_page(
+        &self,
+        after: i32,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelSnapshot>, Report>> + Send;
+
+    /// The DMs among `channels` with a message from a person, sent at or
+    /// after `since` when given.
+    fn direct_messages_with_person_message(
+        &self,
+        channels: &[Uuid],
+        since: Option<DateTime<Utc>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Inbox owners after `after`, in owner order.
+    fn inbox_owner_page(
+        &self,
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<InboxOwner>, Report>> + Send;
+
+    /// The owner's legacy contacts after `after`, in either direction and in
+    /// contact order, each with the `inboxes` that know them.
+    fn inbox_contact_page(
+        &self,
+        owner: &str,
+        inboxes: &[Uuid],
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<InboxContact>, Report>> + Send;
+
+    /// Legacy edges with an id after `after`, in id order, with the evidence
+    /// the database holds for each direction.
+    fn legacy_edge_page(
+        &self,
+        after: i32,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<LegacyEdge>, Report>> + Send;
+}
+
+/// Finds and removes list rows left by deleted accounts. Pages are bounded by
+/// the number of owners or contacts read; each delete by its limit.
+pub trait OrphanedListRows: Send + Sync + 'static {
+    /// Owners or contacts after `after`, in id order, each with their rows of
+    /// that kind when they have no account.
+    fn orphan_page(
+        &self,
+        kind: OrphanKind,
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<OrphanCheck>, Report>> + Send;
+
+    /// Delete up to `limit` of `id`'s rows of that kind, unless an account
+    /// matches them now. Returns the rows deleted.
+    fn delete_orphan_rows(
+        &self,
+        kind: OrphanKind,
+        id: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<u64, Report>> + Send;
 }

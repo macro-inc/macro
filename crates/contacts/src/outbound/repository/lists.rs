@@ -83,6 +83,56 @@ impl ContactListRepository for DbContactsRepository {
     }
 
     #[tracing::instrument(
+        name = "contacts.lists.record_invite",
+        skip_all,
+        fields(added = tracing::field::Empty),
+        err
+    )]
+    async fn record_invite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        contact: &MacroUserIdStr<'static>,
+    ) -> Result<bool, Report> {
+        let added = sqlx::query_file_scalar!(
+            "src/outbound/repository/lists/record_invite.sql",
+            owner.as_ref(),
+            contact.as_ref(),
+            ContactList::Invited.as_ref(),
+        )
+        .fetch_optional(&self.db)
+        .await?
+        .is_some();
+
+        tracing::Span::current().record("added", added);
+        Ok(added)
+    }
+
+    #[tracing::instrument(
+        name = "contacts.lists.missing_profiles",
+        skip_all,
+        fields(ids = ids.len() as i64, missing = tracing::field::Empty),
+        err
+    )]
+    async fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        let ids = id_strings(ids);
+        let missing = sqlx::query_file_scalar!(
+            "src/outbound/repository/lists/missing_profiles.sql",
+            &ids as &[&str],
+        )
+        .fetch_all(&self.db)
+        .await?;
+
+        tracing::Span::current().record("missing", missing.len() as i64);
+        missing
+            .into_iter()
+            .map(|id| Ok(MacroUserIdStr::try_from(id)?))
+            .collect()
+    }
+
+    #[tracing::instrument(
         name = "contacts.lists.delete_user",
         skip_all,
         fields(owners = tracing::field::Empty),
@@ -98,6 +148,28 @@ impl ContactListRepository for DbContactsRepository {
         sqlx::query!("SET LOCAL statement_timeout = '30s'")
             .execute(&mut *tx)
             .await?;
+
+        // Account deletion queues this just before it deletes the profile.
+        // Until the profile is gone an interaction could still add the user
+        // back, so refuse and let the queue deliver the message again; once it
+        // is gone, interactions naming the user write nothing. A legacy
+        // "User" id stored with capitals is matched by its address, as the
+        // interaction writes match it.
+        let profile_exists = sqlx::query_scalar!(
+            r#"SELECT (
+                EXISTS (SELECT 1 FROM "User" WHERE id = $1)
+                OR EXISTS (SELECT 1 FROM "User" WHERE lower(email) = substr($1, 7))
+            ) AS "exists!""#,
+            user.as_ref(),
+        )
+        .fetch_one(&mut *tx)
+        .await?;
+        if profile_exists {
+            return Err(rootcause::report!(
+                "the user's profile still exists; retry after it is deleted"
+            ));
+        }
+
         let owners = sqlx::query_file_scalar!(
             "src/outbound/repository/lists/delete_user_lists.sql",
             user.as_ref(),

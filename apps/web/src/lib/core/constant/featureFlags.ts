@@ -141,17 +141,6 @@ export const enableEntityAppearance = defineFlag({
   default: onInDev,
 });
 
-/**
- * Connect apps Macro Connect serves through it instead of Pipedream. The
- * backend reads the same PostHog key and decides per app; this side only
- * reserves the consent popup inside the click. Off in dev too: dev has no
- * Connect customer key until one is added to Doppler.
- */
-export const macroConnect = defineFlag({
-  key: 'macro-connect',
-  env: 'ENABLE_MACRO_CONNECT',
-});
-
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',
@@ -472,6 +461,24 @@ export const ENABLE_CALLS = true;
 export const disableCrmContactSearch = defineFlag({
   key: 'disable-crm-contact-search',
   env: 'DISABLE_CRM_CONTACT_SEARCH',
+});
+
+// Stores each contact's `GraphqlContact.lists` in the local cache. Off in dev
+// too: a server without the field refuses any read that selects it, so this
+// waits for the server to ship it. Override with VITE_ENABLE_CONTACT_LISTS.
+export const enableContactLists = defineFlag({
+  key: 'enable-contact-lists',
+  env: 'ENABLE_CONTACT_LISTS',
+});
+
+// In a tab without the local cache, reads the people typed text names from the
+// whole directory (`GraphqlUser.contactsNamedBy`) instead of the exact-name
+// scan of the first 2,000 contacts. Off in dev too: a server without the field
+// refuses any read that selects it, so this waits for the server to ship it.
+// Override with VITE_ENABLE_NAMED_CONTACT_SEARCH.
+export const enableNamedContactSearch = defineFlag({
+  key: 'enable-named-contact-search',
+  env: 'ENABLE_NAMED_CONTACT_SEARCH',
 });
 
 // No dev override: the server requires this same remote flag before accepting writes.

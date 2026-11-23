@@ -28,6 +28,7 @@ export const CACHE_TELEMETRY_EVENT_NAMES = [
   'graphql_cache.origin_storage_pressure',
   'graphql_cache.linear_memory',
   'graphql_cache.queue_diagnostics',
+  'graphql_cache.wal_checkpoint',
   'graphql_cache.navigation',
   'graphql_cache.aggregate',
 ] as const;
@@ -273,6 +274,8 @@ export type CacheTelemetryObservation = {
   sampleRate?: number;
   queueDepth?: number;
   oldestAgeMs?: number;
+  /** Frames in the WAL when a checkpoint ran (`graphql_cache.wal_checkpoint`). */
+  walFrames?: number;
   /** The engine request a `slow_request` timed; a fixed protocol name. */
   requestKind?: CacheRequest['kind'];
   /** How long a `slow_request` waited in the engine queue before it ran. */
@@ -417,6 +420,9 @@ function sanitizeObservation(
       : {}),
     ...(boundedNumber(input.oldestAgeMs, 31_536_000_000) !== undefined
       ? { oldestAgeMs: boundedNumber(input.oldestAgeMs, 31_536_000_000) }
+      : {}),
+    ...(boundedNumber(input.walFrames) !== undefined
+      ? { walFrames: boundedNumber(input.walFrames) }
       : {}),
     ...(typeof input.requestKind === 'string' &&
     Object.hasOwn(CACHE_REQUEST_KINDS, input.requestKind)
@@ -854,6 +860,7 @@ export function isCacheTelemetryObservation(
       'sampleRate',
       'queueDepth',
       'oldestAgeMs',
+      'walFrames',
       'requestKind',
       'queueWaitMs',
     ].includes(key)

@@ -2,6 +2,8 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod people_named;
+mod people_search;
 mod plans;
 
 fn mid(id: &str) -> MacroUserIdStr<'static> {
@@ -301,5 +303,33 @@ async fn a_legacy_mixed_case_team_member_reads_their_team(pool: PgPool) {
             user_id: mid(VIEWER),
             lists: vec![ContactList::Teammates],
         }]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("directory"))
+)]
+async fn inbox_contacts_are_the_owners_inbox_rows_once_each(pool: PgPool) {
+    let repository = DbContactsRepository::new(pool);
+
+    let mut found = repository.inbox_contacts(mid(VIEWER)).await.unwrap();
+    found.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+    // d is known through both inboxes; a, b and t are in lists, not inboxes.
+    assert_eq!(
+        found,
+        [
+            mid("macro|c@example.com"),
+            mid("macro|d@example.com"),
+            mid("macro|e@example.com"),
+        ]
+    );
+    // g's inbox knows the viewer; that is g's row, not the viewer's.
+    assert_eq!(
+        repository
+            .inbox_contacts(mid("macro|g@example.com"))
+            .await
+            .unwrap(),
+        [mid(VIEWER)]
     );
 }

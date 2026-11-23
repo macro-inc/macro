@@ -1,4 +1,3 @@
-use crate::domain::models::messages::ContactsNodes;
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::ports::{ContactsService, PeopleSearchService};
 use axum::extract::{FromRef, FromRequestParts, Json, Query, State};
@@ -10,13 +9,13 @@ use axum_extra::extract::Cached;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use rate_limit::domain::models::RateLimitOk;
 use rate_limit::inbound::{RateLimitExtractable, rate_limit_middleware};
 use rate_limit::{RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService};
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
 use tracing::instrument;
@@ -63,6 +62,10 @@ pub struct SearchedPerson {
     pub is_teammate: bool,
     /// Whether the person is an agent rather than a human; false for non-Macro contacts.
     pub is_agent: bool,
+    /// The keys of the viewer's contact lists the person is in (`teammates`,
+    /// `interacted`, `invited`, `gmail`, `outlook`; more may be added). Empty
+    /// for the viewer and for a contact only the legacy directory knows.
+    pub lists: Vec<String>,
 }
 
 impl From<PersonMatch> for SearchedPerson {
@@ -72,6 +75,12 @@ impl From<PersonMatch> for SearchedPerson {
             name: person.contact.name,
             is_teammate: person.is_teammate,
             is_agent: person.is_agent,
+            lists: person
+                .contact
+                .lists
+                .iter()
+                .map(|list| list.as_ref().to_owned())
+                .collect(),
         }
     }
 }
@@ -79,7 +88,10 @@ impl From<PersonMatch> for SearchedPerson {
 /// Response body for GET /contacts/search.
 #[derive(Deserialize, Serialize, Debug, ToSchema)]
 pub struct SearchPeopleResponse {
-    /// Matches ranked teammates first, then prefix matches, then by name or email.
+    /// Matches ranked by group, then prefix matches, then by name or email.
+    /// Teammates come first. For a viewer on the list-aware directory,
+    /// `interacted` and `invited` people come next, then `gmail` and
+    /// `outlook` contacts.
     pub people: Vec<SearchedPerson>,
 }
 
@@ -168,12 +180,10 @@ pub async fn add_contact_handler<S: ContactsService, Auth: MacroAuthorizationSer
     let user = authorization.authorization.user;
 
     service
-        .add_contact_nodes(ContactsNodes {
-            users: HashSet::from([user.macro_user_id.clone(), body.user_id]),
-        })
+        .invite_contact(user.macro_user_id.clone().into_owned(), body.user_id)
         .await
         .map_err(|e| {
-            tracing::error!(error=?e, "failed to create contact connection");
+            tracing::error!(error=?e, "failed to record invited contact");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
     Ok(StatusCode::NO_CONTENT)

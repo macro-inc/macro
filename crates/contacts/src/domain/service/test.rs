@@ -4,9 +4,18 @@ use crate::domain::models::messages::ContactConnection;
 use std::sync::Mutex;
 use uuid::Uuid;
 
+type Pair = (MacroUserIdStr<'static>, MacroUserIdStr<'static>);
+
 #[derive(Default)]
 struct RecordingRepository {
-    connections: Mutex<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>>,
+    connections: Mutex<Vec<Pair>>,
+    /// What `record_interactions` reports as added.
+    interactions_added: Vec<Pair>,
+    /// What `missing_profiles` reports as deleted accounts.
+    missing: Vec<MacroUserIdStr<'static>>,
+    /// The owners `delete_user_lists` reports as having lost the user.
+    lost: Vec<MacroUserIdStr<'static>>,
+    deleted_lists: Mutex<Vec<MacroUserIdStr<'static>>>,
 }
 
 impl ContactsRepository for RecordingRepository {
@@ -36,7 +45,7 @@ impl ContactListRepository for RecordingRepository {
         _users: &[MacroUserIdStr<'static>],
         _peers: &[MacroUserIdStr<'static>],
     ) -> Result<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>, rootcause::Report> {
-        Ok(Vec::new())
+        Ok(self.interactions_added.clone())
     }
 
     async fn record_inbox_contacts(
@@ -47,11 +56,32 @@ impl ContactListRepository for RecordingRepository {
         Ok(Vec::new())
     }
 
+    async fn record_invite(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _contact: &MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
+        Ok(false)
+    }
+
+    async fn missing_profiles(
+        &self,
+        ids: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        Ok(self
+            .missing
+            .iter()
+            .filter(|id| ids.contains(id))
+            .cloned()
+            .collect())
+    }
+
     async fn delete_user_lists(
         &self,
-        _user: &MacroUserIdStr<'static>,
+        user: &MacroUserIdStr<'static>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
-        Ok(Vec::new())
+        self.deleted_lists.lock().unwrap().push(user.clone());
+        Ok(self.lost.clone())
     }
 }
 
@@ -366,4 +396,57 @@ async fn a_user_connected_to_more_than_one_lookup_is_told_the_change_is_unknown(
         user == "macro|owner@example.com"
             || changed.as_deref() == Some(&["macro|owner@example.com".to_owned()][..])
     }));
+}
+
+#[tokio::test]
+async fn an_account_deleted_while_its_interaction_was_written_is_removed_again() {
+    let (a, b, c) = (
+        user("a@example.com"),
+        user("b@example.com"),
+        user("c@example.com"),
+    );
+    // The insert added a, b and c to each other, but b's profile was deleted
+    // and its lists dropped before the insert committed.
+    let service = ContactsDomainService {
+        repository: RecordingRepository {
+            interactions_added: vec![
+                (a.clone(), b.clone()),
+                (b.clone(), a.clone()),
+                (a.clone(), c.clone()),
+                (c.clone(), a.clone()),
+                (b.clone(), c.clone()),
+                (c.clone(), b.clone()),
+            ],
+            missing: vec![b.clone()],
+            lost: vec![a.clone(), c.clone()],
+            ..Default::default()
+        },
+        notifier: RecordingNotifier::default(),
+    };
+
+    service
+        .process_message(ContactsMessage::Change(DirectoryChange::Interacted {
+            users: vec![a.clone(), b.clone(), c.clone()],
+            peers: vec![a.clone(), b.clone(), c.clone()],
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(*service.repository.deleted_lists.lock().unwrap(), [b]);
+    let mut notified: Vec<_> = service
+        .notifier
+        .invalidations
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|invalidation| {
+            (
+                invalidation.user().to_string(),
+                invalidation.changed().is_none(),
+            )
+        })
+        .collect();
+    notified.sort();
+    // a and c lost b, so they re-read everything rather than only each other.
+    assert_eq!(notified, [(a.to_string(), true), (c.to_string(), true)]);
 }

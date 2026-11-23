@@ -444,11 +444,16 @@ async fn run_server() -> anyhow::Result<()> {
 
     let crm_enqueuer = teams::outbound::crm_enqueuer::SqsCrmEnqueuer::new(sqs_client.clone());
     let sqs_client = Arc::new(sqs_client);
-    let contacts_ingress = Arc::new(SqsContactsIngress {
-        queue: SqsContactsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::ContactsQueue::new().to_string(),
-        ),
+    // Channels, team membership and account deletion send list-aware directory
+    // changes, which wait for `contacts-list-writes`; their legacy messages do not.
+    let contacts_ingress = Arc::new(ListWritesGate {
+        inner: SqsContactsIngress {
+            queue: SqsContactsQueue::new(
+                aws_sdk_sqs::Client::new(&aws_config),
+                macro_queues::ContactsQueue::new().to_string(),
+            ),
+        },
+        writes: ContactListWrites::new(config.environment, feature_flags.clone()),
     });
     let contacts_enqueuer = ContactsIngressEnqueuer::new(contacts_ingress.clone());
     let team_analytics = AnalyticsClientTeamAnalytics::new(analytics_client.clone());
@@ -473,12 +478,7 @@ async fn run_server() -> anyhow::Result<()> {
         PgChannelSideEffectContext::new(db.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
-        ContactsChannelDispatcher::new(Arc::new(ListWritesGate {
-            inner: SqsContactsIngress {
-                queue: contacts_ingress.queue.clone(),
-            },
-            writes: ContactListWrites::new(config.environment, feature_flags.clone()),
-        })),
+        ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
     .with_macro_event_broker(macro_event_broker.clone());
     let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
@@ -786,8 +786,23 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            // The notice goes to the admin's email correspondents, read from
+            // the legacy graph or the list-aware tables by the admin's
+            // `contacts-list-reads` flag; without a PostHog key, the legacy
+            // graph.
             teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
-                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+                contacts::domain::list_reads::FlaggedContactReads::new(
+                    Arc::new(contacts::domain::service::ContactsDomainService {
+                        repository: contacts::outbound::repository::DbContactsRepository::new(
+                            db.clone(),
+                        ),
+                        notifier: None::<contacts::outbound::gateway::ConnectionGatewayNotifier>,
+                    }),
+                    Arc::new(contacts::outbound::repository::DbContactsRepository::new(
+                        db.clone(),
+                    )),
+                    contacts::domain::list_reads::ContactListReads::optional(feature_flags.clone()),
+                ),
             ),
             teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
                 teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
@@ -902,6 +917,7 @@ async fn run_server() -> anyhow::Result<()> {
             document_storage_service_client.clone(),
             teams_service.clone(),
             onboarding::outbound::pg_onboarding_repo::PgOnboardingRepo::new(db.clone()),
+            contacts_ingress,
             stripe_client.clone(),
             internal_key,
             harness_url,

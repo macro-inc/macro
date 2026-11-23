@@ -625,7 +625,8 @@ On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and
 cannot be hidden. Verify that hovering within a destination row keeps the drag
 preview stable, dropping saves the order, and reopening retains it. In short
-desktop windows, the app list scrolls while More and the footer remain reachable.
+desktop windows, the rail shows only whole app buttons: apps that don't fit move
+to the top of More in rail order, and More and the footer remain reachable.
 Touch devices retain the flag-gated Reviews tab in Tasks.
 Scheduling appears in Customize sidebar only when the calendar-scheduling flag is
 on. It starts hidden in More, including for existing sidebar preferences. Enable
@@ -1631,11 +1632,13 @@ An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
 instead of opening the routine. Owners can mention their routines in channels
-(see Routine templates).
+(see Routine templates); for anyone else the mention takes the shared
+template's name and opens it, and reads `No Access` (or `Deleted`) when the
+routine isn't shared.
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
-delete, or view run history. Anyone else who opens a routine link sees its
-template when the owner shared one and routine sharing is enabled, and otherwise
-an unavailable message.
+delete, or view run history; the server reads a routine only to its owner.
+Anyone else who opens a routine link sees its template when the owner shared
+one and routine sharing is enabled, and otherwise an unavailable message.
 Run conversations keep their own permissions.
 
 ### Routine templates
@@ -1801,9 +1804,10 @@ Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
 navigating/scrolling, or narrow the query, to resume from the saved cursor.
 A failed local refresh keeps displayed rows and their continuation available for
-another pagination attempt. Quick Access merges the complete channel list with
-cached channels, so known channels remain searchable before cache hydration and
-outside its recent page. Cached metadata wins for duplicate channels while newer
+another pagination attempt. Quick Access merges the joined channels of the
+channel directory with cached channels, so known channels remain searchable
+outside its recent page; on a cold cache the directory fills as the channel
+backfill runs. Cached metadata wins for duplicate channels while newer
 viewed timestamps from either source are retained. Other uncached items should
 appear after hydration without retyping. Cmd+K's
 local search explicitly excludes email hits before limiting entity results;

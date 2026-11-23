@@ -11,6 +11,7 @@ Normalized GraphQL cache with disk-backed persistence for urql. Design doc:
 | `cache-turso` | `Storage` over Turso core — browser WASM and Tauri native hosts |
 | `turso-opfs` | Browser OPFS `IO`/`File` adapter for the dedicated Turso engine worker |
 | `cache-wasm` | wasm-bindgen shell combining the engine, Turso storage, and OPFS adapter for browser worker glue (`apps/web/src/lib/graphql-cache/`) |
+| `cache-bench` | Production-size datasets and the native and browser replays that measure the engine; see its `AGENTS.md` |
 
 The Tauri host lives in the tauri workspace (it needs the patched tauri fork
 pinned there): `apps/web/tauri/graphql_cache_plugin`, path-depending on
@@ -248,11 +249,13 @@ entity-only optimism and retain that recovery query for eventual commit/replay.
 
 ## Streaming text search
 
-Text search binds normalized subsequence patterns to Turso queries scoped by
-`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
-match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
-the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
-stops at NUL; Rust verifies them without truncation. Searching documents does not
+Text search streams each `(profile, bucket)` through
+`search_documents_browse_idx`, and the adapter drops rows in which some query
+token is not an ordered byte subsequence of `search_text` before decoding the
+rest. A token whose characters occur in order also has its UTF-8 bytes in order,
+so this keeps every row the core accepts. It replaces a SQL `LIKE '%a%b%c%'`
+prefilter that Turso evaluated several times slower per token; contact search,
+which must avoid decoding records, keeps its bound LIKE. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
 The index includes `search_text` and `source_hash` after its existing browse keys,
 so filtering and result reads use an index-only scan without table lookups.
@@ -320,7 +323,7 @@ old hydration cannot resurrect verified removals, and old absence evidence canno
 delete a newer positive observation. Unfenced network/optimistic contact writes reject.
 The same backfill then verifies existing membership in bounded raw-key windows using
 the existing exact lookup. Only successful requested-ID omissions permit deletion;
-scan omissions do not. Checkpoint v2 tracks hydration/verification and completes
+scan omissions do not. Checkpoint v2 (v3 while `enable-contact-lists` selects contact lists) tracks hydration/verification and completes
 only after an exhaustive, non-malformed verification pass. Context-only stubs,
 explicit selections and shared name labels do not establish membership. See the
 [contacts plan](../../docs/design/disk-backed-contacts.md) for remaining acceptance.
@@ -511,6 +514,23 @@ Search Datadog logs for `service:web-app "graphql_cache.slow_query"`:
 Parameters, results, raw SQL, and user identity are not exported. Logging uses
 an anonymous span context. A throwing JS telemetry callback cannot change query
 results. Native hosts are unchanged unless they install their own telemetry sink.
+
+## Idle WAL checkpoint
+
+Turso copies the WAL into the database file inside the COMMIT that takes it to
+1,000 frames, so one write pays for the others. After a request that can
+write, the browser engine worker calls `checkpointIfDue` once nothing has run
+for 100 ms, and cache-turso copies from 500 frames there instead. Each request
+that runs re-arms the wait, so the reads a page sends after an open or a
+write run first. A request that arrives during a copy waits for it, as it
+waited for the write that used to carry it; a drain cancels a copy not yet
+started and waits for one under way.
+
+A copy that ran is reported as `graphql_cache.wal_checkpoint` with
+`cache.duration_ms`, `cache.count` (frames copied) and `cache.wal_frames` (frames
+in the WAL when it ran; a count below it is a partial copy). A failed copy is
+reported with its error class and retried once the next request has run; it
+leaves the WAL whole and resets the cache only when the error means corruption.
 
 ## Slow request telemetry
 

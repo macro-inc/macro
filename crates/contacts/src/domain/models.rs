@@ -1,3 +1,5 @@
+/// What the list backfill reads from the legacy directory and its sources.
+pub mod backfill;
 /// Viewer-scoped contact identities and resolved directory records.
 pub mod contact;
 /// Generic graph data structures (vertices and edges).

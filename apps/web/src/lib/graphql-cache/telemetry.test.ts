@@ -82,6 +82,7 @@ describe('cache telemetry privacy contract', () => {
       resetAttempt: 'wipe-before-open',
       queueDepth: 3,
       oldestAgeMs: 42,
+      walFrames: 700,
       scope: 'private-scope',
       mutationId: 'private-mutation',
       query: 'mutation Private { private }',
@@ -96,6 +97,7 @@ describe('cache telemetry privacy contract', () => {
         resetAttempt: 'wipe-before-open',
         queueDepth: 3,
         oldestAgeMs: 42,
+        walFrames: 700,
       }),
     ]);
     expect(JSON.stringify(events)).not.toMatch(

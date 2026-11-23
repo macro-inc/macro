@@ -1,0 +1,1390 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/connectors_e2e.rs
+name: Connectors end-to-end
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: limited
+  CARGO_PROFILE_TEST_DEBUG: limited
+  RUST_BACKTRACE: '1'
+  RUSTFLAGS: -C link-arg=-fuse-ld=lld
+on:
+  schedule:
+    - cron: 0 5 * * *
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  suite:
+    name: Connectors end-to-end
+    runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
+    env:
+      CARGO_PROFILE_DEV_DEBUG: '0'
+      CARGO_PROFILE_TEST_DEBUG: '0'
+      RUSTFLAGS: -Dwarnings -C link-arg=-fuse-ld=mold
+      SQLX_OFFLINE: 'true'
+      SCCACHE_IDLE_TIMEOUT: '0'
+      CONNECTORS_E2E_RESULTS: target/connectors-e2e-results
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          clean: 'false'
+          persist-credentials: 'false'
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          path: |-
+            /nix
+            ./target
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cargo/.global-cache
+        continue-on-error: true
+      - name: Reuse the kept cargo target
+        run: |
+          node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+          // Lets cargo reuse the `target` directory a CI job keeps on its cache
+          // volume. Cargo counts a workspace crate as built when none of its
+          // sources is newer than its last build, and a checkout stamps every file with
+          // the current time, so without this every workspace crate rebuilds.
+          //
+          // The volume keeps, next to `target`, the time each tracked path's current
+          // contents were first seen (`RECORD`). A path whose mode and object match the
+          // record keeps that time; a changed or added path, and every directory above a
+          // change (its tree object changes), gets the current time. A build made while
+          // the contents were what they are now is newer than that time and stays fresh.
+          // A build of other contents is older than it: units only an earlier, different
+          // build left behind (other features, other dependencies) rebuild too.
+          //
+          // Some changes cargo can't see:
+          // - sqlx reads `.sqlx` query data without telling rustc. A new query's data
+          //   comes with the query's new source, so only changed data dates every path
+          //   now and rebuilds every workspace crate. Removed data is not: another
+          //   pull request's query, missing from this tree, is the common case. A job
+          //   rebuilds everything when its own pull request changes data (see
+          //   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while
+          //   an unchanged query still needs it fails only a full build.
+          // - rustc lists the file a symlink pointed to when it built, so a symlink that
+          //   changed, appeared or went away dates the files it pointed to, before and
+          //   after, now. A link is resolved by its text alone: one through another
+          //   symlinked directory, or out of the repository, dates nothing.
+          // Migrations need nothing here: `sqlx::migrate!` includes each file and
+          // `macro_db_migrator`'s build script watches the directory. A build that checks
+          // queries against a live database depends on the schema too; Cloud Storage's
+          // test job dates those crates itself.
+          //
+          // A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace
+          // crate anyway: Cloud Storage's jobs do when the pull request changes query
+          // data.
+          //
+          // Units dated after now (another clock, or anything else writing `target`)
+          // would look fresh against every change, so `target` starts over then.
+          //
+          // A job that builds into `target` without dating its checkout first (one whose
+          // workflow predates this step, or a re-run of one) leaves units the record
+          // doesn't describe. So the last step of a job that did date it writes `SEAL`,
+          // and a unit newer than the seal rebuilds every workspace crate.
+          //
+          // It runs on a fresh checkout: it dates the index, not the work tree.
+
+          import { execFileSync } from "node:child_process";
+          import {
+          	existsSync,
+          	lutimesSync,
+          	mkdirSync,
+          	readdirSync,
+          	readFileSync,
+          	readlinkSync,
+          	rmSync,
+          	statfsSync,
+          	statSync,
+          	writeFileSync,
+          } from "node:fs";
+          import { dirname, join, posix } from "node:path";
+
+          export const TARGET = "target";
+          export const RECORD = `${TARGET}/.macro-source-times`;
+          // Written by the last step of a job that dated its checkout; a unit newer than
+          // it was built by a job that did not.
+          export const SEAL = `${TARGET}/.macro-sealed`;
+          // Dependency upgrades leave old artifacts in `target`; start over if the volume
+          // is nearly full. Namespace grows a volume as it fills (about 97 GB free at any
+          // use, up to 100 GB used), so this guards a full disk, not the volume's size.
+          const MIN_FREE_BYTES = 20 * 1024 ** 3;
+          const SYMLINK = "120000 ";
+          // Directories under a profile that hold build outputs, not more profiles.
+          const UNIT_OUTPUTS = new Set(["deps", "incremental", "examples", "doc"]);
+
+          /** Path to `<mode> <type> <object>`. */
+          export type Tree = Map<string, string>;
+          /** Path to its signature and the time (seconds) those contents were first seen. */
+          export type SourceTimes = Map<string, { signature: string; time: number }>;
+
+          export type Plan = {
+          	/** What to date each tracked path, and to keep for the next run. */
+          	record: SourceTimes;
+          	changed: number;
+          	/** Why every path is dated now, when it is. */
+          	rebuildAll?: string;
+          };
+
+          /** `git ls-tree -r -t -z` output. */
+          export function parseTree(output: string): Tree {
+          	const tree: Tree = new Map();
+          	for (const entry of output.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		if (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));
+          	}
+          	return tree;
+          }
+
+          export function parseRecord(text: string): SourceTimes {
+          	const record: SourceTimes = new Map();
+          	for (const entry of text.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		const space = entry.indexOf(" ");
+          		if (tab < 0 || space < 0 || space > tab) continue;
+          		record.set(entry.slice(tab + 1), {
+          			time: Number(entry.slice(0, space)),
+          			signature: entry.slice(space + 1, tab),
+          		});
+          	}
+          	return record;
+          }
+
+          export function formatRecord(record: SourceTimes): string {
+          	return [...record]
+          		.map(([path, { time, signature }]) => `${time} ${signature}\t${path}\0`)
+          		.join("");
+          }
+
+          /** A symlink's signature carries what it points to, which the next run needs. */
+          function signatureOf(mode: string, link: string | undefined): string {
+          	return link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;
+          }
+
+          /** The repository path a symlink at `path` resolves to, when it stays inside. */
+          function linkTarget(path: string, signature: string): string | undefined {
+          	if (!signature.startsWith(SYMLINK)) return;
+          	const quoted = signature.indexOf(' "');
+          	if (quoted < 0) return;
+          	const target = posix.normalize(
+          		posix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),
+          	);
+          	return target.startsWith("../") || posix.isAbsolute(target)
+          		? undefined
+          		: target;
+          }
+
+          /** `links` holds what each tracked symlink in `tree` points to. */
+          export function plan(
+          	previous: SourceTimes | undefined,
+          	tree: Tree,
+          	links: Map<string, string>,
+          	now: number,
+          	forced?: string,
+          ): Plan {
+          	const record: SourceTimes = new Map();
+          	const linkedTo = new Set<string>();
+          	const linked = (path: string, signature: string) => {
+          		const target = linkTarget(path, signature);
+          		if (target !== undefined) linkedTo.add(target);
+          	};
+          	let changed = 0;
+          	let rebuildAll =
+          		forced || (previous ? undefined : "no record of earlier builds");
+          	for (const [path, mode] of tree) {
+          		const signature = signatureOf(mode, links.get(path));
+          		const before = previous?.get(path);
+          		if (before?.signature === signature) {
+          			record.set(path, before);
+          			continue;
+          		}
+          		changed++;
+          		record.set(path, { signature, time: now });
+          		linked(path, signature);
+          		if (before) linked(path, before.signature);
+          		if (before && /(^|\/)\.sqlx\//.test(path)) {
+          			rebuildAll ??= `${path} (sqlx query data) changed`;
+          		}
+          	}
+          	for (const [path, { signature }] of previous ?? []) {
+          		if (tree.has(path)) continue;
+          		changed++;
+          		linked(path, signature);
+          	}
+          	const targets = [...linkedTo];
+          	for (const [path, { signature, time }] of record) {
+          		const dated =
+          			rebuildAll !== undefined ||
+          			targets.some(
+          				(target) => path === target || path.startsWith(`${target}/`),
+          			);
+          		if (dated && time !== now) record.set(path, { signature, time: now });
+          	}
+          	return { record, changed, rebuildAll };
+          }
+
+          function git(...args: string[]): string {
+          	return execFileSync("git", args, { encoding: "utf8", maxBuffer: 1024 ** 3 });
+          }
+
+          /**
+           * The newest time cargo compares sources against: a unit's fingerprint files
+           * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in
+           * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or
+           * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).
+           */
+          function newestUnit(): number {
+          	let newest = 0;
+          	const consider = (path: string) => {
+          		if (existsSync(path)) {
+          			newest = Math.max(newest, statSync(path).mtimeMs / 1000);
+          		}
+          	};
+          	const children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
+          	const subdirectories = (dir: string) =>
+          		existsSync(dir)
+          			? readdirSync(dir, { withFileTypes: true })
+          					.filter((entry) => entry.isDirectory())
+          					.map((entry) => entry.name)
+          			: [];
+          	const walk = (dir: string, depth: number) => {
+          		for (const name of subdirectories(dir)) {
+          			const path = join(dir, name);
+          			if (name === ".fingerprint") {
+          				for (const unit of children(path)) {
+          					for (const file of children(join(path, unit))) {
+          						consider(join(path, unit, file));
+          					}
+          				}
+          			} else if (name === "build") {
+          				for (const unit of children(path)) consider(join(path, unit, "output"));
+          			} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {
+          				walk(path, depth - 1);
+          			}
+          		}
+          	};
+          	walk(TARGET, 3);
+          	return newest;
+          }
+
+          function emptyTarget(why: string) {
+          	console.log(`Emptying ${TARGET}: ${why}`);
+          	for (const entry of readdirSync(TARGET))
+          		rmSync(join(TARGET, entry), { recursive: true, force: true });
+          }
+
+          export async function main() {
+          	const now = Date.now() / 1000;
+          	mkdirSync(TARGET, { recursive: true });
+          	const sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, "utf8")) : 0;
+          	rmSync(SEAL, { force: true });
+          	const { bavail, bsize } = statfsSync(TARGET);
+          	console.log(
+          		`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,
+          	);
+          	const newest = newestUnit();
+          	if (bavail * bsize < MIN_FREE_BYTES) {
+          		emptyTarget("the cache volume is running out of space");
+          	} else if (newest > now) {
+          		emptyTarget("a unit in it is dated after now");
+          	}
+
+          	const tree = parseTree(
+          		git("ls-tree", "-r", "-t", "-z", git("write-tree").trim()),
+          	);
+          	const links = new Map<string, string>();
+          	for (const [path, mode] of tree) {
+          		if (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {
+          			links.set(path, readlinkSync(path));
+          		}
+          	}
+          	const previous = existsSync(RECORD)
+          		? parseRecord(readFileSync(RECORD, "utf8"))
+          		: undefined;
+          	const { record, changed, rebuildAll } = plan(
+          		previous,
+          		tree,
+          		links,
+          		now,
+          		process.env.CARGO_TARGET_REBUILD_ALL ||
+          			(previous && !(newest <= sealed)
+          				? "a job built into it without dating its checkout"
+          				: undefined),
+          	);
+          	for (const [path, { time }] of record) {
+          		try {
+          			lutimesSync(path, time, time);
+          		} catch (error) {
+          			// Paths outside a sparse checkout are not in the work tree.
+          			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          		}
+          	}
+          	writeFileSync(RECORD, formatRecord(record));
+          	console.log(
+          		rebuildAll
+          			? `Every workspace crate rebuilds: ${rebuildAll}`
+          			: `Reusing ${TARGET}: ${changed} paths differ from the last run`,
+          	);
+          }
+
+          /** The last step of a job that ran `main`: every unit it built is older than this. */
+          export async function seal() {
+          	writeFileSync(SEAL, String(Date.now() / 1000));
+          	console.log(`Sealed ${TARGET} for the next run`);
+          }
+
+          await main();
+          NODE_SCRIPT
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+        timeout-minutes: 15
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name sccache-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: run the connectors end-to-end scenarios
+        run: |
+          #!/usr/bin/env bash
+          # Runs the connectors end-to-end suite against dev and writes the report the
+          # alert job reads: `coverage.json` in "$CONNECTORS_E2E_RESULTS", naming the
+          # scenarios that failed (the shape the email suite's coverage report has).
+          # Without the accounts' API keys every scenario skips and passes.
+          set -uo pipefail
+
+          mkdir -p "$CONNECTORS_E2E_RESULTS"
+          output="$(mktemp)"
+          trap 'rm -f "$output"' EXIT
+
+          cargo nextest run -P connectors-e2e -p connectors_e2e --no-fail-fast \
+            --hide-progress-bar 2>&1 | tee "$output"
+          status="${PIPESTATUS[0]}"
+
+          # A scenario's last result line is its result: `FAIL [ 1.2s] (3/7) <binary> <test>`;
+          # with retries, one that failed and then passed ends as `FLAKY`, which passes.
+          failed="$(sed 's/\x1b\[[0-9;]*m//g' "$output" |
+            awk '$1 == "FAIL" || $1 == "PASS" || $1 == "FLAKY" { result[$NF] = $1 }
+                 END { for (test in result) if (result[test] == "FAIL") print test }' |
+            sort)"
+
+          # A run that built nothing names no scenario: leave no report, so the alert
+          # says the failed step's log has what went wrong.
+          if [ "$status" -eq 0 ] || [ -n "$failed" ]; then
+            jq -n --arg failed "$failed" \
+              '{suite: {failed: ($failed | split("\n") | map(select(. != "")))}, broken: [], gaps: []}' \
+              > "$CONNECTORS_E2E_RESULTS/coverage.json"
+          fi
+          exit "$status"
+        env:
+          CONNECTORS_E2E_FLAGGED_API_KEY: ${{ secrets.CONNECTORS_E2E_FLAGGED_API_KEY }}
+          CONNECTORS_E2E_UNFLAGGED_API_KEY: ${{ secrets.CONNECTORS_E2E_UNFLAGGED_API_KEY }}
+          CONNECTORS_E2E_CONNECT_APP: ${{ vars.CONNECTORS_E2E_CONNECT_APP }}
+          CONNECTORS_E2E_PIPEDREAM_APP: ${{ vars.CONNECTORS_E2E_PIPEDREAM_APP }}
+          CONNECTORS_E2E_GITHUB_LINKED: ${{ vars.CONNECTORS_E2E_GITHUB_LINKED }}
+          CONNECTORS_E2E_MCP_SERVER_URL: ${{ vars.CONNECTORS_E2E_MCP_SERVER_URL }}
+          CONNECTORS_E2E_NOTION_PAGE: ${{ vars.CONNECTORS_E2E_NOTION_PAGE }}
+      - name: Upload connectors-e2e-report artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          path: target/connectors-e2e-results
+          name: connectors-e2e-report
+          if-no-files-found: ignore
+          retention-days: '7'
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+      - name: Seal the kept cargo target
+        run: |
+          node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+          // Lets cargo reuse the `target` directory a CI job keeps on its cache
+          // volume. Cargo counts a workspace crate as built when none of its
+          // sources is newer than its last build, and a checkout stamps every file with
+          // the current time, so without this every workspace crate rebuilds.
+          //
+          // The volume keeps, next to `target`, the time each tracked path's current
+          // contents were first seen (`RECORD`). A path whose mode and object match the
+          // record keeps that time; a changed or added path, and every directory above a
+          // change (its tree object changes), gets the current time. A build made while
+          // the contents were what they are now is newer than that time and stays fresh.
+          // A build of other contents is older than it: units only an earlier, different
+          // build left behind (other features, other dependencies) rebuild too.
+          //
+          // Some changes cargo can't see:
+          // - sqlx reads `.sqlx` query data without telling rustc. A new query's data
+          //   comes with the query's new source, so only changed data dates every path
+          //   now and rebuilds every workspace crate. Removed data is not: another
+          //   pull request's query, missing from this tree, is the common case. A job
+          //   rebuilds everything when its own pull request changes data (see
+          //   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while
+          //   an unchanged query still needs it fails only a full build.
+          // - rustc lists the file a symlink pointed to when it built, so a symlink that
+          //   changed, appeared or went away dates the files it pointed to, before and
+          //   after, now. A link is resolved by its text alone: one through another
+          //   symlinked directory, or out of the repository, dates nothing.
+          // Migrations need nothing here: `sqlx::migrate!` includes each file and
+          // `macro_db_migrator`'s build script watches the directory. A build that checks
+          // queries against a live database depends on the schema too; Cloud Storage's
+          // test job dates those crates itself.
+          //
+          // A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace
+          // crate anyway: Cloud Storage's jobs do when the pull request changes query
+          // data.
+          //
+          // Units dated after now (another clock, or anything else writing `target`)
+          // would look fresh against every change, so `target` starts over then.
+          //
+          // A job that builds into `target` without dating its checkout first (one whose
+          // workflow predates this step, or a re-run of one) leaves units the record
+          // doesn't describe. So the last step of a job that did date it writes `SEAL`,
+          // and a unit newer than the seal rebuilds every workspace crate.
+          //
+          // It runs on a fresh checkout: it dates the index, not the work tree.
+
+          import { execFileSync } from "node:child_process";
+          import {
+          	existsSync,
+          	lutimesSync,
+          	mkdirSync,
+          	readdirSync,
+          	readFileSync,
+          	readlinkSync,
+          	rmSync,
+          	statfsSync,
+          	statSync,
+          	writeFileSync,
+          } from "node:fs";
+          import { dirname, join, posix } from "node:path";
+
+          export const TARGET = "target";
+          export const RECORD = `${TARGET}/.macro-source-times`;
+          // Written by the last step of a job that dated its checkout; a unit newer than
+          // it was built by a job that did not.
+          export const SEAL = `${TARGET}/.macro-sealed`;
+          // Dependency upgrades leave old artifacts in `target`; start over if the volume
+          // is nearly full. Namespace grows a volume as it fills (about 97 GB free at any
+          // use, up to 100 GB used), so this guards a full disk, not the volume's size.
+          const MIN_FREE_BYTES = 20 * 1024 ** 3;
+          const SYMLINK = "120000 ";
+          // Directories under a profile that hold build outputs, not more profiles.
+          const UNIT_OUTPUTS = new Set(["deps", "incremental", "examples", "doc"]);
+
+          /** Path to `<mode> <type> <object>`. */
+          export type Tree = Map<string, string>;
+          /** Path to its signature and the time (seconds) those contents were first seen. */
+          export type SourceTimes = Map<string, { signature: string; time: number }>;
+
+          export type Plan = {
+          	/** What to date each tracked path, and to keep for the next run. */
+          	record: SourceTimes;
+          	changed: number;
+          	/** Why every path is dated now, when it is. */
+          	rebuildAll?: string;
+          };
+
+          /** `git ls-tree -r -t -z` output. */
+          export function parseTree(output: string): Tree {
+          	const tree: Tree = new Map();
+          	for (const entry of output.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		if (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));
+          	}
+          	return tree;
+          }
+
+          export function parseRecord(text: string): SourceTimes {
+          	const record: SourceTimes = new Map();
+          	for (const entry of text.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		const space = entry.indexOf(" ");
+          		if (tab < 0 || space < 0 || space > tab) continue;
+          		record.set(entry.slice(tab + 1), {
+          			time: Number(entry.slice(0, space)),
+          			signature: entry.slice(space + 1, tab),
+          		});
+          	}
+          	return record;
+          }
+
+          export function formatRecord(record: SourceTimes): string {
+          	return [...record]
+          		.map(([path, { time, signature }]) => `${time} ${signature}\t${path}\0`)
+          		.join("");
+          }
+
+          /** A symlink's signature carries what it points to, which the next run needs. */
+          function signatureOf(mode: string, link: string | undefined): string {
+          	return link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;
+          }
+
+          /** The repository path a symlink at `path` resolves to, when it stays inside. */
+          function linkTarget(path: string, signature: string): string | undefined {
+          	if (!signature.startsWith(SYMLINK)) return;
+          	const quoted = signature.indexOf(' "');
+          	if (quoted < 0) return;
+          	const target = posix.normalize(
+          		posix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),
+          	);
+          	return target.startsWith("../") || posix.isAbsolute(target)
+          		? undefined
+          		: target;
+          }
+
+          /** `links` holds what each tracked symlink in `tree` points to. */
+          export function plan(
+          	previous: SourceTimes | undefined,
+          	tree: Tree,
+          	links: Map<string, string>,
+          	now: number,
+          	forced?: string,
+          ): Plan {
+          	const record: SourceTimes = new Map();
+          	const linkedTo = new Set<string>();
+          	const linked = (path: string, signature: string) => {
+          		const target = linkTarget(path, signature);
+          		if (target !== undefined) linkedTo.add(target);
+          	};
+          	let changed = 0;
+          	let rebuildAll =
+          		forced || (previous ? undefined : "no record of earlier builds");
+          	for (const [path, mode] of tree) {
+          		const signature = signatureOf(mode, links.get(path));
+          		const before = previous?.get(path);
+          		if (before?.signature === signature) {
+          			record.set(path, before);
+          			continue;
+          		}
+          		changed++;
+          		record.set(path, { signature, time: now });
+          		linked(path, signature);
+          		if (before) linked(path, before.signature);
+          		if (before && /(^|\/)\.sqlx\//.test(path)) {
+          			rebuildAll ??= `${path} (sqlx query data) changed`;
+          		}
+          	}
+          	for (const [path, { signature }] of previous ?? []) {
+          		if (tree.has(path)) continue;
+          		changed++;
+          		linked(path, signature);
+          	}
+          	const targets = [...linkedTo];
+          	for (const [path, { signature, time }] of record) {
+          		const dated =
+          			rebuildAll !== undefined ||
+          			targets.some(
+          				(target) => path === target || path.startsWith(`${target}/`),
+          			);
+          		if (dated && time !== now) record.set(path, { signature, time: now });
+          	}
+          	return { record, changed, rebuildAll };
+          }
+
+          function git(...args: string[]): string {
+          	return execFileSync("git", args, { encoding: "utf8", maxBuffer: 1024 ** 3 });
+          }
+
+          /**
+           * The newest time cargo compares sources against: a unit's fingerprint files
+           * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in
+           * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or
+           * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).
+           */
+          function newestUnit(): number {
+          	let newest = 0;
+          	const consider = (path: string) => {
+          		if (existsSync(path)) {
+          			newest = Math.max(newest, statSync(path).mtimeMs / 1000);
+          		}
+          	};
+          	const children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
+          	const subdirectories = (dir: string) =>
+          		existsSync(dir)
+          			? readdirSync(dir, { withFileTypes: true })
+          					.filter((entry) => entry.isDirectory())
+          					.map((entry) => entry.name)
+          			: [];
+          	const walk = (dir: string, depth: number) => {
+          		for (const name of subdirectories(dir)) {
+          			const path = join(dir, name);
+          			if (name === ".fingerprint") {
+          				for (const unit of children(path)) {
+          					for (const file of children(join(path, unit))) {
+          						consider(join(path, unit, file));
+          					}
+          				}
+          			} else if (name === "build") {
+          				for (const unit of children(path)) consider(join(path, unit, "output"));
+          			} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {
+          				walk(path, depth - 1);
+          			}
+          		}
+          	};
+          	walk(TARGET, 3);
+          	return newest;
+          }
+
+          function emptyTarget(why: string) {
+          	console.log(`Emptying ${TARGET}: ${why}`);
+          	for (const entry of readdirSync(TARGET))
+          		rmSync(join(TARGET, entry), { recursive: true, force: true });
+          }
+
+          export async function main() {
+          	const now = Date.now() / 1000;
+          	mkdirSync(TARGET, { recursive: true });
+          	const sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, "utf8")) : 0;
+          	rmSync(SEAL, { force: true });
+          	const { bavail, bsize } = statfsSync(TARGET);
+          	console.log(
+          		`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,
+          	);
+          	const newest = newestUnit();
+          	if (bavail * bsize < MIN_FREE_BYTES) {
+          		emptyTarget("the cache volume is running out of space");
+          	} else if (newest > now) {
+          		emptyTarget("a unit in it is dated after now");
+          	}
+
+          	const tree = parseTree(
+          		git("ls-tree", "-r", "-t", "-z", git("write-tree").trim()),
+          	);
+          	const links = new Map<string, string>();
+          	for (const [path, mode] of tree) {
+          		if (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {
+          			links.set(path, readlinkSync(path));
+          		}
+          	}
+          	const previous = existsSync(RECORD)
+          		? parseRecord(readFileSync(RECORD, "utf8"))
+          		: undefined;
+          	const { record, changed, rebuildAll } = plan(
+          		previous,
+          		tree,
+          		links,
+          		now,
+          		process.env.CARGO_TARGET_REBUILD_ALL ||
+          			(previous && !(newest <= sealed)
+          				? "a job built into it without dating its checkout"
+          				: undefined),
+          	);
+          	for (const [path, { time }] of record) {
+          		try {
+          			lutimesSync(path, time, time);
+          		} catch (error) {
+          			// Paths outside a sparse checkout are not in the work tree.
+          			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          		}
+          	}
+          	writeFileSync(RECORD, formatRecord(record));
+          	console.log(
+          		rebuildAll
+          			? `Every workspace crate rebuilds: ${rebuildAll}`
+          			: `Reusing ${TARGET}: ${changed} paths differ from the last run`,
+          	);
+          }
+
+          /** The last step of a job that ran `main`: every unit it built is older than this. */
+          export async function seal() {
+          	writeFileSync(SEAL, String(Date.now() / 1000));
+          	console.log(`Sealed ${TARGET} for the next run`);
+          }
+
+          await seal();
+          NODE_SCRIPT
+  email-e2e-alert:
+    needs:
+      - suite
+    if: '!cancelled() && github.ref == ''refs/heads/main'' && (github.event_name == ''push'' || github.event_name == ''schedule'')'
+    name: Tell the connectors channel
+    runs-on: namespace-profile-linux-small
+    permissions:
+      actions: read
+      contents: read
+    concurrency:
+      group: email-e2e-alert-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+      cancel-in-progress: false
+    timeout-minutes: 10
+    steps:
+      - name: download the coverage report
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: connectors-e2e-report
+          path: ${{ runner.temp }}/email-e2e-reports
+        continue-on-error: true
+      - id: decide
+        name: decide what to post
+        run: |
+          node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+          // Tells the Macro Alerts channel when an email end-to-end workflow turns red
+          // on `main`, and when it turns green again. The last job of `email_e2e.yml`,
+          // `email_e2e_browser.yml` and `email_e2e_full_stack.yml` runs it after every
+          // other job, as does that of `channels_e2e.yml`, on a push to `main` and in
+          // the daily sweep; never on a run by hand.
+          //
+          // A run posts only when its result differs from what the channel was last
+          // told about its stream: the workflow's runs on the same branch for the same
+          // event (the pushes, or the sweep). A red run posts the failure when the
+          // channel shows the stream passing; a green run posts that it passes again
+          // when the channel shows it failing; any other run posts nothing. Pushes and
+          // the sweep are apart because only the sweep runs the tests kept for known
+          // bugs: one of those that passes would otherwise turn the stream red at every
+          // sweep and green at the next push.
+          //
+          // The job records what the channel shows in its last step, "the channel shows
+          // it failing" or "the channel shows it passing", which runs only once a post
+          // succeeded or none was needed. The newest such step among the stream's recent
+          // runs, read through the jobs API, is what the channel shows; with none, it
+          // shows the stream passing. A stream's alert jobs run one at a time (a
+          // concurrency group), so each reads what the one before it left. A run posts
+          // nothing once a newer run has ended, since its result is not the branch's
+          // latest; the newer run's own alert job tells the channel, or, if that job
+          // never runs, the next run does. A failed post records nothing, so the next
+          // run posts again, as does a re-run of this job while no newer run has ended.
+          //
+          // A push that waited for the run before it and was replaced by a newer push
+          // (the workflows queue as the dev deploys do) ends as a cancelled run with no
+          // jobs, and a stream can hold several for each run that ended. Having no jobs,
+          // it neither records nor passes, and the job reads past it without counting it
+          // toward LOOK_BACK; the run after it tests the newer tree, and that run's
+          // failure names the last pass before it, so the changes since span its
+          // commit. A run is judged by its jobs, never by its conclusion: one whose job
+          // ran out of time is cancelled too, yet ran this job.
+          //
+          // A failure names the commit, each failed job with the step it failed at, and
+          // what the run's coverage report (downloaded to EMAIL_E2E_REPORTS) says
+          // failed: gating tests, tests kept for known bugs that now pass, or the
+          // coverage check itself. The step writes the message to
+          // EMAIL_E2E_ALERT_MESSAGE, `post=true` when there is one, and `shows=failing`
+          // or `shows=passing` to its outputs; the next steps post the message and record
+          // what the channel then shows. The message, or why there is none, goes to the
+          // job summary.
+
+          import { appendFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+
+          /**
+           * Conclusions of a finished job that mean it failed. A cancelled job counts:
+           * this job runs only in a run that was not cancelled, so such a job ran out of
+           * time.
+           */
+          const RED = new Set(['failure', 'timed_out', 'cancelled']);
+
+          /** The most runs with jobs of the stream the job reads. */
+          export const LOOK_BACK = 30;
+
+          /**
+           * How many of the stream's newest runs the job lists, the most a page holds:
+           * runs replaced while they waited have no jobs, and are read past.
+           */
+          const LISTED = 100;
+
+          /** How many runs' jobs the job reads at once. */
+          const BATCH = 5;
+
+          /** How many failed tests a message names before it counts the rest. */
+          const NAMED = 8;
+
+          /** Where the alert sends a reader. */
+          export const WHAT_TO_DO = 'docs/development/ci.md#when-an-email-end-to-end-alert-fires';
+
+          /** A line of the browser suite's coverage check about a test kept for a known bug. */
+          const KNOWN_BUG_PASSES = 'a test kept for a known bug passes: remove its @known-bug tag and its waiver: ';
+
+          /** The Rust suite's coverage gap for a scenario kept for a known bug that passes. */
+          const KNOWN_BUG_SCENARIO = /^scenario `(.+)`, kept for a known bug, passes/;
+
+          /** The Rust suite's coverage gap for a scenario that failed. */
+          const FAILED_SCENARIO = /^scenario `.+` failed$/;
+
+          /** A run of the workflow, as the runs API lists it. */
+          export type StreamRun = { id: number; run_number: number; head_sha: string };
+
+          /** A job of a run, as the jobs API lists it. */
+          export type Job = {
+            id: number;
+            name: string;
+            status: string;
+            conclusion: string | null;
+            run_attempt?: number;
+            steps?: { name: string; conclusion: string | null; completed_at?: string | null }[];
+          };
+
+          /** A run and the jobs of all its attempts. */
+          export type Entry = { run: StreamRun; jobs: Job[] };
+
+          /** The names of the alert job and of its steps the script reads. */
+          export type Names = {
+            job: string;
+            post: string;
+            /** The step that records that the channel shows the stream failing. */
+            failing: string;
+            /** The step that records that the channel shows the stream passing. */
+            passing: string;
+          };
+
+          /** What one alert job recorded. */
+          export type Told = { run: StreamRun; failing: boolean; posted: boolean; at: string };
+
+          export type FailedJob = { name: string; step: string | null };
+
+          export type Decision = (
+            | { post: 'failure'; lastGreen: StreamRun | null }
+            | { post: 'recovery'; failingSince: StreamRun | null }
+            | { post: null; why: string }
+          ) & {
+            /** Whether the channel shows the stream failing once this job is done. */
+            failing: boolean;
+          };
+
+          /** What the run's coverage report says failed. */
+          export type Findings = {
+            /** Gating tests that failed. */
+            failedTests: string[];
+            /** Tests kept for known bugs that passed: the known-bug report, not a gating test. */
+            knownBugsPassing: string[];
+            /** Everything else the coverage check fails on. */
+            otherProblems: string[];
+          };
+
+          /** What the message says about the run. */
+          export type Context = {
+            runId: number;
+            workflow: string;
+            event: string;
+            branch: string;
+            sha: string;
+            /** The first line of the head commit's message. */
+            title: string;
+            /** `https://github.com/<owner>/<repo>`. */
+            repoUrl: string;
+            runUrl: string;
+          };
+
+          function env(name: string): string {
+            const value = process.env[name];
+            if (!value) {
+              throw new Error(`${name} is not set`);
+            }
+            return value;
+          }
+
+          /**
+           * The jobs that failed, each with the first step that failed, in the order the
+           * run started them: the suite's before the coverage job that reads their
+           * results. Jobs still running, this one among them, are left out.
+           */
+          export function failedJobs(jobs: Job[]): FailedJob[] {
+            const failed = (conclusion: string | null) => RED.has(conclusion ?? '');
+            return jobs
+              .filter((job) => job.status === 'completed' && failed(job.conclusion))
+              .sort((a, b) => a.id - b.id)
+              .map((job) => ({
+                name: job.name,
+                step: job.steps?.find((step) => failed(step.conclusion))?.name ?? null,
+              }));
+          }
+
+          /** What each alert job of a run, in any attempt, recorded. */
+          export function records(entry: Entry, names: Names): Told[] {
+            const done = (job: Job, name: string) =>
+              job.steps?.find((step) => step.name === name && step.conclusion === 'success');
+            return entry.jobs.flatMap((job) => {
+              const shown = job.name === names.job ? (done(job, names.failing) ?? done(job, names.passing)) : undefined;
+              return shown?.completed_at
+                ? [
+                    {
+                      run: entry.run,
+                      failing: shown.name === names.failing,
+                      posted: done(job, names.post) !== undefined,
+                      at: shown.completed_at,
+                    },
+                  ]
+                : [];
+            });
+          }
+
+          /**
+           * Whether a run passed, from the latest attempt of each of its jobs but the
+           * alert job; null while one of them is still going.
+           */
+          export function passed(entry: Entry, alertJob: string): boolean | null {
+            const latest = new Map<string, Job>();
+            for (const job of entry.jobs) {
+              const seen = latest.get(job.name);
+              if (job.name !== alertJob && (!seen || (job.run_attempt ?? 1) > (seen.run_attempt ?? 1))) {
+                latest.set(job.name, job);
+              }
+            }
+            const suite = [...latest.values()];
+            if (suite.length === 0 || suite.some((job) => job.status !== 'completed')) {
+              return null;
+            }
+            return failedJobs(suite).length === 0;
+          }
+
+          /**
+           * Reads the stream's runs, newest first, a few at a time with `jobsOf`, until
+           * the decision `judge` makes of them would not change or, by the end of a
+           * batch, LOOK_BACK runs with jobs were read. A push replaced while it waited
+           * has none: it is read but not counted, so replaced pushes do not crowd out
+           * the runs that ended.
+           */
+          export async function readStream(
+            stream: StreamRun[],
+            names: Names,
+            judge: (entries: Entry[]) => Decision,
+            jobsOf: (run: StreamRun) => Promise<Job[]>,
+          ): Promise<Decision> {
+            const entries: Entry[] = [];
+            const ran = () => entries.filter((entry) => entry.jobs.length > 0).length;
+            let decision = judge(entries);
+            for (
+              let start = 0;
+              start < stream.length && ran() < LOOK_BACK && readMore(decision, entries, names);
+              start += BATCH
+            ) {
+              const batch = stream.slice(start, start + BATCH);
+              entries.push(...(await Promise.all(batch.map(async (run) => ({ run, jobs: await jobsOf(run) })))));
+              decision = judge(entries);
+            }
+            return decision;
+          }
+
+          const short = (sha: string) => sha.slice(0, 7);
+
+          const newestFirst = (a: { run: StreamRun }, b: { run: StreamRun }) => b.run.run_number - a.run.run_number;
+
+          /**
+           * Whether this run posts, from its result and the stream's recent runs
+           * (`entries`, which may hold this run's earlier attempts).
+           */
+          export function decide({
+            run,
+            red,
+            entries,
+            names,
+          }: {
+            run: StreamRun;
+            red: boolean;
+            entries: Entry[];
+            names: Names;
+          }): Decision {
+            const recorded = entries.flatMap((entry) => records(entry, names)).sort((a, b) => b.at.localeCompare(a.at));
+            const shown = recorded[0];
+            const failing = shown?.failing ?? false;
+
+            // A newer run that ended tells the channel itself, or has already; its
+            // alert job may wait behind this one.
+            const newer = entries
+              .filter(
+                (entry) =>
+                  entry.run.run_number > run.run_number &&
+                  (records(entry, names).length > 0 || passed(entry, names.job) !== null),
+              )
+              .sort(newestFirst)[0];
+            if (newer) {
+              return {
+                post: null,
+                failing,
+                why: `run #${newer.run.run_number}, which is newer, has ended, so this result is not the branch's latest`,
+              };
+            }
+            if (red && !failing) {
+              const lastGreen = entries
+                .filter((entry) => entry.run.run_number < run.run_number && passed(entry, names.job) === true)
+                .sort(newestFirst)[0];
+              return { post: 'failure', failing: true, lastGreen: lastGreen?.run ?? null };
+            }
+            if (!red && failing) {
+              const since = recorded.find((record) => record.failing && record.posted);
+              return { post: 'recovery', failing: false, failingSince: since?.run ?? null };
+            }
+            const as = shown ? ` (since run #${shown.run.run_number}, at ${short(shown.run.head_sha)})` : '';
+            return {
+              post: null,
+              failing,
+              why: red
+                ? `the channel already shows it failing${as}`
+                : shown
+                  ? `it passed, and the channel already shows it passing${as}`
+                  : 'it passed, and the channel was never told otherwise',
+            };
+          }
+
+          /** Whether a decision would change if the job read more runs. */
+          export function readMore(decision: Decision, entries: Entry[], names: Names): boolean {
+            return (
+              !entries.some((entry) => records(entry, names).length > 0) ||
+              (decision.post === 'failure' && decision.lastGreen === null) ||
+              (decision.post === 'recovery' && decision.failingSince === null)
+            );
+          }
+
+          type PlaywrightSpec = {
+            title: string;
+            file: string;
+            line: number;
+            tests: { status: string; expectedStatus?: string }[];
+          };
+          type PlaywrightSuite = { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] };
+
+          /** `file:line title` of each spec that failed in a Playwright JSON report. */
+          export function failedSpecs(report: { suites?: PlaywrightSuite[] }): string[] {
+            const walk = (suites: PlaywrightSuite[] = []): string[] =>
+              suites.flatMap((suite) => [
+                ...(suite.specs ?? [])
+                  .filter((spec) => spec.tests.some((test) => test.status === 'unexpected'))
+                  .map((spec) => `${spec.file}:${spec.line} ${spec.title}`),
+                ...walk(suite.suites),
+              ]);
+            return walk(report.suites);
+          }
+
+          /** What the Rust suite's `coverage.json` says failed. */
+          export function rustFindings(coverage: {
+            suite: { failed: string[] };
+            broken: string[];
+            gaps: string[];
+          }): Findings {
+            const knownBugsPassing = coverage.gaps.flatMap((gap) => KNOWN_BUG_SCENARIO.exec(gap)?.[1] ?? []);
+            return {
+              failedTests: coverage.suite.failed,
+              knownBugsPassing,
+              otherProblems: [
+                ...coverage.broken,
+                ...coverage.gaps.filter((gap) => !FAILED_SCENARIO.test(gap) && !KNOWN_BUG_SCENARIO.test(gap)),
+              ],
+            };
+          }
+
+          /**
+           * What the browser suite's `ledger.json` and the Playwright reports beside it
+           * (`playwright-<run>[-<shard>].json`) say failed.
+           */
+          export function browserFindings(
+            ledger: { failures: string[] },
+            reports: { name: string; report: { suites?: PlaywrightSuite[] } }[],
+          ): Findings {
+            const gating = reports.filter(({ name }) => /^playwright-(gating|full-stack)(-\d+)?\.json$/.test(name));
+            return {
+              // A test that ran on both stacks failed once for each.
+              failedTests: [...new Set(gating.flatMap(({ report }) => failedSpecs(report)))],
+              knownBugsPassing: ledger.failures
+                .filter((line) => line.startsWith(KNOWN_BUG_PASSES))
+                .map((line) => line.slice(KNOWN_BUG_PASSES.length)),
+              otherProblems: ledger.failures.filter((line) => !line.startsWith(KNOWN_BUG_PASSES)),
+            };
+          }
+
+          /** What a message says of a spec marked to fail (`test.fail()`) that passed. */
+          const MARKED_TO_FAIL = ' (marked as a known defect, and now passes)';
+
+          /**
+           * What the one Playwright report of a suite with no coverage check says failed
+           * (the channels suite's `playwright-report.json`). Its tests for known defects
+           * run in every run, marked to fail, so one that passes fails the run: it is
+           * named with the failed tests, and said to be that.
+           */
+          export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
+            const unexpected = (spec: PlaywrightSpec) => spec.tests.filter((test) => test.status === 'unexpected');
+            const walk = (suites: PlaywrightSuite[] = []): string[] =>
+              suites.flatMap((suite) => [
+                ...(suite.specs ?? [])
+                  .filter((spec) => unexpected(spec).length > 0)
+                  .map((spec) => {
+                    const marked = unexpected(spec).some((test) => test.expectedStatus === 'failed');
+                    return `${spec.file}:${spec.line} ${spec.title}${marked ? MARKED_TO_FAIL : ''}`;
+                  }),
+                ...walk(suite.suites),
+              ]);
+            return { failedTests: walk(report.suites), knownBugsPassing: [], otherProblems: [] };
+          }
+
+          /** What the coverage report in `dir` says failed, or null when there is none. */
+          export function readFindings(dir: string): Findings | null {
+            const read = (name: string) => JSON.parse(readFileSync(`${dir}/${name}`, 'utf8'));
+            if (existsSync(`${dir}/coverage.json`)) {
+              return rustFindings(read('coverage.json'));
+            }
+            if (existsSync(`${dir}/ledger.json`)) {
+              const reports = readdirSync(dir)
+                .filter((name) => /^playwright-.*\.json$/.test(name))
+                .map((name) => ({ name, report: read(name) }));
+              return browserFindings(read('ledger.json'), reports);
+            }
+            if (existsSync(`${dir}/playwright-report.json`)) {
+              return suiteFindings(read('playwright-report.json'));
+            }
+            return null;
+          }
+
+          /** A code span; a name holds no backtick, but one would end the span early. */
+          const code = (text: string) => `\`${text.replace(/`/g, "'")}\``;
+
+          /** Text the channel would otherwise read as a tag. */
+          const plain = (text: string) => text.replace(/</g, '‹').replace(/>/g, '›');
+
+          function names(items: string[]): string {
+            const shown = items.slice(0, NAMED).map(code).join(', ');
+            return items.length > NAMED ? `${shown} and ${items.length - NAMED} more` : shown;
+          }
+
+          /**
+           * The failed jobs, by the part of their name after the workflow's ("1/3",
+           * "coverage"), with those that failed at the same step together.
+           */
+          export function jobsLine(workflow: string, jobs: FailedJob[]): string {
+            const part = (name: string) =>
+              name.startsWith(`${workflow} `) ? name.slice(workflow.length + 1).replace(/^\((.*)\)$/, '$1') : name;
+            const byStep = new Map<string | null, string[]>();
+            for (const job of jobs) {
+              byStep.set(job.step, [...(byStep.get(job.step) ?? []), part(job.name)]);
+            }
+            return [...byStep]
+              .map(([step, parts]) => (step ? `${parts.join(', ')} at “${step}”` : parts.join(', ')))
+              .join('; ');
+          }
+
+          /** Which run: the push of a commit, with its PR, or the sweep at a commit. */
+          function which(context: Context): string {
+            const pr = /\(#(\d+)\)$/.exec(context.title)?.[1];
+            const title = plain(context.title.replace(/\s*\(#\d+\)$/, ''));
+            const commit = `${code(short(context.sha))} ${title}`;
+            if (context.event === 'schedule') {
+              return `daily sweep, at ${commit}`;
+            }
+            return pr ? `push of ${commit} ([#${pr}](${context.repoUrl}/pull/${pr}))` : `push of ${commit}`;
+          }
+
+
+          export function failureMessage(
+            context: Context,
+            jobs: FailedJob[],
+            findings: Findings | null,
+            lastGreen: StreamRun | null,
+          ): string {
+            const lines = [`🚨 · **${context.workflow} failed on ${context.branch}** · ${which(context)}`];
+            lines.push(`Failed jobs: ${jobsLine(context.workflow, jobs)}`);
+            if (findings === null) {
+              lines.push('No coverage report was written: the failed step’s log says what went wrong.');
+            } else {
+              const { failedTests, knownBugsPassing, otherProblems } = findings;
+              if (failedTests.length > 0) {
+                lines.push(`Failed tests (${failedTests.length}): ${names(failedTests)}`);
+              }
+              if (knownBugsPassing.length > 0) {
+                lines.push(
+                  `Kept for a known bug and now passing, from the known-bug report rather than a gating test (${knownBugsPassing.length}): ${names(knownBugsPassing)}`,
+                );
+              }
+              if (failedTests.length === 0 && knownBugsPassing.length === 0) {
+                lines.push(
+                  otherProblems.length > 0
+                    ? `The coverage check failed: ${plain(otherProblems[0])}${otherProblems.length > 1 ? ` (and ${otherProblems.length - 1} more)` : ''}`
+                    : 'No test failed in the coverage report: the failed step’s log says what went wrong.',
+                );
+              }
+            }
+            if (lastGreen?.head_sha === context.sha) {
+              lines.push('This commit passed in an earlier run: the failure may be flaky.');
+            } else if (lastGreen) {
+              lines.push(
+                `Last passed at ${code(short(lastGreen.head_sha))} · [changes since](${context.repoUrl}/compare/${lastGreen.head_sha}...${context.sha})`,
+              );
+            }
+            lines.push(`[Run](${context.runUrl}) · [What to do](${context.repoUrl}/blob/main/${WHAT_TO_DO})`);
+            return lines.join('\n');
+          }
+
+          export function recoveryMessage(context: Context, failingSince: StreamRun | null): string {
+            const since =
+              failingSince === null
+                ? ''
+                : failingSince.id === context.runId
+                  ? 'It failed on an earlier attempt of this run. '
+                  : `It had failed since ${code(short(failingSince.head_sha))}. `;
+            return [
+              `✅ Resolved · **${context.workflow} passes again on ${context.branch}** · ${which(context)}`,
+              `${since}[Run](${context.runUrl})`,
+            ].join('\n');
+          }
+
+          /**
+           * GETs a GitHub API path. Network errors, server errors and rate limits are
+           * tried three times, waiting as long as GitHub asks when that fits in the job.
+           */
+          async function github(path: string): Promise<any> {
+            for (let attempt = 1; ; attempt++) {
+              const { response, body } = await fetch(`${process.env.GITHUB_API_URL ?? 'https://api.github.com'}${path}`, {
+                headers: {
+                  accept: 'application/vnd.github+json',
+                  authorization: `Bearer ${env('GH_TOKEN')}`,
+                  'x-github-api-version': '2022-11-28',
+                },
+              })
+                .then(async (response) => ({ response, body: await response.text() }))
+                .catch((error: unknown) => ({ response: null, body: String(error) }));
+              if (response?.ok) {
+                try {
+                  return JSON.parse(body);
+                } catch {
+                  // A body cut short: try again.
+                }
+              }
+              const limited = response?.status === 429 || (response?.status === 403 && /rate limit/i.test(body));
+              const retried = response === null || response.ok || response.status >= 500 || limited;
+              if (attempt === 3 || !retried) {
+                throw new Error(`GET ${path}: ${response ? `HTTP ${response.status} ` : ''}${body}`);
+              }
+              const retryAfter = Number(response?.headers.get('retry-after'));
+              const reset = Number(response?.headers.get('x-ratelimit-reset')) - Date.now() / 1000;
+              const exhausted = response?.headers.get('x-ratelimit-remaining') === '0';
+              const seconds = retryAfter > 0 ? retryAfter : !limited ? 5 * attempt : exhausted && reset > 0 ? reset : 60;
+              // The job's own time limit is ten minutes; a longer wait would not end in time.
+              if (seconds > 120) {
+                throw new Error(`GET ${path}: rate limited for ${Math.round(seconds)}s`);
+              }
+              await new Promise((resolve) => setTimeout(resolve, seconds * 1000));
+            }
+          }
+
+          async function jobsOf(repo: string, run: number, filter: 'latest' | 'all'): Promise<Job[]> {
+            return (await github(`/repos/${repo}/actions/runs/${run}/jobs?filter=${filter}&per_page=100`)).jobs;
+          }
+
+          export async function main() {
+            const repo = env('GITHUB_REPOSITORY');
+            const id = Number(env('GITHUB_RUN_ID'));
+            const names: Names = {
+              job: env('EMAIL_E2E_ALERT_JOB'),
+              post: env('EMAIL_E2E_ALERT_POST_STEP'),
+              failing: env('EMAIL_E2E_ALERT_FAILING_STEP'),
+              passing: env('EMAIL_E2E_ALERT_PASSING_STEP'),
+            };
+            const [run, jobs] = await Promise.all([github(`/repos/${repo}/actions/runs/${id}`), jobsOf(repo, id, 'latest')]);
+            const failed = failedJobs(jobs.filter((job) => job.name !== names.job));
+
+            const query = new URLSearchParams({ branch: run.head_branch, event: run.event, per_page: `${LISTED}` });
+            const stream: StreamRun[] = (await github(`/repos/${repo}/actions/workflows/${run.workflow_id}/runs?${query}`))
+              .workflow_runs;
+            const decision = await readStream(
+              stream,
+              names,
+              (entries) => decide({ run, red: failed.length > 0, entries, names }),
+              (each) => jobsOf(repo, each.id, 'all'),
+            );
+
+            const context: Context = {
+              runId: id,
+              workflow: run.name,
+              event: run.event,
+              branch: run.head_branch,
+              sha: run.head_sha,
+              title: String(run.head_commit?.message ?? '').split('\n')[0],
+              repoUrl: `${env('GITHUB_SERVER_URL')}/${repo}`,
+              runUrl: run.html_url,
+            };
+            const outputs = [`shows=${decision.failing ? 'failing' : 'passing'}`];
+            let summary: string;
+            if (decision.post === null) {
+              summary = `Nothing posted to Macro Alerts: ${decision.why}.`;
+              outputs.push('post=false');
+            } else {
+              const message =
+                decision.post === 'failure'
+                  ? failureMessage(context, failed, readFindings(env('EMAIL_E2E_REPORTS')), decision.lastGreen)
+                  : recoveryMessage(context, decision.failingSince);
+              writeFileSync(env('EMAIL_E2E_ALERT_MESSAGE'), message);
+              outputs.push('post=true');
+              summary = `Posting to Macro Alerts:\n\n${message
+                .split('\n')
+                .map((line) => `> ${line}`)
+                .join('\n')}`;
+            }
+            appendFileSync(env('GITHUB_OUTPUT'), `${outputs.join('\n')}\n`);
+            console.log(summary);
+            appendFileSync(env('GITHUB_STEP_SUMMARY'), `### Macro Alerts\n\n${summary}\n`);
+          }
+
+          await main();
+          NODE_SCRIPT
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EMAIL_E2E_REPORTS: ${{ runner.temp }}/email-e2e-reports
+          EMAIL_E2E_ALERT_MESSAGE: ${{ runner.temp }}/email-e2e-alert.md
+          EMAIL_E2E_ALERT_JOB: Tell the connectors channel
+          EMAIL_E2E_ALERT_POST_STEP: post to the connectors channel
+          EMAIL_E2E_ALERT_FAILING_STEP: the channel shows it failing
+          EMAIL_E2E_ALERT_PASSING_STEP: the channel shows it passing
+      - name: post to the connectors channel
+        if: steps.decide.outputs.post == 'true'
+        run: |
+          set -euo pipefail
+          message=$(cat "$EMAIL_E2E_ALERT_MESSAGE")
+          if [[ -z "$MACRO_WEBHOOK_URL" || -z "$MACRO_BOT_TOKEN" ]]; then
+            echo 'Configure the The connectors channel webhook URL and bot token' >&2
+            exit 1
+          fi
+          jq -n --arg content "$message" '{content: $content}' |
+            curl --fail-with-body --silent --show-error --retry 3 \
+              --header 'Content-Type: application/json' \
+              --header "x-macro-channel-bot-token: $MACRO_BOT_TOKEN" \
+              --data-binary @- "$MACRO_WEBHOOK_URL"
+        shell: bash
+        env:
+          MACRO_WEBHOOK_URL: ${{ vars.CONNECTORS_E2E_ALERT_WEBHOOK_URL }}
+          MACRO_BOT_TOKEN: ${{ secrets.CONNECTORS_E2E_ALERT_BOT_TOKEN }}
+          EMAIL_E2E_ALERT_MESSAGE: ${{ runner.temp }}/email-e2e-alert.md
+      - name: the channel shows it failing
+        if: steps.decide.outputs.shows == 'failing'
+        run: echo 'The connectors channel now shows this workflow failing on this branch.'
+      - name: the channel shows it passing
+        if: steps.decide.outputs.shows == 'passing'
+        run: echo 'The connectors channel now shows this workflow passing on this branch.'
+concurrency:
+  group: connectors-e2e-${{ (github.event_name == 'workflow_dispatch' || github.run_attempt != '1') && github.run_id || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: false

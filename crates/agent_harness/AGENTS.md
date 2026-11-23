@@ -51,11 +51,22 @@ between the sandbox and the rest of the product.
 - Add a trigger source: `crates/agent_trigger` (context) →
   `src/domain/trigger_router.rs` → `src/inbound/kafka.rs`.
 
-External runtimes receive the session's configured MCP selection when binding,
-including enabled owner connections and custom servers under `OwnerConnections`.
-Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
-authorized natively is advertised as that custom server instead of its slug;
-an app connected that way also satisfies the `app.connected` resume check.
+External runtimes receive the session's configured MCP selection when binding.
+`outbound/egress.rs` lists it from `connectors::McpConnectionsService`
+(`connections(owner).scoped(selection).destinations()`): under
+`OwnerConnections` every app and custom server the owner can use (a native
+server several overlaid apps share once, under the first), under
+`Selected` exactly the selected apps, connected or not, so an unconnected one
+answers with a connect prompt. Every app, overlaid ones included, is
+advertised by its app slug. The `app.connected` resume check
+(`outbound/connected_apps.rs`) reads the same service's `status`. Never
+filter connections by source, flag or `enabled` here. A wake made only of
+`app.connected` events continues the owner's own work when the turn before it
+acted for the owner and ended offering each app's `<m-connect-app>` button:
+`stage_notifications` opens it as a `Program` turn for
+them (`domain/app_connections.rs` `continues_for_owner`), so their own calls
+are not held as a bot's. Any other wake, or one after someone else's turn,
+acts for nobody.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the

@@ -1,7 +1,7 @@
 use crate::domain::models::invalidation::ContactsInvalidation;
 use crate::domain::models::list::{InboxProvider, InboxSource};
 use crate::domain::models::messages::{ContactsMessage, DirectoryChange};
-use crate::domain::ports::{ContactListRepository, ContactsNotifier};
+use crate::domain::ports::{ContactListRepository, ContactsNotifier, ContactsService};
 use crate::domain::service::ContactsDomainService;
 use crate::outbound::repository::DbContactsRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -96,11 +96,21 @@ async fn inbox_rows(pool: &PgPool) -> Vec<(String, String, Uuid)> {
     .collect()
 }
 
+async fn delete_profile(pool: &PgPool, user: &str) {
+    sqlx::query!(r#"DELETE FROM "User" WHERE id = $1"#, user)
+        .execute(pool)
+        .await
+        .unwrap();
+}
+
 fn row(user: &str, contact: &str, list: &str) -> (String, String, String) {
     (user.to_owned(), contact.to_owned(), list.to_owned())
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn interactions_pair_every_user_with_every_peer_both_ways(pool: PgPool) {
     let repo = DbContactsRepository::new(pool.clone());
     let users = [mid("macro|a@example.com"), mid("macro|b@example.com")];
@@ -126,7 +136,10 @@ async fn interactions_pair_every_user_with_every_peer_both_ways(pool: PgPool) {
     );
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn repeated_interactions_add_and_notify_nothing(pool: PgPool) {
     let service = service(&pool);
     let message = || {
@@ -156,7 +169,10 @@ async fn repeated_interactions_add_and_notify_nothing(pool: PgPool) {
     assert_eq!(list_rows(&pool).await.len(), 2);
 }
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn adding_to_a_channel_notifies_only_who_gained_someone(pool: PgPool) {
     let service = service(&pool);
     service
@@ -266,7 +282,7 @@ async fn inbox_contacts_keep_the_legacy_edge(pool: PgPool) {
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("inboxes"))
+    fixtures(path = "fixtures", scripts("users", "inboxes"))
 )]
 async fn a_known_contact_who_gains_a_list_is_named(pool: PgPool) {
     let service = service(&pool);
@@ -345,7 +361,7 @@ async fn disconnecting_one_inbox_keeps_contacts_known_through_another(pool: PgPo
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "fixtures", scripts("inboxes"))
+    fixtures(path = "fixtures", scripts("users", "inboxes"))
 )]
 async fn deleting_a_user_removes_them_everywhere_and_notifies_who_lost_them(pool: PgPool) {
     let service = service(&pool);
@@ -366,6 +382,8 @@ async fn deleting_a_user_removes_them_everywhere_and_notifies_who_lost_them(pool
     repo.record_inbox_contacts(&gmail(SECOND_INBOX), &[mid("macro|b@example.com")])
         .await
         .unwrap();
+
+    delete_profile(&pool, "macro|b@example.com").await;
 
     service
         .process_message(ContactsMessage::Change(DirectoryChange::UserDeleted {
@@ -396,4 +414,209 @@ async fn deleting_a_user_removes_them_everywhere_and_notifies_who_lost_them(pool
             ("macro|c@example.com".to_owned(), None),
         ]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_invite_joins_only_the_inviters_directory(pool: PgPool) {
+    let service = service(&pool);
+
+    service
+        .invite_contact(mid("macro|a@example.com"), mid("macro|b@example.com"))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        list_rows(&pool).await,
+        [row("macro|a@example.com", "macro|b@example.com", "invited")]
+    );
+    assert_eq!(
+        notified(&service),
+        [(
+            "macro|a@example.com".to_owned(),
+            Some(vec!["macro|b@example.com".to_owned()])
+        )]
+    );
+    // The old read path still sees the referral until reads move over.
+    let edges = sqlx::query!("SELECT user1, user2 FROM contacts_connections")
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    assert_eq!(edges.len(), 1);
+    assert_eq!(edges[0].user1, "macro|a@example.com");
+    assert_eq!(edges[0].user2, "macro|b@example.com");
+
+    // A retry writes nothing new but still notifies, in case the first
+    // notification failed.
+    service
+        .invite_contact(mid("macro|a@example.com"), mid("macro|b@example.com"))
+        .await
+        .unwrap();
+    assert_eq!(
+        notified(&service),
+        [(
+            "macro|a@example.com".to_owned(),
+            Some(vec!["macro|b@example.com".to_owned()])
+        )]
+    );
+    assert_eq!(list_rows(&pool).await.len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn inviting_yourself_writes_nothing(pool: PgPool) {
+    let service = service(&pool);
+
+    service
+        .invite_contact(mid("macro|a@example.com"), mid("macro|a@example.com"))
+        .await
+        .unwrap();
+
+    assert_eq!(list_rows(&pool).await, []);
+    assert_eq!(notified(&service), []);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn a_user_is_not_deleted_while_their_profile_exists(pool: PgPool) {
+    let service = service(&pool);
+    service
+        .repository
+        .record_interactions(&[mid("macro|a@example.com")], &[mid("macro|b@example.com")])
+        .await
+        .unwrap();
+
+    let deleted = service
+        .process_message(ContactsMessage::Change(DirectoryChange::UserDeleted {
+            user: mid("macro|b@example.com"),
+        }))
+        .await;
+
+    assert!(deleted.is_err());
+    assert_eq!(list_rows(&pool).await.len(), 2);
+    assert_eq!(notified(&service), []);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn an_interaction_that_arrives_after_a_deletion_adds_nobody_back(pool: PgPool) {
+    let service = service(&pool);
+    delete_profile(&pool, "macro|b@example.com").await;
+    service
+        .process_message(ContactsMessage::Change(DirectoryChange::UserDeleted {
+            user: mid("macro|b@example.com"),
+        }))
+        .await
+        .unwrap();
+
+    service
+        .process_message(ContactsMessage::Change(DirectoryChange::Interacted {
+            users: vec![mid("macro|a@example.com"), mid("macro|b@example.com")],
+            peers: vec![
+                mid("macro|a@example.com"),
+                mid("macro|b@example.com"),
+                mid("macro|c@example.com"),
+            ],
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        list_rows(&pool).await,
+        [
+            row("macro|a@example.com", "macro|c@example.com", "interacted"),
+            row("macro|c@example.com", "macro|a@example.com", "interacted"),
+        ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users", "legacy_user"))
+)]
+async fn an_interaction_with_a_legacy_cased_account_lists_its_canonical_id(pool: PgPool) {
+    let service = service(&pool);
+
+    service
+        .process_message(ContactsMessage::Change(DirectoryChange::Interacted {
+            users: vec![mid("macro|a@example.com")],
+            peers: vec![mid("macro|e@example.com")],
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        list_rows(&pool).await,
+        [
+            row("macro|a@example.com", "macro|e@example.com", "interacted"),
+            row("macro|e@example.com", "macro|a@example.com", "interacted"),
+        ]
+    );
+    assert_eq!(
+        notified(&service),
+        [
+            (
+                "macro|a@example.com".to_owned(),
+                Some(vec!["macro|e@example.com".to_owned()])
+            ),
+            (
+                "macro|e@example.com".to_owned(),
+                Some(vec!["macro|a@example.com".to_owned()])
+            ),
+        ]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users", "legacy_user"))
+)]
+async fn a_legacy_cased_account_has_a_profile(pool: PgPool) {
+    let repo = DbContactsRepository::new(pool.clone());
+    delete_profile(&pool, "macro|b@example.com").await;
+
+    let missing = repo
+        .missing_profiles(&[
+            mid("macro|a@example.com"),
+            mid("macro|b@example.com"),
+            mid("macro|e@example.com"),
+        ])
+        .await
+        .unwrap();
+
+    assert_eq!(missing, [mid("macro|b@example.com")]);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users", "legacy_user"))
+)]
+async fn a_legacy_cased_account_is_not_deleted_while_its_profile_exists(pool: PgPool) {
+    let service = service(&pool);
+    service
+        .repository
+        .record_interactions(&[mid("macro|a@example.com")], &[mid("macro|e@example.com")])
+        .await
+        .unwrap();
+
+    let deleted = service
+        .process_message(ContactsMessage::Change(DirectoryChange::UserDeleted {
+            user: mid("macro|e@example.com"),
+        }))
+        .await;
+
+    assert!(deleted.is_err());
+    assert_eq!(list_rows(&pool).await.len(), 2);
+
+    delete_profile(&pool, "macro|E@example.com").await;
+    service
+        .process_message(ContactsMessage::Change(DirectoryChange::UserDeleted {
+            user: mid("macro|e@example.com"),
+        }))
+        .await
+        .unwrap();
+
+    assert_eq!(list_rows(&pool).await, []);
 }
