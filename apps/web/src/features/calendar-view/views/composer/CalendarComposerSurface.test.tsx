@@ -106,6 +106,8 @@ it.each(['create', 'edit'])(
         <CalendarComposerHostContext.Provider
           value={{
             sessions,
+            canPinComposer: () => true,
+            composerPinned: () => sessions.state.pinned,
             boundary: () => undefined,
             dock: () => undefined,
             setDock: () => {},

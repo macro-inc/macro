@@ -5,6 +5,8 @@ import type { ComposerHeaderDrag } from '../primitives/create-composer-header-dr
 
 export interface CalendarComposerHostContextValue {
   sessions: CalendarComposerSession;
+  canPinComposer: Accessor<boolean>;
+  composerPinned: Accessor<boolean>;
   boundary: Accessor<HTMLElement | undefined>;
   dock: Accessor<HTMLElement | undefined>;
   setDock: (element: HTMLElement | undefined) => void;

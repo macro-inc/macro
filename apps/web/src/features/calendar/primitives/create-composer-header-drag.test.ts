@@ -52,6 +52,7 @@ function setup() {
   });
   const onFinish = vi.fn();
   let disabled = false;
+  let canPin = true;
   let pinned = false;
   let width = 1000;
   let height = 500;
@@ -64,6 +65,7 @@ function setup() {
       boundary: () => ({ left: 300, top: 100, width, height: 800 }),
       surface: () => new DOMRect(500, 200, 384, height),
       pinTarget: () => target,
+      canPin: () => canPin,
       disabled: () => disabled,
       pinned: () => pinned,
       onPin,
@@ -79,6 +81,9 @@ function setup() {
     onPin,
     onUnpin,
     onFinish,
+    allowPin: (value: boolean) => {
+      canPin = value;
+    },
     setPinned: (value: boolean) => {
       pinned = value;
     },
@@ -119,6 +124,17 @@ it('does not steal pointer input from a header menu item', () => {
   expect(source.state.active).toBe(false);
 });
 
+it('keeps a drag floating when responsive layout suppresses pin targets', () => {
+  const { header, source, onPin, onFinish, allowPin } = setup();
+  allowPin(false);
+  pointer(header, 'pointerdown', 600, 210);
+  pointer(window, 'pointermove', 400, 250);
+  expect(source.target()).toBeUndefined();
+  expect(source.state.overTarget).toBe(false);
+  pointer(window, 'pointerup', 400, 250);
+  expect(onPin).not.toHaveBeenCalled();
+  expect(onFinish).toHaveBeenCalledWith('floating');
+});
 it('moves the same surface and pins only after release in the future dock', () => {
   const { header, source, onPin, onFinish } = setup();
   pointer(header, 'pointerdown', 600, 210);

@@ -15,6 +15,7 @@ export function createCalendarPanelPlacement(options: {
   surface: Accessor<HTMLElement | undefined>;
   anchor: Accessor<DOMRectReadOnly | undefined>;
   pinned: Accessor<boolean>;
+  canPin?: Accessor<boolean>;
   disabled: Accessor<boolean>;
   onPin: () => void;
   onUnpin: () => void;
@@ -33,6 +34,7 @@ export function createCalendarPanelPlacement(options: {
   const drag = createComposerHeaderDrag({
     boundary: () => options.boundary()?.getBoundingClientRect(),
     surface: () => options.surface()?.getBoundingClientRect(),
+    canPin: options.canPin,
     pinTarget: () => {
       const sidebar = options
         .boundary()

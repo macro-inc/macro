@@ -32,6 +32,7 @@ export function createComposerHeaderDrag(options: {
   boundary: Accessor<ComposerDragBounds | undefined>;
   surface: Accessor<ComposerDragBounds | undefined>;
   pinTarget?: Accessor<ComposerDragBounds | undefined>;
+  canPin?: Accessor<boolean>;
   disabled: Accessor<boolean>;
   pinned?: Accessor<boolean>;
   onPin: () => void;
@@ -46,6 +47,7 @@ export function createComposerHeaderDrag(options: {
   });
   let gesture: HeaderGesture | undefined;
   const target = () => {
+    if (options.canPin && !options.canPin()) return undefined;
     const boundary = options.boundary();
     return (
       options.pinTarget?.() ??
@@ -87,12 +89,14 @@ export function createComposerHeaderDrag(options: {
     if (!state.active && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     event.preventDefault();
     if (!state.active) options.onStart?.();
-    const pinTarget = target() ?? composerPinTarget(boundary);
-    const overTarget =
-      event.clientX >= pinTarget.left &&
-      event.clientX <= pinTarget.left + pinTarget.width &&
-      event.clientY >= pinTarget.top &&
-      event.clientY <= pinTarget.top + pinTarget.height;
+    const pinTarget = target();
+    const overTarget = Boolean(
+      pinTarget &&
+        event.clientX >= pinTarget.left &&
+        event.clientX <= pinTarget.left + pinTarget.width &&
+        event.clientY >= pinTarget.top &&
+        event.clientY <= pinTarget.top + pinTarget.height
+    );
     setState({
       active: true,
       overTarget,

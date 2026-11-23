@@ -1,5 +1,6 @@
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { CalendarComposerHostContext } from '@app/features/calendar/context/calendar-composer-host-context';
+import { createCalendarComposerPinning } from '@app/features/calendar/primitives/create-calendar-composer-pinning';
 import { createCalendarComposerSession } from '@app/features/calendar/primitives/create-calendar-composer-session';
 import { createCalendarPanelState } from '@app/features/calendar/primitives/create-calendar-panel-state';
 import type { ComposerHeaderDrag } from '@app/features/calendar/primitives/create-composer-header-drag';
@@ -38,13 +39,18 @@ export function CalendarComposerHost(props: ParentProps) {
         { owner }
       ),
   });
+  const pinning = createCalendarComposerPinning({
+    boundary,
+    requested: () => sessions.state.pinned,
+    enabled: () => !isTouchDevice(),
+  });
   const calendarView = useCalendarView();
   const selection = createPinnedComposerSelection({
     event: calendarView.selectedEvent,
     anchor: calendarView.selectedEventAnchor,
     enabled: () => !isTouchDevice(),
     pinnedSession: () =>
-      sessions.state.pinned ? sessions.state.session : undefined,
+      pinning.pinned() ? sessions.state.session : undefined,
     replacePinned: sessions.replacePinned,
     open: sessions.open,
   });
@@ -75,6 +81,8 @@ export function CalendarComposerHost(props: ParentProps) {
     <CalendarComposerHostContext.Provider
       value={{
         sessions,
+        canPinComposer: pinning.canPin,
+        composerPinned: pinning.pinned,
         boundary,
         dock,
         setDock,
@@ -82,7 +90,8 @@ export function CalendarComposerHost(props: ParentProps) {
         setDrag,
         cardPinned: panels.cardPinned,
         setCardPinned: panels.setCardPinned,
-        leftPanelPinned: panels.leftPanelPinned,
+        leftPanelPinned: () =>
+          sessions.state.session ? pinning.pinned() : panels.leftPanelPinned(),
         open: (request) =>
           panels.open({
             ...request,

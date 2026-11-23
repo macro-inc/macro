@@ -25,7 +25,7 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
   if (!host)
     throw new Error('CalendarComposerSurface requires CalendarComposerHost');
   const session = props.session;
-  const pinned = () => host.sessions.state.pinned;
+  const pinned = host.composerPinned;
   let content: HTMLDivElement | undefined;
   let operation: UiOperation | undefined;
   const { drag, docked, dockRect, anchorRect, maxHeight } =
@@ -36,7 +36,10 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
       anchor: () => session.request.anchorRect?.(),
       disabled: () => host.sessions.state.transitioning,
       pinned,
-      onPin: () => host.sessions.setPinned(session.key, true),
+      canPin: host.canPinComposer,
+      onPin: () => {
+        if (host.canPinComposer()) host.sessions.setPinned(session.key, true);
+      },
       onUnpin: () => host.sessions.setPinned(session.key, false),
       onStart: () => {
         operation = startUiOperation('calendar.composer.drag');
@@ -85,11 +88,11 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
           ref={content}
           class="portal-scope menu-surface z-modal flex min-h-0 flex-col overflow-visible outline-none"
           classList={{
-            'rounded-[14px] shadow-lg': !docked(),
+            'rounded-3xl shadow-lg': !docked(),
             'rounded-none border-r border-edge shadow-none': docked(),
           }}
           style={{
-            width: docked() ? `${dockRect()?.width ?? 384}px` : '384px',
+            width: docked() ? `${dockRect()?.width ?? 384}px` : '476px',
             height: docked() ? `${dockRect()?.height ?? 0}px` : undefined,
             'max-width': 'calc(100vw - 32px)',
             'max-height': `${maxHeight()}px`,
@@ -129,10 +132,14 @@ export function CalendarComposerSurface(props: { session: ComposerSession }) {
           <StandaloneComposer
             {...session.request}
             pinned={pinned()}
-            onTogglePin={() => {
-              drag.reset();
-              host.sessions.setPinned(session.key, !pinned());
-            }}
+            onTogglePin={
+              host.canPinComposer()
+                ? () => {
+                    drag.reset();
+                    host.sessions.setPinned(session.key, !pinned());
+                  }
+                : undefined
+            }
             onHeaderPointerDown={drag.start}
             onDirtyChange={(dirty) =>
               host.sessions.setDirty(session.key, dirty)

@@ -95,6 +95,8 @@ it('suppresses only editable details already shown in a pinned or floating edito
       <CalendarComposerHostContext.Provider
         value={{
           sessions,
+          canPinComposer: () => true,
+          composerPinned: () => sessions.state.pinned,
           boundary: () => undefined,
           dock: () => undefined,
           setDock: () => {},
