@@ -75,6 +75,24 @@ describe('sectionSteps', () => {
     ]);
   });
 
+  it("leaves out a program's unnamed failure, keeping the step before it", () => {
+    expect(
+      sectionSteps({
+        parts: [call('a'), program('p'), program('q')],
+        rows: [
+          row('a', 'Read', 'completed', 'a.rs'),
+          row('p', 'A step failed', 'failed'),
+          row('q:0', 'Update draft', 'failed'),
+        ],
+        observed: () => undefined,
+        thinking: false,
+      })
+    ).toEqual([
+      { id: 'a', label: 'Read a.rs', status: 'completed' },
+      { id: 'q:0', label: 'Update draft', status: 'failed' },
+    ]);
+  });
+
   it('leaves out the lookups people never see', () => {
     expect(
       sectionSteps({

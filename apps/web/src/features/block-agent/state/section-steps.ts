@@ -38,7 +38,9 @@ const WORKING: SectionStep = {
  * the agent is reasoning at the tail. A call reads as its fold row, with what
  * it acted on, since only people who can read the session see this line. A
  * program reads as the operations its saved record has observed so far: its
- * receipt, and so its fold rows, only list them once it returns.
+ * receipt, and so its fold rows, only list them once it returns. A program
+ * that failed without naming a step is left out, so the line stays on the
+ * step before it: the agent explains a failure in its reply.
  */
 export function sectionSteps(options: {
   /** The run's parts. */
@@ -64,6 +66,7 @@ export function sectionSteps(options: {
     }
     return options.rows
       .filter((row) => row.id === part.id || row.id.startsWith(`${part.id}:`))
+      .filter((row) => !isUnnamedFailure(part, row))
       .map((row) => ({
         id: row.id,
         label: row.detail ? `${row.label} ${row.detail}` : row.label,
@@ -72,4 +75,9 @@ export function sectionSteps(options: {
   });
   if (options.thinking) steps.push(THINKING);
   return steps.length > 0 ? steps : [WORKING];
+}
+
+/** A program's own row standing for no named step, once it failed. */
+function isUnnamedFailure(part: MessagePart, row: ActivityRow): boolean {
+  return isCodeExecution(part) && row.id === part.id && row.status === 'failed';
 }
