@@ -359,7 +359,11 @@ fn failed_projection_read_leaves_the_write_s_hot_records_in_place() {
             .await
             .unwrap();
         // The stored projection's fact no longer decodes, so reading it fails.
-        raw_execute(engine.storage(), "UPDATE exact_facts SET attribute = ''", vec![]);
+        raw_execute(
+            engine.storage(),
+            "UPDATE exact_facts SET attribute = ''",
+            vec![],
+        );
         assert!(
             engine
                 .put_records_with_projections(None, vec![(document, record)], vec![projection("b")])
@@ -418,7 +422,11 @@ fn failed_projection_read_does_not_evict_warm_records() {
             .write_query(None, FULL, Some("Full"), &variables, &data, None)
             .await
             .unwrap();
-        raw_execute(engine.storage(), "UPDATE exact_facts SET attribute = ''", vec![]);
+        raw_execute(
+            engine.storage(),
+            "UPDATE exact_facts SET attribute = ''",
+            vec![],
+        );
         assert!(
             engine
                 .put_records_with_projections(None, vec![(cold, record)], vec![projection("b")])
