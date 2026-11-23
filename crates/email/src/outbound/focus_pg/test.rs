@@ -11,9 +11,9 @@ use sqlx::{Pool, Postgres};
 use super::*;
 use crate::domain::{
     focus::{
-        ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers, FocusClassifier,
-        FocusClassifierError, FocusEnrollment, FocusNotifier, FocusQueries, FocusQuestion,
-        FocusService, FocusThread, FocusVerdict, ProfileSource, ThreadDates,
+        ClassifierLane, ClassifyOutcome, DueDateExtractor, DueDateInput, FocusAnswers,
+        FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier, FocusQueries,
+        FocusQuestion, FocusService, FocusThread, FocusVerdict, ProfileSource, ThreadDates,
     },
     models::calendar_invitation::{CalendarInvitation, InvitationDateTime, InvitationMethod},
 };
@@ -91,6 +91,7 @@ impl FocusClassifier for FixedClassifier {
         _thread_id: Uuid,
         _input: &Value,
         _questions: &[&'static str],
+        _lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         self.answers.clone()
     }

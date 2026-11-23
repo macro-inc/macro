@@ -235,6 +235,7 @@ impl FocusNotifier for FakeNotifier {
 struct FakeClassifier {
     answers: Result<Vec<f32>, FocusClassifierError>,
     inputs: Arc<Mutex<Vec<Value>>>,
+    lanes: Arc<Mutex<Vec<ClassifierLane>>>,
 }
 
 impl FakeClassifier {
@@ -242,6 +243,7 @@ impl FakeClassifier {
         Self {
             answers,
             inputs: Arc::default(),
+            lanes: Arc::default(),
         }
     }
 }
@@ -253,9 +255,11 @@ impl FocusClassifier for FakeClassifier {
         _thread_id: Uuid,
         input: &Value,
         questions: &[&'static str],
+        lane: ClassifierLane,
     ) -> Result<Vec<f32>, FocusClassifierError> {
         assert_eq!(questions.len(), FOCUS_QUESTIONS.len());
         self.inputs.lock().unwrap().push(input.clone());
+        self.lanes.lock().unwrap().push(lane);
         self.answers.clone()
     }
 
@@ -616,6 +620,27 @@ async fn classifier_failures_store_nothing() {
         assert_eq!(outcome, expected);
         assert!(store.saved.lock().unwrap().is_empty());
     }
+}
+
+#[tokio::test]
+async fn new_mail_is_asked_about_live_and_the_sweep_in_the_background() {
+    let store = FakeStore::default();
+    let classifier = FakeClassifier::answering(Ok(relevant()));
+    let service = service(&store, &classifier, &enrolled());
+    let arrived = insert(&store, thread(OWNER));
+    service.classify_thread(arrived).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live]
+    );
+
+    let older = insert(&store, thread(OWNER));
+    set_stale(&store, &[older], noon());
+    service.sweep(Duration::days(30), 100).await.unwrap();
+    assert_eq!(
+        *classifier.lanes.lock().unwrap(),
+        vec![ClassifierLane::Live, ClassifierLane::Background]
+    );
 }
 
 #[tokio::test]

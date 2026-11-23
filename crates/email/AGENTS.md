@@ -247,10 +247,14 @@ tools — hexagonal, heavily feature-gated.
 - Focus's `decide` and `signals` are versioned: bump `FOCUS_RULE_VERSION` in
   `domain/focus/rule.rs` when either changes, or stored rows keep the old verdict
   until new mail arrives. The worker's sweep re-decides older rows from their
-  stored `scores`, without calling Jev. `rule/experiment.csv` holds the expected
-  verdicts for 643 real threads; report how far a rule change moves them. A new
-  question's answer is `#[serde(default)]`, so stored `scores` still decode, and
-  needs no bump when it decides nothing at 0.
+  stored `scores`, without calling Jev. `FocusClassifier::answer` takes a
+  `ClassifierLane`: `classify_thread` (new mail) asks on `Live`, the backfill
+  and the sweep on `Background`, so the worker can hold background calls to
+  its TypeSafe token budget while live mail never waits.
+  `rule/experiment.csv` holds the expected verdicts for 643 real threads;
+  report how far a rule change moves them. A new question's answer is
+  `#[serde(default)]`, so stored `scores` still decode, and needs no bump when
+  it decides nothing at 0.
 - Nothing reclassifies a Focus thread as it ages, so `focus_pg` applies who wrote
   last, the wait, the due day, the calendar hold and the meeting being over when it
   reads: the owner's latest message takes a thread out, and only `awaiting_reply`

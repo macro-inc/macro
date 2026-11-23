@@ -24,8 +24,8 @@ use super::{
         FocusVerdict, StaleThread, StoredClassification, ThreadDates, ThreadFocus,
     },
     ports::{
-        DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment, FocusNotifier,
-        FocusStore, ProfileSource,
+        ClassifierLane, DueDateExtractor, FocusClassifier, FocusClassifierError, FocusEnrollment,
+        FocusNotifier, FocusStore, ProfileSource,
     },
     questions::FOCUS_QUESTIONS,
     rule::{FOCUS_RULE_VERSION, decide},
@@ -297,11 +297,11 @@ where
     /// alone, and one classified under an older rule is decided again from its
     /// stored answers without calling the classifier.
     pub async fn classify_thread(&self, thread_id: Uuid) -> Result<ClassifyOutcome, Report> {
-        self.classify(thread_id, true).await
+        self.classify(thread_id, true, ClassifierLane::Live).await
     }
 
     /// [`Self::classify_thread`], reading the due date of newly classified mail
-    /// only when `read_due_date`.
+    /// only when `read_due_date`, and asking the classifier on `lane`.
     #[tracing::instrument(
         name = "classify_thread",
         skip(self),
@@ -321,6 +321,7 @@ where
         &self,
         thread_id: Uuid,
         read_due_date: bool,
+        lane: ClassifierLane,
     ) -> Result<ClassifyOutcome, Report> {
         let Some(inbox) = self.store.thread_inbox(thread_id).await? else {
             return Ok(ClassifyOutcome::Missing);
@@ -385,7 +386,13 @@ where
         let input = jev_input(&thread, profile.as_deref());
         let probabilities = match self
             .classifier
-            .answer(&thread.owner, thread.thread_id, &input, &FOCUS_QUESTIONS)
+            .answer(
+                &thread.owner,
+                thread.thread_id,
+                &input,
+                &FOCUS_QUESTIONS,
+                lane,
+            )
             .await
         {
             Ok(probabilities) => probabilities,
@@ -762,8 +769,12 @@ where
                             thread_id,
                             latest_at,
                             Some(
-                                self.classify(thread_id, walk.due_dates.reads(latest_at))
-                                    .await,
+                                self.classify(
+                                    thread_id,
+                                    walk.due_dates.reads(latest_at),
+                                    ClassifierLane::Background,
+                                )
+                                .await,
                             ),
                         )
                     }

@@ -35,6 +35,27 @@ nothing, so a due date model's first call each start is not counted. A model
 with no stored price is logged ("no stored price") and its cost is not
 counted.
 
+## TypeSafe budget
+
+TypeSafe allows 100,000 tokens and 80 requests a second, shared with the agent
+services. The worker keeps its backfills and sweeps to 60,000 tokens a second,
+every call counting at least 1,250 tokens so the request limit holds too
+(`services/email_focus_worker/src/outbound/token_budget.rs`). New mail never
+waits on the budget, but what it spends is taken out of it, so a burst of new
+mail makes the backfill wait instead. When Jev finds TypeSafe unavailable
+after its own retries (a rate limit, overload, timeout, server error, or a
+connection failure, which Jev reports the same way) the rate halves, at most
+once per 30 seconds and down to 6,000, and climbs back a tenth each 30 seconds
+without one. `ClassifierSlowDowns` counts the halvings and
+`ClassifierBudgetWaitSeconds` how long background calls waited. The budget is
+per worker process: running a second task doubles what the worker may spend.
+
+At the full rate the worker classifies about 7 threads a second, so a rollout
+step that enrolls N inboxes at once is backfilled in about N × 15 / 7 seconds
+at the mean inbox (about 36 minutes per 1,000 inboxes) and longer when large
+inboxes are among them; the backfill time numbers below rise during such a
+step.
+
 ## Go/stop numbers
 
 | Check | Go while | First look |
