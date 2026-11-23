@@ -281,12 +281,35 @@ impl SoupChannelThread {
 pub struct ChannelWithParticipants {
     /// Channel metadata.
     pub channel: Channel,
-    /// Participants in the channel.
+    /// Participants in the channel. Bots are in `bot_participants`.
     pub participants: Vec<ChannelParticipant>,
+    /// Bots that are participants in the channel.
+    // A boxed slice: a `Vec` would make the channel the one oversized
+    // `SoupItem` variant.
+    #[serde(default)]
+    pub bot_participants: Box<[ChannelBotParticipant]>,
     /// Whether the requesting user is an active participant of the channel.
     /// False for team channels of the user's teams they have not joined.
     #[serde(default)]
     pub is_participant: bool,
+}
+
+/// A bot's membership in a channel, stored under the principal `bot|<id>`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ChannelBotParticipant {
+    /// Channel id for the participant membership.
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
+    pub channel_id: ChannelId,
+    /// Participant bot id.
+    #[cfg_attr(feature = "schema", schema(value_type = Uuid))]
+    pub bot_id: BotId,
+    /// Participant role in the channel.
+    pub role: ParticipantRole,
+    /// Timestamp when the bot joined the channel.
+    pub joined_at: chrono::DateTime<chrono::Utc>,
+    /// Timestamp when the bot left the channel, if any.
+    pub left_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// A user's membership in a channel.
@@ -458,9 +481,35 @@ impl ChannelParticipant {
     }
 }
 
+impl ChannelBotParticipant {
+    /// Converts a channels-domain participant stored as `bot|<id>` into a Soup
+    /// bot participant.
+    pub fn try_new_from_channels(
+        participant: &channels::domain::models::ChannelParticipant,
+    ) -> Result<Self, bot_id::BotIdParseError> {
+        Ok(Self {
+            channel_id: ChannelId(participant.channel_id),
+            bot_id: bot_id::BotIdStr::parse_from_str(&participant.user_id)?
+                .0
+                .bot_id(),
+            role: ParticipantRole::new_from_channels(participant.role),
+            joined_at: participant.joined_at,
+            left_at: participant.left_at,
+        })
+    }
+}
+
 impl ChannelWithParticipants {
-    /// Converts channels-domain metadata and participants into the Soup shape.
+    /// Converts channels-domain metadata and participants into the Soup shape,
+    /// keeping users and bots apart. Other principals are left out.
     pub fn new_from_channels(channel: channels::domain::models::ChannelWithParticipants) -> Self {
+        let bot_participants = channel
+            .participants
+            .iter()
+            .filter_map(|participant| {
+                ChannelBotParticipant::try_new_from_channels(participant).ok()
+            })
+            .collect();
         Self {
             channel: Channel::new_from_channels(channel.channel),
             participants: channel
@@ -470,6 +519,7 @@ impl ChannelWithParticipants {
                     ChannelParticipant::try_new_from_channels(participant).ok()
                 })
                 .collect(),
+            bot_participants,
             is_participant: channel.is_participant,
         }
     }

@@ -14,6 +14,8 @@ import {
 } from './lookup';
 
 vi.mock('./backfill', () => ({ loadContactCheckpoint: vi.fn() }));
+const lists = vi.hoisted(() => ({ selected: false }));
+vi.mock('./lists', () => ({ contactListsSelected: () => lists.selected }));
 vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryByIds: vi.fn(),
   fetchContactDirectoryPage: vi.fn(),
@@ -191,6 +193,81 @@ it('preserves requested ordering and warms only the bounded lookup under its ori
       fetch
     )
   ).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+});
+
+it.each([false, true])(
+  'stores exactly the lookup it fetched when lists selection is %s',
+  async (selected) => {
+    lists.selected = selected;
+    const cache = {
+      ...host(),
+      search: vi.fn<CacheHost['search']>().mockResolvedValue({
+        projectionVersion: 5,
+        documents: [],
+        nextCursor: null,
+      }),
+      hydrateQuery: vi.fn<CacheHost['hydrateQuery']>().mockResolvedValue({
+        kind: 'data',
+        data: {},
+        revision: INITIAL_CACHE_REVISION,
+      }),
+    };
+    const listed = { ...contact(PERSON), lists: ['teammates'] };
+    const fetch = server().mockResolvedValue({
+      user: {
+        id: VIEWER,
+        contactsByUserIds: [selected ? listed : contact(PERSON)],
+      },
+    });
+    try {
+      await resolveContactDirectory(
+        VIEWER,
+        cache,
+        { kind: 'ids', values: [PERSON] },
+        signal(),
+        fetch
+      );
+    } finally {
+      lists.selected = false;
+    }
+    expect(fetch).toHaveBeenCalledWith([PERSON], expect.any(AbortSignal), {
+      lists: selected,
+    });
+    const stored = cache.hydrateQuery.mock.calls[0][0];
+    expect(/\blists\b/.test(stored.query)).toBe(selected);
+    expect(stored.operationName).toBe(
+      selected
+        ? 'ContactDirectoryByUserIdsWithLists'
+        : 'ContactDirectoryByUserIds'
+    );
+    expect(stored.data).toEqual({
+      user: {
+        id: VIEWER,
+        contactsByUserIds: [selected ? listed : contact(PERSON)],
+      },
+    });
+  }
+);
+
+it('asks for no lists when the lookup will not write to the cache', async () => {
+  lists.selected = true;
+  const fetch = server().mockResolvedValue({
+    user: { id: VIEWER, contactsByUserIds: [contact(PERSON)] },
+  });
+  try {
+    await resolveContactDirectory(
+      VIEWER,
+      undefined,
+      { kind: 'ids', values: [PERSON] },
+      signal(),
+      fetch
+    );
+  } finally {
+    lists.selected = false;
+  }
+  expect(fetch).toHaveBeenCalledWith([PERSON], expect.any(AbortSignal), {
+    lists: false,
+  });
 });
 
 it('only transport failures allow cached fallback, and that fallback rechecks scope', async () => {
