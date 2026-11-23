@@ -129,3 +129,28 @@ test('a match that loads after an added one takes the highlight', async ({
     'thread.keeper@example.com'
   );
 });
+
+// When this fails, an arrow key that reopens the list after a pick lands on
+// someone already added, so Enter adds no one.
+for (const key of ['ArrowDown', 'ArrowUp']) {
+  test(`${key} reopens the list on a row that can be picked`, async ({
+    page,
+  }) => {
+    await open(page, 'reply');
+    await field(page, 'To').click();
+    await page.keyboard.type('ann');
+    await expect(
+      page.getByRole('option').filter({ hasText: 'Ann Rivera' })
+    ).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(chips(page, 'To')).toHaveCount(2);
+    await expect(page.getByRole('listbox')).toHaveCount(0);
+
+    await page.keyboard.press(key);
+    const highlighted = page.locator('[role="option"][data-highlighted]');
+    await expect(highlighted).toHaveCount(1);
+    await expect(highlighted).toHaveAttribute('aria-disabled', 'false');
+    await page.keyboard.press('Enter');
+    await expect(chips(page, 'To')).toHaveCount(3);
+  });
+}

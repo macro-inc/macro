@@ -855,25 +855,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         <Combobox.Control<CombinedRecipientItem>>
           {(state) => {
             const context = useComboboxContext();
-            // Kobalte's list opens on its first selected row, which is meant
-            // to restore a single choice. With markAlreadyAdded that row is
-            // disabled, so move on to the first row that can be picked:
-            // Enter and Tab act on the highlighted row.
-            createEffect(() => {
-              if (!props.markAlreadyAdded) return;
-              const list = context.listState();
-              const manager = list.selectionManager();
-              const focused = manager.focusedKey();
-              if (focused === undefined || !manager.isDisabled(focused)) return;
-
-              const collection = list.collection();
-              let key = collection.getFirstKey();
-              while (key !== undefined && manager.isDisabled(key)) {
-                key = collection.getKeyAfter(key);
-              }
-              manager.setFocusedKey(key);
-            });
-
             const [chipsScrollRef, setChipsScrollRef] =
               createSignal<HTMLElement>();
             return (
@@ -1103,6 +1084,13 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
                       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         rowPickedByKey = true;
+                        // Kobalte opens a closed list on its first selected
+                        // row, a disabled one when it was already added.
+                        // Opened here first, the key moves to the first (or
+                        // last) row that can be picked instead.
+                        if (!isOpen() && addedValues().size > 0) {
+                          setComboboxOpen(true);
+                        }
                       }
 
                       if (
@@ -1209,7 +1197,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 ref={setListboxRef}
                 class="flex flex-col gap-1"
                 scrollToItem={scrollToItem()}
-                autoFocus="first"
+                // Kobalte opens the list on its first selected row, to restore
+                // a single choice. Rows already added are disabled, so it
+                // starts on none of them: typing and each page of results
+                // highlight the first row that can be picked.
+                autoFocus={addedValues().size > 0 ? false : 'first'}
               >
                 {(items) => {
                   // Read the options only inside the list, never in this
