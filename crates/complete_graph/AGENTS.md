@@ -125,8 +125,8 @@ deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 `cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs
 it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
 
-Personal contact pages/search and exact ID/email lookups flatten `graphql_contacts`
-under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
+Personal contact pages/search, exact ID/email lookups and the ranked named read
+(`contactsNamedBy`) flatten `graphql_contacts` under authenticated `GraphqlUser`. Search pages can be empty with a continuation;
 only null means exhausted. Optional exact/first-name matching is applied in the
 contacts domain before the page limit; it does not change identity or the search
 work budget, and omitted `matching` retains the deployed subsequence behavior.
