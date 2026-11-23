@@ -846,6 +846,7 @@ async fn page_all(
 }
 #[test]
 fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
+    use std::ops::Range;
     block_on(async {
         let (engine, scope) = seed(5000).await;
         let mut storage = engine.into_storage();
@@ -871,7 +872,11 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
             ("macro|sam@example.com", "Sam", &["gmail"][..]),
             ("macro|sam.b@example.com", "Sam", &["gmail"][..]),
             ("macro|nobody@example.com", "Sam", &[][..]),
-            ("macro|samantha@example.com", "Samantha Mate", &["teammates"][..]),
+            (
+                "macro|samantha@example.com",
+                "Samantha Mate",
+                &["teammates"][..],
+            ),
             ("macro|sammy@example.com", "Sammy Mail", &["outlook"][..]),
             ("macro|isam@example.com", "Isam", &["teammates"][..]),
         ] {
@@ -922,19 +927,21 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
                 5102,
                 "{limit}"
             );
-            let within = |range: std::ops::Range<usize>, rank: u8, prefix: &str, ids: std::ops::Range<usize>| {
-                assert!(
-                    listed[range.clone()].iter().all(|(id, r)| {
-                        *r == rank
-                            && id
-                                .strip_prefix(prefix)
-                                .and_then(|id| id.strip_suffix("@example.com"))
-                                .and_then(|n| n.parse::<usize>().ok())
-                                .is_some_and(|n| ids.contains(&n))
-                    }),
-                    "{limit} {range:?}"
-                );
-            };
+            // Every person in `range` has `rank` and an id `prefix` + a number in `ids`.
+            let within =
+                |range: Range<usize>, rank: u8, prefix: &str, ids: Range<usize>| {
+                    let id = |id: &str| -> Option<usize> {
+                        id.strip_prefix(prefix)?
+                            .strip_suffix("@example.com")?
+                            .parse()
+                            .ok()
+                    };
+                    assert!(
+                        listed[range.clone()].iter().all(|(person, r)| *r == rank
+                            && id(person).is_some_and(|n| ids.contains(&n))),
+                        "{limit} {range:?}"
+                    );
+                };
             // Teammates whose name only starts with the query lead every
             // exact name in a later group, most recent first.
             assert_eq!(listed[0].0, q(10));
@@ -958,12 +965,7 @@ fn list_group_leads_exact_over_word_prefix_on_broad_and_sparse_reads() {
         assert_eq!(listed.len(), 5102);
         assert_eq!(
             listed[..4],
-            [
-                (p(4000), 5),
-                (p(200), 5),
-                (q(10), 4),
-                (p(0), 3),
-            ]
+            [(p(4000), 5), (p(200), 5), (q(10), 4), (p(0), 3),]
         );
 
         // Sparse posting sets take the probe path, one person per page.
