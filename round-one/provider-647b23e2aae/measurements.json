@@ -1,0 +1,2195 @@
+{
+ "title": "Mailbox reconciliation provider repair: 10M-row migration and repair measurement (synthetic, PostgreSQL 14)",
+ "sourceCommit": "647b23e2aae57674f8c716cf449807f777c5677a",
+ "productionFiles": {
+  "crates/email/src/domain/mailbox/provider_repair.rs": "b10052d83ef07ac4b36245a2d871b4be912219ed1f836a1b768c50849d7e6743",
+  "services/email_service/src/outbound/mailbox_provider_repair.rs": "e2042df567cf44887e976e32f123da5edd9c734115aa5543b3dad602012cd59e",
+  "crates/macro_db_client/migrations/20261120233251_email_mailbox_work_provider_scope.sql": "7ecf6cb15d4130784b4a014465c7809904bb9f846ef04fe9d4ea20b7f513a8cb",
+  "crates/macro_db_client/migrations/20261120233252_email_mailbox_work_provider_backfill.sql": "bd191e62e68879d4c16dd221a9f4d2f09974cedf59acd2aa27d60f75f403ceb4",
+  "crates/macro_db_client/migrations/20261120233261_email_reconciliation_provider_backfill_job.sql": "b1b5c0465c97c6273f138cee668f2a232a6ca6801feb73cab4c33aa42cf3263d"
+ },
+ "removedMigrations": [
+  "20261120233250_email_mailbox_work_provider_parent_key.sql",
+  "20261120233253_email_mailbox_work_provider_validate.sql",
+  "20261120233262_email_reconciliation_validation_failures.sql"
+ ],
+ "repairStatementSha256": [
+  {
+   "sha256": "89bee4980b8aff1d02d09359a5fb73935ab003b174b5291d77a350099774fd3a",
+   "params": 1
+  },
+  {
+   "sha256": "a78089fa9e67517dd4222349789cd352125acc3aa5f72570e29a6aed99f0e288",
+   "params": 11
+  },
+  {
+   "sha256": "f5ff38f4268e557daa60e28336036cf06f70e89488e8225bde54d1f08a4c68c3",
+   "params": 2
+  },
+  {
+   "sha256": "152304c0a4a486786fff26bad23123a2ca7f3333a3329351750bc89c969f8e01",
+   "params": 0
+  },
+  {
+   "sha256": "cc3265b44463a68e525f37db0e1c57eaf3d7fead2bcf425d6a598c4e9bd35b33",
+   "params": 0
+  },
+  {
+   "sha256": "e87a3f76d9caee326b4f36802430f3ea370cd374183c6a0e229aeada18bba533",
+   "params": 0
+  },
+  {
+   "sha256": "b9b0418e01fdba73b312e27aee3c03bc887921d793894c922a8c3a8c63548fc3",
+   "params": 0
+  },
+  {
+   "sha256": "20e17139714121675b281a8f26708191ffe85d43a7a2049141fb27941d10e94c",
+   "params": 1
+  },
+  {
+   "sha256": "2dba962202363fe4dd8263a74ab82875aedf09154ba3b612e6d91fe038ef7e62",
+   "params": 4
+  },
+  {
+   "sha256": "51375f121f3ddd7fb8f3b7068b8fa1f188bd8cf254608a52aaa41a9efb00aa9d",
+   "params": 2
+  },
+  {
+   "sha256": "fa5773f35d31df10d47f4c4b6592d66babec89b343a298fa1eed28726f42b292",
+   "params": 2
+  }
+ ],
+ "parentPageStatementSha256": "51375f121f3ddd7fb8f3b7068b8fa1f188bd8cf254608a52aaa41a9efb00aa9d",
+ "environment": {
+  "postgres": "PostgreSQL 14.24 (Debian 14.24-1.pgdg12+2) (local, synthetic data only; production 14.22)",
+  "database": "fresh isolated test database created by the SQLx test harness and dropped after the run",
+  "fixture": {
+   "reconciliationRows": 10000000,
+   "streamRows": 1000000,
+   "parentLinks": 100003,
+   "emptyNonOutlookLinks": 10000,
+   "repairCohortRows": 10000000
+  },
+  "sequence": "schema migrated through 20261120233249, legacy rows seeded, then every later migration applied, then the actual bounded repair run to completion on one connection"
+ },
+ "statisticsProvenance": {
+  "never_analyzed": "autovacuum disabled on email_links and email_message_reconciliation before any seed; the test asserts pg_statistic holds 0 rows for both tables before the first plan set",
+  "analyzed": "explicit ANALYZE of both tables, then the second plan set",
+  "after_repair": "completion lookup after the repair finished",
+  "planModes": [
+   "force_custom_plan",
+   "force_generic_plan"
+  ],
+  "method": "EXPLAIN (ANALYZE, BUFFERS) of each exact source statement text inside a rolled-back transaction; any fixture setup runs in that transaction and rolls back"
+ },
+ "migrations": [
+  {
+   "version": 20261120233251,
+   "seconds": 0.05
+  },
+  {
+   "version": 20261120233252,
+   "seconds": 0.012
+  },
+  {
+   "version": 20261120233254,
+   "seconds": 0.962
+  },
+  {
+   "version": 20261120233255,
+   "seconds": 0.673
+  },
+  {
+   "version": 20261120233256,
+   "seconds": 11.518
+  },
+  {
+   "version": 20261120233257,
+   "seconds": 0.053
+  },
+  {
+   "version": 20261120233258,
+   "seconds": 0.007
+  },
+  {
+   "version": 20261120233259,
+   "seconds": 0.011
+  },
+  {
+   "version": 20261120233260,
+   "seconds": 0.008
+  },
+  {
+   "version": 20261120233261,
+   "seconds": 0.018
+  },
+  {
+   "version": 20261120233263,
+   "seconds": 0.015
+  },
+  {
+   "version": 20261120233264,
+   "seconds": 0.313
+  },
+  {
+   "version": 20261120233265,
+   "seconds": 0.233
+  },
+  {
+   "version": 20261120233266,
+   "seconds": 0.009
+  },
+  {
+   "version": 20261120233267,
+   "seconds": 0.007
+  },
+  {
+   "version": 20261120233268,
+   "seconds": 0.009
+  },
+  {
+   "version": 20261120233269,
+   "seconds": 0.009
+  },
+  {
+   "version": 20261120233270,
+   "seconds": 0.008
+  },
+  {
+   "version": 20261120233271,
+   "seconds": 0.007
+  },
+  {
+   "version": 20261120233272,
+   "seconds": 0.009
+  }
+ ],
+ "heapRewritten": false,
+ "repair": {
+  "batches": 10104,
+  "batchBound": 10110,
+  "rowsRepaired": 10000000,
+  "connections": 1,
+  "unpacedSeconds": 416.5,
+  "maximumBatchWallSeconds": 0.326,
+  "completionLookupSeconds": 0.0037,
+  "productionPacingMs": 250,
+  "estimatedPacedSeconds": 2942,
+  "estimatedPacedMinutes": 49.0,
+  "pacedEstimateMethod": "unpaced repair time + batches x 250 ms production pacing between committed pages",
+  "note": "Unpaced isolated benchmark; no production data. Only the bounded repair holds ROW EXCLUSIVE and parent KEY SHARE; no validation scan or lock."
+ },
+ "plans": [
+  {
+   "query": "child_page",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 32367,
+   "executionMs": 45.689,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 32367
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1027
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1027
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 27
+    },
+    {
+     "node": "ModifyTable",
+     "relation": "email_message_reconciliation",
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 31340
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 5004
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 5000
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1,
+     "loops": 1000,
+     "buffers": 5000
+    },
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 31340
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 31340
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1027
+    }
+   ]
+  },
+  {
+   "query": "parent_page",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4028,
+   "executionMs": 4.706,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Result",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Index Only Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 0,
+     "loops": 999,
+     "buffers": 3998
+    }
+   ]
+  },
+  {
+   "query": "claim",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 13,
+   "executionMs": 0.099,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 13
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "owner_lock",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 3,
+   "executionMs": 0.017,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "save",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4,
+   "executionMs": 0.037,
+   "rootRows": 0,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 0,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "defer",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4,
+   "executionMs": 0.035,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "parent_fence",
+   "statistics": "never_analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 5,
+   "executionMs": 0.025,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    }
+   ]
+  },
+  {
+   "query": "child_page",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 33936,
+   "executionMs": 29.152,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 33936
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3031
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3031
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 2031
+    },
+    {
+     "node": "ModifyTable",
+     "relation": "email_message_reconciliation",
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30905
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 5004
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 5000
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1,
+     "loops": 1000,
+     "buffers": 5000
+    },
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 30905
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30905
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3031
+    }
+   ]
+  },
+  {
+   "query": "parent_page",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4028,
+   "executionMs": 1.577,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Result",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Index Only Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 0,
+     "loops": 999,
+     "buffers": 3998
+    }
+   ]
+  },
+  {
+   "query": "claim",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 7,
+   "executionMs": 0.122,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 7
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "owner_lock",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 3,
+   "executionMs": 0.013,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "save",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4,
+   "executionMs": 0.052,
+   "rootRows": 0,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 0,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "defer",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4,
+   "executionMs": 0.038,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "parent_fence",
+   "statistics": "never_analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 5,
+   "executionMs": 0.032,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    }
+   ]
+  },
+  {
+   "query": "child_page",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 39283,
+   "executionMs": 40.249,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 39283
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3428
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3428
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 2428
+    },
+    {
+     "node": "ModifyTable",
+     "relation": "email_message_reconciliation",
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 35855
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 9000
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 5000
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1,
+     "loops": 1000,
+     "buffers": 5000
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1000,
+     "buffers": 4000
+    },
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 35855
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 35855
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3428
+    }
+   ]
+  },
+  {
+   "query": "parent_page",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4028,
+   "executionMs": 1.568,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Result",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Index Only Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 0,
+     "loops": 999,
+     "buffers": 3998
+    }
+   ]
+  },
+  {
+   "query": "claim",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 7,
+   "executionMs": 0.085,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 7
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "owner_lock",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 3,
+   "executionMs": 0.013,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "save",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4,
+   "executionMs": 0.035,
+   "rootRows": 0,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 0,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "defer",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 4,
+   "executionMs": 0.033,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "parent_fence",
+   "statistics": "analyzed",
+   "mode": "force_custom_plan",
+   "buffers": 5,
+   "executionMs": 0.015,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    }
+   ]
+  },
+  {
+   "query": "child_page",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 30775,
+   "executionMs": 101.278,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 30775
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3337
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3337
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 2337
+    },
+    {
+     "node": "ModifyTable",
+     "relation": "email_message_reconciliation",
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 27438
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1501
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Merge Join",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1497
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 1497
+    },
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 27438
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 27438
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 3337
+    }
+   ]
+  },
+  {
+   "query": "parent_page",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4028,
+   "executionMs": 1.568,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey",
+    "email_message_reconciliation_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "Aggregate",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Sort",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 0
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 4028
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1000,
+     "loops": 1,
+     "buffers": 30
+    },
+    {
+     "node": "Limit",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Result",
+     "relation": null,
+     "index": null,
+     "rows": 0,
+     "loops": 1000,
+     "buffers": 3998
+    },
+    {
+     "node": "Index Only Scan",
+     "relation": "email_message_reconciliation",
+     "index": "email_message_reconciliation_pkey",
+     "rows": 0,
+     "loops": 999,
+     "buffers": 3998
+    }
+   ]
+  },
+  {
+   "query": "claim",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 7,
+   "executionMs": 0.09,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 7
+    },
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    },
+    {
+     "node": "Nested Loop",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "CTE Scan",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "owner_lock",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 3,
+   "executionMs": 0.013,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 3
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "save",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4,
+   "executionMs": 0.035,
+   "rootRows": 0,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 0,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "defer",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 4,
+   "executionMs": 0.034,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_reconciliation_provider_backfill_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "ModifyTable",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": "email_reconciliation_provider_backfill_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 2
+    }
+   ]
+  },
+  {
+   "query": "parent_fence",
+   "statistics": "analyzed",
+   "mode": "force_generic_plan",
+   "buffers": 5,
+   "executionMs": 0.048,
+   "rootRows": 1,
+   "seqScans": [],
+   "indexes": [
+    "email_links_pkey"
+   ],
+   "nodes": [
+    {
+     "node": "LockRows",
+     "relation": null,
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 5
+    },
+    {
+     "node": "Index Scan",
+     "relation": "email_links",
+     "index": "email_links_pkey",
+     "rows": 1,
+     "loops": 1,
+     "buffers": 4
+    }
+   ]
+  },
+  {
+   "query": "completed",
+   "statistics": "after_repair",
+   "mode": "force_custom_plan",
+   "buffers": 1,
+   "executionMs": 0.035,
+   "rootRows": 1,
+   "seqScans": [
+    "email_reconciliation_provider_backfill"
+   ],
+   "indexes": [],
+   "nodes": [
+    {
+     "node": "Seq Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 1
+    }
+   ]
+  },
+  {
+   "query": "completed",
+   "statistics": "after_repair",
+   "mode": "force_generic_plan",
+   "buffers": 1,
+   "executionMs": 0.031,
+   "rootRows": 1,
+   "seqScans": [
+    "email_reconciliation_provider_backfill"
+   ],
+   "indexes": [],
+   "nodes": [
+    {
+     "node": "Seq Scan",
+     "relation": "email_reconciliation_provider_backfill",
+     "index": null,
+     "rows": 1,
+     "loops": 1,
+     "buffers": 1
+    }
+   ]
+  }
+ ],
+ "supersededParentPageFinding": {
+  "shape": "previous parent page used EXISTS (SELECT 1 FROM email_message_reconciliation r WHERE r.link_id = page.id) inside the aggregate FILTER",
+  "failure": "its plan EXPLAIN exceeded the 10 s statement timeout (SQLSTATE 57014) before the repair started",
+  "cause": "link_id had 2 distinct values (100,000 and 9,900,000 rows), so the planner estimated ~5,000,000 matches per correlated probe and chose a per-row first-match Seq Scan; for empty non-Outlook links that scans every row",
+  "plan": "custom and generic: correlated SubPlan = Seq Scan on email_message_reconciliation, Filter (link_id = page.id); not a hashed subplan",
+  "measuredSmallPages": [
+   {
+    "limit": 3,
+    "mode": "force_custom_plan",
+    "executionMs": 770.334,
+    "buffers": 96384,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 2,
+      "rowsRemovedByFilter": 3131640,
+      "actualRows": 1
+     }
+    ]
+   },
+   {
+    "limit": 3,
+    "mode": "force_generic_plan",
+    "executionMs": 11.981,
+    "buffers": 1547,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 2,
+      "rowsRemovedByFilter": 50000,
+      "actualRows": 1
+     }
+    ]
+   },
+   {
+    "limit": 4,
+    "mode": "force_custom_plan",
+    "executionMs": 1060.032,
+    "buffers": 153874,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 3,
+      "rowsRemovedByFilter": 3333387,
+      "actualRows": 1
+     }
+    ]
+   },
+   {
+    "limit": 4,
+    "mode": "force_generic_plan",
+    "executionMs": 806.959,
+    "buffers": 153874,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 3,
+      "rowsRemovedByFilter": 3333387,
+      "actualRows": 1
+     }
+    ]
+   },
+   {
+    "limit": 6,
+    "mode": "force_custom_plan",
+    "executionMs": 2261.263,
+    "buffers": 461600,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 5,
+      "rowsRemovedByFilter": 6000032,
+      "actualRows": 0
+     }
+    ]
+   },
+   {
+    "limit": 6,
+    "mode": "force_generic_plan",
+    "executionMs": 2379.574,
+    "buffers": 461600,
+    "seqScan": [
+     {
+      "relation": "email_message_reconciliation",
+      "loops": 5,
+      "rowsRemovedByFilter": 6000032,
+      "actualRows": 0
+     }
+    ]
+   }
+  ],
+  "candidatesRejected": [
+   "OFFSET 0 inside the EXISTS: same Seq Scan subplan",
+   "ORDER BY primary key LIMIT 1 inside the EXISTS: same Seq Scan subplan"
+  ],
+  "statisticsDisclosure": "one ANALYZE of both tables ran on that failed fixture during diagnosis; link_id n_distinct was 2 before and after and the plans did not change",
+  "adoptedFix": "LEFT JOIN LATERAL selecting a real provider_id ORDER BY generation, provider_id LIMIT 1, matching the primary key prefix and order",
+  "adoptedFixOnFailedFixture": {
+   "plan": "Index Only Scan on email_message_reconciliation_pkey per parent row, custom and generic",
+   "pages": [
+    {
+     "mode": "force_custom_plan",
+     "pages": [
+      {
+       "executionMs": 1.907,
+       "buffers": 4031,
+       "scanned": 1000,
+       "linksCount": 2
+      },
+      {
+       "executionMs": 2.249,
+       "buffers": 4034,
+       "scanned": 1000,
+       "linksCount": 0
+      },
+      {
+       "executionMs": 2.03,
+       "buffers": 4034,
+       "scanned": 1000,
+       "linksCount": 0
+      }
+     ]
+    },
+    {
+     "mode": "force_generic_plan",
+     "pages": [
+      {
+       "executionMs": 1.71,
+       "buffers": 4031,
+       "scanned": 1000,
+       "linksCount": 2
+      },
+      {
+       "executionMs": 1.675,
+       "buffers": 4034,
+       "scanned": 1000,
+       "linksCount": 0
+      },
+      {
+       "executionMs": 1.746,
+       "buffers": 4034,
+       "scanned": 1000,
+       "linksCount": 0
+      }
+     ]
+    }
+   ],
+   "resultCheck": "scanned count, pending links and last id matched an independent ground truth on the first three pages"
+  }
+ },
+ "criterion": "approved benchmark criterion for this synthetic measurement (bounded committed pages, batches below the empty-link bound, index paths for every source statement); not a production measurement"
+}
