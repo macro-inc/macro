@@ -4,7 +4,9 @@ use super::dss::{
     EventSource, SourceError, SourceEvent, SourceItem, SourceStream, StoreError, SubscriptionStore,
     source_item,
 };
-use super::protocol::{FILTER_META, INTERPRETATION_META, PROFILE_HEADER, RequestScope, handle};
+use super::protocol::{
+    FILTER_META, INTERPRETATION_META, PROFILE_HEADER, PROFILE_META, RequestScope, handle,
+};
 use super::stream::{NotificationSink, SUBSCRIPTION_ID_META, SinkClosed};
 use super::{Compiled, MAX_STREAMS_PER_USER, McpEvents, SecretSealer, Selection};
 use futures::StreamExt as _;
@@ -140,6 +142,9 @@ struct FakeStore {
     subscribes: Mutex<Vec<McpSubscribeRequest>>,
     unsubscribes: Mutex<Vec<McpUnsubscribeRequest>>,
     refuse: Mutex<Option<McpSubscriptionErrorBody>>,
+    /// The profile it stores, whatever was asked: set it to play storage
+    /// that predates profiles.
+    stored_profile: Mutex<Option<McpDeliveryProfile>>,
 }
 
 fn key(event_type: &str, arguments: &Value, url: &str) -> (String, String, String) {
@@ -168,6 +173,11 @@ impl SubscriptionStore for FakeStore {
             id: McpSubscriptionId::from_stored("sub_1".to_owned()),
             refresh_before: chrono::DateTime::from_timestamp(1_800_000_000, 0).unwrap(),
             filter,
+            profile: *self
+                .stored_profile
+                .lock()
+                .unwrap()
+                .get_or_insert(request.profile),
         })
     }
 
@@ -1679,8 +1689,10 @@ async fn chatgpt_lists_every_named_type_for_webhooks_only() {
     let CustomResult(listed) = call(&fixture.events, "events/list", json!({}), &chatgpt())
         .await
         .unwrap();
-    // ChatGPT's documented shape: the entries alone.
-    assert_eq!(listed.as_object().unwrap().len(), 1);
+    // ChatGPT's documented shape: the entries alone, and the profile it was
+    // answered under, which the Worker checks and removes.
+    assert_eq!(listed.as_object().unwrap().len(), 2);
+    assert_eq!(listed["_meta"], json!({ PROFILE_META: "chatgpt" }));
     let types = listed["events"].as_array().unwrap();
     assert_eq!(types, &*CHATGPT_EVENT_TYPES);
     assert_eq!(types.len(), WEBHOOK_EVENT_NAMES.len());
@@ -1713,10 +1725,27 @@ async fn chatgpt_subscribes_with_its_profile_and_gets_the_documented_result() {
             "refreshBefore": "2027-01-15T08:00:00Z",
             "cursor": null,
             "truncated": false,
+            "_meta": { PROFILE_META: "chatgpt" },
         })
     );
     let subscribes = fixture.store.subscribes.lock().unwrap();
     assert_eq!(subscribes[0].profile, McpDeliveryProfile::Chatgpt);
+}
+
+#[tokio::test]
+async fn a_chatgpt_subscription_stored_without_its_profile_is_refused() {
+    // Document storage from before profiles stores what MCP's would.
+    let fixture = fixture();
+    *fixture.store.stored_profile.lock().unwrap() = Some(McpDeliveryProfile::Mcp);
+    let error = call(
+        &fixture.events,
+        "events/subscribe",
+        subscribe_params("message.mentioned", json!({"mentioned_id": "me"})),
+        &chatgpt(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error.code, rmcp::model::ErrorCode::INTERNAL_ERROR);
 }
 
 #[tokio::test]
@@ -1753,7 +1782,7 @@ async fn chatgpt_unsubscribes_idempotently() {
         )
         .await
         .unwrap();
-        assert_eq!(result, json!({}));
+        assert_eq!(result, json!({ "_meta": { PROFILE_META: "chatgpt" } }));
     }
 }
 

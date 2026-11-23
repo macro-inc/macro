@@ -1119,6 +1119,34 @@ mod code_mode {
     }
 
     #[tokio::test]
+    async fn chatgpt_through_its_worker_is_offered_events_whatever_its_credential() {
+        // A token refreshed without a resource reaches here as ChatGPT's own
+        // OAuth client; the Worker's profile header still gets it events.
+        let app = events_app();
+        for caller in [
+            mcp_client("ChatGPT"),
+            Some(ToolCaller::McpClient { name: None }),
+            Some(ToolCaller::ApiKey),
+        ] {
+            let listed = rpc_with(
+                app.clone(),
+                USER,
+                caller.clone(),
+                "events/list",
+                serde_json::json!({}),
+                &[("x-macro-events-profile", "chatgpt")],
+            )
+            .await;
+            assert!(
+                listed["result"]["events"]
+                    .as_array()
+                    .is_some_and(|events| !events.is_empty()),
+                "{caller:?}: {listed}"
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn a_server_without_events_offers_none() {
         let app = app(Arc::new(Runs::default()));
         let discovered = rpc_with(

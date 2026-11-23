@@ -128,11 +128,14 @@ impl<Context> AuthenticatedToolService<Context> {
         self
     }
 
-    /// Events for this request: none for ChatGPT, which is not offered them.
+    /// Events for this request: none for a client that may be ChatGPT
+    /// connecting directly, which cannot follow MCP's; the ChatGPT MCP Worker
+    /// asks for ChatGPT's profile, whatever credential ChatGPT's token became.
     fn events_for(&self, extensions: &rmcp::model::Extensions) -> Option<&Arc<McpEvents>> {
-        self.events
-            .as_ref()
-            .filter(|_| !caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller)))
+        self.events.as_ref().filter(|_| {
+            events::names_chatgpt_profile(extensions)
+                || !caller(extensions).is_ok_and(|caller| may_be_chatgpt(&caller))
+        })
     }
 
     fn tool_definitions(&self) -> Vec<Tool> {

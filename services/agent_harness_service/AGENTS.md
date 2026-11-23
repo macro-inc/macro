@@ -203,7 +203,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   credential accepted. A new host picks one before it ships.
   `src/public_mcp/events.rs` + `events/` serve MCP Events
   (`io.modelcontextprotocol/events`) to every client but ChatGPT's direct
-  connection:
+  connection (a request naming the `chatgpt` profile is offered them
+  whatever its credential, since the Worker forwards ChatGPT's token as it
+  gets it):
   `events/list`, `events/subscribe`/`unsubscribe` (webhook mode) and
   `events/stream` (push); poll is Unsupported. `macro.events` takes a request
   in words in two steps: the words alone are compiled by one fast-model call
@@ -221,7 +223,10 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   draft OpenAI follows, so the named types only (no `macro.events`),
   webhook delivery, its `-32011`–`-32015` codes, a bare subscribe result,
   idempotent unsubscribe answering `{}`, and a stored `chatgpt` delivery
-  profile, whose deliveries document storage shapes for ChatGPT.
+  profile, whose deliveries document storage shapes for ChatGPT. Its
+  results carry `_meta: {"com.macro/eventsProfile": "chatgpt"}`, which the
+  Worker requires and removes, and a subscribe that document storage
+  stored under another profile is refused.
   Results carry the filter and its reading in `_meta` (`com.macro/filter`,
   `com.macro/interpretation`). Subscriptions live in document storage
   (`dss.rs`: internal routes, secret sealed with the MCP OAuth KMS key under

@@ -25,7 +25,9 @@ pub(crate) mod test;
 
 pub(crate) use compiler::ModelFilterCompiler;
 pub(crate) use dss::DssEvents;
-pub(crate) use protocol::{EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step};
+pub(crate) use protocol::{
+    EXTENSION_ID, METHOD_PREFIX, RequestScope, handle, is_confirm_step, names_chatgpt_profile,
+};
 
 use catalog::Selection;
 use compiler::{CompileError, FilterCompiler};
@@ -314,6 +316,18 @@ impl McpEvents {
             profile: request.profile,
         };
         let result = self.store.subscribe(user, &body).await?;
+        // Document storage from before delivery profiles ignores the field
+        // and stores an MCP subscription; its deliveries would then reach a
+        // ChatGPT endpoint unredacted. Refuse, rather than answer as if it
+        // were ChatGPT's (the row stays, and delivers what MCP's would, only
+        // to an endpoint that checks the draft's ids and so drops it).
+        if result.profile != request.profile {
+            return Err(EventsError::Internal(rootcause::report!(
+                "document storage stored delivery profile {} for a {} subscription",
+                result.profile,
+                request.profile
+            )));
+        }
         let compiled = Compiled::new(result.filter.clone());
         Ok(Subscribed { result, compiled })
     }

@@ -41,6 +41,10 @@ const MCP_METHOD_HEADER: &str = "mcp-method";
 /// by the ChatGPT MCP Worker (`chatgpt`). It changes how subscriptions are
 /// answered and delivered and grants nothing.
 pub(crate) const PROFILE_HEADER: &str = "x-macro-events-profile";
+/// Where a result answered under a profile other than MCP's names it, so a
+/// caller that asked for one can tell it from a server that ignored the
+/// header (`mcp-chatgpt-worker` checks and removes it).
+pub(crate) const PROFILE_META: &str = "com.macro/eventsProfile";
 /// Where the filter a subscription delivers by is returned.
 pub(crate) const FILTER_META: &str = "com.macro/filter";
 /// Where the reading of that filter in words is returned.
@@ -208,6 +212,12 @@ fn check_name_header(extensions: &rmcp::model::Extensions, name: &str) -> Result
     }
 }
 
+/// Whether a request names ChatGPT's profile in [`PROFILE_HEADER`]: the
+/// ChatGPT MCP Worker, which answers ChatGPT in its draft's terms.
+pub(crate) fn names_chatgpt_profile(extensions: &rmcp::model::Extensions) -> bool {
+    profile(extensions).is_ok_and(|profile| profile == McpDeliveryProfile::Chatgpt)
+}
+
 /// The profile a request names in [`PROFILE_HEADER`]; MCP's when absent.
 fn profile(extensions: &rmcp::model::Extensions) -> Result<McpDeliveryProfile, McpError> {
     let Some(value) = extensions
@@ -287,10 +297,17 @@ pub(crate) async fn handle<Sink: NotificationSink>(
     .await;
     let result = match profile {
         McpDeliveryProfile::Mcp => result,
-        McpDeliveryProfile::Chatgpt => result.map_err(|mut error| {
-            error.code = chatgpt_code(error.code);
-            error
-        }),
+        McpDeliveryProfile::Chatgpt => result
+            .map(|CustomResult(mut value)| {
+                if let Some(fields) = value.as_object_mut() {
+                    fields.insert("_meta".to_owned(), json!({ PROFILE_META: profile }));
+                }
+                CustomResult(value)
+            })
+            .map_err(|mut error| {
+                error.code = chatgpt_code(error.code);
+                error
+            }),
     };
     span.record(
         "mcp.outcome",
