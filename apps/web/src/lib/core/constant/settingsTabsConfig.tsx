@@ -1,4 +1,3 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import settingsNavMessages from '@app/lib/i18n/locales/en/settings-nav';
 import BellIcon from '@icon/system/regular/bell-simple.svg';
@@ -8,8 +7,7 @@ import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import RoutineIcon from '@icon/system/regular/clock-clockwise.svg';
 import CpuIcon from '@icon/system/regular/cpu.svg';
 import CreditCardIcon from '@icon/system/regular/credit-card.svg';
-import DesktopIcon from '@icon/system/regular/desktop.svg';
-import DeviceMobileIcon from '@icon/system/regular/device-mobile-speaker.svg';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import GaugeIcon from '@icon/system/regular/gauge.svg';
 import HardDrivesIcon from '@icon/system/regular/hard-drives.svg';
@@ -29,13 +27,7 @@ import { useHasPermission } from '../context/user';
 import { isMobile } from '../mobile/isMobile';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
-import { isPlatform } from '../util/platform';
-import {
-  DEV_MODE_ENV,
-  desktopApp,
-  ENABLE_APP_STORE_QR_CODE,
-  ENABLE_EMAIL,
-} from './featureFlags';
+import { DEV_MODE_ENV, ENABLE_EMAIL } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
 
@@ -203,15 +195,22 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         icon: CreditCardIcon,
         keywords: ['payment', 'subscription', 'invoice', 'plan'],
       }),
-      tabItem('tabDesktopApp', {
-        tab: 'Desktop App',
-        icon: DesktopIcon,
-        keywords: ['download', 'mac', 'macos', 'linux', 'version', 'update'],
-      }),
-      tabItem('tabMobileApp', {
-        tab: 'Mobile App',
-        icon: DeviceMobileIcon,
-        keywords: ['phone', 'ios', 'android'],
+      tabItem('tabDownloads', {
+        tab: 'Downloads',
+        icon: DownloadIcon,
+        keywords: [
+          'download',
+          'install',
+          'desktop',
+          'mac',
+          'macos',
+          'linux',
+          'mobile',
+          'phone',
+          'ios',
+          'android',
+          'app',
+        ],
       }),
     ],
   },
@@ -313,8 +312,7 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   'AI Memory': 'ai-memory',
   Inbox: 'inbox',
   Shortcuts: 'shortcuts',
-  'Mobile App': 'mobile-app',
-  'Desktop App': 'desktop-app',
+  Downloads: 'downloads',
   Agent: 'mcp-server',
   Agents: 'agents',
   Routines: 'routines',
@@ -343,6 +341,9 @@ SETTINGS_SLUG_TO_TAB.set('connections', 'Connected');
 SETTINGS_SLUG_TO_TAB.set('agent-connections', 'Connected');
 // Team connections (Slack export, GitHub App) moved into Integrations.
 SETTINGS_SLUG_TO_TAB.set('team-connections', 'Connected');
+// Downloads replaced the Mobile App and Desktop App pages.
+SETTINGS_SLUG_TO_TAB.set('mobile-app', 'Downloads');
+SETTINGS_SLUG_TO_TAB.set('desktop-app', 'Downloads');
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -361,7 +362,6 @@ export const settingsSlugToTab = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const desktopAppFlag = useFeatureFlag(desktopApp);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {
@@ -392,13 +392,11 @@ export const useSettingsTabAvailable = () => {
         return true;
       case 'Shortcuts':
         return !isTouchDevice();
-      case 'Mobile App':
-        return isNativeMobilePlatform() || ENABLE_APP_STORE_QR_CODE;
-      case 'Desktop App':
-        return (
-          isPlatform('desktop') ||
-          (isPlatform('web') && desktopAppFlag().enabled)
-        );
+      // Phones, tablets and the mobile apps have no Downloads page: the
+      // desktop installers don't run there, and a phone can't scan its own
+      // screen.
+      case 'Downloads':
+        return !isNativeMobilePlatform() && !isTouchDevice();
       case 'Agent':
         return !isNativeMobilePlatform();
       case 'Harness':

@@ -642,7 +642,7 @@ export default {
     more: '更多',
     moreOptions: '更多选项',
     create: '新建',
-    getMobileApp: '获取移动应用',
+    downloads: '下载',
     signedInAs: '已登录为 {{name}}',
     customizeSidebar: '自定义侧边栏',
     customizeSidebarDescription:
@@ -705,8 +705,7 @@ export default {
     tabShortcuts: '键盘快捷键',
     tabUsage: '用量',
     tabBilling: '账单',
-    tabDesktopApp: '桌面应用',
-    tabMobileApp: '移动应用',
+    tabDownloads: '下载',
     tabTags: '标签',
     tabIntegrations: '集成',
     tabRuntimes: '机器',

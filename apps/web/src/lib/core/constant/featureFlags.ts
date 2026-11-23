@@ -405,14 +405,6 @@ export const ENABLE_CLIENT_EMAIL_SIGNAL_FILTER = defineFlag({
   default: false,
 }).enabled;
 
-/** Desktop download settings rollout on web; native desktop always shows it. */
-export const desktopApp = defineFlag({ key: 'desktop-app' });
-
-export const ENABLE_APP_STORE_QR_CODE = defineFlag({
-  env: 'ENABLE_APP_STORE_QR_CODE',
-  default: true,
-}).enabled;
-
 export const ENABLE_PR_DISCUSSION_INPUT = defineFlag({
   env: 'ENABLE_PR_DISCUSSION_INPUT',
   default: false,
@@ -519,6 +511,17 @@ export const enableTaskSourceProperty = defineFlag({
 export const enableTaskStartDate = defineFlag({
   key: 'enable-task-start-date',
   env: 'ENABLE_TASK_START_DATE',
+  default: onInDev,
+});
+
+/**
+ * Time tracking on tasks: the Time pill and its entries, the running timer,
+ * and Time logged wherever task properties show. The backend refuses time
+ * writes under the same key.
+ */
+export const enableTimeTracking = defineFlag({
+  key: 'enable-time-tracking',
+  env: 'ENABLE_TIME_TRACKING',
   default: onInDev,
 });
 

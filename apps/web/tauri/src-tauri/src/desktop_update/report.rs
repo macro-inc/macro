@@ -38,6 +38,13 @@ pub enum Outcome {
     UpToDate,
     /// The feed offers a newer version; its download starts now.
     UpdateFound { target_version: String },
+    /// The feed offers a newer version built for a newer OS than this
+    /// computer runs, so it is not downloaded.
+    NeedsNewerOs {
+        target_version: String,
+        /// The feed's `minimumSystemVersion` for this platform.
+        minimum_system_version: String,
+    },
     /// The update downloaded and its signature verified. It installs on quit.
     Downloaded {
         target_version: String,

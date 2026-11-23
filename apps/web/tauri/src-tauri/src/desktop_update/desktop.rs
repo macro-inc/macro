@@ -333,6 +333,15 @@ async fn check<R: Runtime>(
     // macOS refuses to open, so stay on this one.
     if let Some(minimum) = unsupported_minimum(&update.raw_json, os_version()) {
         tracing::info!(version = %update.version, minimum, "native update needs a newer OS");
+        report(
+            app,
+            coordinator,
+            timing,
+            Outcome::NeedsNewerOs {
+                target_version: update.version.clone(),
+                minimum_system_version: minimum,
+            },
+        );
         publish(app, coordinator, Status::Idle);
         return Ok(true);
     }

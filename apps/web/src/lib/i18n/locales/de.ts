@@ -700,7 +700,7 @@ export default {
     more: 'Mehr',
     moreOptions: 'Weitere Optionen',
     create: 'Erstellen',
-    getMobileApp: 'Mobile App herunterladen',
+    downloads: 'Downloads',
     signedInAs: 'Angemeldet als {{name}}',
     customizeSidebar: 'Seitenleiste anpassen',
     customizeSidebarDescription:
@@ -764,8 +764,7 @@ export default {
     tabShortcuts: 'Tastenkürzel',
     tabUsage: 'Nutzung',
     tabBilling: 'Abrechnung',
-    tabDesktopApp: 'Desktop-App',
-    tabMobileApp: 'Mobile App',
+    tabDownloads: 'Downloads',
     tabTags: 'Tags',
     tabIntegrations: 'Integrationen',
     tabRuntimes: 'Rechner',

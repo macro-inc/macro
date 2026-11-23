@@ -437,7 +437,7 @@ The compact sidebar uses the shared workspace width.
 
 When a newer version is ready, an **Update available** button (a download icon
 in a subtle accent circle that a glowing comet periodically circles) appears in
-the sidebar rail above the mobile-app and settings icons. Its popover (a title,
+the sidebar rail above the Downloads and settings icons. Its popover (a title,
 a short description, and one action) opens by itself once per update until
 dismissed (click outside or Escape); the button stays until the update is
 applied. Its wording and action depend on the update: **New version available**
@@ -486,28 +486,29 @@ Left nav (feature and platform gates still apply):
   Integrations; `/app/settings/team-connections` opens Integrations.
 - **Blocks**: Email, Calendar, Agents, CRM. On touch devices, where the Agents
   sidebar can be collapsed, **Routines** (`/app/settings/routines`) follows Agents.
-- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Desktop App, Mobile App.
+- **Personal**: Account, Appearance, Notifications, Keyboard shortcuts, Usage, Billing, Downloads.
 - **Workspace**: Tags, Integrations (email, accounts, team Slack export, AI apps and agent tools).
 - **Developer**: Machines, MCP server, API Keys, Account Managers, Bots.
 
-**Desktop App** (`/app/settings/desktop-app`) is titled
-**Desktop App (Alpha)** and shows a compact Version, Build date, and Bundle
-date card in the desktop app. Build date is when the installed native binary
-was built (from `get_native_build_time`), not when it was installed or when the
-running JavaScript was built, so OTA updates don't change it. Bundle date is when the active
-OTA bundle was built (from `get_bundle_debug_info`), or **No OTA update** while
-the app's embedded bundle runs. In the browser it links to the latest desktop release
-on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
-native mobile never shows it.
+**Downloads** (`/app/settings/downloads`; the old `/app/settings/mobile-app`
+and `/app/settings/desktop-app` links land on it) gets Macro onto other
+devices. In a desktop browser its **Desktop app (Alpha)** section offers
+**Download for macOS** and **Download for Linux**: the one for the browser's
+computer is primary and listed first, with that installer's system
+requirement under the row. On a computer with no installer (Windows, ChromeOS) both are secondary
+under "Available for macOS and Linux." The links point at the newest stable
+GitHub release that carries each installer (the same lookup as the marketing
+`/download` page), with pinned installers until GitHub answers or when it
+can't be reached. A click sends the PostHog event `desktop_download_clicked`
+with `platform` (`macos` or `linux`) and `source: 'app_settings'`. Its
+**Mobile app** section has an **iPhone** / **Android** switch for the App
+Store or Google Play QR code, with **Copy link** for that store's URL. Inside
+the desktop app the page shows only the Mobile app section. Phones, tablets and
+the iOS and Android apps have no Downloads page.
 
-The **Mobile App** page is titled **Mobile app**. In a desktop browser an
-**iPhone** / **Android** switch picks which phone and QR code to show (App Store
-or Google Play), with **Copy link** for that store's URL. Phone browsers get a
-store button instead, with no QR codes: **App Store** on an iPhone, **Google
-Play** on an Android phone, and both when the user agent names neither. The
-page description names the store shown, or says "your app store" with both. Inside the
-iOS and Android apps it shows the same Version, Build date, and Bundle date card
-as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
+The sidebar rail's **Downloads** button (a download glyph in the same accent
+circle as the update button, without its comet) opens this page; Shift-click
+opens it in a new split. It shows wherever the page exists.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens

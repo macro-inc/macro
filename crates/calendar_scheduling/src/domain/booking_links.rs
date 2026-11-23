@@ -2,7 +2,7 @@
 pub use super::booking_link_models::*;
 use super::{
     models::*,
-    ports::{Directory, Repository},
+    ports::{BookingAccounts, Directory, Repository},
     service::Service,
 };
 use std::future::Future;
@@ -49,7 +49,7 @@ fn saved_link(profile: &Profile, event: &EventType) -> Result<BookingLink, Error
     })
 }
 
-impl<Store: Repository, Calendar: Send + Sync + 'static, Members: Directory> BookingLinks
+impl<Store: Repository, Calendar: BookingAccounts, Members: Directory> BookingLinks
     for Service<Store, Calendar, Members>
 {
     async fn list_links(
@@ -70,12 +70,17 @@ impl<Store: Repository, Calendar: Send + Sync + 'static, Members: Directory> Boo
             })
             .map(|event| saved_link(&profile, event))
             .collect::<Result<Vec<_>, _>>()?;
+        let accounts = match team {
+            Some(_) => Vec::new(),
+            None => self.calendars.booking_accounts(user).await?,
+        };
         Ok(BookingLinkListing {
             team_ids: self.directory.user_teams(user).await?,
             user_id: user.into(),
             profile_id: profile.id,
             revision: profile.revision,
             schedules: profile.schedules,
+            accounts,
             links,
         })
     }

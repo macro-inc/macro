@@ -316,6 +316,7 @@ export function CommandMenuListItem(
       aria-selected={props['aria-selected']}
       disabled={props.as === 'div' ? undefined : props.disabled}
       aria-disabled={props.disabled || undefined}
+      data-press-surface={props.disabled ? undefined : ''}
       class={cn(
         'rounded-md group w-full flex items-center h-10 px-2 gap-2 text-sm font-semibold relative scroll-m-1 text-left disabled:opacity-50 disabled:pointer-events-none',
         props.disabled && 'opacity-50 pointer-events-none',
