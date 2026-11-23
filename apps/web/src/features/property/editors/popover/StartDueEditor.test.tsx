@@ -252,3 +252,13 @@ it('makes both ends whole days again with Remove time', async () => {
   );
   expect(screen.getByRole('button', { name: /^Add time/ })).toBeTruthy();
 });
+
+it('updates the length in the footer while the picker stays open', async () => {
+  setup(vi.fn(async () => {}));
+  expect(screen.getByText('5 days')).toBeTruthy();
+
+  pickStartInCalendar(25);
+
+  await waitFor(() => expect(screen.getByText('3 days')).toBeTruthy());
+  expect(field('Start')).toBe('StartWed, Nov 25');
+});
