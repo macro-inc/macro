@@ -8,6 +8,7 @@ import {
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { RangeUnavailableBanner } from '@app/features/calendar/components/RangeUnavailableBanner';
 import { useCalendarComposerHost } from '@app/features/calendar/context/calendar-composer-host-context';
+import { CALENDAR_GRID_FULL_HEADER_WIDTH } from '@app/features/calendar/primitives/create-calendar-composer-pinning';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { createRenderQueue } from '@app/lib/utils/create-render-queue';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
@@ -122,7 +123,7 @@ function CalendarPages() {
   const breakpoints = createSizeBreakpoints(
     () => viewportSize.width ?? undefined,
     {
-      fullDayHeaders: { min: 520 },
+      fullDayHeaders: { min: CALENDAR_GRID_FULL_HEADER_WIDTH },
     }
   );
   const useNarrowDayHeaders = () =>
@@ -131,9 +132,9 @@ function CalendarPages() {
 
   createEffect(
     on(
-      () => viewportSize.width,
-      (width) => {
-        if (width === null) return;
+      () => [viewportSize.width, viewportSize.height] as const,
+      ([width, height]) => {
+        if (width === null || height === null) return;
         if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
         resizeFrame = requestAnimationFrame(() => {
           resizeFrame = undefined;

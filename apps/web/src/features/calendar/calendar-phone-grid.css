@@ -45,13 +45,15 @@
   }
 
   html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-weekday {
-    font-size: 12px;
+    font-size: var(--text-xs);
+    line-height: var(--text-xs--line-height);
   }
 
   html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-date {
     width: 28px;
     height: 28px;
-    font-size: 16px;
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
   }
 
   html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell {

@@ -114,3 +114,45 @@ it('keeps Month weekday names short even in a narrow grid', async () => {
     ).toEqual(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'])
   );
 });
+
+it.each(['timeGridDay', 'timeGridWeek'] as const)(
+  'keeps the complete selected date in the narrow %s header',
+  async (view) => {
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const { container } = render(() => (
+      <CalendarGrid
+        initialDate={new Date(2026, 10, 28)}
+        events={[]}
+        eventsById={new Map()}
+        settings={{
+          initialView: view,
+          showWeekends: true,
+          weekStartsOn: 0,
+          timeFormat: '24-hour',
+          useNarrowDayHeaders: true,
+          useNarrowEventContent: true,
+        }}
+        selection={{ color: 'orange' }}
+      />
+    ));
+    await waitFor(() => {
+      const selected = container.querySelector(
+        '.calendar-day-header-date-selected'
+      );
+      expect(selected?.textContent).toBe('28');
+      expect(selected?.classList.contains('calendar-day-header-date')).toBe(
+        true
+      );
+      expect(
+        selected?.parentElement?.querySelector('.calendar-day-header-weekday')
+      ).not.toBeNull();
+    });
+  }
+);

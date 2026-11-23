@@ -15,7 +15,7 @@ export function MobileCalendarGridAxis(props: {
     <>
       <div
         data-calendar-hour-axis
-        class="pointer-events-none absolute left-0 z-10 overflow-hidden bg-panel text-[10px] font-medium text-ink-extra-muted"
+        class="pointer-events-none absolute left-0 z-10 overflow-hidden bg-panel text-xxs font-medium text-ink-extra-muted"
         style={{
           top: `${axis.state.top - labelBleed()}px`,
           height: `${axis.state.height + labelBleed()}px`,
@@ -44,9 +44,9 @@ export function MobileCalendarGridAxis(props: {
           <Show when={axis.state.now}>
             {(now) => (
               <div
-                class="absolute inset-x-0 text-right font-semibold leading-[14px] text-accent"
+                class="absolute inset-x-0 -translate-y-1/2 text-right font-semibold leading-normal text-accent"
                 style={{
-                  top: `${now().top}px`,
+                  top: `${now().top + now().height / 2}px`,
                   'padding-right': 'var(--calendar-phone-axis-gap)',
                 }}
               >

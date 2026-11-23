@@ -77,6 +77,7 @@ export function MonthGrid(props: {
                 class="phone-month-week"
                 style={{
                   'grid-template-columns': `repeat(${week.days.length}, minmax(0, 1fr))`,
+                  '--phone-month-columns': week.days.length,
                 }}
               >
                 <For each={week.days}>
