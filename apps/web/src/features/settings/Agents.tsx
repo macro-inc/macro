@@ -33,7 +33,7 @@ import {
   MACRO_HARNESS_NAME,
 } from '@core/constant/macroAgent';
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -233,7 +233,7 @@ export function Agents(props: {
       current?.rowId === rowId ? undefined : { rowId }
     );
   const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
-  const channelsContext = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
   const createAgentMutation = useCreateAgentMutation();
@@ -301,7 +301,7 @@ export function Agents(props: {
     );
   };
   const channelOptions = createMemo(() =>
-    botAssignableChannelOptions(channelsContext.channels())
+    botAssignableChannelOptions(channelDirectory.channels())
   );
   const currentTeamId = () =>
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;

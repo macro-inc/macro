@@ -310,18 +310,22 @@ vi.mock('@core/component/Toast/Toast', () => ({
   },
 }));
 
-vi.mock('@core/context/channels', () => ({
-  useChannelsContext: () => ({
-    channels: () => [
-      { id: 'channel-general', name: 'general', channel_type: 'private' },
-      {
-        id: 'channel-engineering',
-        name: 'engineering',
-        channel_type: 'team',
-      },
-    ],
-  }),
-}));
+vi.mock('@core/context/channels', async () => {
+  const { directoryChannel } = await import(
+    '@queries/channel/tests/directory-channel'
+  );
+  const channels = [
+    directoryChannel('channel-general', {
+      name: 'general',
+      channelType: 'private',
+    }),
+    directoryChannel('channel-engineering', {
+      name: 'engineering',
+      channelType: 'team',
+    }),
+  ];
+  return { useChannelDirectory: () => ({ channels: () => channels }) };
+});
 
 const connectorMocks = vi.hoisted(() => ({
   connected: [] as string[],

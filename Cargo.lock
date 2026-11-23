@@ -5085,6 +5085,7 @@ dependencies = [
  "entity_access",
  "entity_mutation",
  "favorites",
+ "filter_ast",
  "graphql_activity",
  "graphql_calendar",
  "graphql_channel",
@@ -5104,6 +5105,7 @@ dependencies = [
  "graphql_scheduled_action",
  "graphql_soup",
  "graphql_work_feed",
+ "item_filters",
  "macro_authorization",
  "macro_db_migrator",
  "macro_user_id",
@@ -9741,6 +9743,7 @@ dependencies = [
  "graphql_common",
  "macro_user_id",
  "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]
