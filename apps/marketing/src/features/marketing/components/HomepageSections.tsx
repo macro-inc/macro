@@ -1,4 +1,17 @@
-import { createSignal, For } from 'solid-js';
+import CrmIcon from '@icon/system/regular/building-office.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
+import EmailIcon from '@icon/system/regular/envelope.svg';
+import DocsIcon from '@icon/system/regular/file.svg';
+import DriveIcon from '@icon/system/regular/folder-simple.svg';
+import BookingIcon from '@icon/system/regular/link.svg';
+import TasksIcon from '@icon/system/regular/list-checks.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import CallsIcon from '@icon/system/regular/phone-call.svg';
+import AgentsIcon from '@icon/system/regular/sparkle.svg';
+import SheetsIcon from '@icon/wide-spreadsheet.svg';
+import ChatIcon from '@phosphor/chats-circle.svg';
+import { For } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import agentsScreen from '../../../assets/homepage/agents.webp';
 import calendarScreen from '../../../assets/homepage/calendar.webp';
 import callsScreen from '../../../assets/homepage/calls.webp';
@@ -178,21 +191,19 @@ const SECTIONS: readonly Section[] = [
 ];
 
 const MODULES = [
-  'Email',
-  'Chat',
-  'Docs',
-  'Tasks',
-  'Calendar',
-  'Calls',
-  'CRM',
-  'Agents',
-  'Booking links',
-  'Search',
-  'Drive',
-  'Sheets',
+  { label: 'Email', href: '/email', icon: EmailIcon },
+  { label: 'Chat', href: '/channels', icon: ChatIcon },
+  { label: 'Docs', href: '/documents', icon: DocsIcon },
+  { label: 'Tasks', href: '/tasks', icon: TasksIcon },
+  { label: 'Calendar', href: '/calendar', icon: CalendarIcon },
+  { label: 'Calls', href: '/calls', icon: CallsIcon },
+  { label: 'CRM', href: '/crm', icon: CrmIcon },
+  { label: 'Agents', href: '/agents', icon: AgentsIcon },
+  { label: 'Booking links', href: '/booking-links', icon: BookingIcon },
+  { label: 'Search', href: '/docs/product/search', icon: SearchIcon },
+  { label: 'Drive', href: '/drive', icon: DriveIcon },
+  { label: 'Sheets', href: '/spreadsheets', icon: SheetsIcon },
 ];
-
-const CLONE_COMMAND = 'git clone https://github.com/macro-inc/macro';
 
 function SectionCaption(props: { sentences: readonly string[] }) {
   return (
@@ -220,35 +231,6 @@ function Shortcuts() {
         Search
       </li>
     </ul>
-  );
-}
-
-function CloneCommand() {
-  const [label, setLabel] = createSignal('Copy');
-  let command!: HTMLElement;
-
-  // Clipboard access can be refused; select the command so it can be copied by hand.
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(CLONE_COMMAND);
-      setLabel('Copied');
-    } catch {
-      const range = document.createRange();
-      range.selectNodeContents(command);
-      window.getSelection()?.removeAllRanges();
-      window.getSelection()?.addRange(range);
-      setLabel('Selected');
-    }
-    setTimeout(() => setLabel('Copy'), 1600);
-  };
-
-  return (
-    <div class="homepage-clone">
-      <code ref={command}>{CLONE_COMMAND}</code>
-      <button type="button" onClick={copy}>
-        {label()}
-      </button>
-    </div>
   );
 }
 
@@ -291,26 +273,21 @@ export function HomepageSections() {
         more={<HomepageFeatureDetails title="pricing" path="/pricing" />}
       >
         <ul class="homepage-modules" aria-label="Included modules">
-          <For each={MODULES}>{(module) => <li>{module}</li>}</For>
+          <For each={MODULES}>
+            {(module) => (
+              <li>
+                <a href={module.href}>
+                  <Dynamic component={module.icon} aria-hidden="true" />
+                  {module.label}
+                </a>
+              </li>
+            )}
+          </For>
         </ul>
         <SectionCaption
           sentences={[
             'At our last startup we paid for Slack, Linear, Notion, HubSpot, and Superhuman.',
             'We liked those tools, but each new subscription came with another place for work to get stuck.',
-          ]}
-        />
-      </FeaturePageSection>
-      <FeaturePageSection
-        id="open-source"
-        aura="github"
-        title="Fully open source. Not open core."
-        description="Macro is fully open source under the AGPLv3. Read the code, fork the repo, or run it on your own."
-      >
-        <CloneCommand />
-        <SectionCaption
-          sentences={[
-            'If we were choosing a system to run our company on, we’d want to be able to read the code and run it ourselves.',
-            'We’d also want to change it when our team needed something different.',
           ]}
         />
       </FeaturePageSection>

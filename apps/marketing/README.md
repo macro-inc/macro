@@ -36,15 +36,14 @@ the capture, with a “Learn about [feature] →” link where the product has a
 Let the heading wrap at its normal size. Follow each capture with two short
 sentences in the same type as the introduction. Draw on the founder's letter,
 the repository README, and the competitor notes for the reason we built the
-Block or an example of how we use it. Use `ProductCopy` for linked Block names. Pricing and
-open source use the same copy structure before `HomepageClosing`. The captures
+Block or an example of how we use it. Use `ProductCopy` for linked Block names. Below 768px, pricing lists the included modules with an icon and a link to each page. The captures
 in `src/assets/homepage/`
 come from the in-app tutorial videos and show demo data. Mount shared UI styles
 scoped to `.macro-homepage` for direct loads and client-side navigation. Keep the
 homepage aura at 25% of the shared gradient and the grain at 1.2% opacity.
 Give each homepage section a faint horizontal oval in its tutorial accent,
 with the onboarding dot pattern fading toward the edges. Pricing uses the Home
-palette and open source uses the GitHub palette.
+palette.
 The first-paint scripts and `sitePalette.ts` must apply the same palette policy
 before and after hydration.
 
@@ -360,7 +359,7 @@ When the focus is too wide for that (about 580 capture pixels or more), add a
 `narrow` frame: the same scene captured at 400×700, where the app uses its narrow
 layout, with the focus measured on the same element; phones show it instead. The
 build fails if an outline starts clipped on a phone. `FeaturePhoneScreens`
-adds an "On your phone." row of mobile captures from `phoneScreens`. Children
+adds an "On your phone." row of mobile captures from `phoneScreens`. Fit the cards within the desktop reading column and let the row scroll sideways on phones. Children
 passed with a `screen` render below it, for real links, videos, and setup steps.
 Drop a section the app cannot show rather than drawing it, and keep `Macro
 <Product>` names in section copy so `ProductCopy` renders their linked mentions.

@@ -82,50 +82,27 @@
 
 .homepage-modules li {
   break-inside: avoid;
-  padding: 13px 0;
   border-top: 1px solid color-mix(in srgb, var(--color-ink) 9%, transparent);
   color: var(--color-ink);
   font: 370 16px/1.4 'Inter Variable', Inter, sans-serif;
 }
 
-.homepage-clone {
+.homepage-modules a {
   display: flex;
   align-items: center;
-  gap: 12px;
-  width: min(640px, 100%);
-  min-width: 0;
-  margin: 0 auto;
-  padding: 8px 8px 8px 18px;
-  border-radius: 14px;
-  background: #0d0d0d;
-  box-shadow: inset 0 0 0 1px #ffffff29;
+  gap: 8px;
+  min-height: 44px;
+  color: inherit;
+  text-decoration: none;
 }
+.homepage-modules a:hover { text-decoration: underline; }
+.homepage-modules svg { flex: none; width: 16px; height: 16px; }
 
-.homepage-clone code {
-  flex: 1;
-  min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-  color: #fff;
-  font: 400 14px/1.4 ui-monospace, 'SF Mono', Menlo, monospace;
-  white-space: nowrap;
+@media (min-width: 768px) {
+  .macro-homepage #pricing { display: none; }
 }
-
-.homepage-clone > button {
-  flex: none;
-  min-height: 36px;
-  padding: 0 16px;
-  border: 0;
-  border-radius: 999px;
-  background: #fff;
-  color: #000;
-  font: 500 13.5px/1 'Inter Variable', Inter, sans-serif;
-}
-
 @media (max-width: 699px) {
   .macro-homepage .homepage-section-caption { margin-top: 16px; }
   .homepage-shortcuts { gap: 10px 20px; }
   .homepage-modules { width: calc(100% - 16px); column-gap: 24px; }
-  .homepage-clone { width: calc(100% - 16px); }
-  .homepage-clone button { min-height: 44px; }
 }
