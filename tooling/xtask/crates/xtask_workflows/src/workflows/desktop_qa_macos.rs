@@ -125,7 +125,8 @@ fn qa_macos_job() -> Job {
         // build of an arbitrary branch would only churn it.
         .add_step(cargo_test())
         .add_step(run_harness())
-        .add_step(upload_results("macos-qa"))
+        // The desktop factory downloads this artifact by name.
+        .add_step(upload_results(format!("macos-qa-{}", github().run_id())))
 }
 
 /// The smoke suite on the app in the signed, notarized DMG of `ref_expr` that
@@ -172,7 +173,13 @@ pub(crate) fn qa_release_job(ref_expr: Expr<Str>) -> Job {
         )
         .add_step(run_harness())
         // Not `macro-*`: the publish jobs attach every `macro-*` artifact to the release.
-        .add_step(upload_results("macos-qa-release"))
+        // A re-run of the failed job after a flake uploads again, and
+        // upload-artifact refuses a name already taken in the run.
+        .add_step(upload_results(format!(
+            "macos-qa-release-{}-{}",
+            github().run_id(),
+            github().run_attempt()
+        )))
 }
 
 /// The harness comes from the commit that holds this workflow, not from the
@@ -212,15 +219,9 @@ fn run_harness() -> Step<Run> {
         .shell("bash")
 }
 
-fn upload_results(prefix: &str) -> Step<Use> {
+fn upload_results(name: String) -> Step<Use> {
     ActionsUploadArtifact::new("Upload QA results", out())
-        // A re-run of a failed job uploads again; upload-artifact refuses a
-        // name already taken in the run.
-        .name(format!(
-            "{prefix}-{}-{}",
-            github().run_id(),
-            github().run_attempt()
-        ))
+        .name(name)
         .if_no_files_found("warn")
         .retention_days(14)
         .step()
