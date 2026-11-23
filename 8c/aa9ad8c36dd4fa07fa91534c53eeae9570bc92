@@ -1,0 +1,119 @@
+apps/web/src/features/agent-permissions/queries/references.ts
+  s_9aaadd038e8bff::t_9156ca7fc7d235 1-150
+apps/web/src/features/agent-permissions/core/references.ts
+  s_9aaadd038e8bff::t_49ec1a773da2ca 1-168
+apps/web/src/features/agent-permissions/queries/references-view.ts
+  s_9aaadd038e8bff::t_56eaf396d6628d 1-74
+apps/web/src/features/agent-permissions/core/references.test.ts
+  s_9aaadd038e8bff::t_57f05fe03a86b7 1-150
+apps/web/src/features/agent-permissions/views/agent-permissions-form.tsx
+  s_9aaadd038e8bff::t_30718816eaea5d 1-459
+apps/web/src/features/agent-permissions/views/agent-permissions-form.test.tsx
+  s_9aaadd038e8bff::t_6c0e1a832f3245 1-311
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_aa9038102244a3::t_ecca352472be3f 22-34,68-72
+apps/web/src/features/agent-permissions/components/action-accordion.tsx
+  s_36fd91c34e1916::t_167e77f9ca8d31 6,15,36-44,132-146,196-213,255
+apps/web/src/features/agent-permissions/components/exception-row.tsx
+  s_36fd91c34e1916::t_d083a12436fa82 5,24-25,39
+apps/web/src/features/agent-permissions/components/following-note.tsx
+  s_9aaadd038e8bff::t_1028b49d7b6597 1-90
+apps/web/src/features/agent-permissions/components/policy-avatar.tsx
+  s_66bc7dfd939bb2::t_296d357f144526 1-39
+apps/web/src/features/agent-permissions/components/policy-source-card.tsx
+  s_66bc7dfd939bb2::t_bef9e48fb2d209 1-60
+apps/web/src/features/agent-permissions/components/policy-source-picker.tsx
+  s_66bc7dfd939bb2::t_67e0ef9934c201 1-77
+apps/web/src/features/agent-permissions/components/restriction-marker.tsx
+  s_36fd91c34e1916::t_97909d5b19e351 1-55
+apps/web/src/features/agent-permissions/components/source-labels.ts
+  s_9aaadd038e8bff::t_90b96d19275cfd 1-24
+apps/web/src/features/agent-permissions/components/tool-permissions.tsx
+  s_816c0e14824fd5::t_25f1d24a4874db 7,20,22,46-55,72-92,157-160
+apps/web/src/features/agent-permissions/components/tool-settings-list.tsx
+  s_36fd91c34e1916::t_b063b4673604cd 17-18,54
+apps/web/src/features/agent-permissions/core/model.ts
+  s_36fd91c34e1916::t_5f6f7671529af1 209-211,214-215,218-221
+apps/web/src/features/agent-permissions/index.ts
+  s_9aaadd038e8bff::t_544c466e0b6473 11-16,20
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_9aaadd038e8bff::t_1f5a7d09ad2807 13,20-22,54-56,106,111-119
+apps/web/src/features/agent-permissions/tests/fixtures.ts
+  s_9aaadd038e8bff::t_610e06d9c9c667 8-11,386-475
+apps/web/src/features/agent-permissions/views/agent-permissions-panel.tsx
+  s_9aaadd038e8bff::t_028691e9d0953b 12,16,31,37,47,70-71,166-177,181-190
+apps/web/src/features/settings/Agents.test.tsx
+  s_9aaadd038e8bff::t_3e9220cd3c4af2 23,89-92,94-112,1176-1234
+apps/web/src/features/settings/Agents.tsx
+  s_9aaadd038e8bff::t_36b5146ba30077 4-6,8-9,39,1410-1432,1458-1460,1781-1794,2035
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_0cc55d4013f523::t_5725ba88d4098c 98-139
+apps/web/src/features/agent-permissions/queries/keys.ts
+  s_86a3b382b10917::t_284e76085f8781 9-12
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_9aaadd038e8bff::t_5476f01c968f70 3,46-54,65-66,118-189
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "8caa9ad8c36dd4fa07fa91534c53eeae9570bc92",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_36fd91c34e1916": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "edb7fdbd-079c-4406-9030-14c7e5d1fc32",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_66bc7dfd939bb2": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "eeeb41d1-6a76-4cfc-8bcc-18dbe760419c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_816c0e14824fd5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d8e52af2-d4d1-46e0-b6af-1f9482604fea",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_9aaadd038e8bff": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "e05430e7-cb2a-430c-b897-bbb624a22b13",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_aa9038102244a3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "8722afde-2cce-4eb5-b137-43e8230dc6d1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
