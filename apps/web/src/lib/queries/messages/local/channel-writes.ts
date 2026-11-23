@@ -148,7 +148,16 @@ export interface ChannelWrites {
   unstoredRoots: (channelId: string) => ChannelPageEntry[];
   /** Replies this page sent to a thread, oldest first, the same way. */
   unstoredReplies: (channelId: string, rootId: string) => Message[];
+  /**
+   * The host is retiring and will settle nothing more: fail every write still
+   * waiting for the queue, as a storage reset does, instead of leaving it
+   * pending for good.
+   */
+  retire(): void;
 }
+
+/** Ends a settlement wait with the refusal it carries. */
+type Lost = Deferred.Deferred<never, ThrownResultError>;
 
 const mentionInput = (mention: Mention) => ({
   entityType: mention.entity_type,
@@ -180,11 +189,12 @@ function refusalOf(error: CombinedError): ThrownResultError {
  * Listening starts before the write is handed over, so a settlement that lands
  * between the queue's answer and the wait is not missed. A storage reset
  * empties the queue: the write is gone and will never settle, so each wait
- * races the reset.
+ * races the reset. A retired host (`retired`, from `ChannelWrites.retire`)
+ * reports nothing more, so each wait races that too.
  */
-function watchSettlements(host: ChannelWriteHost) {
+function watchSettlements(host: ChannelWriteHost, retired: Lost) {
   const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
-  const reset = Deferred.makeUnsafe<void>();
+  const reset: Lost = Deferred.makeUnsafe();
   const settlementOf = (transactionId: string) => {
     let deferred = settlements.get(transactionId);
     if (!deferred) {
@@ -200,17 +210,18 @@ function watchSettlements(host: ChannelWriteHost) {
     );
   });
   const stopReset = host.onCacheGenerationChanged((change) => {
-    if (change.storage === 'reset') Deferred.doneUnsafe(reset, Effect.void);
+    if (change.storage !== 'reset') return;
+    Deferred.doneUnsafe(
+      reset,
+      Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
+    );
   });
   const settledOrReset = (transactionId: string) =>
-    Effect.raceFirst(
+    Effect.raceAllFirst([
       Deferred.await(settlementOf(transactionId)),
-      Deferred.await(reset).pipe(
-        Effect.andThen(
-          Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
-        )
-      )
-    );
+      Deferred.await(reset),
+      Deferred.await(retired),
+    ]);
   const committed = (
     transactionId: string
   ): Effect.Effect<void, ThrownResultError> =>
@@ -334,6 +345,7 @@ interface Write<TData, TVariables extends AnyVariables> {
  */
 export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   const [pending, setPending] = createStore<Record<string, PendingWrite[]>>({});
+  const retired: Lost = Deferred.makeUnsafe();
 
   const addPending = (channelId: string, write: PendingWrite) =>
     setPending(
@@ -377,7 +389,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   async function queuedWrite<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>
   ): Promise<Message> {
-    const settlements = watchSettlements(deps.host);
+    const settlements = watchSettlements(deps.host, retired);
     addPending(write.channelId, {
       uuid: write.uuid,
       unstored: write.unstored,
@@ -604,5 +616,11 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       (pending[channelId] ?? []).flatMap((write) =>
         write.reply?.rootId === rootId ? [write.reply.message] : []
       ),
+    retire() {
+      Deferred.doneUnsafe(
+        retired,
+        Effect.fail(refusal('CACHE_RETIRED', 'device cache was retired'))
+      );
+    },
   };
 }

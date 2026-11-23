@@ -75,6 +75,13 @@ export function startChannelStream(
   return createChannelStream(client, channelSyncRuntime(host));
 }
 
+/** The writes of a host that already has them; never makes them. */
+export function existingChannelWrites(
+  host: CacheHost
+): ChannelWrites | undefined {
+  return writes.get(host);
+}
+
 /** The channel writes of a cache host, made on first use. */
 export function channelWrites(host: CacheHost): ChannelWrites {
   const existing = writes.get(host);

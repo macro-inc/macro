@@ -363,6 +363,19 @@ describe('createChannelWrites', () => {
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
   });
 
+  it('rejects a held write when its host retires', async () => {
+    const { writes, listeners } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const sending = writes.send(send(graphqlMessage(7).id));
+    await settleMicrotasks();
+    writes.retire();
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'CACHE_RETIRED')).toBe(true);
+    expect(listeners.size).toBe(0);
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
   it('rejects a held write the server later refuses, with its code', async () => {
     const { writes, settle, runtime } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
