@@ -10,8 +10,10 @@
 //! browser owner loss physically resets the database and discards all three.
 //! Native files keep one path, so there an older storage version with
 //! registered upgrade steps is upgraded in place instead (`cache-turso`'s
-//! `storage/migration.rs`), and a format in
-//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward.
+//! `storage/migration.rs`), a format in
+//! [`MIGRATABLE_CACHE_FORMAT_VERSIONS`] is carried forward, and a file of
+//! another compatibility epoch ([`namespace_epoch`]) drops its records and
+//! keeps its queued writes.
 
 use crate::normalize::RecordUpdates;
 use crate::queue::{PersistedOptimisticLayer, StoredMutation};
@@ -270,6 +272,19 @@ pub const MIGRATABLE_CACHE_FORMAT_VERSIONS: &[u32] = &[3];
 /// Namespace a cache scope used at one cache format version.
 pub fn cache_namespace_at(scope: &str, format_version: u32) -> String {
     format!("graphql-cache:{scope}:s{CACHE_SCHEMA_COMPATIBILITY_EPOCH}:v{format_version}")
+}
+
+/// The schema compatibility epoch `namespace` names, when it is `scope`'s
+/// namespace at this cache format under any epoch. A native file of another
+/// epoch keeps its queued writes and drops its records.
+pub fn namespace_epoch(scope: &str, namespace: &str) -> Option<u32> {
+    namespace
+        .strip_prefix("graphql-cache:")?
+        .strip_prefix(scope)?
+        .strip_prefix(":s")?
+        .strip_suffix(&format!(":v{CACHE_FORMAT_VERSION}"))?
+        .parse()
+        .ok()
 }
 
 /// Storage versions `(schema compatibility epoch, cache format, storage
@@ -582,6 +597,31 @@ mod tests {
             "graphql-cache:client-token-1:s4:v3"
         );
         assert!(!MIGRATABLE_CACHE_FORMAT_VERSIONS.contains(&CACHE_FORMAT_VERSION));
+    }
+
+    #[test]
+    fn namespace_epoch_reads_only_this_scope_at_this_format() {
+        let scope = "client-token-1";
+        assert_eq!(
+            namespace_epoch(scope, &cache_namespace(scope)),
+            Some(CACHE_SCHEMA_COMPATIBILITY_EPOCH)
+        );
+        assert_eq!(
+            namespace_epoch(
+                scope,
+                &format!("graphql-cache:{scope}:s3:v{CACHE_FORMAT_VERSION}")
+            ),
+            Some(3)
+        );
+        for other in [
+            cache_namespace("client-token-2"),
+            cache_namespace_at(scope, 3),
+            format!("graphql-cache:{scope}:sx:v{CACHE_FORMAT_VERSION}"),
+            format!("graphql-cache:{scope}:s:v{CACHE_FORMAT_VERSION}"),
+            "wrong".to_owned(),
+        ] {
+            assert_eq!(namespace_epoch(scope, &other), None, "{other}");
+        }
     }
 
     #[test]

@@ -148,12 +148,15 @@ pub enum Tier {
 #[strum(serialize_all = "kebab-case")]
 pub enum ResetReason {
     /// The stored schema cannot be read, or is of another compatibility
-    /// epoch or format.
+    /// epoch or format; or the cache stores none, and the host's record of
+    /// what wrote it cannot be read.
     Unreadable,
     /// An operation root type was renamed.
     Roots,
     /// The schema to store would not validate.
     Invalid,
+    /// Applying the change's own tier failed, so every record went instead.
+    Failed,
 }
 
 /// A schema change sorted into its tier, and the schema to store after it.
@@ -484,8 +487,9 @@ pub fn overlay_fits(
 }
 
 /// Drops an optimistic response and its link recipes, so the layer adds no
-/// records. Its projections, revalidations and identity bindings stay: they
-/// name documents and keys, not values a schema shapes.
+/// records. Its revalidations and identity bindings stay: they name keys, not
+/// values a schema shapes. Its projections stay too, unless storage dropped
+/// the records they project.
 pub fn retire_overlay(source: &mut OptimisticSource) {
     source.mutation_data = Json::Object(serde_json::Map::new());
     source.link_patches.clear();
