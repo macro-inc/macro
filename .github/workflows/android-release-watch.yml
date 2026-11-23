@@ -154,11 +154,30 @@ jobs:
           # go green without anyone clicking "Re-run". GH_TOKEN needs actions:write,
           # pull-requests:write and statuses:write; GOOGLE_PLAY_ACCESS_TOKEN the
           # androidpublisher scope.
+          #
+          # Google Play keeps one open edit per app, and opening one invalidates the
+          # others: the status read opens an edit (release notes and rollout status are
+          # only readable through one), which would break a publisher's upload or
+          # promotion midway. So no PR is checked while a run of either publishing
+          # workflow is queued or running; the next half-hourly run checks it. The read
+          # lasts seconds and a publish run takes minutes to reach Play, so checking
+          # just before each read keeps the two apart.
           cd apps/web
           conf_path="apps/web/tauri/src-tauri/tauri.android.conf.json"
 
+          # How many runs of the workflows that edit the Play app have not completed.
+          play_publish_runs() {
+            local workflow count total=0
+            for workflow in android-play-publish.yml publish-android-play.yml; do
+              count=$(gh run list --repo "$GH_REPO" --workflow "$workflow" --json status \
+                --jq '[.[] | select(.status != "completed")] | length') || return 1
+              total=$(( total + count ))
+            done
+            echo "$total"
+          }
+
           check_pr() {
-            local pr=$1 number sha merge native_hash version_code live run run_id status run_url job conclusion job_id reruns
+            local pr=$1 number sha merge native_hash version_code publishing live run run_id status run_url job conclusion job_id reruns
             number=$(jq -r '.number' <<<"$pr")
             sha=$(jq -r '.sha' <<<"$pr")
             merge=$(jq -r '.merge // empty' <<<"$pr")
@@ -171,6 +190,11 @@ jobs:
             native_hash=$(bun scripts/android-native.mjs hash "$merge")
             echo "PR #${number}: Android version code ${version_code} at ${sha:0:10}, merge-result native hash ${native_hash:0:10}"
 
+            publishing=$(play_publish_runs)
+            if (( publishing > 0 )); then
+              echo "  a Google Play publish run is in progress; checking again in the next run"
+              return 0
+            fi
             if ! bun scripts/android-play-status.mjs --version-code "$version_code" --require-live \
                 --native-hash "$native_hash" --pr "$number" >"$RUNNER_TEMP/status-${number}.log" 2>&1; then
               echo "  not live yet:"

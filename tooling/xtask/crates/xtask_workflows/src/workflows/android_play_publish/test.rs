@@ -230,6 +230,64 @@ gh() {
     }
 }
 
+/// The watcher reads Play through an edit, which would invalidate a publish
+/// run's edit, so it reads nothing while a publish run is queued or running,
+/// nor when it cannot tell.
+#[test]
+fn watcher_leaves_play_alone_while_publishing() {
+    let script = concat!(
+        include_str!("../scripts/android_play_statuses.sh"),
+        include_str!("../scripts/android_release_watch.sh")
+    );
+    let fakes = r#"
+cd() { :; }
+gh_fetch() { [[ "$1" == merge ]]; }
+gh() {
+  case "$*" in
+    "api repos/example/repo/contents/apps/web/tauri/src-tauri/tauri.android.conf.json?ref=head "*)
+      printf '{"bundle":{"android":{"versionCode":22}}}' | base64 ;;
+    "run list --repo example/repo --workflow android-play-publish.yml "*)
+      [[ "$FAKE_PUBLISH_RUNS" != error ]] && echo "$FAKE_PUBLISH_RUNS" ;;
+    "run list --repo example/repo --workflow publish-android-play.yml "*) echo 0 ;;
+    *) echo "unexpected: gh $*" >&2; return 1 ;;
+  esac
+}
+bun() {
+  case "$1" in
+    scripts/android-native.mjs) echo "$FAKE_HASH" ;;
+    scripts/android-play-status.mjs) echo "read Google Play"; return 1 ;;
+    *) return 1 ;;
+  esac
+}
+"#;
+    let temp = tempfile::tempdir().expect("runner temp");
+    let runner_temp = temp.path().to_str().expect("runner temp path");
+    let prs = r#"[{"number":5,"sha":"head","merge":"merge"}]"#;
+    let cases = [
+        ("no publish run", "0", true, true),
+        ("a publish run in progress", "1", true, false),
+        ("publish runs unknown", "error", false, false),
+    ];
+    for (case, runs, pass, reads_play) in cases {
+        let (ok, log, _) = run(
+            fakes,
+            script,
+            &[
+                ("PRS", prs),
+                ("RUNNER_TEMP", runner_temp),
+                ("FAKE_HASH", HASH),
+                ("FAKE_PUBLISH_RUNS", runs),
+            ],
+        );
+        assert_eq!(ok, pass, "{case}: {log}");
+        assert_eq!(
+            log.contains("read Google Play"),
+            reads_play,
+            "{case}: {log}"
+        );
+    }
+}
+
 /// Drift reads whether the publisher submitted the stale version code:
 /// success is promoted, pending or failure unknown, nothing not promoted.
 #[test]
@@ -379,8 +437,9 @@ fn only_main_copy_workflows_sign_in_to_play() {
             < at("Upload to internal testing")
     );
     assert!(at("Write the provenance stamp as release notes") < at("Upload to internal testing"));
+    assert!(at("Upload to internal testing") < at("Retry the upload to internal testing"));
     assert!(
-        at("Upload to internal testing")
+        at("Retry the upload to internal testing")
             < at("Require the native code to be unchanged before promoting")
     );
     assert!(

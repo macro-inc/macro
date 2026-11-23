@@ -48,7 +48,7 @@ if (env.JOB_STATUS === 'success') {
     tail = lines.slice(-30).join('\n').slice(-3000);
   }
   const retry =
-    env.UPLOAD_OUTCOME === 'success'
+    env.UPLOADED === 'true'
       ? [
           `The bundle reached the internal track, so version code ${versionCode} is used up: bump`,
           '(`cd apps/web && just android-bump`), commit, and re-add the `android-update` label.',

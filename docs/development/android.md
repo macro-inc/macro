@@ -280,7 +280,10 @@ To release:
    It then repeats the head guard, writes the release notes' provenance
    stamp (`native tree <hash> for PR #<n>`, the twin of the iOS TestFlight
    stamp) from `main`'s hashing script, uploads the bundle to the
-   **internal** track with `status=completed`, checks the native code once
+   **internal** track with `status=completed` (a failed upload is retried
+   once with a fresh edit: Play keeps one open edit per app, so another
+   edit opened meanwhile fails the first attempt with "This edit has
+   expired"), checks the native code once
    more, and promotes it to **production** as a full rollout (Google review
    applies), recording the promotion as the `android-play/release` status.
    A failed build comments on the PR; otherwise the publisher comments the
@@ -300,7 +303,12 @@ To release:
    minutes) notices the version code being published on production, marks
    the PR head `android-play/live`, re-runs the failed jobs of the PR's latest
    `PR CI` run (the `Android Native Check` among them), and comments; the PR merges if auto-merge is
-   on.
+   on. Its status read opens a Play edit, which would invalidate a
+   publisher's, so it skips each PR while a run of `Android Play Publish` or
+   `publish-android-play.yml` is queued or running and checks it in the next
+   run. The two do not share a concurrency group: GitHub replaces a pending
+   run in a group with the next one queued, so a watcher run could cancel a
+   waiting publish.
 4. Pushes after the label: web-only commits need nothing. Native commits make
    the bundle stale: **`Android Release Drift`** cancels an in-progress build,
    removes the label and comments. A Play production release cannot be

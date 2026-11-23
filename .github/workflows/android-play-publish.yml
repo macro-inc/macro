@@ -454,6 +454,20 @@ jobs:
           track: internal
           status: completed
           whatsNewDirectory: ${{ runner.temp }}/whatsnew
+        continue-on-error: true
+      - id: upload_retry
+        name: Retry the upload to internal testing
+        if: steps.upload.outcome == 'failure'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5
+        with:
+          packageName: com.macro.workspace.mobile
+          serviceAccountJson: ${{ steps.auth.outputs.credentials_file_path }}
+          releaseFiles: ${{ steps.artifact.outputs.bundle }}
+          mappingFile: ${{ steps.artifact.outputs.mapping }}
+          releaseName: ${{ needs.check.outputs.release_name }}
+          track: internal
+          status: completed
+          whatsNewDirectory: ${{ runner.temp }}/whatsnew
       - name: Require the native code to be unchanged before promoting
         run: |
           printf '%s\n' "$LOGGED_STEP" > "$RUNNER_TEMP/last-step.name"
@@ -830,7 +844,7 @@ jobs:
                 tail = lines.slice(-30).join('\n').slice(-3000);
               }
               const retry =
-                env.UPLOAD_OUTCOME === 'success'
+                env.UPLOADED === 'true'
                   ? [
                       `The bundle reached the internal track, so version code ${versionCode} is used up: bump`,
                       '(`cd apps/web && just android-bump`), commit, and re-add the `android-update` label.',
@@ -857,4 +871,4 @@ jobs:
           BUILD_URL: ${{ github.event.workflow_run.html_url }}
           RELEASE_NAME: ${{ needs.check.outputs.release_name }}
           JOB_STATUS: ${{ job.status }}
-          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+          UPLOADED: ${{ steps.upload.outcome == 'success' || steps.upload_retry.outcome == 'success' }}
