@@ -31,11 +31,11 @@ export function usePropertyOptionsQuery(
   propertyDefinitionId: Accessor<string>,
   enabled: Accessor<boolean> = () => true
 ): CatalogListResult<PropertyOption> {
-  const stamp = createListedAt();
   const variables = () => {
     const id = propertyDefinitionId();
     return enabled() && id ? { propertyDefinitionId: id } : undefined;
   };
+  const stamp = createListedAt(PropertyCatalogOptionsDocument, variables);
   const query = createLiveQuery(
     PropertyCatalogOptionsDocument,
     variables,

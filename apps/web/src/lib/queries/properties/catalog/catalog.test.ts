@@ -7,11 +7,12 @@ import {
   DeletePropertyOptionDocument,
   type PropertyCatalogDefinitionFieldsFragment,
   type PropertyCatalogOptionFieldsFragment,
+  PropertyCatalogOptionsDocument,
   UpdatePropertyOptionDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { onlineManager } from '@tanstack/solid-query';
-import { CombinedError } from '@urql/core';
-import { createRoot } from 'solid-js';
+import { CombinedError, createRequest } from '@urql/core';
+import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CatalogMutationError, isCatalogErrorCode } from './errors';
 import {
@@ -248,14 +249,8 @@ function fakeQuery(state: {
   data?: string[];
   error?: Error;
   isFetching?: boolean;
-  operationKey?: number;
 }) {
   return {
-    get operation() {
-      return state.operationKey === undefined
-        ? undefined
-        : { key: state.operationKey };
-    },
     get data() {
       return state.data;
     },
@@ -314,87 +309,138 @@ describe('catalog list results', () => {
     ]).toEqual([EMPTY, true, false, true]);
   });
 
-  it('keeps a server refusal over later cache rereads of the same read', () => {
-    createRoot((dispose) => {
-      const refused = new CombinedError({
-        graphQLErrors: ['property definition is not visible'],
-      });
-      const result = (
-        key: number,
-        source: string,
-        data: unknown,
-        error?: CombinedError
-      ) =>
-        ({
-          operation: { key },
-          data,
-          error,
-          extensions: { __macroNormalizedCache: { source } },
-        }) as unknown as Parameters<
-          ReturnType<typeof createListedAt>['onResult']
-        >[0];
-      const stamp = createListedAt();
-      const state: { data?: string[]; error?: Error; operationKey?: number } = {
-        operationKey: 1,
-      };
-      const list = catalogListResult(fakeQuery(state), stamp, EMPTY);
-
-      // The server refuses the read; the cache still holds the old list.
-      state.data = ['deleted'];
-      state.error = refused;
-      stamp.onResult(result(1, 'normalized-cache-hit', {}, refused));
-      expect([list.isError, list.error]).toEqual([true, refused]);
-
-      // A write elsewhere rereads the cached list with no error.
-      state.error = undefined;
-      stamp.onResult(result(1, 'affected-cache-reread', {}));
-      stamp.onResult(result(1, 'normalized-cache-patch', {}));
-      expect([list.isError, list.isSuccess, list.error]).toEqual([
-        true,
-        false,
-        refused,
-      ]);
-
-      // Another read (other variables) neither inherits the refusal nor,
-      // once the server answers it, clears it.
-      state.operationKey = 2;
-      expect(list.isError).toBe(false);
-      stamp.onResult(result(2, 'live-network', { user: {} }));
-      state.operationKey = 1;
-      expect(list.isError).toBe(true);
-
-      // A refetch that reached no server leaves it standing, offline too.
-      onlineManager.setOnline(false);
-      try {
-        const offline = new CombinedError({
-          networkError: new Error('offline'),
-        });
-        state.error = offline;
-        stamp.onResult(result(1, 'live-network', undefined, offline));
-        expect([list.isError, list.error]).toEqual([true, refused]);
-      } finally {
-        onlineManager.setOnline(true);
-      }
-      state.error = undefined;
-
-      // The server's next successful answer replaces it.
-      stamp.onResult(result(1, 'live-network', { user: {} }));
-      expect([list.isError, list.error]).toEqual([false, null]);
-      dispose();
+  describe('a server refusal', () => {
+    type Result = Parameters<ReturnType<typeof createListedAt>['onResult']>[0];
+    const refused = new CombinedError({
+      graphQLErrors: ['property definition is not visible'],
     });
-  });
+    const keyOf = (id: string) =>
+      createRequest(PropertyCatalogOptionsDocument, {
+        propertyDefinitionId: id,
+      }).key;
+    const result = (
+      id: string,
+      source: string | undefined,
+      data: unknown,
+      error?: CombinedError
+    ) =>
+      ({
+        operation: { key: keyOf(id) },
+        data,
+        error,
+        extensions:
+          source === undefined
+            ? undefined
+            : { __macroNormalizedCache: { source } },
+      }) as unknown as Result;
+    const reader = () => {
+      const [id, setId] = createSignal<string | undefined>('a');
+      const stamp = createListedAt(PropertyCatalogOptionsDocument, () => {
+        const value = id();
+        return value === undefined
+          ? undefined
+          : { propertyDefinitionId: value };
+      });
+      const state: { data?: string[]; error?: Error } = {};
+      const list = catalogListResult(fakeQuery(state), stamp, EMPTY);
+      return { stamp, state, list, setId };
+    };
 
-  it('keeps no refusal for a failure that reached no server', () => {
-    createRoot((dispose) => {
-      const stamp = createListedAt();
-      stamp.onResult({
-        operation: { key: 1 },
-        data: undefined,
-        error: new CombinedError({ networkError: new Error('offline') }),
-        extensions: undefined,
-      } as unknown as Parameters<typeof stamp.onResult>[0]);
-      expect(stamp.refusal(1)).toBeNull();
-      dispose();
+    it('stands over later cache rereads of the same read', () => {
+      createRoot((dispose) => {
+        const { stamp, state, list, setId } = reader();
+
+        // The server refuses the read; the cache still holds the old list.
+        state.data = ['deleted'];
+        state.error = refused;
+        stamp.onResult(result('a', 'normalized-cache-hit', {}, refused));
+        expect([list.isError, list.error]).toEqual([true, refused]);
+
+        // A write elsewhere rereads the cached list with no error.
+        state.error = undefined;
+        stamp.onResult(result('a', 'affected-cache-reread', {}));
+        stamp.onResult(result('a', 'normalized-cache-patch', {}));
+        expect([list.isError, list.isSuccess, list.error]).toEqual([
+          true,
+          false,
+          refused,
+        ]);
+
+        // Another read neither inherits the refusal nor, once the server
+        // answers it, clears it; switching back shows it before any result.
+        setId('b');
+        expect(list.isError).toBe(false);
+        stamp.onResult(result('b', 'live-network', { user: {} }));
+        setId('a');
+        expect([list.isError, list.error]).toEqual([true, refused]);
+
+        // A paused reader shows none.
+        setId(undefined);
+        expect(list.isError).toBe(false);
+        setId('a');
+
+        // A refetch that reached no server leaves it standing, offline too.
+        onlineManager.setOnline(false);
+        try {
+          const offline = new CombinedError({
+            networkError: new Error('offline'),
+          });
+          state.error = offline;
+          stamp.onResult(result('a', 'live-network', undefined, offline));
+          expect([list.isError, list.error]).toEqual([true, refused]);
+        } finally {
+          onlineManager.setOnline(true);
+        }
+        state.error = undefined;
+
+        // The server's next successful answer replaces it.
+        stamp.onResult(result('a', 'live-network', { user: {} }));
+        expect([list.isError, list.error]).toEqual([false, null]);
+        dispose();
+      });
+    });
+
+    it('is cleared by an answer from a client without the cache', () => {
+      createRoot((dispose) => {
+        const { stamp, list } = reader();
+        stamp.onResult(result('a', undefined, undefined, refused));
+        expect(list.error).toBe(refused);
+        stamp.onResult(result('a', undefined, { user: {} }));
+        expect([list.isError, list.error]).toEqual([false, null]);
+        dispose();
+      });
+    });
+
+    it('is not kept for a failure that reached no server', () => {
+      createRoot((dispose) => {
+        const { stamp, list } = reader();
+        stamp.onResult(
+          result(
+            'a',
+            undefined,
+            undefined,
+            new CombinedError({ networkError: new Error('offline') })
+          )
+        );
+        expect(stamp.refusal()).toBeNull();
+        expect(list.error).toBeNull();
+        dispose();
+      });
+    });
+
+    it('is kept for the sixteen reads refused last', () => {
+      createRoot((dispose) => {
+        const { stamp, setId } = reader();
+        const ids = Array.from({ length: 20 }, (_, i) => `d${i}`);
+        for (const id of ids)
+          stamp.onResult(result(id, 'live-network', undefined, refused));
+        const kept = ids.filter((id) => {
+          setId(id);
+          return stamp.refusal() !== null;
+        });
+        expect(kept).toEqual(ids.slice(4));
+        dispose();
+      });
     });
   });
 
