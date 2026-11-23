@@ -66,6 +66,13 @@ export type CacheOpenOutcome =
   | 'reset-corrupt'
   | 'reset-storage-uncertain';
 
+/** What `checkpointIfDue` did; frame counts are far below 2^53. */
+export type CacheWalCheckpoint = {
+  ran: boolean;
+  walFrames: number;
+  backfilledFrames: number;
+};
+
 export type CacheQueueDiagnostics =
   | {
       availability: 'available';
@@ -88,6 +95,8 @@ export interface CacheOpenResult {
 export type CacheEngineHydrationResult = WriteResult &
   HydrationSearchChanges & {
     data: unknown | null;
+    /** A write committed between `prepareHydrate` and `commitHydrate`. */
+    projectionsReread?: true;
   };
 
 export interface CacheEngine {
@@ -105,6 +114,8 @@ export interface CacheEngine {
   boundIdentity(): Promise<string | null>;
   /** Optional for compatibility engines; absence means unavailable. */
   queueDiagnostics?(): Promise<CacheQueueDiagnostics>;
+  /** Optional for compatibility engines; absence leaves the checkpoint to COMMIT. */
+  checkpointIfDue?(): Promise<CacheWalCheckpoint>;
   readQuery(
     opId: string | undefined,
     query: string,
@@ -167,6 +178,33 @@ export interface CacheEngine {
     identity: string | undefined,
     hydrationScope?: HydrationScope
   ): Promise<CacheEngineHydrationResult>;
+  /**
+   * `hydrateQuery` in two halves: `prepareHydrate` reads what the response
+   * changes and writes nothing, `commitHydrate` writes it. Between them the
+   * worker runs only requests that read. Optional for compatibility engines.
+   */
+  prepareHydrate?(
+    query: string,
+    operationName: string | undefined,
+    variables: Record<string, unknown> | undefined,
+    data: unknown,
+    identity: string | undefined,
+    hydrationScope?: HydrationScope
+  ): Promise<void>;
+  /**
+   * Optional, after `prepareHydrate`: runs the kept hydrate's next projection
+   * pass without writing, and resolves whether one ran. Reads may run after
+   * each; `stageHydrate` and `commitHydrate` run the passes left.
+   */
+  stepHydrate?(): Promise<boolean>;
+  /**
+   * Optional, between the halves: computes the kept hydrate's write without
+   * writing, so `commitHydrate` only writes. Reads may run before and after.
+   * Rejects when staging fails, keeping nothing to commit: the hydrate fails
+   * with that error.
+   */
+  stageHydrate?(): Promise<void>;
+  commitHydrate?(): Promise<CacheEngineHydrationResult>;
   inspectMutations(): Promise<MutationInspection[]>;
   enqueueOptimisticMutation(
     originOpId: string | undefined,

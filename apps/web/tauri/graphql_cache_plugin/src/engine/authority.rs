@@ -51,6 +51,22 @@ impl EngineHandle {
         self
     }
 
+    /// A read on this handle that [`Self::abandon`] names by `request_id`
+    /// before it starts reading fails without reading. Without an id it
+    /// always reads.
+    pub fn abandonable(mut self, request_id: Option<String>) -> Self {
+        self.abandon = request_id
+            .and_then(|id| self.abandons.register(id))
+            .map(std::sync::Arc::new);
+        self
+    }
+
+    /// Gives up the read registered with `request_id`, and says whether one
+    /// was running. Takes no lock the engine holds.
+    pub fn abandon(&self, request_id: &str) -> bool {
+        self.abandons.abandon(request_id)
+    }
+
     async fn check_generation(&self, state: &mut EngineState) -> Result<(), String> {
         // Prepare legacy callers too, before any response is committed. Identity
         // binding updates this authority in the same durable batch as its witness.
@@ -74,8 +90,34 @@ impl EngineHandle {
     }
 
     pub(super) async fn ready_read(&self) -> Result<AccessGuard<'_, EngineState>, String> {
-        let mut state = self.inner.lock().await;
+        self.ready_op_read(None).await
+    }
+
+    /// [`Self::ready_read`] for a read that registers operation `op_id`'s
+    /// dependencies. An abandoned read still waits its turn and finishes an
+    /// interrupted retirement, as every read does, so whatever was queued
+    /// behind it finds the engine as before; then it gives the engine back
+    /// without reading. In place of the dependencies it would have
+    /// registered, it registers the operation against every change and drops
+    /// its retained view: the next write reports the operation, and the
+    /// caller's next watch reads it whole, as it would have had to after a
+    /// read it never saw.
+    pub(super) async fn ready_op_read(
+        &self,
+        op_id: Option<&str>,
+    ) -> Result<AccessGuard<'_, EngineState>, String> {
+        let mut state = self.inner.read().await;
         self.resume_retirement(&mut state).await?;
+        if self
+            .abandon
+            .as_ref()
+            .is_some_and(|abandon| abandon.is_abandoned())
+        {
+            if let Some(op_id) = op_id {
+                register_broadly(&mut state, op_id);
+            }
+            return Err(super::abandon::ABANDONED.into());
+        }
         Ok(state)
     }
 
@@ -91,6 +133,13 @@ impl EngineHandle {
         self.resume_retirement(&mut state).await?;
         self.check_generation(&mut state).await?;
         Ok(state)
+    }
+
+    /// The checks [`Self::snapshot_hydration`] makes, again, for a hydrate that
+    /// gave the engine to reads and found it changed.
+    pub(super) async fn recheck_hydration(&self, state: &mut EngineState) -> Result<(), String> {
+        self.resume_retirement(state).await?;
+        self.check_generation(state).await
     }
 
     /// Capture the owner generation before a request. This is also the native
@@ -133,4 +182,10 @@ impl EngineHandle {
             changed: result.changed,
         })
     }
+}
+
+/// Registers an operation whose read was abandoned against every change.
+fn register_broadly(state: &mut EngineState, op_id: &str) {
+    let op = state.ops.intern(op_id);
+    state.engine.register_operation_broadly(op);
 }
