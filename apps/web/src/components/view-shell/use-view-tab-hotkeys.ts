@@ -1,26 +1,118 @@
+import { t } from '@app/lib/i18n';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { getScopeElement } from '@core/hotkey/utils';
+import { isEditableInput } from '@core/util/isEditableInput';
 import { onCleanup } from 'solid-js';
 
 export type UseViewTabHotkeysOptions<TTab extends string> = {
+  /** The split's hotkey scope: the pane the tabs head. */
   scopeId: string;
+  /**
+   * The tabs in the pane's top bar. The keys act only while this element is
+   * on screen, so register beside the `Tabs` it names, never with a
+   * sidebar's navigation.
+   */
+  tabs: () => HTMLElement | undefined;
+  /** The tabs, left to right as they are drawn. */
   ids: () => readonly TTab[];
-  /** Tabs that Tab and Shift+Tab cycle through; defaults to `ids`. */
-  sequentialIds?: () => readonly TTab[];
-  activeId: () => TTab;
+  activeId: () => TTab | undefined;
   setActiveId: (id: TTab) => void;
+  /** A tab's visible name, for the shortcut sheet. */
+  label: (id: TTab) => string;
   enabled?: () => boolean;
-  shouldHandleSequentialKeyEvent?: (
-    event: KeyboardEvent | undefined
-  ) => boolean;
 };
 
-/** Registers numeric and sequential navigation for a view's tabs. */
+/**
+ * Focus targets that stand for the pane itself rather than for one of its
+ * controls: a container that owns keys (the split, a conversation's message
+ * list, a list scope) or a list grid, whose rows take focus virtually.
+ */
+const PANE_FOCUS_SELECTOR =
+  '[data-hotkey-scope], [role="grid"], [role="treegrid"], [role="tree"], [role="listbox"]';
+
+/** The view-shell regions a split lays its list, sidebar and detail in. */
+const PANE_REGION_SELECTOR =
+  '[data-view-shell-list], [data-view-shell-main], [data-view-shell-aside], [data-view-shell-detail]';
+
+/** Whether an element is laid out on screen, outside an inert layer. */
+function isOnScreen(element: Element | undefined): boolean {
+  if (!element?.isConnected) return false;
+  if (element.closest('[inert]')) return false;
+  return element.getClientRects().length > 0;
+}
+
+/**
+ * Whether a key pressed at `target` is on the pane the tabs head rather than
+ * on a field, an editor or a control. The pane is the view-shell region
+ * holding the tabs (a list beside a detail is its own pane), else the whole
+ * split. Nothing focused counts as the pane, as the split keeps the keyboard
+ * after a load or an item opening, unless the user last put the keyboard in
+ * another of the split's panes (`lastPlace`, that pane: a press on plain text
+ * in a detail beside the list focuses the split itself).
+ */
+function keyboardIsOnPane(
+  target: EventTarget | null | undefined,
+  tabs: Element,
+  split: Element | null,
+  lastPlace: Element | undefined
+): boolean {
+  const pane = tabs.closest(PANE_REGION_SELECTOR) ?? split;
+  if (
+    !(target instanceof Element) ||
+    target === document.body ||
+    target === document.documentElement ||
+    target === split
+  )
+    return (
+      !lastPlace || !split?.contains(lastPlace) || !!pane?.contains(lastPlace)
+    );
+  if (!pane?.contains(target)) return false;
+  return target.matches(PANE_FOCUS_SELECTOR) && !isEditableInput(target);
+}
+
+/**
+ * Tab, Shift+Tab and 1–9 for the tabs in a pane's top bar. They act only
+ * while those tabs are on screen and the keyboard is on the pane; anywhere
+ * else (a field, an editor, a button, an open item without tabs) Tab is
+ * normal focus order.
+ */
 export function useViewTabHotkeys<TTab extends string>(
   options: UseViewTabHotkeysOptions<TTab>
 ) {
   const group = createHotkeyGroup();
-  const isEnabled = () => options.enabled?.() ?? true;
+  // Where the user last put the keyboard: the pane of the last element
+  // pressed, or of the last one focused other than the split itself. The
+  // pane rather than the element, so content replaced inside it keeps it.
+  let lastPlace: WeakRef<Element> | undefined;
+  const remember = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (event.type === 'focusin' && target === getScopeElement(options.scopeId))
+      return;
+    lastPlace = new WeakRef(target.closest(PANE_REGION_SELECTOR) ?? target);
+  };
+  document.addEventListener('pointerdown', remember, { capture: true });
+  document.addEventListener('focusin', remember, { capture: true });
+  onCleanup(() => {
+    document.removeEventListener('pointerdown', remember, { capture: true });
+    document.removeEventListener('focusin', remember, { capture: true });
+  });
+  const isEnabled = () =>
+    (options.enabled?.() ?? true) && isOnScreen(options.tabs());
+  const keyboardOnPane = (event: KeyboardEvent | undefined) => {
+    const tabs = options.tabs();
+    if (!tabs) return false;
+    return (
+      !event ||
+      keyboardIsOnPane(
+        event.target,
+        tabs,
+        getScopeElement(options.scopeId),
+        lastPlace?.deref()
+      )
+    );
+  };
   const numberKeys = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const;
 
   numberKeys.forEach((key, index) => {
@@ -28,11 +120,14 @@ export function useViewTabHotkeys<TTab extends string>(
       hotkey: key,
       hotkeyToken: TOKENS.soup.tabs[key],
       scopeId: options.scopeId,
-      description: `Switch to tab ${key}`,
-      condition: () => isEnabled() && options.ids().length > index,
-      keyDownHandler: () => {
+      description: () => {
         const id = options.ids()[index];
-        if (!id) return false;
+        return t('tabs.viewTabGoTo', { label: id ? options.label(id) : key });
+      },
+      condition: () => isEnabled() && options.ids().length > index,
+      keyDownHandler: (event) => {
+        const id = options.ids()[index];
+        if (!id || !keyboardOnPane(event)) return false;
 
         options.setActiveId(id);
         return true;
@@ -41,13 +136,12 @@ export function useViewTabHotkeys<TTab extends string>(
     }).withGroup(group);
   });
 
-  const sequentialIds = () => options.sequentialIds?.() ?? options.ids();
-
   const move = (offset: 1 | -1) => {
-    const ids = sequentialIds();
+    const ids = options.ids();
     if (ids.length < 2) return false;
 
-    const currentIndex = ids.indexOf(options.activeId());
+    const active = options.activeId();
+    const currentIndex = active === undefined ? -1 : ids.indexOf(active);
     let origin = currentIndex;
     if (origin === -1) {
       origin = offset === 1 ? -1 : 0;
@@ -65,24 +159,18 @@ export function useViewTabHotkeys<TTab extends string>(
     hotkey: 'tab',
     hotkeyToken: TOKENS.soup.tabs.next,
     scopeId: options.scopeId,
-    description: 'Next tab',
-    condition: () => isEnabled() && sequentialIds().length > 1,
-    keyDownHandler: (event) =>
-      options.shouldHandleSequentialKeyEvent?.(event) === false
-        ? false
-        : move(1),
+    description: () => t('tabs.viewTabNext'),
+    condition: () => isEnabled() && options.ids().length > 1,
+    keyDownHandler: (event) => keyboardOnPane(event) && move(1),
   }).withGroup(group);
 
   registerHotkey({
     hotkey: 'shift+tab',
     hotkeyToken: TOKENS.soup.tabs.prev,
     scopeId: options.scopeId,
-    description: 'Previous tab',
-    condition: () => isEnabled() && sequentialIds().length > 1,
-    keyDownHandler: (event) =>
-      options.shouldHandleSequentialKeyEvent?.(event) === false
-        ? false
-        : move(-1),
+    description: () => t('tabs.viewTabPrevious'),
+    condition: () => isEnabled() && options.ids().length > 1,
+    keyDownHandler: (event) => keyboardOnPane(event) && move(-1),
   }).withGroup(group);
 
   onCleanup(() => group.dispose());
