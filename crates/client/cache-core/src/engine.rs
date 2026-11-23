@@ -2188,7 +2188,9 @@ impl<S: Storage> Engine<S> {
     /// Puts back the hot records a failed plan or write left unchanged, and
     /// returns its error. A record already back in the hot tier, because a
     /// read put it there since the plan took it, stays as it is. Records read
-    /// from storage stay out, so the failed write evicts nothing.
+    /// from storage stay out, so the failed write evicts nothing. Changed
+    /// records taken from the hot tier stay out too: they hold the merge, and
+    /// storage still has the value before it, which the next read loads.
     fn restore_unchanged(
         &mut self,
         unchanged: Vec<(EntityKey<'static>, Record, bool)>,
