@@ -10,7 +10,8 @@ by several services, each piece gated behind its own Cargo feature.
 - `src/lib.rs`: `connection_drop_prevention_handler` — wraps
   POST/PUT/PATCH/DELETE handlers in a spawned task so a dropped client
   connection doesn't cancel an in-flight mutation; the task `capture`s the
-  request's `agent_correlation` attribution so its events stay stamped.
+  request's `agent_correlation` attribution so its events stay stamped,
+  and runs in the request's span so the handler's spans stay in its trace.
 - `src/cloud_storage/mod.rs` (feature `cloud_storage`): middleware that needs
   `macro_db_client`/`entity_access_db_utils`/`model_user`.
 - `src/tracking/mod.rs` (feature `tracking`): request tracking via
