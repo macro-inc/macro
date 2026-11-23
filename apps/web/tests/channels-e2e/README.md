@@ -99,11 +99,13 @@ channel when the pushes or the nightly runs turn red, with the failed tests,
 and when they pass again
 ([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
 When a run fails with many tests waiting for a channel to show
-(`harness/channel.ts`, `shown`), look at the line the step prints after the
-ledger: "a database connection of the stack was left in an aborted
-transaction". It names a backend defect, not one of channels: a pooled
-connection handed back inside a transaction fails every later request that
-gets it, so pages show "Conversation unavailable". The run stays red.
+(`harness/channel.ts`, `shown`), look for the line the step prints after the
+ledger: "Postgres refused N statements in an aborted transaction". It is a
+clue, not a verdict: a backend defect, not one of channels, hands a pooled
+connection back inside a transaction, and every later request that gets it
+fails, so pages show "Conversation unavailable". Check a failed test's
+screenshot for that heading before reading the failure as one of channels.
+The run stays red either way.
 
 A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
 traces (`channels-e2e-results`). One that runs out of time keeps the logs too: the

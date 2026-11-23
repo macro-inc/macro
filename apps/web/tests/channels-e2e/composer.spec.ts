@@ -13,7 +13,13 @@ import {
   waitingFiles,
   writePng,
 } from './harness/composer';
-import { arrivesLive, expect, failsSometimes, test } from './harness/fixtures';
+import {
+  arrivesLive,
+  expect,
+  failsSometimes,
+  missedLive,
+  test,
+} from './harness/fixtures';
 import { findConversations } from './harness/sidebar';
 
 // If this fails, a person who starts writing, looks at another channel and
@@ -112,12 +118,8 @@ test('CMP-13 a message shown as sent is still sent when the page is reloaded at 
   // never reaches a member who has the channel open. The likely cause, not
   // proven: the reload cuts the request off after the message is stored and
   // before it is announced.
-  await failsSometimes(async () => {
-    await bens.expectEndsWith(['sent just before a reload']);
-  });
   // Whatever the open page missed, a reload must show it.
-  await bens.page.reload();
-  await bens.shown();
+  await arrivesLive(bens, bens.message('sent just before a reload'));
   await bens.expectEndsWith(['sent just before a reload']);
   // Known defect on main, about one run in nine: the sent message is
   // also back in the composer as a draft.
@@ -354,9 +356,7 @@ test('CMP-10 typing reported from the other person’s other device shows “…
   // Known defect on main, seen once in 62 runs: an open page sometimes
   // misses a live change. A typing line is gone after a reload, so nothing
   // stricter can follow.
-  await failsSometimes(async () => {
-    await expect(typingLine(page, 'Ben Member')).toBeVisible();
-  });
+  await missedLive(typingLine(page, 'Ben Member'));
 
   await ben.typing(channel.id, false);
   await expect(typingLine(page, 'Ben Member')).toBeHidden({ timeout: 5_000 });

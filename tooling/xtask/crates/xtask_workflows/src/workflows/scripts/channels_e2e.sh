@@ -18,14 +18,15 @@ echo 'DEV_DANGEROUS_LOCAL_CONTAINERS=false' >> "$stack_env"
 started=$(date +%s)
 # The bring-up prints a stage's output only once the stage ends, so a stage
 # that never ends leaves nothing in the log. Once a minute, name the build and
-# compose commands that are running. Read from /proc: the runner's `ps` does
+# compose commands that are running, by their first three words and never a
+# whole argument list. Read from /proc: the runner's `ps` does
 # not load inside the Nix shell.
 running() {
   for cmdline in /proc/[0-9]*/cmdline; do
     # A process may have ended since the list was made.
     { tr '\0' ' ' < "$cmdline"; } 2>/dev/null || true
     echo
-  done | grep -E '^([^ ]*/)?(docker|cargo|rustc|bun|node) ' | cut -c1-120 | sort -u | head -n 3 | tr '\n' ';'
+  done | grep -E '^([^ ]*/)?(docker|cargo|rustc|bun|node) ' | cut -d' ' -f1-3 | cut -c1-120 | sort -u | head -n 3 | tr '\n' ';'
 }
 (
   while sleep 60; do
@@ -60,13 +61,20 @@ echo "Channels suite: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUM
 
 # A backend defect, not one of channels, fails tests at random: a pooled
 # database connection handed back inside a transaction, on which every later
-# request fails. Postgres logs each of those, so a red run says when it had it.
+# request fails. Postgres logs each refused statement, so a red run says when
+# there were any. It is a clue for whoever reads the run, and never changes
+# the step's result.
 if [ "$failed" = 1 ]; then
-  aborted=$(docker compose -p "macro-$CHANNELS_E2E_INSTANCE" logs --no-color postgres 2>/dev/null |
-    grep -c 'current transaction is aborted' || true)
-  if [ "${aborted:-0}" -gt 0 ]; then
-    echo "A database connection of the stack was left in an aborted transaction ($aborted failed statements): tests that could not open a channel failed for that." |
-      tee -a "$GITHUB_STEP_SUMMARY"
+  postgres_log=$(mktemp)
+  if docker compose -p "macro-$CHANNELS_E2E_INSTANCE" logs --no-color postgres > "$postgres_log" 2>&1; then
+    aborted=$(grep -c 'current transaction is aborted' "$postgres_log" || true)
+    if [ "$aborted" -gt 0 ]; then
+      note="Postgres refused $aborted statements in an aborted transaction during this run. A known backend defect leaves a pooled connection that way, and requests that get it fail: see the suite's README, In CI."
+      echo "$note"
+      echo "$note" >> "$GITHUB_STEP_SUMMARY" || true
+    fi
+  else
+    echo "The Postgres log could not be read, so this run was not checked for aborted transactions."
   fi
 fi
 exit "$failed"
