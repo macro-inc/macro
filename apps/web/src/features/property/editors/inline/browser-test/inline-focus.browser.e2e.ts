@@ -144,11 +144,7 @@ test.describe('link value', () => {
     await waitForSave(page);
     await finishSave(page);
 
-    await expect(
-      page
-        .getByTestId('link')
-        .getByRole('button', { name: 'example.com', exact: true })
-    ).toBeFocused();
+    await expect(value(page, 'link')).toBeFocused();
   });
 
   test('Escape hands focus back to the add button', async ({ page }) => {

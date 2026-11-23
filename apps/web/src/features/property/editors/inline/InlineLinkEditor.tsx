@@ -21,7 +21,7 @@ const ADD_BUTTON_CLASS =
 
 // Inline URL collection editor for LINK properties. Supports multi-select
 // (chip list with add button) and single (one slot). Unfurl preview pulls
-// favicon + title; remove on hover.
+// favicon + title; each chip has its own remove button.
 export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
 
@@ -110,11 +110,13 @@ export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
       // mutation onError owns toast
     } finally {
       setIsSaving(false);
+      returnFocus();
     }
   };
 
   // Enter and Escape remove the focused input, which drops focus to the page.
-  // A single link has no add button left, so focus goes to its chip.
+  // A single link has no add button left, so focus goes to its chip. Removing
+  // a link unmounts its chip and remove button the same way.
   const returnFocus = () => {
     if (document.activeElement !== document.body) return;
     if (addButton?.isConnected) addButton.focus();
@@ -278,15 +280,12 @@ const LinkChip: Component<LinkChipProps> = (props) => {
         </div>
         <span class="truncate flex-1 text-ink">{title()}</span>
       </button>
-      {/* The remove button takes its own space so the title truncates before
-          it; desktop shows it on hover or focus, touch always. */}
       <Show when={props.canEdit}>
         <button
           type="button"
           aria-label={t('entityActions.removeLink')}
-          class="mr-1 size-4 touch:size-6 p-0.5 shrink-0 flex items-center justify-center text-ink-muted hover:text-failure-ink rounded-sm opacity-0 pointer-events-none not-touch:group-hover/link-chip:opacity-100 not-touch:group-hover/link-chip:pointer-events-auto group-focus-within/link-chip:opacity-100 group-focus-within/link-chip:pointer-events-auto touch:opacity-100 touch:pointer-events-auto"
+          class="mr-1 size-4 touch:size-6 p-0.5 shrink-0 flex items-center justify-center text-ink-muted not-touch:hover:text-failure-ink rounded-sm opacity-0 pointer-events-none not-touch:group-hover/link-chip:opacity-100 not-touch:group-hover/link-chip:pointer-events-auto group-focus-within/link-chip:opacity-100 group-focus-within/link-chip:pointer-events-auto touch:opacity-100 touch:pointer-events-auto"
           onClick={props.onRemove}
-          disabled={props.isRemoving}
         >
           <DeleteIcon class="size-3 touch:size-4" />
         </button>
