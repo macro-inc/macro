@@ -108,10 +108,7 @@ pub(super) fn write_rows(
 }
 
 /// Removes the timeline rows of deleted message and activity records.
-pub(super) fn delete_rows(
-    connection: &Db,
-    keys: &[RecordKey],
-) -> Result<(), TursoStorageError> {
+pub(super) fn delete_rows(connection: &Db, keys: &[RecordKey]) -> Result<(), TursoStorageError> {
     let mut statement = None;
     for key in keys.iter().filter(|key| is_entry(&key.typename)) {
         let statement = match statement.as_mut() {
@@ -131,9 +128,7 @@ pub(super) fn clear(connection: &Db) -> Result<(), TursoStorageError> {
     Ok(())
 }
 
-pub(super) fn save_projection_version(
-    connection: &Db,
-) -> Result<(), TursoStorageError> {
+pub(super) fn save_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     driver::execute(
         connection,
         META_UPSERT,
@@ -148,9 +143,7 @@ pub(super) fn save_projection_version(
 /// Rebuilds the disposable timeline rows from message and activity records
 /// when the projection changed, without touching records, coverage, or sync
 /// state.
-pub(super) fn ensure_projection_version(
-    connection: &Db,
-) -> Result<(), TursoStorageError> {
+pub(super) fn ensure_projection_version(connection: &Db) -> Result<(), TursoStorageError> {
     let versions = driver::query(connection, META_SELECT, vec![text(PROJECTION_VERSION_KEY)])?;
     if let [row] = versions.as_slice()
         && required_text(row, 0)? == CHANNEL_TIMELINE_PROJECTION_VERSION.to_string()
@@ -289,10 +282,7 @@ struct SyncRow {
     touched_at_ms: i64,
 }
 
-fn load_sync(
-    connection: &Db,
-    channel_id: &str,
-) -> Result<Option<SyncRow>, TursoStorageError> {
+fn load_sync(connection: &Db, channel_id: &str) -> Result<Option<SyncRow>, TursoStorageError> {
     match driver::query(connection, SYNC_SELECT, vec![text(channel_id)])?.as_slice() {
         [] => Ok(None),
         [row] if row.len() == 2 => Ok(Some(SyncRow {
@@ -364,11 +354,7 @@ fn query_snapshot(
     })
 }
 
-fn record_keys(
-    connection: &Db,
-    sql: &str,
-    value: &str,
-) -> Result<Vec<String>, TursoStorageError> {
+fn record_keys(connection: &Db, sql: &str, value: &str) -> Result<Vec<String>, TursoStorageError> {
     driver::query(connection, sql, vec![text(value)])?
         .iter()
         .map(|row| required_text(row, 0))
