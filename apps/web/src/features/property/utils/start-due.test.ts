@@ -494,6 +494,21 @@ describe('rescheduledStartDue', () => {
     ]);
   });
 
+  it('compares an end saved as a whole day by its day on a timed bar, and saves it at the start of the day', () => {
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
+        { start: at(23, 1), end: at(27, 15), allDay: false }
+      )
+    ).toEqual([]);
+    expect(
+      rescheduledStartDue(
+        { start: at(23, 0), due: at(27, 15), wholeDay: 'start' },
+        { start: at(24, 1), end: at(27, 15), allDay: false }
+      )
+    ).toEqual([{ field: 'start', value: at(24, 0), hasTime: false }]);
+  });
+
   it('gives a task drawn from its created date a start only when the start moved', () => {
     const created = new Date(2026, 10, 20, 9, 12);
     expect(

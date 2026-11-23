@@ -263,23 +263,24 @@ export function rescheduledStartDue(
   previous: { start: Date; due: Date | null; wholeDay?: DateField },
   range: { start: Date; end: Date; allDay: boolean }
 ): RescheduledEnd[] {
-  const moved = (before: Date | null, after: Date) =>
+  const wholeDay = (field: DateField) =>
+    range.allDay || previous.wholeDay === field;
+  const moved = (field: DateField, before: Date | null, after: Date) =>
     !before ||
-    (range.allDay
+    (wholeDay(field)
       ? !isSameDay(before, after)
       : before.getTime() !== after.getTime());
-  const hasTime = (field: DateField) =>
-    !range.allDay && previous.wholeDay !== field;
+  const end = (field: DateField, value: Date): RescheduledEnd => ({
+    field,
+    value: wholeDay(field) && !range.allDay ? startOfDay(value) : value,
+    hasTime: !wholeDay(field),
+  });
   const ends: RescheduledEnd[] = [];
-  if (moved(previous.start, range.start)) {
-    ends.push({
-      field: 'start',
-      value: range.start,
-      hasTime: hasTime('start'),
-    });
+  if (moved('start', previous.start, range.start)) {
+    ends.push(end('start', range.start));
   }
-  if (moved(previous.due, range.end)) {
-    ends.push({ field: 'due', value: range.end, hasTime: hasTime('due') });
+  if (moved('due', previous.due, range.end)) {
+    ends.push(end('due', range.end));
   }
   if (ends.length === 2 && previous.due && range.start > previous.due) {
     ends.reverse();
