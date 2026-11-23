@@ -59,9 +59,9 @@ the axum route constructors that declare each handler's category.
 - `Rollout` names, per caller, the categories whose observed refusals are
   enforced, applied where the route is decided. No flag feeds it yet; with
   none, `NoRollout` enforces nothing beyond the table.
-- An internal key is resolved from its header, not verified: never let a
-  `Category::Internal` route rely on the policy alone. Keep its internal-key
-  extractor.
+- An internal key's header resolves nothing here (alone it resolves no
+  caller, and it never changes one): never let a `Category::Internal` route
+  rely on the policy alone. Keep its internal-key extractor.
 - A route can't be forced into the table at runtime: one built with
   `axum::routing` instead of these constructors never runs the layer. A
   service's categorization PR adds a test that calls `undeclared_routes` over
@@ -110,9 +110,9 @@ the axum route constructors that declare each handler's category.
   caller kind that reaches it with no verified user token (a bot, a computer,
   an internal service, a user API key, an account manager's key) in a layer
   that verifies its credential and puts the `ResolvedCaller` in the request
-  extensions before `route_policy` runs (as `macro_authorization` does for an
-  account manager's key, which decides again once the key's lookup finds a
-  manager's). The PR carries one test per real caller kind that reaches a
+  extensions before `route_policy` runs. (`macro_authorization`'s manager
+  re-decision is not such a layer: it runs in the extractor and only narrows a
+  caller already resolved.) The PR carries one test per real caller kind that reaches a
   categorized route, showing it is allowed what its table row allows and
   refused what it refuses, so no production path starts returning 403. A route
   no such caller reaches says so in the PR. Verifying credentials centrally
