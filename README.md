@@ -1,6 +1,6 @@
 # IMAP/SMTP proof for #11484
 
-Latest round-one checkpoint `647b23e2aae`: [provider repair measurements](round-one/provider-647b23e2aae/README.md) and [projection queue measurements](round-one/projection-166462eea37/README.md). Other round-one fixes remain open; no new movie or real-provider proof is claimed.
+Latest round-one checkpoint `7d3b89c17dd`: [non-FIFO mailbox claim measurements](round-one/nonfifo-7d3b89c17dd/README.md). Earlier: [projection queue measurements](round-one/projection-166462eea37/README.md) at `166462eea37`, and [provider repair measurements](round-one/provider-647b23e2aae/README.md) at `647b23e2aae`, superseded because `7d3b89c17dd` removes that repair job. Other round-one fixes remain open; no new movie or real-provider proof is claimed.
 
 Previous runtime checkpoint `f0740021328`: [main-merge runtime checks](merge-f4bd312fc30/README.md), on `f4bd312fc30` plus one test-only commit.
 
