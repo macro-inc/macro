@@ -1,31 +1,12 @@
 import { thrownResultErrorHasCode } from '@core/util/result';
-import {
-  type OptimisticMutationContext,
-  optimisticContextOf,
-  withOptimisticMutationDisposition,
-} from '@graphql-cache/exchange/optimistic';
-import type { CacheGenerationChange } from '@graphql-cache/host/types';
-import type { MutationSettlement } from '@graphql-cache/protocol';
-import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import {
-  type Client,
-  CombinedError,
-  type Operation,
-  type OperationResult,
-  type OperationResultSource,
-} from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import {
   channelMessageKey,
   mapChannelMessage,
   unplacedSortKey,
 } from '../channel-map';
-import {
-  type ChannelSend,
-  type ChannelWriteHost,
-  createChannelWrites,
-} from '../channel-writes';
-import { CHANNEL_ID, fakeHost, graphqlMessage } from './fixtures';
+import { CHANNEL_ID, graphqlMessage } from './fixtures';
+import { NOW, refused, SENDER, send, setup, written } from './write-fixtures';
 
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
@@ -33,115 +14,9 @@ vi.mock('@macro-inc/observability', async (importOriginal) => ({
     error: vi.fn(),
     span: async (_name: string, run: (span: unknown) => unknown) =>
       run({ setAttr: () => undefined }),
+    captureContext: () => ({ run: <T>(operation: () => T) => operation() }),
   },
 }));
-
-const NOW = new Date('2026-11-01T10:00:07.000Z');
-const SENDER = 'macro|sender@example.test';
-
-type Answer = Partial<OperationResult> & {
-  disposition?: Parameters<typeof withOptimisticMutationDisposition>[1];
-};
-
-type Call = {
-  variables: { input: Record<string, unknown> };
-  context: OptimisticMutationContext;
-};
-
-/**
- * A client that answers each mutation from `answer`, records the call and
- * acknowledges the queue installing it.
- */
-function fakeClient(answer: (variables: unknown) => Answer | Promise<Answer>) {
-  const calls: Call[] = [];
-  const client = {
-    mutation(_document: unknown, variables: never, context: never) {
-      const operation = { context } as unknown as Operation;
-      const optimistic = optimisticContextOf(operation);
-      if (!optimistic) throw new Error('not an optimistic mutation');
-      calls.push({ variables, context: optimistic });
-      return {
-        toPromise: async () => {
-          const { disposition, ...result } = await answer(variables);
-          const base = {
-            operation,
-            stale: false,
-            hasNext: false,
-            ...result,
-          } as OperationResult;
-          return disposition
-            ? withOptimisticMutationDisposition(base, disposition)
-            : base;
-        },
-      } as OperationResultSource<OperationResult>;
-    },
-  } as unknown as Client;
-  return { client, calls };
-}
-
-/** A host holding `records` whose queue settles when the test says so. */
-function writeHost(records: ChannelMessageFieldsFragment[] = []) {
-  const listeners = new Set<(settlement: MutationSettlement) => void>();
-  const resets = new Set<(change: CacheGenerationChange) => void>();
-  const device = fakeHost([], { records });
-  const host: ChannelWriteHost = {
-    readRecordsByKeys: device.readRecordsByKeys,
-    onMutationSettled(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    onCacheGenerationChanged(listener) {
-      resets.add(listener);
-      return () => resets.delete(listener);
-    },
-  };
-  return {
-    host,
-    device,
-    listeners,
-    reset() {
-      for (const listener of [...resets])
-        listener({ storage: 'reset' } as CacheGenerationChange);
-    },
-    settle(settlement: MutationSettlement) {
-      for (const listener of [...listeners]) listener(settlement);
-    },
-  };
-}
-
-function setup(
-  answer: (variables: unknown) => Answer | Promise<Answer>,
-  records: ChannelMessageFieldsFragment[] = []
-) {
-  const { client, calls } = fakeClient(answer);
-  const device = writeHost(records);
-  const runtime = { notifyChanged: vi.fn() };
-  const writes = createChannelWrites({
-    host: device.host,
-    runtime,
-    client: () => client,
-    now: () => NOW,
-  });
-  return { writes, calls, runtime, ...device };
-}
-
-const written = (
-  field: string,
-  message: ChannelMessageFieldsFragment,
-  root: ChannelMessageFieldsFragment | null = null
-) => ({
-  [field]: { __typename: 'GraphqlChannelMessageWrite', message, root },
-});
-
-const send = (
-  id: string,
-  message: ChannelSend['message'] = { content: 'hello' }
-): ChannelSend => ({ channelId: CHANNEL_ID, id, senderId: SENDER, message });
-
-const refused = (code: string) =>
-  new CombinedError({
-    graphQLErrors: [{ message: 'refused', extensions: { code } }],
-  });
 
 const settleMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -361,6 +236,57 @@ describe('createChannelWrites', () => {
     expect(thrownResultErrorHasCode(error, 'CACHE_RESET')).toBe(true);
     expect(listeners.size).toBe(0);
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('resolves a send another tab delivered while this page was away', async () => {
+    const stored = graphqlMessage(7);
+    const { writes, queued, restore, listeners } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [stored]
+    );
+    queued.push('4');
+    const sending = writes.send(send(stored.id));
+    await settleMicrotasks();
+
+    // Back from the back/forward cache: the queue no longer holds it, and
+    // its settlement went to the page while it was suspended.
+    queued.length = 0;
+    restore();
+
+    await expect(sending).resolves.toEqual(mapChannelMessage(stored));
+    expect(listeners.size).toBe(0);
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('rejects a send the queue rolled back while this page was away', async () => {
+    const { writes, queued, restore } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    queued.push('4');
+    const sending = writes.send(send(graphqlMessage(7).id));
+    await settleMicrotasks();
+    queued.length = 0;
+    restore();
+
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+  });
+
+  it('keeps waiting for a write still queued when the page comes back', async () => {
+    const stored = graphqlMessage(7);
+    const { writes, queued, restore, settle } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [stored]
+    );
+    queued.push('4');
+    const sending = writes.send(send(stored.id));
+    await settleMicrotasks();
+    restore();
+    await settleMicrotasks();
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+    settle({ transactionId: '4', status: 'committed' });
+    await expect(sending).resolves.toEqual(mapChannelMessage(stored));
   });
 
   it('rejects a held write when its host retires', async () => {

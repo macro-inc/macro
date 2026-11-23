@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import {
   executeOptimisticMutation,
@@ -6,7 +7,7 @@ import {
 } from '@graphql-cache/exchange/optimistic';
 import type { CacheHost } from '@graphql-cache/index';
 import type { MutationSettlement } from '@graphql-cache/protocol';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   type ChannelMessageFieldsFragment,
   type ChannelMessageWriteFieldsFragment,
@@ -70,7 +71,10 @@ export async function whenOnline(): Promise<void> {
 
 export type ChannelWriteHost = Pick<
   CacheHost,
-  'onMutationSettled' | 'onCacheGenerationChanged' | 'readRecordsByKeys'
+  | 'onMutationSettled'
+  | 'onCacheGenerationChanged'
+  | 'readRecordsByKeys'
+  | 'inspectMutations'
 >;
 
 type Mention = { entity_type: string; entity_id: string };
@@ -191,10 +195,25 @@ function refusalOf(error: CombinedError): ThrownResultError {
  * empties the queue: the write is gone and will never settle, so each wait
  * races the reset. A retired host (`retired`, from `ChannelWrites.retire`)
  * reports nothing more, so each wait races that too.
+ *
+ * A page the browser suspended (the back/forward cache) hears no settlement
+ * while away, and another tab can deliver its write meanwhile. When the
+ * engine comes back with its storage kept, a wait whose transaction left the
+ * queue unheard ends as `missed`: the caller reads the outcome from the device.
  */
 function watchSettlements(host: ChannelWriteHost, retired: Lost) {
   const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
   const reset: Lost = Deferred.makeUnsafe();
+  const missed = Deferred.makeUnsafe<'missed'>();
+  let waiting: string | undefined;
+  const checkQueued = async () => {
+    const transactionId = waiting;
+    if (!transactionId || !host.inspectMutations) return;
+    const queue = await host.inspectMutations();
+    if (waiting !== transactionId) return;
+    if (queue.some((entry) => entry.transactionId === transactionId)) return;
+    Deferred.doneUnsafe(missed, Effect.succeed('missed' as const));
+  };
   const settlementOf = (transactionId: string) => {
     let deferred = settlements.get(transactionId);
     if (!deferred) {
@@ -210,7 +229,10 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
     );
   });
   const stopReset = host.onCacheGenerationChanged((change) => {
-    if (change.storage !== 'reset') return;
+    if (change.storage === 'preserved') {
+      fireAndForget(checkQueued(), 'channel-writes');
+      return;
+    }
     Deferred.doneUnsafe(
       reset,
       Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
@@ -221,13 +243,16 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
       Deferred.await(settlementOf(transactionId)),
       Deferred.await(reset),
       Deferred.await(retired),
+      Deferred.await(missed),
     ]);
   const committed = (
     transactionId: string
-  ): Effect.Effect<void, ThrownResultError> =>
+  ): Effect.Effect<'committed' | 'missed', ThrownResultError> =>
     Effect.gen(function* () {
+      waiting = transactionId;
       const settlement = yield* settledOrReset(transactionId);
-      if (settlement.status === 'committed') return;
+      if (settlement === 'missed') return settlement;
+      if (settlement.status === 'committed') return settlement.status;
       if (settlement.status === 'permanently-failed') {
         return yield* Effect.fail(
           refusal(settlement.errorCode, settlement.error)
@@ -240,7 +265,7 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
       stopSettled();
       stopReset();
     },
-    committed: (transactionId: string): Promise<void> =>
+    committed: (transactionId: string): Promise<'committed' | 'missed'> =>
       Effect.runPromise(committed(transactionId)),
   };
 }
@@ -335,6 +360,8 @@ interface Write<TData, TVariables extends AnyVariables> {
   predicted?: ChannelMessageFieldsFragment;
   unstored?: ChannelPageEntry;
   reply?: UnstoredReply;
+  /** The trace the write was asked for in, when it awaited before starting. */
+  trace?: TraceContext;
 }
 
 /**
@@ -386,6 +413,22 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     return mapChannelMessage(message);
   }
 
+  /**
+   * A write that left the queue while this page heard nothing: a send the
+   * device holds was delivered, and one it does not hold was rolled back.
+   * Other writes resolve with the device's copy, which the views reread.
+   */
+  async function missedOutcome(
+    write: Pick<Write<unknown, AnyVariables>, 'messageId' | 'operation'>
+  ): Promise<Message> {
+    const message = await readMessage(write.messageId);
+    if (message) return mapChannelMessage(message);
+    throw refusal(
+      write.operation === 'channel.write.send' ? 'NOT_SENT' : 'NOT_FOUND',
+      'the write left the queue while the page was away'
+    );
+  }
+
   async function queuedWrite<TData, TVariables extends AnyVariables>(
     write: Write<TData, TVariables>
   ): Promise<Message> {
@@ -401,22 +444,27 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
     try {
       // The span covers the hand-off and a direct answer; a queued write can
       // wait for hours, which is not this operation's duration.
-      const result = await Telemetry.span(write.operation, async (span) => {
-        span.setAttr('channel.id', write.channelId);
-        span.setAttr('message.id', write.messageId);
-        const answer = await write.run(deps.client(), {
-          uuid: write.uuid,
-          onEnqueued,
-        });
-        span.setAttr(
-          'write.disposition',
-          optimisticMutationDispositionOf(answer)?.kind ?? 'direct'
-        );
-        return answer;
-      });
+      const traced = <T>(operation: () => T): T =>
+        write.trace ? write.trace.run(operation) : operation();
+      const result = await traced(() =>
+        Telemetry.span(write.operation, async (span) => {
+          span.setAttr('channel.id', write.channelId);
+          span.setAttr('message.id', write.messageId);
+          const answer = await write.run(deps.client(), {
+            uuid: write.uuid,
+            onEnqueued,
+          });
+          span.setAttr(
+            'write.disposition',
+            optimisticMutationDispositionOf(answer)?.kind ?? 'direct'
+          );
+          return answer;
+        })
+      );
       const disposition = optimisticMutationDispositionOf(result);
       if (disposition?.kind === 'queued') {
-        await settlements.committed(disposition.transactionId);
+        const outcome = await settlements.committed(disposition.transactionId);
+        if (outcome === 'missed') return await missedOutcome(write);
         return await stored(write);
       }
       if (result.error) throw refusalOf(result.error);
@@ -434,6 +482,8 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
 
   return {
     async send(send) {
+      // Taken before the root is read: the write span joins the sender's trace.
+      const trace = Telemetry.captureContext();
       const createdAt = now();
       const predicted = predictedMessage(send, createdAt);
       const rootId = send.message.thread_id;
@@ -442,6 +492,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       const entry = predicted && mapChannelTimelineEntry(predicted);
       return queuedWrite({
         operation: 'channel.write.send',
+        trace,
         channelId: send.channelId,
         messageId: send.id,
         uuid: send.id,
