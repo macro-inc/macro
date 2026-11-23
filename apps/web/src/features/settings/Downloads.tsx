@@ -109,7 +109,8 @@ function DesktopDownload() {
     : DESKTOP_PLATFORMS;
 
   const url = (platform: DesktopPlatform) => {
-    const resolved = installers.isSuccess ? installers.data : undefined;
+    // A failed refetch keeps the installers GitHub last listed.
+    const resolved = installers.isPending ? undefined : installers.data;
     return (resolved ?? FALLBACK_DOWNLOAD_URLS)[platform];
   };
 

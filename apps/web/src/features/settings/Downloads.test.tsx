@@ -9,8 +9,8 @@ import { Downloads } from './Downloads';
 
 const host = vi.hoisted(() => ({ desktopApp: false }));
 const installers = vi.hoisted(() => ({
-  current: { isSuccess: false, data: undefined } as {
-    isSuccess: boolean;
+  current: { isPending: true, data: undefined } as {
+    isPending: boolean;
     data: { macos: string; linux: string } | undefined;
   },
 }));
@@ -72,7 +72,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   host.desktopApp = false;
-  installers.current = { isSuccess: false, data: undefined };
+  installers.current = { isPending: true, data: undefined };
   Reflect.deleteProperty(navigator, 'userAgent');
   motionStyles.remove();
   vi.unstubAllGlobals();
@@ -123,7 +123,7 @@ describe('Downloads desktop installers', () => {
   it('links the newest installers once GitHub answers', () => {
     setUserAgent(MAC_UA);
     installers.current = {
-      isSuccess: true,
+      isPending: false,
       data: {
         macos: 'https://example.com/new.dmg',
         linux: 'https://example.com/new.AppImage',

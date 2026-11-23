@@ -419,6 +419,8 @@ export function searchSettings(
     emailRowStyle?: boolean;
     outlook?: boolean;
     macroComputers?: boolean;
+    /** The desktop app's Downloads page has no installers to find. */
+    desktopDownload?: boolean;
     /** Whether search lists the Agent pings notification setting. */
     agentNotifications?: boolean;
   } = {}
@@ -444,6 +446,8 @@ export function searchSettings(
           setting.title !== 'Email row style') &&
         (options.outlook !== false || setting.title !== 'Outlook') &&
         (options.macroComputers !== false || !setting.macroComputers) &&
+        (options.desktopDownload !== false ||
+          setting.title !== 'Download the desktop app') &&
         (options.agentNotifications !== false ||
           setting.eventType !== AGENT_PINGS_EVENT_TYPE)
     ).map((setting) => ({
