@@ -112,21 +112,29 @@ export function windowStart(previous: Run | undefined, now: Date): Date {
   return new Date(Math.max(earliest, Date.parse(previous.run_started_at ?? previous.created_at)));
 }
 
-/** The most pages of releases a run reads. */
+/** The most pages of releases a run reads; reaching it without finishing fails the run. */
 export const MAX_PAGES = 10;
 
 /**
- * Whether releases after this page can still be due: the list is newest
- * first by creation, and a release published at or before `since` minus
- * DEADLINE_HOURS, so created before then, is not due. A full page whose
- * oldest release was created after that point has more to read.
+ * How much older than its publication a release's `created_at` may be. GitHub
+ * sets `created_at` to the date of the release's commit, and lists releases
+ * newest first by it, so a release cut from an older commit sits further down
+ * the list. Releases so far were published at most 16 h after their commit.
+ */
+export const COMMIT_AGE_DAYS = 7;
+
+/**
+ * Whether releases after this page can still be due: a full page whose oldest
+ * release's commit is newer than the earliest deadline in the window, less
+ * DEADLINE_HOURS and COMMIT_AGE_DAYS.
  */
 export function readMore(page: Release[], perPage: number, since: Date): boolean {
   const oldest = page.at(-1);
   if (page.length < perPage || !oldest) {
     return false;
   }
-  return Date.parse(oldest.created_at) > since.getTime() - DEADLINE_HOURS * HOUR;
+  const cutoff = since.getTime() - DEADLINE_HOURS * HOUR - COMMIT_AGE_DAYS * 24 * HOUR;
+  return Date.parse(oldest.created_at) > cutoff;
 }
 
 /** The names of the jobs that did not finish their work. */
@@ -212,7 +220,10 @@ async function github(path: string): Promise<any> {
 export async function findings(repo: string, since: Date, now: Date): Promise<Finding[]> {
   const perPage = 30;
   const releases: Release[] = [];
-  for (let page = 1; page <= MAX_PAGES; page++) {
+  for (let page = 1; ; page++) {
+    if (page > MAX_PAGES) {
+      throw new Error(`Read ${MAX_PAGES} pages of releases without reaching the window's start`);
+    }
     const batch: Release[] = await github(`/repos/${repo}/releases?per_page=${perPage}&page=${page}`);
     releases.push(...batch);
     if (!readMore(batch, perPage, since)) {

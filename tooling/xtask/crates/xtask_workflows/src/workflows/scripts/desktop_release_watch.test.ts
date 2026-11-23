@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
+  COMMIT_AGE_DAYS,
   DEADLINE_HOURS,
   describeRun,
   due,
@@ -148,18 +149,28 @@ describe('windowStart', () => {
 
 describe('readMore', () => {
   const since = hoursAgo(3);
+  const DAY = 24;
+  // A page, newest first by commit date, whose oldest release's commit was
+  // `oldestHoursAgo` hours ago.
   const page = (oldestHoursAgo: number, size = 3) =>
-    Array.from({ length: size }, (_, index) =>
-      release(`v1.0.${index}`, hoursAgo(oldestHoursAgo - (size - 1 - index) * 0.1)),
-    );
+    Array.from({ length: size }, (_, index) => {
+      const created = hoursAgo(oldestHoursAgo - (size - 1 - index) * 0.1).toISOString();
+      return { ...release(`v1.0.${index}`, NOW), created_at: created };
+    });
 
-  test('reads the next page while its oldest release may still be due', () => {
-    // Unrelated releases can fill a page ahead of a due production release.
+  test('reads the next page while a release there may still be due', () => {
+    // Unrelated releases fill a page ahead of a due production release.
     assert.equal(readMore(page(DEADLINE_HOURS + 2), 3, since), true);
   });
 
-  test('stops once the oldest release was created before any due deadline', () => {
-    assert.equal(readMore(page(DEADLINE_HOURS + 4), 3, since), false);
+  test('reads on past releases whose commits are days old', () => {
+    // A release cut from a commit days before it was published sits behind
+    // them in the list, though it can be due now.
+    assert.equal(readMore(page((COMMIT_AGE_DAYS - 1) * DAY), 3, since), true);
+  });
+
+  test('stops once commits are older than any due release can have', () => {
+    assert.equal(readMore(page((COMMIT_AGE_DAYS + 1) * DAY), 3, since), false);
   });
 
   test('stops at a short page, the last one', () => {
