@@ -84,6 +84,7 @@ export const TASK_GROUP_OPTIONS: {
   { id: 'project', label: 'Project' },
   { id: 'date', label: 'Date' },
   { id: 'due_date', label: 'Due date' },
+  { id: 'start_date', label: 'Start date' },
 ];
 
 export const TASK_SORT_DEFINITIONS: SortDefinition<
@@ -170,7 +171,52 @@ export const TASK_SORT_OPTIONS: {
       direction: 'desc',
     },
   },
+  {
+    id: 'start_date_earliest',
+    label: 'Starts soonest',
+    property: {
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+      direction: 'asc',
+    },
+  },
+  {
+    id: 'start_date_latest',
+    label: 'Starts furthest away',
+    property: {
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.START_DATE,
+      direction: 'desc',
+    },
+  },
 ];
+
+const START_DATE_SORTS: readonly TaskSortId[] = [
+  'start_date_earliest',
+  'start_date_latest',
+];
+
+/** The sort choices offered: Start date ones only with start dates on. */
+export function taskSortOptions(startDates: boolean) {
+  return startDates
+    ? TASK_SORT_OPTIONS
+    : TASK_SORT_OPTIONS.filter(
+        (option) => !START_DATE_SORTS.includes(option.id)
+      );
+}
+
+/** The grouping choices offered: Start date only with start dates on. */
+export function taskGroupOptions(startDates: boolean) {
+  return startDates
+    ? TASK_GROUP_OPTIONS
+    : TASK_GROUP_OPTIONS.filter((option) => option.id !== 'start_date');
+}
+
+/**
+ * Date sorts keep tasks without the date last whichever way they run, so
+ * they are never reversed.
+ */
+export function isTaskDateSort(id: TaskSortId): boolean {
+  return id.startsWith('due_date_') || id.startsWith('start_date_');
+}
 
 export function taskPropertySort(id: TaskSortId): TaskPropertySort | undefined {
   return TASK_SORT_OPTIONS.find((option) => option.id === id)?.property;
@@ -221,7 +267,7 @@ export function sortTasks(
     if (!definition?.options) return items;
   }
   let ascending = propertySort.direction === 'asc';
-  if (selection.reversed && !selection.id.startsWith('due_date_'))
+  if (selection.reversed && !isTaskDateSort(selection.id))
     ascending = !ascending;
   const key = (item: TaskEntityWithProperties) =>
     propertySortKey(

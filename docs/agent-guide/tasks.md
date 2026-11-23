@@ -345,7 +345,7 @@ empty. Cancel leaves the previous filter unchanged. Status remains independent:
 select Completed or Canceled explicitly to include closed tasks in a date filter.
 The mobile controls use the same options and date-range dialog in the sliders drawer.
 
-**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+**Group → Due date** uses non-overlapping viewer-local calendar buckets, with No due date last:
 Overdue is before today's midnight; Today and Tomorrow cover those entire days;
 Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
 missing and cleared dates. Relative filters and groups refresh at local midnight,
@@ -364,6 +364,20 @@ Later dates, completed tasks, and canceled tasks have neutral due dates. Urgency
 refreshes at local midnight, on timezone changes, and app resume.
 Date selections persist with the navigation entry and round-trip through
 `tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
+
+With `enable-task-start-date`, lists sort, filter, and group by Start date the
+same way: **Starts soonest** and **Starts furthest away** sort (missing starts
+last, never reversed); **Filter → Start date** offers Started, Today, Tomorrow,
+Next 7 days, Later, Has start date, No start date, and Custom range, and combines
+with the due-date filter; **Group → Start date** uses the same buckets, Started
+being before today's midnight and No start date last. Both No due date and No
+start date headers show the slashed calendar. The selections round-trip
+through `tasks.startDate`, `tasks.startFrom`, and `tasks.startTo`, the entry
+state, and saved task views (`startDate` in the definition). There is no Start
+date column: the Due date column shows the range. Boards show Status columns
+when grouped by Start date, as for the other list-only groupings, and the Gantt
+does not move bars between Start date groups. With the flag off, the Start date
+choices are hidden and a stored start-date filter does not apply.
 
 ### Start dates
 

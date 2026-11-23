@@ -29,6 +29,7 @@ import {
 } from 'solid-js';
 import {
   EMPTY_GROUP_PROPERTY_IDS,
+  isNoDateGroup,
   STATUS_GROUP_HEADER_TINTS,
 } from '../components/task-list/TaskGroupHeader';
 import { taskGanttDates } from '../queries/task-gantt';
@@ -294,8 +295,10 @@ export function TaskGanttView(props: {
                                   <Match
                                     when={
                                       !group().groupId ||
-                                      (props.groupBy === 'date' &&
-                                        group().groupId === 'no_due_date')
+                                      isNoDateGroup(
+                                        props.groupBy,
+                                        group().groupId
+                                      )
                                     }
                                   >
                                     <PropertyEmptyIcon

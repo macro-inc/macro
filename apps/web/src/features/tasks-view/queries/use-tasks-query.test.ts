@@ -12,6 +12,10 @@ const fixture = vi.hoisted(() => ({
   searchState: vi.fn(),
   mapItem: vi.fn(),
 }));
+const startDates = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@property/hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => startDates.enabled,
+}));
 vi.mock('@queries/properties/definitions', () => ({
   useListPropertiesQuery: () => ({ isSuccess: false, data: [] }),
 }));
@@ -689,3 +693,54 @@ it('pauses task reads across project views and resumes when returning to tasks',
     }
   });
 });
+
+it.each([true, false])(
+  'filters by a stored start date only with start dates on (%s)',
+  (enabled) => {
+    startDates.enabled = enabled;
+    fixture.calls = [];
+    fixture.query = {
+      isLoading: false,
+      isPending: false,
+      isPlaceholderData: false,
+      data: { entities: [] },
+    };
+    createRoot((dispose) => {
+      try {
+        useTasksDataSource(
+          {
+            tab: 'team-tasks',
+            search: '',
+            facets: {},
+            groupBy: 'none',
+            sort: [],
+            startDate: { type: 'has_start_date' },
+          },
+          {
+            userId: () => 'viewer',
+            tagSets: () => [],
+            tagSetsReady: () => true,
+            isGroupExpanded: () => true,
+          }
+        );
+        const query = fixture.calls[0]?.args() as {
+          body: { propf?: unknown };
+        };
+        expect(JSON.stringify(query.body.propf ?? null)).toBe(
+          enabled
+            ? JSON.stringify({
+                l: {
+                  pd: '00000001-0000-0000-0000-000000000015',
+                  et: 'TASK',
+                  v: { dr: {} },
+                },
+              })
+            : 'null'
+        );
+      } finally {
+        startDates.enabled = true;
+        dispose();
+      }
+    });
+  }
+);

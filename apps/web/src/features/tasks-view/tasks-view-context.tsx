@@ -86,7 +86,11 @@ import {
   type UseTasksDataSourceOptions,
   useTasksDataSource,
 } from './queries/use-tasks-query';
-import { tasksTabSearch, tasksTabSearchCodec } from './tasks-tab-search';
+import {
+  taskDateFilterSearch,
+  tasksTabSearch,
+  tasksTabSearchCodec,
+} from './tasks-tab-search';
 import type {
   TaskCreateOptions,
   TaskDetailTarget,
@@ -242,6 +246,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
         dueDate: initial.dueDate,
+        startDate: initial.startDate,
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -321,10 +326,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         : undefined,
       // Layout and rollout fallbacks must not overwrite the selected grouping.
       groupBy: persistedState.groupBy,
-      dueDate: state.dueDate?.type ?? 'any',
-      dueStart:
-        state.dueDate?.type === 'range' ? state.dueDate.start : undefined,
-      dueEnd: state.dueDate?.type === 'range' ? state.dueDate.end : undefined,
+      ...taskDateFilterSearch(state),
     });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
@@ -365,15 +367,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         groupBy: persistedState.groupBy,
         sort: persistedState.sort[0]?.id,
         sortReversed: persistedState.sort[0]?.reversed ? 'true' : 'false',
-        dueDate: persistedState.dueDate?.type ?? 'any',
-        dueStart:
-          persistedState.dueDate?.type === 'range'
-            ? persistedState.dueDate.start
-            : undefined,
-        dueEnd:
-          persistedState.dueDate?.type === 'range'
-            ? persistedState.dueDate.end
-            : undefined,
+        ...taskDateFilterSearch(persistedState),
       },
       { history: 'replace' }
     );
@@ -411,6 +405,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
               groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
               sort: [{ id: 'updated_at' as const }],
               dueDate: undefined,
+              startDate: undefined,
             };
         applyTaskFacets('team-tasks', restored.facets);
         setState({
@@ -418,6 +413,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           groupBy: restored.groupBy,
           sort: restored.sort,
           dueDate: restored.dueDate,
+          startDate: restored.startDate,
           search: '',
         });
         setNewSavedView(true);
@@ -443,6 +439,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         discardNewSavedView();
         applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
         setState('dueDate', undefined);
+        setState('startDate', undefined);
         navigateSavedView(undefined);
       });
     runViewNavigation(leave);
@@ -455,10 +452,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       creating: () => Boolean(newSavedView()),
       state: persistedState,
       facetContext,
-      apply: ({ facets, layout, groupBy, sort, dueDate }) =>
+      apply: ({ facets, layout, groupBy, sort, dueDate, startDate }) =>
         batch(() => {
           applyTaskFacets('team-tasks', facets);
           setState('dueDate', dueDate);
+          setState('startDate', startDate);
           setState('layout', layout);
           setState('groupBy', groupBy);
           setState(
@@ -471,9 +469,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
               groupBy,
               sort: sort[0]?.id,
               sortReversed: sort[0]?.reversed ? 'true' : 'false',
-              dueDate: dueDate?.type ?? 'any',
-              dueStart: dueDate?.type === 'range' ? dueDate.start : undefined,
-              dueEnd: dueDate?.type === 'range' ? dueDate.end : undefined,
+              ...taskDateFilterSearch({ dueDate, startDate }),
             },
             { history: 'replace' }
           );
@@ -530,6 +526,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
             DEFAULT_TASK_FACET_SELECTION
           );
           setState('dueDate', undefined);
+          setState('startDate', undefined);
         }
       }
     )
@@ -721,6 +718,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
         draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
         draft.dueDate = undefined;
+        draft.startDate = undefined;
         draft.collapsedGroupIds = [];
       })
     );
