@@ -97,7 +97,7 @@ export function ProjectRowColumns(
     enabled: startDateEnabled,
     other: startDate,
     saveOther: (property, value) =>
-      context.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+      context.saveHandler.saveProperty(property, value),
   });
   const updated = () => {
     const date = new Date(props.row.project.updatedAt);

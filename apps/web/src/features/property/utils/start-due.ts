@@ -1,4 +1,13 @@
-import { differenceInCalendarDays } from 'date-fns';
+import { formatDuration } from '@app/components/date-time-range/time-options';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import {
+  addHours,
+  addMinutes,
+  differenceInCalendarDays,
+  differenceInMinutes,
+  isSameDay,
+  startOfDay,
+} from 'date-fns';
 import { SYSTEM_PROPERTY_IDS } from '../identifiers';
 import type { Property } from '../types';
 import { isDateProperty } from './typeGuards';
@@ -6,8 +15,15 @@ import { isDateProperty } from './typeGuards';
 /** Which end of a task's or project's dates the picker sets. */
 export type DateField = 'start' | 'due';
 
-/** A task's or project's Start Date and Due Date, each a whole local day. */
-export type StartDue = { start: Date | null; due: Date | null };
+/**
+ * A task's or project's Start Date and Due Date. Without `timed` each is a
+ * whole local day; with it, each end is an exact moment with its time of day.
+ */
+export type StartDue = {
+  start: Date | null;
+  due: Date | null;
+  timed?: boolean;
+};
 
 const DAY_FORMAT = new Intl.DateTimeFormat('en-US', {
   month: 'short',
@@ -30,6 +46,7 @@ export function formatStartDue(
   dates: StartDue,
   now = new Date()
 ): string | undefined {
+  if (dates.timed) return formatTimedStartDue(dates, now);
   const { start, due } = dates;
   if (!start) return undefined;
   if (!due) {
@@ -45,6 +62,120 @@ export function formatStartDue(
       ? DAY_FORMAT.format(due)
       : DAY_YEAR_FORMAT.format(due);
   return `${DAY_FORMAT.format(start)} → ${end}`;
+}
+
+/** Whether times read on a 12-hour clock, as the calendar shows them. */
+export function clockIs12Hour(): boolean {
+  const [preferences] = useCalendarPreferences();
+  return preferences.timeFormat === '12-hour';
+}
+
+function dayTimeFormat(withYear: boolean) {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(withYear ? { year: 'numeric' } : {}),
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: clockIs12Hour(),
+  });
+}
+
+/**
+ * The text for dates with times: `Nov 26, 2:00 – 4:00 PM` on one day,
+ * `Nov 26, 2:00 PM → Nov 28, 4:00 PM` across days, `Nov 26, 2:00 PM →`
+ * without a due date and `Nov 26, 4:00 PM` without a start.
+ */
+function formatTimedStartDue(dates: StartDue, now: Date): string | undefined {
+  const text = timedStartDueText(dates, now);
+  // Intl puts narrow and thin spaces around times; plain ones read the same.
+  return text?.replace(/[\u2009\u202f]/g, ' ');
+}
+
+function timedStartDueText(dates: StartDue, now: Date): string | undefined {
+  const { start, due } = dates;
+  const thisYear = (date: Date) => date.getFullYear() === now.getFullYear();
+  if (!start)
+    return due ? dayTimeFormat(!thisYear(due)).format(due) : undefined;
+  if (!due) return `${dayTimeFormat(!thisYear(start)).format(start)} →`;
+  if (isSameDay(start, due)) {
+    return dayTimeFormat(!thisYear(start)).formatRange(start, due);
+  }
+  const withYear = !thisYear(start) || !thisYear(due);
+  const format = dayTimeFormat(withYear);
+  return `${format.format(start)} → ${format.format(due)}`;
+}
+
+/**
+ * The footer's length: `2h` or `1h 30min` for times within a day, else the
+ * calendar days from start to due, both counted.
+ */
+export function startDueLength(dates: StartDue): string | undefined {
+  const { start, due } = dates;
+  if (!start || !due) return undefined;
+  if (dates.timed) {
+    const minutes = differenceInMinutes(due, start);
+    if (minutes >= 0 && minutes < 24 * 60) return formatDuration(minutes);
+  }
+  const days = startDueDays(start, due);
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
+}
+
+/**
+ * The dates once Add time turns times on, as a new calendar event gets them:
+ * the start at the next full hour after `now` on its own day, and the due
+ * date an hour after that on its day. A due date alone takes the next full
+ * hour, and with neither end set the due date becomes that hour today.
+ */
+export function withTimes(dates: StartDue, now = new Date()): StartDue {
+  const hour = (now.getHours() + 1) % 24;
+  const at = (day: Date, hours: number) => addHours(startOfDay(day), hours);
+  const start = dates.start ? at(dates.start, hour) : null;
+  const dueDay = dates.due ?? (dates.start ? null : now);
+  const due = dueDay ? at(dueDay, start ? hour + 1 : hour) : null;
+  return { start, due, timed: true };
+}
+
+/** The dates once Remove time makes each end a whole day again. */
+export function withoutTimes(dates: StartDue): StartDue {
+  return {
+    start: dates.start && startOfDay(dates.start),
+    due: dates.due && startOfDay(dates.due),
+  };
+}
+
+/**
+ * The dates after a clock time is picked for `field`, as minutes past the
+ * midnight of `day`. A new start time moves the due date with it, keeping
+ * the length, as a calendar event's end follows its start. A due time before
+ * the start moves the start back to it.
+ */
+export function pickTime(
+  dates: StartDue,
+  field: DateField,
+  day: Date,
+  minutes: number
+): { dates: StartDue; changed: DateField[] } {
+  const at = addMinutes(startOfDay(day), minutes);
+  if (field === 'start') {
+    if (!dates.due || !dates.start) {
+      return { dates: { ...dates, start: at }, changed: ['start'] };
+    }
+    const length = differenceInMinutes(dates.due, dates.start);
+    if (length < 0)
+      return { dates: { ...dates, start: at }, changed: ['start'] };
+    return {
+      dates: { ...dates, start: at, due: addMinutes(at, length) },
+      changed: ['start', 'due'],
+    };
+  }
+  if (dates.start && at < dates.start) {
+    return {
+      dates: { ...dates, start: at, due: at },
+      changed: ['start', 'due'],
+    };
+  }
+  return { dates: { ...dates, due: at }, changed: ['due'] };
 }
 
 /** The calendar days from `start` to `due`, both counted. */
@@ -80,6 +211,37 @@ export function pickDay(
   return { dates: { ...dates, [field]: day }, changed: field };
 }
 
+/**
+ * `pickDay` for dates with times: the day picked keeps the time its end had,
+ * and an end moved for the other keeps its own time on the new day.
+ */
+export function pickTimedDay(
+  dates: StartDue,
+  field: DateField,
+  day: Date
+): { dates: StartDue; changed: DateField } {
+  const timeOf = (end: DateField) => {
+    const value = dates[end] ?? dates[end === 'start' ? 'due' : 'start'];
+    return value ? differenceInMinutes(value, startOfDay(value)) : 0;
+  };
+  const picked = pickDay(
+    {
+      start: dates.start && startOfDay(dates.start),
+      due: dates.due && startOfDay(dates.due),
+    },
+    field,
+    startOfDay(day)
+  );
+  const changed = picked.changed;
+  return {
+    dates: {
+      ...dates,
+      [changed]: addMinutes(picked.dates[changed]!, timeOf(changed)),
+    },
+    changed,
+  };
+}
+
 function dayOf(property: Property | undefined): Date | null {
   if (!property || !isDateProperty(property) || property.value == null) {
     return null;
@@ -92,7 +254,10 @@ export function startDueOf(
   start: Property | undefined,
   due: Property | undefined
 ): StartDue {
-  return { start: dayOf(start), due: dayOf(due) };
+  const timed = [start, due].some(
+    (end) => end && isDateProperty(end) && end.hasTime === true
+  );
+  return { start: dayOf(start), due: dayOf(due), ...(timed ? { timed } : {}) };
 }
 
 /** The end a Start Date or Due Date definition holds, or none for others. */

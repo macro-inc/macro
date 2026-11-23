@@ -186,6 +186,9 @@ export type PropertyApiValues =
   | { valueType: 'ENTITY'; refs: EntityReference[] | null }
   | { valueType: 'LINK'; values: string[] | null };
 
+/** A date property's value as it is saved: its moment and whether it has a time of day. */
+export type DateApiValue = Extract<PropertyApiValues, { valueType: 'DATE' }>;
+
 // Result type for API responses
 type ApiError = {
   code: string;

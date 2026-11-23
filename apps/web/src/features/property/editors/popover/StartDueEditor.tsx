@@ -3,9 +3,13 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { ResultAsync } from 'neverthrow';
 import { createSignal, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
-import type { DateProperty } from '../../types';
+import type { DateApiValue, DateProperty } from '../../types';
 import { isDateProperty } from '../../utils';
-import type { DateField, StartDue } from '../../utils/start-due';
+import {
+  type DateField,
+  type StartDue,
+  startDueOf,
+} from '../../utils/start-due';
 import { StartDueSelector } from '../selectors/StartDueSelector';
 import { EditorPopover } from './EditorPopover';
 
@@ -15,7 +19,7 @@ export type StartDueEditorProps = {
   /** The other end, a placeholder while it is unset. */
   other: () => DateProperty;
   /** Saves the other end, which the pill or row does not own. */
-  saveOther: (property: DateProperty, value: Date | null) => Promise<unknown>;
+  saveOther: (property: DateProperty, value: DateApiValue) => Promise<unknown>;
 };
 
 /** The dates picker in a popover, opened from a Start Date or Due Date pill. */
@@ -56,17 +60,18 @@ function StartDueEditorBody(
   const own = ctx.property() as DateProperty;
   const other = props.other();
   const end = (field: DateField) => (field === props.field ? own : other);
-  const day = (property: DateProperty) =>
-    property.value != null ? new Date(property.value) : null;
+  const [dates, setDates] = createSignal<StartDue>(
+    startDueOf(end('start'), end('due'))
+  );
 
-  const [dates, setDates] = createSignal<StartDue>({
-    start: day(end('start')),
-    due: day(end('due')),
-  });
-
-  const save = async (field: DateField, value: Date | null) => {
+  const save = async (field: DateField, next: StartDue) => {
+    const value: DateApiValue = {
+      valueType: 'DATE',
+      value: next[field],
+      ...(next.timed && next[field] ? { hasTime: true } : {}),
+    };
     if (field === props.field) {
-      await ctx.onSave?.(own, { valueType: 'DATE', value });
+      await ctx.onSave?.(own, value);
       return;
     }
     await props.saveOther(other, value);
@@ -86,11 +91,11 @@ function StartDueEditorBody(
   ) => {
     for (const [index, field] of changed.entries()) {
       const result = await ResultAsync.fromPromise(
-        save(field, next[field]),
+        save(field, next),
         (error) => error
       );
       if (result.isOk()) {
-        saved = { ...saved, [field]: next[field] };
+        saved = { ...saved, [field]: next[field], timed: next.timed };
         continue;
       }
       // mutation onError owns toast
@@ -100,6 +105,7 @@ function StartDueEditorBody(
       setDates((shown) => ({
         start: restore.includes('start') ? saved.start : shown.start,
         due: restore.includes('due') ? saved.due : shown.due,
+        timed: restore.length > 0 ? saved.timed : shown.timed,
       }));
       return;
     }

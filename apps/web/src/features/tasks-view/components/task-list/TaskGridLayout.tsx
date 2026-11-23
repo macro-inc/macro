@@ -164,15 +164,18 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
     field: 'due',
     enabled: startDateEnabled,
     other: startProperty,
-    saveOther: (property, value) =>
-      saveOne(property, { valueType: 'DATE', value }),
+    saveOther: (property, value) => saveOne(property, value),
   });
 
   const dueDateClass = () => {
+    const due = propertyMap().get(TASK_DUE_DATE_COLUMN.defId);
     const urgency = taskDueDateUrgency(
       getTaskDueDate(props.entity),
       isTaskClosed(props.entity),
-      props.calendar()
+      props.calendar(),
+      startDateEnabled() && due && isDateProperty(due) && due.hasTime
+        ? { now: Date.now() }
+        : undefined
     );
     return cn({
       'text-failure': urgency === 'danger',

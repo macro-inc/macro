@@ -1,5 +1,9 @@
-import { describe, expect, it } from 'vitest';
-import { formatDate, formatTimeRange } from './formatting';
+import { describe, expect, it, vi } from 'vitest';
+import { formatDate, formatDateValue, formatTimeRange } from './formatting';
+
+vi.mock('@app/features/calendar/utils/preferences', () => ({
+  useCalendarPreferences: () => [{ timeFormat: '12-hour' }],
+}));
 
 describe('formatDate', () => {
   it('shows a day as its short month, day and year', () => {
@@ -45,5 +49,18 @@ describe('formatTimeRange', () => {
         end: new Date(2026, 9, 13, 17),
       }).replaceAll('\u202f', ' ')
     ).toBe('Oct 9, 9:00 AM\u2009–\u2009Oct 13, 5:00 PM');
+  });
+});
+
+describe('formatDateValue', () => {
+  const at = new Date(2026, 10, 26, 14, 30);
+
+  it('adds the time of day to a date that has one while times are shown', () => {
+    expect(formatDateValue(at, true, true)).toBe('Nov 26, 2026, 2:30 PM');
+  });
+
+  it('shows the day alone for a whole day, or while times are not shown', () => {
+    expect(formatDateValue(at, undefined, true)).toBe(formatDate(at));
+    expect(formatDateValue(at, true, false)).toBe(formatDate(at));
   });
 });

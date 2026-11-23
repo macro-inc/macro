@@ -149,6 +149,8 @@ export function TaskBoardView(props: {
     // With start dates a card's due date reads as the range and edits both
     // ends; it shows once either end is set.
     const isDue = id === SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const timedDue = (due: Property) =>
+      startDateEnabled() && isDateProperty(due) && due.hasTime === true;
     const datesText = (due: Property) => {
       if (!isDue || !startDateEnabled()) return undefined;
       return formatStartDue(startDueOf(startDate(task().id), due));
@@ -159,10 +161,7 @@ export function TaskBoardView(props: {
           enabled: startDateEnabled,
           other: () => startDate(task().id),
           saveOther: (property, value) =>
-            props.data.saveProperty(task().id, property, {
-              valueType: 'DATE',
-              value,
-            }),
+            props.data.saveProperty(task().id, property, value),
         })
       : undefined;
 
@@ -190,7 +189,8 @@ export function TaskBoardView(props: {
                     ? taskDueDateUrgency(
                         task().dueDate,
                         task().closed ?? true,
-                        calendar()
+                        calendar(),
+                        timedDue(property()) ? { now: Date.now() } : undefined
                       )
                     : undefined
                 }

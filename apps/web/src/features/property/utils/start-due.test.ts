@@ -1,5 +1,20 @@
-import { describe, expect, it } from 'vitest';
-import { formatStartDue, pickDay, startDueDays } from './start-due';
+import { describe, expect, it, vi } from 'vitest';
+
+const calendarPreferences = vi.hoisted(() => ({ timeFormat: '12-hour' }));
+vi.mock('@app/features/calendar/utils/preferences', () => ({
+  useCalendarPreferences: () => [calendarPreferences],
+}));
+
+import {
+  formatStartDue,
+  pickDay,
+  pickTime,
+  pickTimedDay,
+  startDueDays,
+  startDueLength,
+  withoutTimes,
+  withTimes,
+} from './start-due';
 
 const NOW = new Date(2026, 10, 20);
 
@@ -95,6 +110,137 @@ describe('pickDay', () => {
     expect(pickDay({ start: null, due: null }, 'due', range.due)).toEqual({
       dates: { start: null, due: range.due },
       changed: 'due',
+    });
+  });
+});
+
+const at = (day: number, hours: number, minutes = 0) =>
+  new Date(2026, 10, day, hours, minutes);
+
+describe('dates with times', () => {
+  it('read as one block on a day, a range across days, and a lone end', () => {
+    expect(
+      formatStartDue({ start: at(26, 14), due: at(26, 16), timed: true }, NOW)
+    ).toBe('Nov 26, 2:00 – 4:00 PM');
+    expect(
+      formatStartDue({ start: at(26, 14), due: at(28, 16), timed: true }, NOW)
+    ).toBe('Nov 26, 2:00 PM → Nov 28, 4:00 PM');
+    expect(
+      formatStartDue({ start: at(26, 14), due: null, timed: true }, NOW)
+    ).toBe('Nov 26, 2:00 PM →');
+    expect(
+      formatStartDue({ start: null, due: at(26, 16, 30), timed: true }, NOW)
+    ).toBe('Nov 26, 4:30 PM');
+  });
+
+  it('follow the calendar clock setting', () => {
+    calendarPreferences.timeFormat = '24-hour';
+    try {
+      expect(
+        formatStartDue({ start: null, due: at(26, 16), timed: true }, NOW)
+      ).toBe('Nov 26, 16:00');
+    } finally {
+      calendarPreferences.timeFormat = '12-hour';
+    }
+  });
+
+  it('keep a due date alone without times to its own text', () => {
+    expect(
+      formatStartDue({ start: null, due: at(26, 0) }, NOW)
+    ).toBeUndefined();
+  });
+
+  it('measure a length in hours within a day and in days across days', () => {
+    expect(
+      startDueLength({ start: at(26, 14), due: at(26, 16, 30), timed: true })
+    ).toBe('2h 30min');
+    expect(
+      startDueLength({ start: at(26, 14), due: at(28, 9), timed: true })
+    ).toBe('3 days');
+    expect(startDueLength({ start: at(23, 0), due: at(27, 0) })).toBe('5 days');
+  });
+
+  it('get the next full hour and an hour after it when times are added', () => {
+    expect(
+      withTimes({ start: at(23, 0), due: at(27, 0) }, at(20, 9, 41))
+    ).toEqual({ start: at(23, 10), due: at(27, 11), timed: true });
+    expect(withTimes({ start: null, due: at(27, 0) }, at(20, 9, 41))).toEqual({
+      start: null,
+      due: at(27, 10),
+      timed: true,
+    });
+    expect(withTimes({ start: null, due: null }, at(20, 9, 41))).toEqual({
+      start: null,
+      due: at(20, 10),
+      timed: true,
+    });
+  });
+
+  it('go back to whole days when times are removed', () => {
+    expect(
+      withoutTimes({ start: at(26, 14), due: at(27, 16), timed: true })
+    ).toEqual({ start: at(26, 0), due: at(27, 0) });
+  });
+
+  it('move the due date with a new start time, keeping the length', () => {
+    expect(
+      pickTime(
+        { start: at(26, 14), due: at(26, 16), timed: true },
+        'start',
+        at(26, 0),
+        15 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 15), due: at(26, 17), timed: true },
+      changed: ['start', 'due'],
+    });
+  });
+
+  it('move the start back to a due time picked before it', () => {
+    expect(
+      pickTime(
+        { start: at(26, 14), due: at(26, 16), timed: true },
+        'due',
+        at(26, 0),
+        13 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 13), due: at(26, 13), timed: true },
+      changed: ['start', 'due'],
+    });
+    expect(
+      pickTime(
+        { start: at(26, 14), due: at(26, 16), timed: true },
+        'due',
+        at(27, 0),
+        9 * 60
+      )
+    ).toEqual({
+      dates: { start: at(26, 14), due: at(27, 9), timed: true },
+      changed: ['due'],
+    });
+  });
+
+  it('keep each end its time when a day is picked', () => {
+    expect(
+      pickTimedDay(
+        { start: at(26, 14), due: at(26, 16), timed: true },
+        'due',
+        at(28, 0)
+      )
+    ).toEqual({
+      dates: { start: at(26, 14), due: at(28, 16), timed: true },
+      changed: 'due',
+    });
+    expect(
+      pickTimedDay(
+        { start: at(26, 14), due: at(27, 16), timed: true },
+        'due',
+        at(24, 0)
+      )
+    ).toEqual({
+      dates: { start: at(24, 14), due: at(27, 16), timed: true },
+      changed: 'start',
     });
   });
 });
