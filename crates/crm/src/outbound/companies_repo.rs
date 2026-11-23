@@ -5,6 +5,7 @@ pub(crate) mod test;
 
 mod association;
 mod company_contacts;
+mod company_domains;
 mod contact_filing;
 mod contact_listing;
 mod contact_update;
@@ -2489,6 +2490,17 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         include_hidden: bool,
     ) -> Result<CrmContact, CrmError> {
         self.update_contact_details(team_id, contact_id, update, include_hidden)
+            .await
+    }
+
+    async fn update_company_domains(
+        &self,
+        team_id: &uuid::Uuid,
+        company_id: &uuid::Uuid,
+        update: &crate::domain::company_domains::CompanyDomainUpdate,
+        editor: crate::domain::company_domains::CompanyDomainEditor,
+    ) -> Result<CrmCompanyWithContacts, CrmError> {
+        self.update_company_domain_rows(team_id, company_id, update, editor)
             .await
     }
 
