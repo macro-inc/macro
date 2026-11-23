@@ -41,6 +41,11 @@ export type ChannelTimelineRuntime = Pick<
 
 export interface ChannelTimelineDeps extends ChannelPageDeps {
   runtime: ChannelTimelineRuntime;
+  /**
+   * Roots this page sent that the device does not hold yet, newest first; the
+   * live end shows them until the device's copy replaces them.
+   */
+  unstored?: (channelId: string) => readonly ChannelPageEntry[];
 }
 
 type TimelineState = {
@@ -401,7 +406,16 @@ export function createLocalChannelTimeline(
     )
   );
 
-  const entries = createMemo(() => state.entries.map((entry) => entry.entry));
+  const entries = createMemo(() => {
+    const unstored =
+      state.newerCursor === null ? (deps.unstored?.(channelId) ?? []) : [];
+    // The device's copy wins once it holds the message.
+    const shown =
+      unstored.length === 0
+        ? state.entries
+        : mergeEntries(unstored, state.entries);
+    return shown.map((entry) => entry.entry);
+  });
 
   return {
     entries,

@@ -9,6 +9,9 @@ import {
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
+import { channelCacheHost, channelCacheHostFor } from './local/channel-flag';
+import { channelWrites } from './local/channel-sync';
+import { channelWriteNetworkMode, whenOnline } from './local/channel-writes';
 import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
@@ -216,7 +219,23 @@ export function useAddReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
+      const host = channelCacheHostFor(vars.parent);
+      if (host) {
+        return channelWrites(host).react({
+          channelId: vars.parent.id,
+          id: vars.messageId,
+          emoji: vars.emoji,
+          add: true,
+          reactions:
+            vars.currentReactions &&
+            addUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+              .reactions,
+          nonce: addReactionNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,
@@ -286,7 +305,23 @@ export function useRemoveReactionMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: ReactionParams) => {
+      const host = channelCacheHostFor(vars.parent);
+      if (host) {
+        return channelWrites(host).react({
+          channelId: vars.parent.id,
+          id: vars.messageId,
+          emoji: vars.emoji,
+          add: false,
+          reactions:
+            vars.currentReactions &&
+            removeUserReaction(vars.currentReactions, vars.emoji, vars.userId)
+              .reactions,
+          nonce: removeReactionNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.react(
         vars.parent,
         vars.messageId,

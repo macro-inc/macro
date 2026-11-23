@@ -7,8 +7,15 @@ import type { ChannelMessageFieldsFragment } from '@service-storage/graphql/gene
 import { CombinedError } from '@urql/core';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { rootSortKey } from '../channel-map';
-import type { FetchChannelServerPage } from '../channel-pages';
+import {
+  channelMessageKey,
+  mapChannelTimelineEntry,
+  rootSortKey,
+} from '../channel-map';
+import type {
+  ChannelPageEntry,
+  FetchChannelServerPage,
+} from '../channel-pages';
 import { createChannelTouches } from '../channel-pages';
 import {
   type ChannelTimelineRuntime,
@@ -157,6 +164,7 @@ function mount(options: {
   held?: boolean;
   fetchPage?: FetchChannelServerPage;
   around?: string;
+  unstored?: () => ChannelPageEntry[];
 }) {
   const [rows, setRows] = createSignal(options.rows);
   const [held, setHeld] = createSignal(options.held ?? true);
@@ -173,6 +181,7 @@ function mount(options: {
         runtime,
         touches: createChannelTouches(),
         fetchPage: options.fetchPage,
+        unstored: options.unstored,
       },
       CHANNEL_ID,
       around,
@@ -218,6 +227,38 @@ describe('createLocalChannelTimeline', () => {
     // One touch, no other write.
     expect(host.commits).toEqual([
       { channelId: CHANNEL_ID, touchedAtMs: expect.any(Number) },
+    ]);
+    dispose();
+  });
+
+  it('shows a root this page sent at the live end until the device holds it', async () => {
+    const sent = graphqlMessage(9);
+    const entry = mapChannelTimelineEntry(sent);
+    if (!entry) throw new Error('not a row');
+    const [unstored, setUnstored] = createSignal<ChannelPageEntry[]>([
+      { key: channelMessageKey(sent.id), sortKey: sent.sortKey, entry },
+    ]);
+    const { timeline, runtime, addRow, dispose } = mount({
+      rows: messages(2),
+      unstored,
+    });
+    await waitFor(() => !timeline.isLoading());
+    expect(ids(timeline)).toEqual([
+      sent.id,
+      graphqlMessage(2).id,
+      graphqlMessage(1).id,
+    ]);
+
+    // The device stores it: its copy replaces the one in hand.
+    addRow(sent);
+    runtime.changed();
+    await settle();
+    setUnstored([]);
+    await waitFor(() => timeline.entries()[0] !== entry);
+    expect(ids(timeline)).toEqual([
+      sent.id,
+      graphqlMessage(2).id,
+      graphqlMessage(1).id,
     ]);
     dispose();
   });

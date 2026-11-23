@@ -36,6 +36,9 @@ import { useMutation } from '@tanstack/solid-query';
 import { v7 as uuidv7 } from 'uuid';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
+import { channelCacheHost, channelCacheHostFor } from './local/channel-flag';
+import { channelWrites } from './local/channel-sync';
+import { channelWriteNetworkMode, whenOnline } from './local/channel-writes';
 import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
@@ -433,10 +436,27 @@ export function useSendMessageMutation(
 
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: SendMessageParams) => {
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
       const parent = vars.parentSpan ?? Telemetry.captureContext();
+      // With the device cache serving channels, the write goes through its
+      // durable queue, which keeps it across a lost connection.
+      const host = vars.message.anchor
+        ? undefined
+        : channelCacheHostFor(vars.parent);
+      if (host) {
+        return parent.run(() =>
+          channelWrites(host).send({
+            channelId: vars.parent.id,
+            id: vars.optimisticId,
+            senderId: vars.senderId,
+            message: vars.message,
+          })
+        );
+      }
+      await whenOnline();
       try {
         return await parent.run(() =>
           entityMessagesClient.post(vars.parent, {
@@ -589,7 +609,17 @@ export function useDeleteMessageMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: DeleteMessageParams) => {
+      const host = channelCacheHostFor(vars.parent);
+      if (host) {
+        return channelWrites(host).remove({
+          channelId: vars.parent.id,
+          id: vars.messageID,
+          nonce: deleteNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.delete(
         vars.parent,
         vars.messageID,
@@ -672,7 +702,21 @@ export function usePatchMessageMutation(
 ) {
   return useMutation(() => ({
     gcTime: 0,
+    networkMode: channelWriteNetworkMode(channelCacheHost()),
     mutationFn: async (vars: PatchMessageParams) => {
+      const host = channelCacheHostFor(vars.parent);
+      if (host) {
+        return channelWrites(host).edit({
+          channelId: vars.parent.id,
+          id: vars.messageID,
+          content: vars.content,
+          mentions: vars.mentions,
+          removeAttachmentIds: vars.attachmentIDsToDelete ?? [],
+          addAttachments: vars.attachmentsToAdd ?? [],
+          nonce: patchNonce.use(vars),
+        });
+      }
+      await whenOnline();
       return entityMessagesClient.patch(vars.parent, vars.messageID, {
         content: vars.content,
         mentions: vars.mentions,

@@ -1,6 +1,7 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { ChannelChangesDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
 import { channelCacheHost } from './channel-flag';
 import { queryChannelNetwork } from './channel-network';
@@ -11,9 +12,11 @@ import {
   type ChannelSyncRuntime,
   createChannelSyncRuntime,
 } from './channel-sync-runtime';
+import { type ChannelWrites, createChannelWrites } from './channel-writes';
 
 const runtimes = new WeakMap<CacheHost, ChannelSyncRuntime>();
 const touches = new WeakMap<CacheHost, ChannelTouches>();
+const writes = new WeakMap<CacheHost, ChannelWrites>();
 
 /** Reads a page of changes and resolves once its records are cached. */
 async function fetchChannelChanges(
@@ -70,4 +73,17 @@ export function startChannelStream(
 ): ChannelStream | undefined {
   if (channelCacheHost() !== host) return undefined;
   return createChannelStream(client, channelSyncRuntime(host));
+}
+
+/** The channel writes of a cache host, made on first use. */
+export function channelWrites(host: CacheHost): ChannelWrites {
+  const existing = writes.get(host);
+  if (existing) return existing;
+  const created = createChannelWrites({
+    host,
+    runtime: channelSyncRuntime(host),
+    client: getGraphqlSoupClient,
+  });
+  writes.set(host, created);
+  return created;
 }

@@ -17,7 +17,11 @@ import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
 import { channelCacheSupported } from './local/channel-flag';
-import { channelSyncRuntime, channelTouches } from './local/channel-sync';
+import {
+  channelSyncRuntime,
+  channelTouches,
+  channelWrites,
+} from './local/channel-sync';
 import {
   createLocalChannelTimeline,
   type LocalChannelTimeline,
@@ -192,6 +196,7 @@ export function useChannelTimelineSource(
           host: current,
           runtime: channelSyncRuntime(current),
           touches: channelTouches(current),
+          unstored: channelWrites(current).unstoredRoots,
         },
         parent().id,
         aroundMessageId,
