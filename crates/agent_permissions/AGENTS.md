@@ -60,7 +60,9 @@ resolves them against `agent_permission_registry`, and serves the HTTP API
   above, or asks for everything when its source was hard deleted (`Lost`:
   `follows` with no source); each following level's rows, the policy's own
   included, only restrict (stricter-of), whoever made them; the overlay comes
-  last. A state the chain gave from a source has `Origin::Source`. Persona
+  last. An agent's restrictions on itself (`via_agent` rows) stay its own: a
+  source's never reach its followers (`Layer::as_source`), in the gate, the
+  view and a detach's snapshot alike, as a follower's stay local to it. A state the chain gave from a source has `Origin::Source`. Persona
   and team policies are roots. A soft-deleted agent's policy stays
   and keeps applying, frozen. The store reads a chain and its rules in one
   statement, and the gate reads it with the overlay in one snapshot
