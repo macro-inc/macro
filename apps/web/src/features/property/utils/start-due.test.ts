@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { Property } from '../types';
 
 const calendarPreferences = vi.hoisted(() => ({ timeFormat: '12-hour' }));
 vi.mock('@app/features/calendar/utils/preferences', () => ({
@@ -13,6 +14,7 @@ import {
   pickTimedDay,
   startDueDays,
   startDueLength,
+  startDueOf,
   withoutTimes,
   withTimes,
 } from './start-due';
@@ -162,6 +164,52 @@ describe('dates with times', () => {
     ).toBe('Nov 26, 4:30 PM');
   });
 
+  it('read an end saved as a whole day without a time', () => {
+    expect(
+      formatStartDue(
+        { start: at(20, 19), due: at(30, 15), timed: true, wholeDay: 'start' },
+        NOW
+      )
+    ).toBe('Nov 20 → Nov 30, 3:00 PM');
+    expect(
+      formatStartDue(
+        { start: at(30, 0), due: at(30, 15), timed: true, wholeDay: 'start' },
+        NOW
+      )
+    ).toBe('Nov 30, 3:00 PM');
+    expect(
+      formatStartDue(
+        { start: at(30, 14), due: at(30, 0), timed: true, wholeDay: 'due' },
+        NOW
+      )
+    ).toBe('Nov 30, 2:00 PM → Nov 30');
+  });
+
+  it('mark the end without a time when only one end has one', () => {
+    const date = (value: Date, hasTime?: boolean) =>
+      ({
+        valueType: 'DATE',
+        value,
+        ...(hasTime ? { hasTime } : {}),
+      }) as Property;
+    expect(startDueOf(date(at(20, 19)), date(at(30, 15), true))).toEqual({
+      start: at(20, 19),
+      due: at(30, 15),
+      timed: true,
+      wholeDay: 'start',
+    });
+    expect(startDueOf(undefined, date(at(30, 15), true))).toEqual({
+      start: null,
+      due: at(30, 15),
+      timed: true,
+    });
+    expect(startDueOf(date(at(26, 14), true), date(at(30, 15), true))).toEqual({
+      start: at(26, 14),
+      due: at(30, 15),
+      timed: true,
+    });
+  });
+
   it('follow the calendar clock setting', () => {
     calendarPreferences.timeFormat = '24-hour';
     try {
@@ -287,10 +335,25 @@ describe('formatStartDueCompact', () => {
         { start: at(26, 14), due: at(28, 16, 30), timed: true },
         NOW
       )
-    ).toBe('Nov 26, 2pm → Nov 28, 4:30pm');
+    ).toBe('Nov 26 → Nov 28');
     expect(
       formatStartDueCompact({ start: null, due: at(26, 9), timed: true }, NOW)
     ).toBe('Nov 26, 9am');
+  });
+
+  it('reads an end saved as a whole day without a time', () => {
+    expect(
+      formatStartDueCompact(
+        { start: at(26, 0), due: at(26, 15), timed: true, wholeDay: 'start' },
+        NOW
+      )
+    ).toBe('Nov 26, 3pm');
+    expect(
+      formatStartDueCompact(
+        { start: at(26, 14), due: at(26, 0), timed: true, wholeDay: 'due' },
+        NOW
+      )
+    ).toBe('Nov 26, 2pm → Nov 26');
   });
 
   it('reads whole days as the full form does', () => {

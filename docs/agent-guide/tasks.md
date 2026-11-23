@@ -397,8 +397,10 @@ follow the calendar's 12/24-hour setting. The footer then reads `2h` with
 **Remove time**, which makes both ends whole days again, and **Clear both**.
 With times, the pills read `Nov 26, 2:00 – 4:00 PM` (`Nov 26, 2:00 PM →
 Nov 28, 4:00 PM` across days); list cells, board cards and project rows write
-times compactly, as calendar events do (`Nov 26, 2–4pm`), and the Properties
-rows show `Nov 26, 2pm`. A due date with a time is overdue from that moment.
+times compactly, as calendar events do (`Nov 26, 2–4pm`), and across days show
+the days alone (`Nov 26 → Nov 28`); the Properties rows show `Nov 26, 2pm`.
+When only one end has a time (an agent set a due time on a task with a
+whole-day start), the other end reads as a day: `Nov 20 → Nov 30, 3:00 PM`. A due date with a time is overdue from that moment.
 When a pick moves the start past the saved due date, the picker saves the due
 date first, so the server's start rule never clamps the new start. A date without a time is read and
 written exactly as before. Agents set a time with `date_has_time` on
