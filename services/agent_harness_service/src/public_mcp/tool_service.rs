@@ -233,6 +233,7 @@ fn events_span(extensions: &rmcp::model::Extensions) -> tracing::Span {
     tracing::info_span!(
         "public_mcp.events",
         mcp.events.method = tracing::field::Empty,
+        mcp.events.profile = tracing::field::Empty,
         mcp.event.name = tracing::field::Empty,
         mcp.events.sources = tracing::field::Empty,
         mcp.caller = caller_kind,

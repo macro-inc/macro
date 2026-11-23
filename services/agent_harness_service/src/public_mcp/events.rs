@@ -37,8 +37,9 @@ use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use webhook::domain::mcp::filter::McpEventFilter;
 use webhook::domain::mcp::models::{
-    MAX_ARGUMENTS_BYTES, McpEndpointFailure, McpSecretCiphertext, McpSubscribeRequest,
-    McpSubscribeResult, McpSubscriptionErrorBody, McpTtlRequest, McpUnsubscribeRequest,
+    MAX_ARGUMENTS_BYTES, McpDeliveryProfile, McpEndpointFailure, McpSecretCiphertext,
+    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionErrorBody, McpTtlRequest,
+    McpUnsubscribeRequest,
 };
 use webhook_signature::standard::SigningSecret;
 
@@ -174,6 +175,8 @@ pub(crate) struct Subscribe {
     pub(crate) url: String,
     pub(crate) secret: SigningSecret,
     pub(crate) ttl: McpTtlRequest,
+    /// Whose conventions its deliveries follow.
+    pub(crate) profile: McpDeliveryProfile,
 }
 
 /// An `events/unsubscribe` request, parsed.
@@ -234,9 +237,11 @@ impl McpEvents {
         selection: &Selection,
     ) -> Result<Compiled, EventsError> {
         let filter = match selection {
-            Selection::Event { name, ids } => {
-                McpEventFilter::for_events(vec![(*name).to_owned()], ids.clone())
-            }
+            Selection::Event {
+                name,
+                ids,
+                conditions,
+            } => catalog::event_filter(name, ids.as_deref(), conditions),
             Selection::Query {
                 filter: Some(filter),
                 ..
@@ -306,6 +311,7 @@ impl McpEvents {
             secret: request.secret,
             secret_ciphertext,
             ttl: request.ttl,
+            profile: request.profile,
         };
         let result = self.store.subscribe(user, &body).await?;
         let compiled = Compiled::new(result.filter.clone());
