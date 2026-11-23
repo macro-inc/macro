@@ -264,7 +264,7 @@ export function createLocalChannelTimeline(
       deps.runtime.noteStoredSeq(channelId, seq);
       return 'held';
     }
-    deps.runtime.noteServerRead(channelId, seq, epoch);
+    deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
     return seq === null ? 'unheld' : 'held';
   };
 

@@ -66,13 +66,19 @@ export interface ChannelPage {
 
 export type LoadedChannelPage = {
   page: ChannelPage;
-  source: 'device' | 'server';
   /**
    * The change sequence the device holds for the channel once the page is
    * stored: at once for a device page, after the commit for a server page.
    */
   stored: Promise<string | null>;
-};
+} & (
+  | { source: 'device' }
+  | {
+      source: 'server';
+      /** The sequence the server read the page at. */
+      readSeq: string;
+    }
+);
 
 export type ChannelServerPage = ChannelTimelineQuery['user']['channelTimeline'];
 
@@ -429,6 +435,7 @@ async function loadPage(
       newerCursor: page.newerCursor,
     },
     source: 'server',
+    readSeq: page.seq,
     stored: store(),
   };
 }

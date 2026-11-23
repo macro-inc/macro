@@ -39,8 +39,8 @@ const page = (
   seq: string | null = '5'
 ): LoadedChannelPage => ({
   page: { entries: [], olderCursor: null, newerCursor: null },
-  source,
   stored: Promise.resolve(seq),
+  ...(source === 'server' ? { source, readSeq: seq ?? '0' } : { source }),
 });
 
 function deps(
@@ -99,7 +99,7 @@ describe('runChannelPrewarmPass', () => {
       { channelId: 'fresh', limit: PREWARM_PAGE_SIZE },
       { channelId: 'held', limit: PREWARM_PAGE_SIZE },
     ]);
-    expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', '9', 3);
+    expect(runtime.noteServerRead).toHaveBeenCalledWith('fresh', '9', 3, '9');
     expect(runtime.noteStoredSeq).toHaveBeenCalledWith('held', '4');
     expect(runtime.ensureCurrent).toHaveBeenCalledTimes(1);
     expect(runtime.ensureCurrent).toHaveBeenCalledWith('held');

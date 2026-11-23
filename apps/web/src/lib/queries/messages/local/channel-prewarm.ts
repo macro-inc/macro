@@ -153,7 +153,7 @@ const warmChannel = (
       if (loaded === 'unsupported') return 'unsupported' as const;
       const seq = await loaded.stored;
       if (loaded.source === 'server') {
-        deps.runtime.noteServerRead(channelId, seq, epoch);
+        deps.runtime.noteServerRead(channelId, seq, epoch, loaded.readSeq);
         return 'fetched' as const;
       }
       deps.runtime.noteStoredSeq(channelId, seq);

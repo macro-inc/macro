@@ -151,7 +151,12 @@ async function fetchServerThread(
   fetchPage: FetchChannelThreadPage,
   signal?: AbortSignal
 ): Promise<
-  | { thread: MessageThread; seq: string | null; sessionChanged: boolean }
+  | {
+      thread: MessageThread;
+      seq: string | null;
+      readSeq: string;
+      sessionChanged: boolean;
+    }
   | undefined
 > {
   // The session the thread is read under: a later one must not store it.
@@ -210,11 +215,11 @@ async function fetchServerThread(
     // The cache session changed before the device stored the thread; the
     // caller reads it again under the new one.
     if (cacheSessionChanged(error))
-      return { thread, seq: null, sessionChanged: true };
+      return { thread, seq: null, readSeq: seq, sessionChanged: true };
     // The thread still shows; it is read from the server again next time.
     Telemetry.error(error, { surface: 'channel-thread' });
   }
-  return { thread, seq: committed, sessionChanged: false };
+  return { thread, seq: committed, readSeq: seq, sessionChanged: false };
 }
 
 export type LoadedChannelThread = {
@@ -224,6 +229,8 @@ export type LoadedChannelThread = {
   seq: string | null;
   /** The cache session changed before the device could store the thread. */
   sessionChanged?: boolean;
+  /** The sequence the server read the thread at; absent for a device read. */
+  readSeq?: string;
 };
 
 /**
@@ -358,8 +365,16 @@ export function createLocalChannelThread(
         if (reloads < SESSION_CHANGE_RELOADS) await load(root, reloads + 1);
         return;
       }
-      deps.runtime.noteServerRead(channelId, loaded.seq, epoch);
+      deps.runtime.noteServerRead(
+        channelId,
+        loaded.seq,
+        epoch,
+        loaded.readSeq ?? null
+      );
       held = loaded.seq !== null;
+      // A device that kept an older sequence than the read catches up.
+      if (held)
+        fireAndForget(deps.runtime.ensureCurrent(channelId), 'channel-thread');
     } catch (error) {
       if (current !== token) return;
       setState('error', error);

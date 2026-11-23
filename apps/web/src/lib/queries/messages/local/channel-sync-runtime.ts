@@ -81,10 +81,18 @@ export interface ChannelSyncRuntime {
   /** What a read learned about the stored sequence. */
   noteStoredSeq(channelId: string, seq: string | null): void;
   /**
-   * A read fetched from the server at the socket epoch `epoch`: the stored
-   * sequence it committed is current if the socket stayed up since.
+   * A read fetched from the server at sequence `readSeq` and the socket epoch
+   * `epoch`: the stored sequence it committed is current if the socket stayed
+   * up since, and the device held no older sequence than the read. A device
+   * that kept an older one also kept what changed between the two, which only
+   * a catch-up replays.
    */
-  noteServerRead(channelId: string, seq: string | null, epoch: number): void;
+  noteServerRead(
+    channelId: string,
+    seq: string | null,
+    epoch: number,
+    readSeq: string | null
+  ): void;
   /** The socket epoch, which changes on every disconnect. */
   epoch(): number;
   /** Catches the channel up unless it is current; resolves when done. */
@@ -433,10 +441,17 @@ export function createChannelSyncRuntime(
       state.seq = parseSeq(seq);
       if (state.seq === null) state.current = false;
     },
-    noteServerRead(channelId, seq, epoch) {
+    noteServerRead(channelId, seq, epoch, readSeq) {
       const state = stateOf(channelId);
       state.seq = parseSeq(seq);
-      if (state.seq === null || !isConnected || epoch !== socketEpoch) return;
+      const read = parseSeq(readSeq);
+      if (state.seq === null || read === null || read > state.seq) {
+        // Nothing stored, or the device kept rows the server has since
+        // changed or deleted: only a catch-up replays those.
+        state.current = false;
+        return;
+      }
+      if (!isConnected || epoch !== socketEpoch) return;
       // Read while frames were flowing: every later change arrives as one,
       // unless one already went by while the device held nothing.
       if (state.seenSeq === undefined || state.seenSeq <= state.seq) {

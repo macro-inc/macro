@@ -336,7 +336,12 @@ describe('createLocalChannelTimeline', () => {
     await waitFor(
       () => vi.mocked(runtime.noteServerRead).mock.calls.length > 0
     );
-    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, '9', 3);
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      '9',
+      3,
+      '9'
+    );
     expect(mounted.host.commits.at(-1)).toMatchObject({
       channelId: CHANNEL_ID,
       coverage: [{ start: '', end: '\u{10FFFF}' }],
@@ -378,7 +383,12 @@ describe('createLocalChannelTimeline', () => {
       return vi.mocked(runtime.noteServerRead).mock.calls.length > 0;
     });
     expect(fetchPage).toHaveBeenCalledTimes(2);
-    expect(runtime.noteServerRead).toHaveBeenCalledWith(CHANNEL_ID, '9', 3);
+    expect(runtime.noteServerRead).toHaveBeenCalledWith(
+      CHANNEL_ID,
+      '9',
+      3,
+      '9'
+    );
     // The reload never blanks the window it shows.
     expect(shown.slice(shown.indexOf(2))).not.toContain(0);
 

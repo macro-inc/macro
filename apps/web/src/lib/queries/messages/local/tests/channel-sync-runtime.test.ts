@@ -199,10 +199,21 @@ describe('createChannelSyncRuntime', () => {
   it('asks nothing when opening a channel proven current by a server read', async () => {
     const { fetch, runtime } = setup(null);
     runtime.onConnected();
-    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch());
+    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '9');
 
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('catches up from the stored sequence when the server read a newer one', async () => {
+    // The device kept sequence 9 and its rows; the page was read at 12. A
+    // row deleted at 10 is still on the device until changes after 9 replay.
+    const { fetch, runtime } = setup(9n);
+    runtime.onConnected();
+    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '12');
+
+    await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
+    expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
   });
 
   it('does not trust a server read across a disconnect', async () => {
@@ -211,7 +222,7 @@ describe('createChannelSyncRuntime', () => {
     const epoch = runtime.epoch();
     runtime.onDisconnected();
     runtime.onConnected();
-    runtime.noteServerRead(CHANNEL_ID, '9', epoch);
+    runtime.noteServerRead(CHANNEL_ID, '9', epoch, '9');
 
     await expect(runtime.ensureCurrent(CHANNEL_ID)).resolves.toBe('current');
     expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
@@ -224,7 +235,7 @@ describe('createChannelSyncRuntime', () => {
     const release = runtime.open(CHANNEL_ID);
     runtime.onFrame(frame(11), true);
     await settle();
-    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch());
+    runtime.noteServerRead(CHANNEL_ID, '9', runtime.epoch(), '9');
     await waitFor(() => fetch.mock.calls.length > 0);
     expect(fetch).toHaveBeenCalledWith(CHANNEL_ID, '9');
     release();
