@@ -14,7 +14,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: {},
   itemToSafeName: vi.fn(),
 }));
-vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
+vi.mock('@core/context/channels', () => ({ useChannelDirectory: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },
@@ -79,6 +79,51 @@ const mapped = (timestamps: Partial<FocusThread>) =>
   } as EmailFocusQuery)[0];
 
 describe('mapEmailFocus', () => {
+  it.each([
+    { invitationIn: 'message', hasCalendarInvite: true },
+    { invitationIn: 'draft', hasCalendarInvite: true },
+    { invitationIn: 'neither', hasCalendarInvite: false },
+  ])(
+    'keeps an attachment-free Calendar invite on Focus ($invitationIn)',
+    ({ invitationIn, hasCalendarInvite }) => {
+      const baseline = {
+        messageCount: 1,
+        inboxVisible: true,
+        isRead: false,
+        isSignal: true,
+        hasCalendarAttachment: invitationIn === 'message',
+        latestInboundMessageTs: null,
+        latestNonSpamMessageTs: null,
+        latestOutboundMessageTs: null,
+        previewTs: null,
+        preview: null,
+      };
+
+      expect(
+        mapped({
+          attachments: [],
+          mailDraftState: {
+            baseline,
+            drafts:
+              invitationIn === 'draft'
+                ? [
+                    {
+                      id: 'draft',
+                      macroDraft: true,
+                      facts: { ...baseline, hasCalendarAttachment: true },
+                    },
+                  ]
+                : [],
+          },
+        })
+      ).toMatchObject({
+        hasIcsAttachment: hasCalendarInvite,
+        hasFileAttachment: false,
+        attachments: [],
+      });
+    }
+  );
+
   it('carries the classification onto the row', () => {
     expect(mapped({})?.focus).toEqual({
       category: 'TEAM',

@@ -1068,14 +1068,14 @@ dependencies = [
 name = "cache-core"
 version = "0.1.0"
 dependencies = [
- "apollo-compiler",
  "apollo-parser",
+ "cache-schema",
  "chrono",
  "database_sql",
+ "item-filter-index",
  "lru",
  "macro_user_id",
  "maybe_send",
- "miniz_oxide",
  "postcard",
  "predicate-index",
  "serde",
@@ -1084,6 +1084,18 @@ dependencies = [
  "subsequence_match",
  "thiserror 2.0.18",
  "uuid",
+ "zlib-rs",
+]
+
+[[package]]
+name = "cache-schema"
+version = "0.1.0"
+dependencies = [
+ "apollo-compiler",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -1091,6 +1103,7 @@ name = "cache-turso"
 version = "0.1.0"
 dependencies = [
  "cache-core",
+ "item-filter-index",
  "maybe_send",
  "predicate-index",
  "thiserror 2.0.18",
@@ -3103,6 +3116,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -7354,6 +7368,7 @@ dependencies = [
  "serde_json",
  "soup-filter-projection",
  "thiserror 2.0.18",
+ "tracing",
  "uuid",
 ]
 
@@ -8046,7 +8061,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-fs"
 version = "2.5.1"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
 dependencies = [
  "anyhow",
  "dunce",
@@ -8083,7 +8098,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-http"
 version = "2.5.9"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
 dependencies = [
  "bytes",
  "cookie_store",
@@ -8303,7 +8318,7 @@ dependencies = [
 [[package]]
 name = "tauri-plugin-websocket"
 version = "2.4.2"
-source = "git+https://github.com/macro-inc/plugins-workspace?rev=5896804dbd481f14bb17e8cadc1828ff5619aa1e#5896804dbd481f14bb17e8cadc1828ff5619aa1e"
+source = "git+https://github.com/macro-inc/plugins-workspace?rev=a6f62aed2b573d46ccac835598f8624676876e92#a6f62aed2b573d46ccac835598f8624676876e92"
 dependencies = [
  "futures-util",
  "http",

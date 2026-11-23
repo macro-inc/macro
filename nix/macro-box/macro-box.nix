@@ -28,8 +28,8 @@ let
           module
           herdr
           {
-            macro.box.macrod = self'.packages.macrod;
-            macro.box.harnessd.package = self'.packages.harnessd;
+            macro.box.macrod = self'.packages.macro-box-macrod;
+            macro.box.harnessd.package = self'.packages.macro-box-harnessd;
           }
         ];
       }
@@ -151,7 +151,8 @@ in
             # Never written, so enrollment fails with its reason.
             macro.box.enrollFrom = lib.mkDefault "file:/run/macro/enrollment.json";
           };
-          inherit (self'.packages) macrod harnessd;
+          macrod = self'.packages.macro-box-macrod;
+          harnessd = self'.packages.macro-box-harnessd;
         };
         macro-box-firecracker-restore = import ./_firecracker-test.nix {
           inherit pkgs;
@@ -161,7 +162,8 @@ in
               herdr
             ];
           };
-          inherit (self'.packages) macrod harnessd;
+          macrod = self'.packages.macro-box-macrod;
+          harnessd = self'.packages.macro-box-harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
         # start-agent's boot (lock adoption, rollback) and agent-stopped's

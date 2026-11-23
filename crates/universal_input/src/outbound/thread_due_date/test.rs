@@ -57,12 +57,16 @@ fn the_schema_accepts_every_fact_kind_and_they_decode() {
             {"message": 1, "date": {"kind": "weekday", "span": "Friday", "weekday": "friday", "week": "upcoming"}},
         ],
         "closures": [{"message": 1, "span": "Done"}],
+        "events": [
+            {"message": 1, "date": {"kind": "weekday", "span": "Monday", "weekday": "monday", "week": "next"}, "when": "to_come"},
+        ],
     });
 
     validator.validate(&answer).unwrap();
     let facts: ThreadFacts = serde_json::from_value(answer).unwrap();
     assert_eq!(facts.deadlines.len(), 3);
     assert_eq!(facts.closures.len(), 1);
+    assert_eq!(facts.events.len(), 1);
 }
 
 #[test]
@@ -78,7 +82,14 @@ fn the_schema_requires_every_field_as_strict_output_needs() {
     assert!(validator.validate(&json!({"deadlines": []})).is_err());
     assert!(
         validator
-            .validate(&json!({"deadlines": [], "closures": [], "due_on": "2030-01-01"}))
+            .validate(&json!({"deadlines": [], "closures": []}))
+            .is_err()
+    );
+    assert!(
+        validator
+            .validate(
+                &json!({"deadlines": [], "closures": [], "events": [], "due_on": "2030-01-01"})
+            )
             .is_err()
     );
     // A model cannot hand over a computed date in place of a fact.
@@ -87,6 +98,39 @@ fn the_schema_requires_every_field_as_strict_output_needs() {
             .validate(&json!({
                 "deadlines": [{"message": 0, "date": "2030-01-01"}],
                 "closures": [],
+                "events": [],
+            }))
+            .is_err()
+    );
+    assert!(
+        validator
+            .validate(&json!({
+                "deadlines": [],
+                "closures": [],
+                "events": [{"message": 0, "date": "2030-01-01", "when": "to_come"}],
+            }))
+            .is_err()
+    );
+    // An event says which way from its message it lies, in one of three ways.
+    assert!(
+        validator
+            .validate(&json!({
+                "deadlines": [],
+                "closures": [],
+                "events": [{"message": 0, "date": {
+                    "kind": "relative_day", "span": "yesterday", "offset_days": -1
+                }, "when": "past"}],
+            }))
+            .is_err()
+    );
+    assert!(
+        validator
+            .validate(&json!({
+                "deadlines": [],
+                "closures": [],
+                "events": [{"message": 0, "date": {
+                    "kind": "relative_day", "span": "yesterday", "offset_days": -1
+                }}],
             }))
             .is_err()
     );
@@ -113,4 +157,48 @@ fn the_schema_fits_what_the_examples_in_the_prompt_answer() {
         validator.validate(&answer).unwrap();
         serde_json::from_value::<ThreadFacts>(answer).unwrap();
     }
+}
+
+#[derive(Default)]
+struct Journal(Mutex<Vec<ai_usage::UsageEvent>>);
+
+impl UsageRecorder for Journal {
+    fn record(&self, event: ai_usage::UsageEvent) {
+        self.0.lock().unwrap().push(event);
+    }
+}
+
+#[test]
+fn a_read_reports_the_tokens_it_records_and_still_records_them() {
+    let journal = Journal::default();
+    let recorder = Captured {
+        inner: &journal,
+        usage: Mutex::new(None),
+    };
+    let owner = macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@macro.com").unwrap();
+    for (input, output) in [(2_000, 10), (500, 1)] {
+        recorder.record(
+            UsageContext::new(ai_usage::AiFeature::EmailFocus, owner.clone()).into_event(
+                "fireworks/nemotron".to_owned(),
+                UsageAmount::Tokens {
+                    input,
+                    output,
+                    cache_read: 7,
+                    cache_write: 0,
+                },
+            ),
+        );
+    }
+
+    assert_eq!(journal.0.lock().unwrap().len(), 2);
+    assert_eq!(
+        recorder.usage.into_inner().unwrap(),
+        Some(DueDateUsage {
+            model: "fireworks/nemotron".to_owned(),
+            input_tokens: 2_500,
+            output_tokens: 11,
+            cache_read_tokens: 14,
+            cache_write_tokens: 0,
+        })
+    );
 }

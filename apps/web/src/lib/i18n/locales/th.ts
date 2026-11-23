@@ -103,7 +103,6 @@ export default {
     close: 'ปิด',
     delete: 'ลบ',
     rename: 'เปลี่ยนชื่อ',
-    more: 'เพิ่มเติม',
     search: 'ค้นหา',
     settings: 'การตั้งค่า',
   },
@@ -504,6 +503,9 @@ export default {
       other: 'ลบ {{count}} รายการแล้ว',
     },
     toastDeleteFailed: 'ลบไม่สำเร็จ',
+    toastPropertySet: {
+      other: 'ตั้งค่า {{property}} ให้ {{count}} รายการแล้ว',
+    },
     toastAddedToFavorites: 'เพิ่มในรายการโปรดแล้ว',
     toastAddedCountToFavorites: {
       other: 'เพิ่ม {{count}} รายการในรายการโปรดแล้ว',
@@ -736,7 +738,6 @@ export default {
     searchNoResults: 'ไม่พบการตั้งค่า ลองค้นหา “ลายเซ็น” “ธีม” หรือ “ปฏิทิน”',
     backToSettings: 'กลับไปที่การตั้งค่า',
     closeSettings: 'ปิดการตั้งค่า',
-    goToTab: 'ไปที่แท็บการตั้งค่า {{number}}',
     editProfile: 'แก้ไขโปรไฟล์',
     logOut: 'ออกจากระบบ',
     yourAccount: 'บัญชีของคุณ',

@@ -104,7 +104,6 @@ export default {
     close: 'Stäng',
     delete: 'Ta bort',
     rename: 'Byt namn',
-    more: 'Mer',
     search: 'Sök',
     settings: 'Inställningar',
   },
@@ -518,6 +517,10 @@ export default {
       other: '{{count}} objekt borttagna',
     },
     toastDeleteFailed: 'Det gick inte att ta bort',
+    toastPropertySet: {
+      one: '{{property}} har angetts',
+      other: '{{property}} har angetts för {{count}} objekt',
+    },
     toastAddedToFavorites: 'Tillagt i favoriter',
     toastAddedCountToFavorites: {
       one: '{{count}} objekt tillagt i favoriter',
@@ -773,7 +776,6 @@ export default {
       'Inga inställningar hittades. Prova ”signatur”, ”tema” eller ”kalender”.',
     backToSettings: 'Tillbaka till inställningar',
     closeSettings: 'Stäng inställningar',
-    goToTab: 'Gå till inställningsflik {{number}}',
     editProfile: 'Redigera profil',
     logOut: 'Logga ut',
     yourAccount: 'Ditt konto',

@@ -44,10 +44,14 @@ export type UiOpenResult =
  * - At most 3 items open per turn. `{status: 'declined'}` is final (`not_allowed_route`: agents can't open that page, such as settings or a call; `rate_limited`; `turned_off`): link `url` in your reply. Don't try other paths for it, and never open something else to test whether opening works.
  * - `{status: 'sent'}` means the user's tab received it, not that they looked. Say "I opened it" only for `sent`, and include the link anyway.
  *
- * ```javascript
+ * ```typescript
  * // "Pull up the Q4 plan next to this chat."
- * export async function main({macro, execution}) {
- *   const [doc] = await macro.search.documents('Q4 plan', {limit: 1});
+ * export async function main({macro, execution}: CodeContext) {
+ *   let doc;
+ *   for await (const found of macro.documents.search('Q4 plan')) {
+ *     doc = found;
+ *     break;
+ *   }
  *   if (!doc) return {data: {found: false}};
  *   const opened = await macro.ui.open(execution, doc);
  *   return {data: {status: opened.status, url: opened.url}};

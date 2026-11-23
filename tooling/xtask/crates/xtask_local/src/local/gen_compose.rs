@@ -26,7 +26,9 @@ use super::build::{BinariesDir, runtime_image_tag};
 use super::computers::{Computers, Fleet};
 use super::instance::{Instance, Port};
 use super::inventory::{OPENBAO_IMAGE, RustService, services_for_mode};
-use super::{Mode, google_emulator, microsoft_emulator, model_emulator, openbao, repo_root};
+use super::{
+    Mode, google_emulator, microsoft_emulator, model_emulator, passwords_vault, repo_root,
+};
 
 #[cfg(test)]
 mod test;
@@ -161,6 +163,7 @@ pub fn generate(
     // The rest of the local infra (FusionAuth, Mailpit, per-instance Postgres/
     // Redis/OpenSearch port remaps) only for the self-contained local stacks.
     if mode.spec().runs_local_infra {
+        passwords_vault::stage_config(&passwords_vault::config_dir(instance))?;
         add_local_infra(&mut services, instance, static_frontend)?;
         add_sdk_webhook_relay(&mut services, instance)?;
     }
@@ -505,12 +508,12 @@ fn add_local_infra(
                 "/openbao/config/start.sh".to_string(),
             ])),
             command: Some(dct::Command::Args(vec![])),
-            volumes: openbao::MOUNTS
+            volumes: passwords_vault::CONFIG_FILES
                 .iter()
-                .map(|(path, target)| {
+                .map(|(name, _)| {
                     dct::Volumes::Simple(format!(
-                        "{}:{target}:ro,z",
-                        repo_root().join(path).display()
+                        "{}:/openbao/config/{name}:ro,z",
+                        passwords_vault::config_dir(instance).join(name).display()
                     ))
                 })
                 .chain([dct::Volumes::Simple(

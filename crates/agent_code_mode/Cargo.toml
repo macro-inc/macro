@@ -25,11 +25,10 @@ import = { path = "../import" }
 lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
-mcp_client = { path = "../mcp_client" }
+connectors = { path = "../connectors" }
 macro_uuid = { path = "../macro_uuid" }
 nom = { workspace = true }
 nutype = { workspace = true }
-pipedream_mcp = { path = "../pipedream_mcp" }
 rootcause = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
@@ -50,6 +49,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 jev = { path = "../jev", features = ["outbound"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 macro_db_migrator = { path = "../macro_db_migrator" }

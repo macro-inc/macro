@@ -33,7 +33,7 @@ use crate::domain::ports::{
     SharedEntity, SourceDates, TeamMember,
 };
 use crate::domain::service::NotionWorkspaceImporter;
-use crate::domain::service::test::admission::NoConnector;
+use crate::domain::service::test::admission::{NoConnector, no_connections};
 use crate::outbound::pg_import_repo::PgImportRepo;
 
 fn page_id(hex: char) -> NotionId {
@@ -104,9 +104,16 @@ impl NotionApi for Pages {
 
     async fn data_source(
         &self,
-        _: &NotionId,
+        id: &NotionId,
     ) -> std::result::Result<NotionDataSource, NotionError> {
-        unimplemented!("only pages here")
+        Ok(NotionDataSource {
+            id: id.clone(),
+            database_id: page_id('d'),
+            title: "Rows".into(),
+            database_parent: import_notion::domain::model::NotionParent::Workspace,
+            in_trash: false,
+            properties: Vec::new(),
+        })
     }
 
     async fn database_sources(
@@ -121,7 +128,10 @@ impl NotionApi for Pages {
         _: &NotionId,
         _: Option<String>,
     ) -> std::result::Result<RowsPage, NotionError> {
-        unimplemented!("only pages here")
+        Ok(RowsPage {
+            rows: vec![self.page(&page_id('f')).await?],
+            next: import_notion::domain::model::RowsNext::End,
+        })
     }
 
     async fn users(
@@ -182,7 +192,7 @@ fn service(
 ) -> Service {
     ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::new(writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -376,7 +386,7 @@ async fn a_stalled_write_is_adopted_on_read_and_finishes_without_duplicates(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -541,7 +551,7 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -568,6 +578,21 @@ async fn a_write_shares_what_the_plan_shares_and_keeps_the_rest_with_the_owner(p
         [SharedEntity::Document(write::document_id(rows[0]))],
         "only the Wiki is shared"
     );
+    assert_eq!(
+        *writer.folder_visibilities.lock().unwrap(),
+        vec![(
+            "Notion".to_string(),
+            crate::domain::ports::ImportVisibility::Personal
+        )],
+    );
+    let policies = writer.visibilities.lock().unwrap();
+    for (row, expected) in [
+        (rows[0], crate::domain::ports::ImportVisibility::Shared),
+        (rows[1], crate::domain::ports::ImportVisibility::Personal),
+        (rows[2], crate::domain::ports::ImportVisibility::Personal),
+    ] {
+        assert!(policies.contains(&(write::document_id(row), expected)));
+    }
     let wiki = repo.get(&owner, rows[0]).await.unwrap().unwrap();
     assert_eq!(wiki.status, ImportStatus::Imported);
     assert_eq!(wiki.team_id, Some(team), "the team's copy of the Wiki");
@@ -621,7 +646,7 @@ async fn a_teammate_writing_the_same_page_waits_and_links_to_the_first_copy(pool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -692,7 +717,7 @@ async fn a_page_a_teammate_already_shared_is_linked_without_writing(pool: PgPool
     let writer = Arc::new(Writer::default());
     let service = ImportServiceImpl::new(
         PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -867,51 +892,5 @@ mod reimport;
 mod root;
 mod tracker;
 
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn written_pages_keep_their_notion_dates(pool: PgPool) {
-    let owner = user("dates");
-    let mut spec = page('f', "Spec");
-    spec.parent_foreign_id = Some(page_id('e').as_str().to_string());
-    let (review, rows) = approved(&pool, &owner, &[page('e', "Wiki"), spec]).await;
-    let repo = PgImportRepo::new(pool.clone());
-    planned(&repo, &owner).await;
-    let tracker = TaskTracker::new();
-    let writer = Arc::new(Writer::default());
-    let service = ImportServiceImpl::new(
-        PgImportRepo::new(pool.clone()),
-        Arc::new(NoConnector),
-        Arc::clone(&writer),
-        Arc::new(ai_usage::NoOpUsageRecorder),
-    )
-    .with_notion_connections(Arc::new(Connected))
-    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
-
-    service
-        .start_notion_write(&owner, review, NotionWriteChoices::default())
-        .await
-        .unwrap();
-    tracker.close();
-    tracker.wait().await;
-
-    let at = |month| Utc.with_ymd_and_hms(2024, month, 1, 0, 0, 0).unwrap();
-    let mut documents = writer.document_dates.lock().unwrap().clone();
-    documents.sort_by_key(|(id, _)| *id);
-    let mut expected = vec![
-        (
-            write::document_id(rows[0]),
-            Some(SourceDates {
-                created: at(1),
-                last_edited: at(3),
-            }),
-        ),
-        (
-            write::document_id(rows[1]),
-            Some(SourceDates {
-                created: at(2),
-                last_edited: at(6),
-            }),
-        ),
-    ];
-    expected.sort_by_key(|(id, _)| *id);
-    assert_eq!(documents, expected, "each page keeps its own dates");
-}
+mod dates;
+mod folders;

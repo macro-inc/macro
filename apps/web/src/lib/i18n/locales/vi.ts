@@ -103,7 +103,6 @@ export default {
     close: 'Đóng',
     delete: 'Xóa',
     rename: 'Đổi tên',
-    more: 'Thêm',
     search: 'Tìm kiếm',
     settings: 'Cài đặt',
   },
@@ -511,6 +510,9 @@ export default {
       other: 'Đã xóa {{count}} mục',
     },
     toastDeleteFailed: 'Không thể xóa',
+    toastPropertySet: {
+      other: 'Đã đặt {{property}} cho {{count}} mục',
+    },
     toastAddedToFavorites: 'Đã thêm vào mục yêu thích',
     toastAddedCountToFavorites: {
       other: 'Đã thêm {{count}} mục vào mục yêu thích',
@@ -746,7 +748,6 @@ export default {
       'Không tìm thấy cài đặt nào. Hãy thử “chữ ký”, “giao diện” hoặc “lịch”.',
     backToSettings: 'Quay lại cài đặt',
     closeSettings: 'Đóng cài đặt',
-    goToTab: 'Đi tới thẻ cài đặt {{number}}',
     editProfile: 'Chỉnh sửa hồ sơ',
     logOut: 'Đăng xuất',
     yourAccount: 'Tài khoản của bạn',

@@ -12,7 +12,7 @@ use std::time::Duration;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_harness::domain::model::{ListedSessions, RuntimeAccessFacts};
 use agent_harness::domain::ports::RuntimeConnections;
-use agent_session::domain::connection::RuntimeAttachment;
+use agent_session::domain::connection::{RuntimeAttachment, RuntimeConnectionId};
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -134,6 +134,10 @@ impl<Inner: RuntimeConnections, Waker: DispatchWaker> RuntimeConnections
 
     fn is_connected(&self, harness: HarnessId) -> bool {
         self.inner.is_connected(harness)
+    }
+
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.inner.connection_of(harness)
     }
 
     fn sessions_on_harness(

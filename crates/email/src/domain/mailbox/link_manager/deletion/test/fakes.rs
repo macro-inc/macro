@@ -24,6 +24,7 @@ pub(super) enum Call {
     CrmDelete(Uuid, Uuid),
     Purge(Uuid, u32, u32, u32, std::time::Duration),
     LinkRemoved(String, Uuid),
+    DirectoryChanged(String),
     Event(serde_json::Value),
     History(Uuid, String),
     Acquire,
@@ -108,6 +109,7 @@ pub(super) fn expected_calls(reason: &str, promoted: bool) -> Vec<Call> {
         Call::CrmDelete(TEAM, LINK),
         Call::Purge(LINK, 500, 2000, 5000, std::time::Duration::from_secs(2)),
         Call::LinkRemoved(OWNER.into(), LINK),
+        Call::DirectoryChanged(OWNER.into()),
         Call::Event(
             serde_json::json!({"schema_version": 1, "event_type":"email.link_disconnected", "metadata": {
                 "link_id": LINK, "owner": OWNER, "email_address": "owner@example.com", "reason": reason,
@@ -261,6 +263,10 @@ impl LinkPurger for Fake {
 impl LinkDeletionRefresh for Fake {
     async fn link_removed(&self, owner: &str, link_id: Uuid) {
         self.step("refresh", Call::LinkRemoved(owner.into(), link_id))
+            .unwrap();
+    }
+    async fn directory_changed(&self, owner: &MacroUserIdStr<'static>) {
+        self.step("directory", Call::DirectoryChanged(owner.to_string()))
             .unwrap();
     }
 }

@@ -59,6 +59,12 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   teammate's computer, the same guest with `macro.box.agentMode = true`
   (macro has no sudo and no docker). The fleet picks it for a computer with
   an agent.
+- Every image takes macrod and harnessd from `.#macro-box-macrod` and
+  `.#macro-box-harnessd` (`nix/cloud-storage.nix`): release builds from each
+  crate's closure in `.github/workspace-dep-closures.json`, over deps built
+  once per `Cargo.lock`, so a change outside that closure (or any web change)
+  reuses them. The desktop app's sidecar keeps `.#macrod` (`tauri-desktop.nix`).
+  A local stack builds both Docker images only with `run_local --computers docker`.
 - `nix build .#macro-box-firecracker` → `result/{vmlinux,rootfs.ext4,boot_args}`
   (`nixosConfigurations.macro-box-firecracker`). `boot_args` has no `root=`:
   the rootfs is the read-write root drive (`is_root_device`), copied per VM.
@@ -66,7 +72,8 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   flood the host's log); `macro.box.firecracker.serialConsole = true` gives a
   console on ttyS0 for debugging an image by hand.
 - `nix build .#macro-box-claude-code` → the pinned model-compatible Claude Code.
-- `nix build .#harnessd` → the harnessd binary.
+- `nix build .#macro-box-harnessd` → the harnessd binary (and
+  `.#macro-box-macrod` → macrod) the images bake in.
 - `nix build .#macro-box-claude-agent-acp` → the ACP adapter npm prefix.
 - `nix build .#macro-agent-runtime` → the agent's `node_modules` and the
   `bun.lock` it was installed from.
@@ -103,7 +110,21 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `macro-agent.path` (`PathChanged` on it and on the runtime's restart
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
-  agent (`ConditionPathExists`).
+  agent (`ConditionPathExists`). `start-agent` exports the file's
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime,
+  with `OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=<MACRO_COMPUTER_ID>`
+  (unauthenticated, so the analytics proxy ignores it until the id is signed); everything else stays
+  a credential. `macro-agent-apply` also installs the
+  setup traceparent macrod staged (`setup-traceparent` in the inbox) once, as
+  `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
+  never stops the environment's install), and `start-agent` exports it as
+  `MACRO_SETUP_TRACEPARENT` for the first start only (it records the one used
+  in `~macro/agent/state/setup-traceparent`). It times its own steps and
+  passes them as `MACRO_LAUNCH_TIMINGS`, which the runtime exports as
+  `agent.launch.*` spans (the script has no exporter).
+- `macrod.service` loads `/var/lib/macrod/telemetry.env` (written by
+  `macrod enroll` from the enrollment's telemetry intake) when present, so
+  macrod's setup spans export there.
 - The agent's units exist only with `macro.box.agentMode` (the
   `macro-box-agent` images), where macro has no sudo or docker.
 - `macro-agent.service` is a system unit running as `macro`, the user
@@ -375,7 +396,8 @@ existing credentials: no new pairing and no Claude login.
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
-  `files/test-start-agent.sh`: start-agent's lock adoption and rollback, and
+  `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
+  muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
   agent-stopped's failure count, against local git repositories.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs

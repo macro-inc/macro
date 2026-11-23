@@ -16,7 +16,6 @@ publish = false
 ### BEGIN HAKARI SECTION
 [dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
@@ -109,7 +108,8 @@ num-iter = { version = "0.1", default-features = false, features = ["i128", "std
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
-opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
+opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs", "reqwest-blocking", "reqwest-rustls"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["grpc-tonic", "http-proto", "internal-logs", "logs", "reqwest-blocking-client", "reqwest-rustls"] }
 opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
@@ -120,12 +120,14 @@ proc-macro2 = { version = "1", features = ["span-locations"] }
 prost = { version = "0.12", features = ["prost-derive"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
+rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-594e8ee84c453af0 = { package = "reqwest", version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-5ef9efb8ec2df382 = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }
@@ -181,7 +183,6 @@ zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
-aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8", features = ["serde"] }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
@@ -277,7 +278,8 @@ num-iter = { version = "0.1", default-features = false, features = ["i128", "std
 num-traits = { version = "0.2", features = ["i128", "libm"] }
 once_cell = { version = "1" }
 opentelemetry = { version = "0.31", default-features = false, features = ["internal-logs", "logs", "metrics", "testing"] }
-opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs"] }
+opentelemetry-http = { version = "0.31", default-features = false, features = ["internal-logs", "reqwest-blocking", "reqwest-rustls"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = ["grpc-tonic", "http-proto", "internal-logs", "logs", "reqwest-blocking-client", "reqwest-rustls"] }
 opentelemetry_sdk = { version = "0.31", default-features = false, features = ["internal-logs", "testing"] }
 percent-encoding = { version = "2" }
 phf = { version = "0.13", features = ["macros"] }
@@ -290,12 +292,14 @@ prost = { version = "0.12", features = ["prost-derive"] }
 quote = { version = "1" }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
+rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }
 redis = { version = "1", features = ["cluster-async", "connection-manager", "tokio-rustls-comp"] }
 regex = { version = "1" }
 regex-automata = { version = "0.4" }
 regex-syntax = { version = "0.8" }
-reqwest = { version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-594e8ee84c453af0 = { package = "reqwest", version = "0.13", features = ["form", "gzip", "hickory-dns", "json", "multipart", "query", "stream"] }
+reqwest-5ef9efb8ec2df382 = { package = "reqwest", version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rig-agent = { version = "0.41", features = ["test-utils"] }
 rig-core = { version = "0.41", features = ["test-utils"] }
 rmcp = { version = "3", features = ["auth", "client", "transport-streamable-http-client-reqwest", "transport-streamable-http-server"] }

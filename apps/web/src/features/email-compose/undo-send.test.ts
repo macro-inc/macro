@@ -22,7 +22,6 @@ vi.mock('@core/component/Toast/Toast', () => ({ toast: mocks }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: mocks }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@queries/email/integration', () => ({}));
-vi.mock('@queries/email/keys', () => ({}));
 vi.mock('@queries/soup/cache', () => ({}));
 vi.mock('./primitives/prepare-email-body', () => ({}));
 vi.mock('@queries/email/send-queue', () => ({

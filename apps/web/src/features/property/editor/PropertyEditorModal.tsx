@@ -1,5 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -8,7 +10,7 @@ import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
-import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
+import { isTaskEntity } from '@entity';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -29,6 +31,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import {
+  ERROR_MESSAGES,
   macroEntityToPropertyEntityType,
   PropertyDataTypeIcon,
   toPropertyApiValue,
@@ -45,6 +48,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
@@ -54,7 +58,6 @@ import {
   CommandMenuList,
   CommandMenuSearchInput,
   CommandMenuShell,
-  cn,
   createCommandListController,
   Dialog,
   Hotkey,
@@ -64,7 +67,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   on,
   onCleanup,
@@ -193,10 +195,6 @@ function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   return macroEntityToPropertyEntityType(entity);
 }
 
-function propertyEditorEntityName(entity: PropertyEditorEntity): string {
-  return entity.name || 'Entity';
-}
-
 export function PropertyEditorModal() {
   const saveProperties = useSavePropertyForMultiEntitites();
   const handlePropertySave = (value: PropertyApiValues) => {
@@ -204,12 +202,10 @@ export function PropertyEditorModal() {
     if (!selectedEntities.length || !targetProperty) return;
 
     // Snapshot before closing — closing resets selectedEntities.
-    const count = selectedEntities.length;
-    const message = `Set ${targetProperty.displayName} for ${
-      count === 1
-        ? propertyEditorEntityName(selectedEntities[0])
-        : count + ' entities'
-    }`;
+    const message = t('entityActions.toastPropertySet', {
+      property: targetProperty.displayName,
+      count: selectedEntities.length,
+    });
 
     fireAndForget(
       saveProperties(selectedEntities, targetProperty, value).then(
@@ -258,7 +254,6 @@ export function PropertyEditorDialog(props: {
   ) => void | Promise<void>;
   availableProperties?: PropertyDefinitionDomain[];
   properties?: Property[];
-  name?: string;
 }) {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
@@ -286,11 +281,31 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
+  // The create dialog offers a built-in property only where it applies, so it
+  // needs the entity type when every selected entity shares one. A host with
+  // no selection (a draft) supplies it through its properties context.
+  const selectedEntityType = () => {
+    const [first, ...rest] = props.state.selectedEntities.map(
+      propertyEditorEntityType
+    );
+    return rest.every((type) => type === first) ? first : undefined;
+  };
+
+  let searchInput: HTMLInputElement | undefined;
+  /**
+   * The create dialog takes focus with it when it closes, and the next keys
+   * would reach the app's shortcuts. Hand focus back to the search field.
+   */
+  const closeCreateProperty = () => {
+    setCreatePropertyInitialName(null);
+    if (!isTouchDevice()) searchInput?.focus();
+  };
+
   const handlePropertyCreated = async (
     _propertyDefinitionId?: string,
     propertyDefinition?: PropertyDefinition
   ) => {
-    setCreatePropertyInitialName(null);
+    closeCreateProperty();
     if (!propertyDefinition) return;
 
     const revision = editorRevision;
@@ -327,6 +342,48 @@ export function PropertyEditorDialog(props: {
       toPropertyDefinitionDomain(created.definition, created.property_options)
     );
     props.onModeChange('direct');
+  };
+
+  /** Adds a property to the selection and opens its value. */
+  const selectProperty = async (
+    property: Property | PropertyDefinitionDomain
+  ) => {
+    const revision = editorRevision;
+    await props.onPropertyAdded?.([propertyIdentity(property)]);
+    if (!props.isOpen || revision !== editorRevision) return;
+    props.onTargetChange(property);
+    props.onModeChange('direct');
+  };
+
+  /**
+   * Leaves the create dialog for the built-in property it suggested, as if
+   * that property had been picked from the list. A host that edits the
+   * property with its own control still takes the value through `onSave`.
+   */
+  const selectBuiltInProperty = async (definitionId: string) => {
+    const revision = editorRevision;
+    let builtIn: PropertyDefinitionResponse | undefined;
+    try {
+      builtIn = await fetchPropertyDefinitionWithOptions(definitionId);
+    } catch (error) {
+      console.error('Failed to fetch the built-in property', error);
+    }
+
+    if (!props.isOpen || revision !== editorRevision) return;
+    if (!builtIn) {
+      toast.failure(ERROR_MESSAGES.PROPERTY_FETCH);
+      return;
+    }
+
+    closeCreateProperty();
+    await selectProperty(
+      'definition' in builtIn
+        ? toPropertyDefinitionDomain(
+            builtIn.definition,
+            builtIn.property_options
+          )
+        : toPropertyDefinitionDomain(builtIn)
+    );
   };
 
   const { dispose: disposeHotkey } = registerHotkey({
@@ -366,6 +423,9 @@ export function PropertyEditorDialog(props: {
             <PropertiesIcon class="size-3" />
           </span>
           <SearchInput
+            inputRef={(element) => {
+              searchInput = element;
+            }}
             placeHolder={placeholder() || defaultPlaceholder}
             value={searchValue}
             setValue={setSearchValue}
@@ -374,16 +434,6 @@ export function PropertyEditorDialog(props: {
             inputType={inputType()}
           />
         </CommandMenuShell.Header>
-        <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0">
-          <Show
-            when={props.name}
-            fallback={
-              <EditingEntityPreview entities={props.state.selectedEntities} />
-            }
-          >
-            <span class="truncate text-ink-muted">{props.name}</span>
-          </Show>
-        </CommandMenuShell.Toolbar>
         <CommandMenuShell.Body>
           <Switch>
             <Match when={props.state.mode === 'selector'}>
@@ -405,13 +455,7 @@ export function PropertyEditorDialog(props: {
                       ? () => props.onModeChange('tag')
                       : undefined
                   }
-                  onPropertySelected={async (property) => {
-                    const revision = editorRevision;
-                    await props.onPropertyAdded?.([propertyIdentity(property)]);
-                    if (!props.isOpen || revision !== editorRevision) return;
-                    props.onTargetChange(property);
-                    props.onModeChange('direct');
-                  }}
+                  onPropertySelected={selectProperty}
                 />
               </div>
             </Match>
@@ -448,9 +492,11 @@ export function PropertyEditorDialog(props: {
           <CreatePropertyModal
             isOpen
             initialName={initialName()}
+            entityType={selectedEntityType()}
             autoPinOnCreate={false}
-            onClose={() => setCreatePropertyInitialName(null)}
+            onClose={closeCreateProperty}
             onPropertyCreated={handlePropertyCreated}
+            onUseBuiltIn={selectBuiltInProperty}
           />
         )}
       </Show>
@@ -459,6 +505,7 @@ export function PropertyEditorDialog(props: {
 }
 
 function SearchInput(props: {
+  inputRef?: (element: HTMLInputElement) => void;
   placeHolder: string;
   setValue: Setter<string>;
   value: Accessor<string>;
@@ -475,7 +522,10 @@ function SearchInput(props: {
 
   return (
     <CommandMenuSearchInput
-      ref={inputRef}
+      ref={(element: HTMLInputElement) => {
+        inputRef = element;
+        props.inputRef?.(element);
+      }}
       type={props.inputType ?? 'text'}
       class="text-base"
       placeholder={props.placeHolder}
@@ -655,41 +705,6 @@ function PropertyList(props: {
         )}
       </CommandMenuList>
     </Show>
-  );
-}
-
-function EditingEntityPreview(props: { entities: PropertyEditorEntity[] }) {
-  const displayEntities = () => props.entities.slice(0, 2);
-  const remainingCount = () => Math.max(0, props.entities.length - 2);
-  return (
-    <div class="flex items-center gap-2">
-      <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <Show
-                when={!('entityType' in entity)}
-                fallback={propertyEditorEntityName(entity)}
-              >
-                <InlineEntity entity={entity as EntityData} />
-              </Show>
-            </div>
-          );
-        }}
-      </For>
-      <Show when={remainingCount() > 0}>
-        <div class="text-ink-muted text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
-      </Show>
-    </div>
   );
 }
 

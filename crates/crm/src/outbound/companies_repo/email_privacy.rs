@@ -10,6 +10,7 @@ use crate::domain::{
 use chrono::{DateTime, Utc};
 use opentelemetry::trace::TraceContextExt as _;
 use sqlx::PgConnection;
+use tracing::Instrument as _;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 use uuid::Uuid;
 
@@ -197,13 +198,36 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    pub(super) async fn eligible_interactions(
+    /// Whether the mailbox may contribute this address at all: a live primary
+    /// mailbox, current membership, consent (in a queued worker's exact
+    /// generation) and an unblocked domain. It reads no message history.
+    async fn admitted(
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
         email: &str,
-    ) -> Result<Option<EligibleInteractions>, CrmError> {
-        Self::eligible_interactions_with_authority(conn, team, link, email, None).await
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        use crate::domain::email_policy_work::EmailHistoryAuthority;
+        let (incarnation, version) = match authority {
+            Some(EmailHistoryAuthority::Policy(generation)) => (
+                Some(generation.consent_incarnation),
+                Some(generation.policy_version),
+            ),
+            None | Some(EmailHistoryAuthority::Legacy) => (None, None),
+        };
+        sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/admission.sql",
+            team,
+            link,
+            email,
+            authority.is_some(),
+            incarnation,
+            version
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(
@@ -213,6 +237,7 @@ impl CompaniesRepositoryImpl {
         err
     )]
     pub(super) async fn eligible_interactions_with_authority(
+        &self,
         conn: &mut PgConnection,
         team: Uuid,
         link: Uuid,
@@ -226,17 +251,117 @@ impl CompaniesRepositoryImpl {
             .execute(&mut *conn)
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        // Retain lifecycle and membership locks through a population transaction.
-        // The pre-enrichment transaction ends before external work; the writer
-        // repeats admission and the history scan inside its own transaction.
+        // Reject stale work cheaply, without a mailbox row lock. Sync commits
+        // need that row while this potentially long address-history scan runs.
+        if !Self::admitted(conn, team, link, email, authority).await? {
+            return Ok(None);
+        }
+        let row = sqlx::query_file!(
+            "src/outbound/companies_repo/email_privacy/interactions.sql",
+            team,
+            link,
+            email
+        )
+        .fetch_one(&mut *conn)
+        .instrument(tracing::info_span!("crm.email_interaction_scan"))
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let (
+            Some(first_at),
+            Some(last_at),
+            Some(is_sent),
+            Some(first_message),
+            Some(first_thread),
+            Some(first_contact),
+            Some(last_message),
+            Some(last_thread),
+            Some(last_contact),
+            Some(last_is_sent),
+        ) = (
+            row.first_at,
+            row.last_at,
+            row.is_sent,
+            row.first_message_id,
+            row.first_thread_id,
+            row.first_contact_id,
+            row.last_message_id,
+            row.last_thread_id,
+            row.last_contact_id,
+            row.last_is_sent,
+        )
+        else {
+            return Ok(None);
+        };
+
+        #[cfg(test)]
+        if let Some(gate) = &self.after_eligible_scan {
+            gate.entered.notify_one();
+            gate.resume.notified().await;
+        }
+
+        // In READ COMMITTED this recheck sees lifecycle changes committed
+        // during the scan. Writers retain their privacy/contact advisory locks
+        // across both phases, then keep these row locks through the CRM writes.
+        if !Self::lock_population_authority(conn, team, link, email, authority).await? {
+            return Ok(None);
+        }
+        // A provider deletion may have committed during the unlocked scan.
+        // Validate only its two scalar witnesses by primary key. A changed
+        // witness defers the job, so its next scan also runs without this lock.
+        let witnesses_valid = sqlx::query_file_scalar!(
+            "src/outbound/companies_repo/email_privacy/witnesses.sql",
+            link,
+            email,
+            first_message,
+            first_thread,
+            first_at,
+            is_sent,
+            first_contact,
+            last_message,
+            last_thread,
+            last_at,
+            last_is_sent,
+            last_contact
+        )
+        .fetch_one(&mut *conn)
+        .instrument(tracing::info_span!("crm.email_history_witnesses"))
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        if !witnesses_valid {
+            return Err(CrmError::Contended);
+        }
+        Ok(Some(EligibleInteractions {
+            first_at,
+            last_at,
+            is_sent,
+        }))
+    }
+
+    #[tracing::instrument(
+        name = "crm.email_authority_recheck",
+        skip_all,
+        fields(team_id = %team, link_id = %link),
+        err
+    )]
+    async fn lock_population_authority(
+        conn: &mut PgConnection,
+        team: Uuid,
+        link: Uuid,
+        email: &str,
+        authority: Option<crate::domain::email_policy_work::EmailHistoryAuthority>,
+    ) -> Result<bool, CrmError> {
+        // Preserve mailbox/member -> consent -> domain/entity lock order.
+        // Lifecycle writers own the mailbox before revoking consent and do
+        // not acquire the team privacy lock.
         let live = sqlx::query_scalar!(
             "SELECT l.id FROM email_links l JOIN team_user tu ON tu.user_id = l.macro_id AND tu.team_id = $1 WHERE l.id = $2 AND l.is_primary AND l.deleting_at IS NULL AND l.disconnect_requested_at IS NULL AND NOT l.needs_reauth FOR SHARE OF l FOR KEY SHARE OF tu",
             team, link
         ).fetch_optional(&mut *conn).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
         if live.is_none() {
-            return Ok(None);
+            return Ok(false);
         }
-        // Reject stale/unsolicited work before scanning mailbox history.
+        // Consent can change while waiting for the mailbox guard; use a new
+        // statement snapshot, including the queued worker's exact generation.
         let consented = if let Some(authority) = authority {
             use crate::domain::email_policy_work::EmailHistoryAuthority;
             let (incarnation, version) = match authority {
@@ -276,26 +401,7 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?
         };
-        if !consented {
-            return Ok(None);
-        }
-        let row = sqlx::query_file!(
-            "src/outbound/companies_repo/email_privacy/interactions.sql",
-            team,
-            link,
-            email
-        )
-        .fetch_one(conn)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(match (row.first_at, row.last_at, row.is_sent) {
-            (Some(first_at), Some(last_at), Some(is_sent)) => Some(EligibleInteractions {
-                first_at,
-                last_at,
-                is_sent,
-            }),
-            _ => None,
-        })
+        Ok(consented)
     }
 }
 
@@ -425,19 +531,16 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         link: Uuid,
         email: &str,
     ) -> Result<bool, CrmError> {
-        let mut tx = self
+        // Admission only. The population transaction scans the address
+        // history once, after skipping a job that would change nothing: one
+        // job is queued per message, so most of a busy contact's jobs are
+        // duplicates that need no history at all.
+        let mut conn = self
             .pool
-            .begin()
+            .acquire()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        let eligible =
-            Self::eligible_interactions(&mut tx, team, link, &email.to_ascii_lowercase())
-                .await?
-                .is_some();
-        tx.commit()
-            .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-        Ok(eligible)
+        Self::admitted(&mut conn, team, link, &email.to_ascii_lowercase(), None).await
     }
 
     #[tracing::instrument(skip_all, fields(team_id = %team), err)]

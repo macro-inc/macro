@@ -86,6 +86,7 @@ vi.mock('@app/components/view-shell', async () => {
       CloseButton: () => null,
       Title: Slot,
       Content: Slot,
+      Section: Slot,
       Nav,
       Item,
       Icon: Slot,

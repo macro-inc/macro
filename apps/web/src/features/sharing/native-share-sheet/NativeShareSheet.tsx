@@ -31,7 +31,7 @@ import {
 } from '@core/util/upload';
 import type { PendingShareFile } from '@macro/tauri';
 import { useShareTarget, useTauri } from '@macro/tauri';
-import { invalidateListChannels } from '@queries/channel/channels';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -215,7 +215,7 @@ function NativeShareSheetComposer(props: { handleCancel: () => void }) {
 
   const sendShare = createNativeShareSend<InputSnapshot>({
     clear: async () => {
-      fireAndForget(invalidateListChannels(), 'native-share-sheet');
+      fireAndForget(refreshChannelDirectory(), 'native-share-sheet');
       requestContactRefresh();
       await shareTarget?.clearPendingShareFiles(batchTokens);
     },
@@ -482,6 +482,8 @@ export function NativeShareSheet() {
         preventScrollbarShift={false}
         restoreFocus={false}
         noOutsidePointerEvents={false}
+        // Dismissing discards the shared files on iOS, without asking.
+        keepOpenOnNavigation
         onOpenChange={(open) => {
           const closeGuardActive =
             !open && isOpen() && awaitingFirstInteraction();

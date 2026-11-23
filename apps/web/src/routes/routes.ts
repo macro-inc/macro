@@ -171,6 +171,17 @@ export const loginPopupSuccessRoute = defineRoute({
   externalSearch: '*',
 });
 
+/**
+ * GitHub's connect step: starts the Macro GitHub account link, which is
+ * GitHub's connection, then returns to Settings → Integrations. Registered
+ * with the sign-in pages so `:documentType/:documentId` never claims it.
+ */
+export const githubConnectRoute = defineRoute({
+  id: 'github-connect',
+  path: 'connect/github',
+  externalSearch: '*',
+});
+
 export const loginRoute = defineRoute({
   id: 'login',
   path: 'login',
@@ -574,6 +585,12 @@ export const homeSplitRoute = defineRoute({
   id: 'view-home',
   path: 'home',
   search: '*' as const,
+});
+
+/** New Home's entry: it sends the split to the tab New Home was left on. */
+export const newHomeRoute = defineRoute({
+  id: 'view-new-home',
+  path: 'new-home',
 });
 
 export const recentRoute = defineRoute({

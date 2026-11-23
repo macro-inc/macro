@@ -38,6 +38,7 @@ import {
 import { Company } from './company-detail';
 import { Contact } from './contact-detail';
 import { RecordHeaderActions } from './record-header-actions';
+import { useRecordTabKeys } from './record-tab-keys';
 import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
@@ -68,7 +69,7 @@ function sectionOf<T extends CrmRecordSection>(
  * breadcrumb after the originating view; reopening one already in the trail
  * returns to it.
  */
-export function CrmRecordDetail(props: {
+type CrmRecordDetailProps = {
   /** Opened records, oldest first; the last one is shown. */
   records: readonly CrmRecordRef[];
   section: CrmRecordSection | undefined;
@@ -79,7 +80,9 @@ export function CrmRecordDetail(props: {
   onClose: () => void;
   navigation: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
-}) {
+};
+
+export function CrmRecordDetail(props: CrmRecordDetailProps) {
   const trail = () => props.records;
   // Each navigation brings new record objects; only another record remounts.
   const current = createMemo(() => trail()[trail().length - 1]!, undefined, {
@@ -91,6 +94,13 @@ export function CrmRecordDetail(props: {
     sectionOf(COMPANY_SECTIONS, props.section);
   const contactSection = (): ContactSection =>
     sectionOf(CONTACT_SECTIONS, props.section);
+  const recordTabsRef = useRecordTabKeys<CrmRecordSection>({
+    sections: () =>
+      current().type === 'contact' ? CONTACT_SECTIONS : COMPANY_SECTIONS,
+    value: () =>
+      current().type === 'contact' ? contactSection() : companySection(),
+    onChange: (section) => props.onSectionChange(section),
+  });
   const returnTo = (index: number) => {
     if (index === trail().length - 1) return;
     props.onOpen(trail().slice(0, index + 1));
@@ -174,6 +184,7 @@ export function CrmRecordDetail(props: {
         <div
           ref={container}
           tabindex={-1}
+          data-pane-focus=""
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
           <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2 mobile:flex-wrap">
@@ -191,6 +202,7 @@ export function CrmRecordDetail(props: {
                     compact={compactTabs()}
                     value={companySection()}
                     onChange={props.onSectionChange}
+                    tabsRef={recordTabsRef}
                   />
                 }
               >
@@ -199,6 +211,7 @@ export function CrmRecordDetail(props: {
                   compact={compactTabs()}
                   value={contactSection()}
                   onChange={props.onSectionChange}
+                  tabsRef={recordTabsRef}
                 />
               </Show>
             </div>

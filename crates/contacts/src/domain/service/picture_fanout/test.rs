@@ -1,5 +1,7 @@
 use super::*;
+use crate::domain::models::listed::ListedContact;
 use crate::domain::models::page::{ContactIdEntry, ContactIdPage};
+use crate::domain::models::people::{PeopleSearchLimit, PersonMatch};
 use crate::domain::models::query::ContactLookup;
 use std::sync::{Arc, Mutex};
 
@@ -14,10 +16,13 @@ fn entry(value: &str) -> ContactIdEntry {
     ContactIdEntry::parse(value.to_string()).expect("valid entry")
 }
 
-/// Serves canned pages in order and records the cursors it was asked for.
+/// Serves canned legacy and list-aware audience pages in order and records
+/// the cursors each was asked for.
 struct PagedRepo {
     pages: Mutex<Vec<ContactIdPage>>,
     cursors: Cursors,
+    audience_pages: Mutex<Vec<ContactIdPage>>,
+    audience_cursors: Cursors,
 }
 
 impl ContactsPageRepository for PagedRepo {
@@ -41,6 +46,72 @@ impl ContactsPageRepository for PagedRepo {
             .unwrap()
             .push(after.map(|c| c.position().to_string()));
         Ok(self.pages.lock().unwrap().remove(0))
+    }
+}
+
+impl ContactListReader for PagedRepo {
+    async fn list_directory_page(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _after: Option<&ContactCursor>,
+        _limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        unreachable!("fan-out reads the audience")
+    }
+
+    async fn lookup_listed_contacts(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _lookup: &ContactLookup,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        unreachable!("fan-out only pages")
+    }
+
+    async fn contact_lists(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _lookup: &ContactLookup,
+    ) -> Result<Vec<ListedContact>, Report> {
+        unreachable!("fan-out reads no lists")
+    }
+
+    async fn audience_page(
+        &self,
+        _subject: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> Result<ContactIdPage, Report> {
+        assert_eq!(limit, ContactPageSize::MAX);
+        self.audience_cursors
+            .lock()
+            .unwrap()
+            .push(after.map(|c| c.position().to_string()));
+        Ok(self.audience_pages.lock().unwrap().remove(0))
+    }
+
+    async fn search_listed_people(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _needle: &str,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        unreachable!("fan-out does not search")
+    }
+
+    async fn name_listed_people(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+        _query: &crate::domain::models::people::NamedPeopleQuery,
+        _limit: PeopleSearchLimit,
+    ) -> Result<Vec<PersonMatch>, Report> {
+        unreachable!("fan-out does not name people")
+    }
+
+    async fn inbox_contacts(
+        &self,
+        _viewer: MacroUserIdStr<'_>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        unreachable!("fan-out reads the audience")
     }
 }
 
@@ -74,16 +145,38 @@ fn page(ids: &[&str], next: Option<&str>) -> ContactIdPage {
     }
 }
 
+/// A fan-out over `pages` of legacy neighbors and an empty list-aware
+/// audience.
 fn fanout(
     pages: Vec<ContactIdPage>,
     notifier: RecordingNotifier,
 ) -> (UserPictureFanout<PagedRepo, RecordingNotifier>, Cursors) {
+    let (service, cursors, _) = fanout_both(pages, vec![page(&[], None)], notifier);
+    (service, cursors)
+}
+
+fn fanout_both(
+    pages: Vec<ContactIdPage>,
+    audience_pages: Vec<ContactIdPage>,
+    notifier: RecordingNotifier,
+) -> (
+    UserPictureFanout<PagedRepo, RecordingNotifier>,
+    Cursors,
+    Cursors,
+) {
     let cursors = Arc::new(Mutex::new(Vec::new()));
+    let audience_cursors = Arc::new(Mutex::new(Vec::new()));
     let repo = PagedRepo {
         pages: Mutex::new(pages),
         cursors: cursors.clone(),
+        audience_pages: Mutex::new(audience_pages),
+        audience_cursors: audience_cursors.clone(),
     };
-    (UserPictureFanout::new(repo, notifier), cursors)
+    (
+        UserPictureFanout::new(repo, notifier),
+        cursors,
+        audience_cursors,
+    )
 }
 
 #[tokio::test]
@@ -105,7 +198,7 @@ async fn pages_through_all_contacts_one_message_per_page() {
     assert_eq!(
         summary,
         FanoutSummary {
-            pages: 2,
+            pages: 3,
             recipients: 3
         }
     );
@@ -121,6 +214,50 @@ async fn pages_through_all_contacts_one_message_per_page() {
 }
 
 #[tokio::test]
+async fn notifies_the_legacy_and_list_aware_audiences() {
+    let notifier = RecordingNotifier::default();
+    let (service, cursors, audience_cursors) = fanout_both(
+        vec![page(&["macro|a@example.com", "macro|b@example.com"], None)],
+        vec![
+            page(
+                &["macro|a@example.com", "macro|c@example.com"],
+                Some("macro|c@example.com"),
+            ),
+            page(&["macro|d@example.com"], None),
+        ],
+        notifier.clone(),
+    );
+
+    let summary = service.fan_out(&user("macro|a@example.com")).await.unwrap();
+
+    assert_eq!(
+        summary,
+        FanoutSummary {
+            pages: 3,
+            recipients: 5
+        }
+    );
+    let sent = notifier.sent.lock().unwrap();
+    let recipients: Vec<_> = sent
+        .iter()
+        .map(|(_, recipients)| recipients.clone())
+        .collect();
+    assert_eq!(
+        recipients,
+        [
+            vec!["macro|a@example.com", "macro|b@example.com"],
+            vec!["macro|a@example.com", "macro|c@example.com"],
+            vec!["macro|d@example.com"],
+        ]
+    );
+    assert_eq!(*cursors.lock().unwrap(), [None]);
+    assert_eq!(
+        *audience_cursors.lock().unwrap(),
+        [None, Some("macro|c@example.com".to_string())]
+    );
+}
+
+#[tokio::test]
 async fn empty_contacts_send_nothing() {
     let notifier = RecordingNotifier::default();
     let (service, _) = fanout(vec![page(&[], None)], notifier.clone());
@@ -130,7 +267,7 @@ async fn empty_contacts_send_nothing() {
     assert_eq!(
         summary,
         FanoutSummary {
-            pages: 1,
+            pages: 2,
             recipients: 0
         }
     );
@@ -153,7 +290,7 @@ async fn empty_page_with_continuation_keeps_paging() {
     assert_eq!(
         summary,
         FanoutSummary {
-            pages: 2,
+            pages: 3,
             recipients: 1
         }
     );

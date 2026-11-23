@@ -104,7 +104,6 @@ export default {
     close: 'Chiudi',
     delete: 'Elimina',
     rename: 'Rinomina',
-    more: 'Altro',
     search: 'Cerca',
     settings: 'Impostazioni',
   },
@@ -526,6 +525,11 @@ export default {
       other: '{{count}} elementi eliminati',
     },
     toastDeleteFailed: 'Impossibile eliminare',
+    toastPropertySet: {
+      one: '{{property}}: valore impostato',
+      many: '{{property}}: valore impostato per {{count}} di elementi',
+      other: '{{property}}: valore impostato per {{count}} elementi',
+    },
     toastAddedToFavorites: 'Aggiunto ai preferiti',
     toastAddedCountToFavorites: {
       one: '{{count}} elemento aggiunto ai preferiti',
@@ -801,7 +805,6 @@ export default {
       'Nessuna impostazione trovata. Prova «firma», «tema» o «calendario».',
     backToSettings: 'Torna alle impostazioni',
     closeSettings: 'Chiudi impostazioni',
-    goToTab: 'Vai alla scheda impostazioni {{number}}',
     editProfile: 'Modifica profilo',
     logOut: 'Esci',
     yourAccount: 'Il tuo account',

@@ -103,7 +103,6 @@ export default {
     close: 'Tutup',
     delete: 'Hapus',
     rename: 'Ganti nama',
-    more: 'Lainnya',
     search: 'Cari',
     settings: 'Setelan',
   },
@@ -517,6 +516,9 @@ export default {
       other: '{{count}} item dihapus',
     },
     toastDeleteFailed: 'Gagal menghapus',
+    toastPropertySet: {
+      other: '{{property}} disetel untuk {{count}} item',
+    },
     toastAddedToFavorites: 'Ditambahkan ke favorit',
     toastAddedCountToFavorites: {
       other: '{{count}} item ditambahkan ke favorit',
@@ -750,7 +752,6 @@ export default {
       'Setelan tidak ditemukan. Coba “tanda tangan”, “tema”, atau “kalender”.',
     backToSettings: 'Kembali ke setelan',
     closeSettings: 'Tutup setelan',
-    goToTab: 'Buka tab setelan {{number}}',
     editProfile: 'Edit profil',
     logOut: 'Logout',
     yourAccount: 'Akun Anda',

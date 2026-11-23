@@ -6,6 +6,7 @@ import type { Operation } from '@urql/core';
 import { parse } from 'graphql';
 import { err, ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { make, pipe, toPromise } from 'wonka';
 import type {
   ChannelListItemFieldsFragment,
   ChannelListNotificationFieldsFragment,
@@ -183,6 +184,67 @@ it('preserves initiative identity, properties, and metadata separately from fold
   });
 });
 
+it('keeps whether a date property has its time of day set', async () => {
+  const { mapGraphqlSoupItem } = await import('./graphql-soup');
+  const property = (id: string, dateValue: string, dateHasTime: boolean) => ({
+    id,
+    propertyDefinitionId: id,
+    displayName: id,
+    dataType: 'DATE' as const,
+    isMultiSelect: false,
+    specificEntityType: null,
+    isSystem: true,
+    isMetadata: false,
+    value: {
+      __typename: 'GraphqlDatePropertyValue' as const,
+      dateValue,
+      dateHasTime,
+    },
+  });
+  const mapped = mapGraphqlSoupItem({
+    __typename: 'GraphqlSoupInitiative',
+    appearance: null,
+    id: 'initiative',
+    entityType: 'INITIATIVE',
+    displayName: 'Launch',
+    metadata: {
+      ownerId: 'owner',
+      createdAt: '2026-09-01',
+      updatedAt: '2026-09-26',
+      viewedAt: null,
+    },
+    viewerPermission: {
+      __typename: 'GraphqlAccessLevelPermission',
+      accessLevel: 'EDIT',
+    },
+    properties: [
+      property('start', '2026-09-28T14:30:00Z', true),
+      property('due', '2026-09-30T00:00:00Z', false),
+    ],
+    notifications: [],
+    isFavorited: false,
+    frecencyScore: null,
+    cacheProjection: null,
+  });
+
+  expect(mapped).toMatchObject({
+    data: {
+      properties: [
+        {
+          value: {
+            type: 'Date',
+            value: '2026-09-28T14:30:00Z',
+            has_time: true,
+          },
+        },
+        { value: { type: 'Date', value: '2026-09-30T00:00:00Z' } },
+      ],
+    },
+  });
+  if (mapped?.tag !== 'initiative') throw new Error('expected an initiative');
+  expect(mapped.data.properties[1]?.value).not.toHaveProperty('has_time');
+});
+
 it('skips a Soup item type from a newer server', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
   const fromNewerServer = JSON.parse(
@@ -306,6 +368,9 @@ const mocks = vi.hoisted(() => {
   const host = {
     disabled: false,
     currentRevision: vi.fn(async () => '1'),
+    onCacheGenerationChanged: vi.fn<CacheHost['onCacheGenerationChanged']>(
+      () => () => {}
+    ),
     inspectMutations: vi.fn(async () => []),
     dispose: vi.fn(() => cleanupOrder.push('host')),
     enqueueOptimisticMutation: vi.fn(async () => {
@@ -374,6 +439,8 @@ const mocks = vi.hoisted(() => {
     plainClient,
     realtimeClient,
     replaceSubscriptions,
+    initializeCrmCacheOwner: vi.fn(async () => {}),
+    cachedQuery: vi.fn(),
     platformFetch,
     toastFailure,
     telemetryError: vi.fn(),
@@ -433,13 +500,22 @@ vi.mock('@core/util/fetchWithToken', () => ({ fetchToken: vi.fn() }));
 vi.mock('@core/util/reloadForNewerBuild', () => ({
   reloadForNewerBuild: mocks.reloadForNewerBuild,
 }));
-vi.mock('@core/util/platform', () => ({ isTauri: () => mocks.tauri }));
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
+  isPlatform: () => false,
+  isTauri: () => mocks.tauri,
+}));
 // Recovery lifecycle is covered with its real store in local-drafts.test.ts.
 vi.mock('@queries/email/local-drafts', () => ({
   localDraftQueueLifecycle: () => ({}),
 }));
 vi.mock('@core/util/platformFetch', () => ({
   platformFetch: mocks.platformFetch,
+}));
+// Permission-owner binding and HTTP proofs use their real adapters in crm-access-cache.test.ts.
+vi.mock('./crm-access-cache', () => ({
+  installCrmCacheHost: vi.fn(),
+  initializeCrmCacheOwner: mocks.initializeCrmCacheOwner,
 }));
 vi.mock('@graphql-cache/rollout', () => ({
   getBrowserTursoCacheRolloutDecision: (): BrowserTursoCacheRolloutDecision => {
@@ -468,33 +544,44 @@ vi.mock('@graphql-cache/scope', () => ({
   getOrCreateCacheScope: () => 'anonymous-scope',
 }));
 vi.mock('@graphql-cache/exchange/normalized-cache-exchange', () => ({
+  HYDRATE_ONLY_CONTEXT_KEY: 'normalizedCacheHydrateOnly',
   normalizedCacheExchange: mocks.normalizedCacheExchange,
 }));
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: {
-    error: mocks.telemetryError,
-    warn: mocks.telemetryWarn,
-    captureContext: () => ({ run: <T>(work: () => T) => work() }),
-    span: (name: string, work?: (span: unknown) => Promise<unknown>) => {
-      const attrs: Record<string, unknown> = {};
-      const end = vi.fn();
-      mocks.spans.push({ name, attrs, end });
-      const span = {
-        run: <T>(work: () => T) => work(),
-        event: vi.fn(),
-        setAttr: (key: string, value: unknown) => {
-          attrs[key] = value;
-        },
-        error: vi.fn(),
-        end,
-        injectTraceHeaders: (headers: Record<string, string>) => {
-          headers.traceparent = mocks.traceparent;
-        },
-      };
-      return work ? work(span) : span;
-    },
-  },
-}));
+vi.mock('@macro-inc/observability', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@macro-inc/observability')>();
+  return {
+    ...actual,
+    Telemetry: Object.assign(Object.create(actual.Telemetry), {
+      error: mocks.telemetryError,
+      warn: mocks.telemetryWarn,
+      captureContext: () => ({ run: <T>(work: () => T) => work() }),
+      span: (
+        name: string,
+        optionsOrWork?: unknown,
+        work?: (span: typeof actual.NOOP_SPAN) => Promise<unknown>
+      ) => {
+        const attrs: Record<string, unknown> = {};
+        const end = vi.fn();
+        mocks.spans.push({ name, attrs, end });
+        const span = Object.assign(Object.create(actual.NOOP_SPAN), {
+          setAttr: (key: string, value: unknown) => {
+            attrs[key] = value;
+          },
+          end,
+          injectTraceHeaders: (headers: Record<string, string>) => {
+            headers.traceparent = mocks.traceparent;
+          },
+        });
+        const operation =
+          typeof optionsOrWork === 'function'
+            ? (optionsOrWork as typeof work)
+            : work;
+        return operation ? operation(span) : span;
+      },
+    }),
+  };
+});
 vi.mock('@service-auth/fetch', () => ({ getMacroApiToken: vi.fn() }));
 vi.mock('graphql-ws', () => ({
   createClient: () => ({ subscribe: vi.fn(), dispose: vi.fn() }),
@@ -505,6 +592,9 @@ vi.mock('../../queries/optimistic-resolvers', () => ({
 vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
+}));
+vi.mock('./channel-membership', () => ({
+  channelMembershipReceiptExchange: () => ({ kind: 'membership-receipt' }),
 }));
 vi.mock('./graphql-notification-receipt', () => ({
   notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
@@ -544,6 +634,11 @@ vi.mock('@urql/core', () => ({
       expect(receiptIndex).toBeGreaterThanOrEqual(0);
       expect(receiptIndex).toBeLessThan(subscriptionIndex);
       if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+      const membershipIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'membership-receipt'
+      );
+      expect(membershipIndex).toBeGreaterThan(receiptIndex);
+      expect(membershipIndex).toBeLessThan(subscriptionIndex);
     }
     const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
@@ -554,6 +649,7 @@ vi.mock('@urql/core', () => ({
     const host = cacheExchange.host;
     return {
       kind: 'cached',
+      query: (...args: unknown[]) => mocks.cachedQuery(...args),
       mutation: () => ({
         toPromise: async () => {
           await host.enqueueOptimisticMutation();
@@ -578,12 +674,15 @@ it('maps the unread and mention aliases without pretending either is the full no
     ownerId: 'owner',
     organizationId: null,
     channelTeamId: null,
+    autoJoinTeam: false,
     createdAt: '2026-01-01',
     updatedAt: '2026-01-01',
     viewedAt: null,
     interactedAt: null,
     isParticipant: true,
     participants: [],
+    botParticipants: [],
+    agentDm: null,
     latestMessage: null,
     latestNonThreadMessage: null,
     cacheProjection: null,
@@ -670,6 +769,42 @@ describe('legacy channel list notifications', () => {
         viewedAt: '2026-01-02T00:00:00Z',
       })
     ).toMatchObject({ state: 'seen', viewed_at: '2026-01-02T00:00:00Z' });
+  });
+
+  it('spells a direct message the way notification checks read it', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageReactionMetadata',
+        channelMessageReactionMessageId: 'message',
+        channelMessageReactionThreadId: null,
+        channelMessageReactionMessageContent: 'Ship it',
+        channelMessageReactionEmoji: '❤️',
+        channelMessageReactionChannelType: 'DIRECT_MESSAGE',
+        channelMessageReactionChannelName: 'Ada',
+        channelMessageReactionSenderProfilePictureUrl: null,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_reaction',
+      content: { channelType: 'directMessage' },
+    });
+  });
+
+  it('reads a channel kind it does not know as a named channel', async () => {
+    const { mapGraphqlNotification } = await import('./graphql-soup');
+    const mapped = mapGraphqlNotification(
+      notification({
+        __typename: 'GraphqlChannelMessageSendMetadata',
+        channelMessageSendSender: 'sender',
+        channelMessageSendMessageId: 'message',
+        channelMessageSendChannelType: 'FUTURE_KIND' as never,
+      })
+    );
+    expect(mapped.notification_metadata).toMatchObject({
+      tag: 'channel_message_send',
+      content: { channelType: 'public' },
+    });
   });
 
   it('preserves mention and reply thread membership and message targets', async () => {
@@ -820,12 +955,110 @@ describe('GraphQL Soup browser cache session gate', () => {
     mocks.resetQueue();
     mocks.platformFetch.mockReset();
     mocks.telemetryError.mockReset();
+    mocks.initializeCrmCacheOwner.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
     const soup = await import('./graphql-soup');
     soup.setGraphqlSoupSessionActive(false);
     vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  it('publishes the client and host before owner initialization can reenter client lookup', async () => {
+    const soup = await import('./graphql-soup');
+    const { installCrmCacheHost } = await import('./crm-access-cache');
+    let reenteredClient: unknown;
+    let reenteredHost: unknown;
+    vi.mocked(installCrmCacheHost).mockImplementationOnce(() => {
+      reenteredClient = soup.getGraphqlSoupClient();
+      reenteredHost = soup.getGraphqlSoupCacheHost();
+    });
+
+    const client = soup.getGraphqlSoupClient();
+
+    expect(reenteredClient).toBe(client);
+    expect(reenteredHost).toBe(soup.getGraphqlSoupCacheHost());
+    expect(mocks.createWorkerCacheHost).toHaveBeenCalledOnce();
+    expect(mocks.normalizedCacheExchange).toHaveBeenCalledOnce();
+  });
+
+  it('starts subscriptions only after the local owner baseline is established', async () => {
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner.mockReturnValue(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+    owner.resolve();
+    await initialized;
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledExactlyOnceWith(
+      soup.getGraphqlSoupClient(),
+      soup.getGraphqlCacheHost()
+    );
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
+  });
+
+  it('keeps a slow local owner until its own startup deadline', async () => {
+    vi.useFakeTimers();
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    const slowHost = soup.getGraphqlCacheHost();
+    try {
+      // Asset loading and the coordinator's retry backoffs can exceed 1.5s.
+      // Root renders independently; this must not retire a healthy late owner.
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(soup.getGraphqlCacheHost()).toBe(slowHost);
+      expect(slowHost?.disabled).toBe(false);
+      expect(mocks.replaceSubscriptions).not.toHaveBeenCalled();
+      expect(mocks.platformFetch).not.toHaveBeenCalled();
+    } finally {
+      owner.resolve();
+      await initialized;
+    }
+    expect(soup.graphqlCacheRecoveryState()).toBe('ready');
+    expect(mocks.replaceSubscriptions).toHaveBeenCalledExactlyOnceWith(
+      soup.getGraphqlSoupClient(),
+      slowHost
+    );
+  });
+
+  it('preserves a delayed bootstrap failure as retryable', async () => {
+    vi.useFakeTimers();
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const { CacheBootstrapExhaustedError } = await import(
+      '@graphql-cache/worker/startup'
+    );
+    const initialized = soup.initializeGraphqlSoupCache();
+    await vi.advanceTimersByTimeAsync(2_000);
+    // Only the worker can prove that retrying preserves the unopened queue.
+    owner.reject(new CacheBootstrapExhaustedError('Engine assets unavailable'));
+    await initialized;
+    expect(soup.graphqlCacheRecoveryState()).toBe('unavailable');
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+  });
+
+  it('uses the existing fallback when local owner initialization rejects', async () => {
+    const owner = Promise.withResolvers<void>();
+    mocks.initializeCrmCacheOwner
+      .mockReturnValueOnce(owner.promise)
+      .mockReturnValueOnce(owner.promise);
+    const soup = await import('./graphql-soup');
+    const initialized = soup.initializeGraphqlSoupCache();
+    owner.reject(new Error('local store unavailable'));
+    await initialized;
+    expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    expect(soup.graphqlDraftQueueBlocked()).toBe(true);
+    expect(mocks.platformFetch).not.toHaveBeenCalled();
   });
 
   it.each([false, true])(
@@ -1244,6 +1477,7 @@ describe('GraphQL Soup browser cache session gate', () => {
 
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
+    await soup.initializeGraphqlSoupCache();
     expect(mocks.replaceSubscriptions).toHaveBeenCalledWith(
       mocks.realtimeClient
     );
@@ -1264,6 +1498,7 @@ describe('GraphQL Soup browser cache session gate', () => {
 
       soup.setGraphqlSoupSessionActive(true);
       expect(soup.getGraphqlSoupClient()).not.toBe(mocks.plainClient);
+      await soup.initializeGraphqlSoupCache();
       expect(mocks.replaceSubscriptions).toHaveBeenCalledOnce();
     }
   );
@@ -1318,6 +1553,31 @@ describe('GraphQL Soup browser cache session gate', () => {
       readers.dispose();
     }
   );
+
+  it('leaves a hydration request once its signal aborts', async () => {
+    let left = false;
+    // Like urql's, the request ends only when its subscriber leaves: urql
+    // replaces a fetch signal with its own.
+    const held = make<never>(() => () => {
+      left = true;
+    });
+    mocks.cachedQuery.mockReturnValue(
+      Object.assign(held, { toPromise: () => pipe(held, toPromise) })
+    );
+    const soup = await import('./graphql-soup');
+    const controller = new AbortController();
+
+    const hydrated = soup.hydrateGraphqlSoup(
+      parse('query Page { user { id } }'),
+      {},
+      { signal: controller.signal }
+    );
+    const settled = expect(hydrated).rejects.toThrow('deadline');
+    controller.abort(new Error('deadline'));
+
+    await vi.waitFor(() => expect(left).toBe(true));
+    await settled;
+  });
 
   it('latches an activated client through a flag change until navigation', async () => {
     const apiStarted = mocks.apiStarted();

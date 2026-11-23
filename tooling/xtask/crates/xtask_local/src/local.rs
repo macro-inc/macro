@@ -43,6 +43,7 @@ pub mod microsoft_emulator;
 pub mod model_emulator;
 pub mod openbao;
 pub mod opensearch;
+pub mod passwords_vault;
 pub mod portmap;
 pub mod proxy;
 pub mod resources;
@@ -530,6 +531,9 @@ pub(crate) fn bring_up(
     }
     if let Some(handle) = frontend_lane {
         join_frontend("Preparing frontend dependencies (background)", handle)?;
+    }
+    if mode.spec().runs_local_infra && !stage.is_dry_run() {
+        passwords_vault::provision_teams(stage, instance)?;
     }
 
     if !stage.is_dry_run() {
@@ -1023,7 +1027,6 @@ fn prepare(
         let microsoft =
             microsoft_emulator::stands_in(mode, &env.merged).then(microsoft_emulator::idp);
         fusionauth::write_kickstart(instance, Some(&google), github.as_ref(), microsoft.as_ref())?;
-        openbao::make_mounts_readable()?;
     }
     if args.build.build_aux_services {
         build_aux_service_images(stage, instance, &env)?;
@@ -1877,11 +1880,7 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 /// `cargo x gen-compose`.
 pub fn gen_compose_only(args: &cli::ComposeArgs) -> Result<()> {
     let instance = Instance::resolve(args.instance.instance.as_deref(), args.instance.port_base)?;
-    let computers = computers::Computers::new(
-        Mode::Local,
-        args.computers.fleet(computers::Fleet::Docker),
-        &instance,
-    );
+    let computers = computers::Computers::new(Mode::Local, args.computers.fleet(), &instance);
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     // No env is resolved here, so the sidecars are those of a stack without

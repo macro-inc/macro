@@ -7,18 +7,24 @@ import {
   type ConversationGrouping,
   EMPTY_CONVERSATION_FILTERS,
 } from '../core/conversation-filters';
+import type { ConversationSort } from '../core/conversation-list';
 
 type ConversationListViewState = {
   filters: ConversationFilters;
   grouping: ConversationGrouping;
+  sort: ConversationSort;
 };
 
 const DEFAULT_VIEW: ConversationListViewState = {
   filters: EMPTY_CONVERSATION_FILTERS,
   grouping: 'status',
+  sort: 'updated',
 };
 
-const GROUPINGS: readonly ConversationGrouping[] = ['none', 'status', 'type'];
+const SORTS: readonly ConversationSort[] = ['updated', 'created'];
+// Retained only for the old phone composition; the desktop ignores grouping.
+// A saved grouping this build no longer offers (Type) falls back to the default.
+const LEGACY_GROUPINGS: readonly ConversationGrouping[] = ['none', 'status'];
 
 function stringsOf<Value extends string>(
   value: unknown,
@@ -39,11 +45,15 @@ function parseView(raw: string | null): ConversationListViewState | undefined {
   if (typeof parsed !== 'object' || parsed === null) return;
   const view = parsed as {
     filters?: Record<string, unknown>;
+    sort?: unknown;
     grouping?: unknown;
   };
-  const grouping = GROUPINGS.find((option) => option === view.grouping);
+  const sort = SORTS.find((option) => option === view.sort);
   return {
-    grouping: grouping ?? DEFAULT_VIEW.grouping,
+    grouping:
+      LEGACY_GROUPINGS.find((option) => option === view.grouping) ??
+      DEFAULT_VIEW.grouping,
+    sort: sort ?? DEFAULT_VIEW.sort,
     filters: {
       type: stringsOf(view.filters?.type, ['chat', 'code'] as const),
       status: stringsOf(view.filters?.status, [
@@ -63,7 +73,7 @@ function parseView(raw: string | null): ConversationListViewState | undefined {
   };
 }
 
-/** The Agents sidebar's filters and grouping, remembered per user. */
+/** The Agents sidebar's filters and sort, remembered per user. */
 export function createConversationListView(userId: string | undefined) {
   const storage = createUserScopedStorage('agents-conversation-list-view-v1');
   const [view, setView] = makePersistedState(
@@ -94,6 +104,8 @@ export function createConversationListView(userId: string | undefined) {
   return {
     filters: () => view().filters,
     grouping: () => view().grouping,
+    sort: () => view().sort,
+    setSort: (sort: ConversationSort) => setView({ ...view(), sort }),
     setSelected,
     setGrouping: (grouping: ConversationGrouping) =>
       setView({ ...view(), grouping }),

@@ -39,7 +39,11 @@ function failureMessage(error: SyncDocumentError): string {
       () => 'You do not have the required access to this document.'
     )
     .with('not_found', () => 'The document could not be found.')
-    .with('too_large', () => 'The document exceeds the 4 MiB snapshot limit.')
+    .with('too_large', () =>
+      error.operation === 'read'
+        ? 'The document exceeds the 4 MiB snapshot limit.'
+        : 'The change is too large to write at once. Write it in smaller parts.'
+    )
     .with('rejected', () => 'The sync service rejected the update.')
     .with('unavailable', () => 'The sync service is unavailable. Please retry.')
     .with(

@@ -7,14 +7,18 @@ use crate::{
     api::util::count_occurrences,
     service::{
         document_event_publisher::publish_document_purged_event,
-        entity_mutation::{EntityLifecycleService, LifecycleError},
+        entity_mutation::{EntityLifecycleService, LifecycleError, ThreadChannelShare},
     },
 };
+use channels::domain::models::ChannelType;
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use models_permissions::share_permission::{
+    UpdateSharePermissionRequestV2, access_level::AccessLevel,
+};
 use sqlx::PgPool;
 
 /// Wrap a legacy client failure as an internal lifecycle error.
@@ -53,6 +57,34 @@ impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
 }
 
 impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B> {
+    #[tracing::instrument(skip_all, fields(%thread_id))]
+    async fn thread_channel_shares(
+        &self,
+        thread_id: uuid::Uuid,
+        viewer: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<ThreadChannelShare>, LifecycleError> {
+        let mut transaction = self.db.begin().await.map_err(|error| internal!(error))?;
+        sqlx::query!("SET LOCAL statement_timeout = '5s'")
+            .execute(&mut *transaction)
+            .await
+            .map_err(|error| internal!(error))?;
+
+        let shares = sqlx::query_file_as!(
+            ThreadChannelShare,
+            "src/outbound/thread_channel_shares.sql",
+            thread_id,
+            viewer.as_ref(),
+        )
+        .fetch_all(&mut *transaction)
+        .await
+        .map_err(|error| internal!(error))?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| internal!(error))?;
+        Ok(shares)
+    }
+
     async fn update_thread_share_policy(
         &self,
         _actor: &EntityMutationActor,

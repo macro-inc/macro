@@ -42,7 +42,7 @@ pub struct UpdateLabelBatchResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, body), fields(user_id=authorization.authorization.user.user_context.user_id, fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(ctx, authorization, body), fields(fusionauth_user_id=authorization.authorization.user.user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
@@ -104,6 +104,12 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to commit transaction".into(),
         ),
+        MessageLabelError::Contended => (
+            StatusCode::CONFLICT,
+            email::domain::models::EmailErr::Contended
+                .to_string()
+                .into(),
+        ),
         MessageLabelError::Unqueued(_) | MessageLabelError::Command(_) => (
             StatusCode::INTERNAL_SERVER_ERROR,
             "unable to queue the label change".into(),
@@ -111,3 +117,6 @@ fn error_response<E>(error: MessageLabelError<E>) -> Response {
     };
     (status, Json(ErrorResponse { message })).into_response()
 }
+
+#[cfg(test)]
+mod test;

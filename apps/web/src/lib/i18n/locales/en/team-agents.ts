@@ -1,6 +1,5 @@
 export default {
-  inviteKind: 'What to invite',
-  people: 'People',
+  inviteTitle: 'Invite an agent',
   agent: 'Agent',
   intro:
     'An agent is a member of your team with its own Macro computer. You talk to it in a DM or a channel, like anyone else.',
@@ -72,6 +71,7 @@ export default {
   statusStarting: 'Starting',
   statusRunning: 'Running',
   statusPaused: 'Paused',
+  statusUnhealthy: 'Not responding',
   statusFailed: 'Needs attention',
   statusReleased: 'Released',
   statusSetupFailed: 'Setup failed',
@@ -84,6 +84,7 @@ export default {
   failedNotice: "{{name}} couldn't be set up",
   failedNoticeBody: "Retry from {{name}}'s row in Members.",
   messageAgent: 'Message {{name}}',
+  openDirectMessageFailed: "Couldn't open the conversation. Try again.",
   connectClaude: 'Connect Claude plan',
   reconnectClaude: 'Reconnect Claude plan',
   dmSettingUp: "{{name}} is still being set up. It'll answer once it's ready.",

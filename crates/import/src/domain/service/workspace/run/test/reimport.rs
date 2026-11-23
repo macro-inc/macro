@@ -50,7 +50,7 @@ async fn a_personal_replacement_never_claims_or_shares_the_deleted_team_copy(poo
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -182,7 +182,7 @@ async fn later_page_writes_use_the_replacement_and_preserve_live_team_destinatio
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -268,7 +268,7 @@ async fn a_deleted_linked_task_folder_requires_a_fresh_plan_instead_of_a_databas
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -325,7 +325,7 @@ async fn one_deleted_finished_page_is_reported_without_stopping_other_pages(pool
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -399,7 +399,7 @@ async fn a_deleted_finished_link_is_reported_instead_of_staying_already_imported
     });
     let service = ImportServiceImpl::new(
         repo.clone(),
-        Arc::new(NoConnector),
+        no_connections(),
         Arc::clone(&writer),
         Arc::new(ai_usage::NoOpUsageRecorder),
     )
@@ -424,4 +424,48 @@ async fn a_deleted_finished_link_is_reported_instead_of_staying_already_imported
         ImportStatus::Imported
     );
     assert_eq!(writer.documents.lock().unwrap().len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_teamless_shared_replacement_keeps_its_reviewed_verdict(pool: PgPool) {
+    let owner = user("teamless-replacement");
+    let repo = PgImportRepo::new(pool.clone());
+    let (review, ids) = approved(&pool, &owner, &[planned_page('e', "Replacement", true)]).await;
+    let row = repo.get(&owner, ids[0]).await.unwrap().unwrap();
+    let mut meta: NotionDocMeta = serde_json::from_value(row.metadata).unwrap();
+    meta.plan.as_mut().unwrap().already_imported =
+        Some(crate::domain::models::NotionAlreadyImported {
+            by: "former@example.com".into(),
+            entity_id: Uuid::now_v7().to_string(),
+            entity_type: "md".into(),
+        });
+    sqlx::query!(
+        "UPDATE import_entity SET metadata = $2 WHERE id = $1",
+        ids[0],
+        serde_json::to_value(meta).unwrap()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    planned(&repo, &owner).await;
+    let tracker = TaskTracker::new();
+    let service = service(
+        &pool,
+        Writer::default(),
+        CancellationToken::new(),
+        tracker.clone(),
+    );
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let imported = repo.get(&owner, ids[0]).await.unwrap().unwrap();
+    assert_eq!(imported.status, ImportStatus::Imported);
+    let meta: NotionDocMeta = serde_json::from_value(imported.metadata).unwrap();
+    assert!(
+        meta.plan.unwrap().shared,
+        "team claim availability must not rewrite the reviewed verdict"
+    );
 }

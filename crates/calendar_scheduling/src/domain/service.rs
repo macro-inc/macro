@@ -266,15 +266,14 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         if end < now || start > now + Duration::days(i64::from(event.horizon_days) + 1) {
             return Ok(vec![]);
         }
-        let records = self.repository.bookings(profile_id, start, end).await?;
-        let count = records
-            .iter()
-            .filter(|r| {
-                r.booking.event_type_id == event_id && r.booking.status != BookingStatus::Cancelled
-            })
-            .count();
-        if event.daily_limit.is_some_and(|n| count >= usize::from(n)) {
-            return Ok(vec![]);
+        if let Some(limit) = event.daily_limit {
+            let count = self
+                .repository
+                .daily_bookings(profile_id, event_id, start, end, None)
+                .await?;
+            if count >= i64::from(limit) {
+                return Ok(vec![]);
+            }
         }
         let busy_start = start - Duration::minutes(i64::from(event.before_minutes));
         let busy_end = end + Duration::minutes(i64::from(event.after_minutes));
@@ -777,15 +776,41 @@ impl<R: Repository, C: Calendars, D: Directory> Service<R, C, D> {
         let mut slots = vec![];
         let now = Utc::now();
         while host_date <= last {
-            slots.extend(
-                slots_for_date(&event, &record.schedule, host_date, now, &busy)?
-                    .into_iter()
-                    .filter(|s| s.starts_at >= start && s.starts_at < end),
-            );
+            if !self.day_full_for_move(&record, host_date).await? {
+                slots.extend(
+                    slots_for_date(&event, &record.schedule, host_date, now, &busy)?
+                        .into_iter()
+                        .filter(|s| s.starts_at >= start && s.starts_at < end),
+                );
+            }
             host_date = host_date.succ_opt().ok_or(Error::Conflict)?;
         }
         slots.sort_by_key(|s| s.starts_at);
         self.respect_host_hours(&owner, &event, slots).await
+    }
+    /// Whether the booking link's daily limit leaves no place for `record` on
+    /// this schedule date, counted as the move itself counts it: the booking
+    /// being moved never takes a place from itself.
+    async fn day_full_for_move(
+        &self,
+        record: &BookingRecord,
+        date: NaiveDate,
+    ) -> Result<bool, Error> {
+        let Some(limit) = record.event.daily_limit else {
+            return Ok(false);
+        };
+        let (start, end) = day_bounds(&record.schedule, date)?;
+        let count = self
+            .repository
+            .daily_bookings(
+                record.profile_id,
+                record.booking.event_type_id,
+                start,
+                end,
+                Some(record.booking.id),
+            )
+            .await?;
+        Ok(count >= i64::from(limit))
     }
     /// Move a booking while retaining both reservations until the calendar accepts the change.
     pub async fn reschedule(

@@ -104,7 +104,6 @@ export default {
     close: 'Zamknij',
     delete: 'Usuń',
     rename: 'Zmień nazwę',
-    more: 'Więcej',
     search: 'Szukaj',
     settings: 'Ustawienia',
   },
@@ -528,6 +527,12 @@ export default {
       other: 'Usunięto {{count}} elementu',
     },
     toastDeleteFailed: 'Nie udało się usunąć',
+    toastPropertySet: {
+      one: '{{property}}: ustawiono',
+      few: '{{property}}: ustawiono dla {{count}} elementów',
+      many: '{{property}}: ustawiono dla {{count}} elementów',
+      other: '{{property}}: ustawiono dla {{count}} elementu',
+    },
     toastAddedToFavorites: 'Dodano do ulubionych',
     toastAddedCountToFavorites: {
       one: 'Dodano {{count}} element do ulubionych',
@@ -824,7 +829,6 @@ export default {
       'Nie znaleziono ustawień. Spróbuj „podpis”, „motyw” lub „kalendarz”.',
     backToSettings: 'Wróć do ustawień',
     closeSettings: 'Zamknij ustawienia',
-    goToTab: 'Przejdź do karty ustawień {{number}}',
     editProfile: 'Edytuj profil',
     logOut: 'Wyloguj się',
     yourAccount: 'Twoje konto',

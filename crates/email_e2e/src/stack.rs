@@ -60,6 +60,9 @@ const FOCUS_SKIPPED: &str = "focus skipped";
 /// the Debug name of `ClassifyOutcome::NotEnabled` in `email_focus_worker`,
 /// so renaming that variant makes the wait for it time out.
 const FOCUS_NOT_ENABLED: &str = "NotEnabled";
+/// What `pubsub_workers` logs when its read of the Outlook import live pass
+/// flag turns the switch on; it starts off.
+const LIVE_IMPORT_PASS_ON: &str = "outlook import live pass switched";
 /// The setting that names the Kafka brokers.
 const KAFKA_BROKERS: &str = "KAFKA_BROKERS";
 /// Where that service answers GraphQL.
@@ -132,6 +135,11 @@ pub struct StackOptions {
     /// scenarios run one at a time (the `email-e2e-focus` test group):
     /// keep them in `tests/focus.rs`.
     pub focus: bool,
+    /// Turns the Outlook import live pass on: the email services read
+    /// `enable-outlook-import-live-pass` from the Macro services stand-in,
+    /// which answers it on, and the stack starts once the workers have read
+    /// it. Off by default, as in production.
+    pub outlook_import_live_pass: bool,
 }
 
 /// What a stack with calendar runs on top of the email services.
@@ -349,7 +357,27 @@ impl Stack {
             .await?;
             stack.calendar = Some(calendar);
         }
+        if options.outlook_import_live_pass {
+            stack.wait_for_live_import_pass().await?;
+        }
         Ok(stack)
+    }
+
+    /// Waits until `pubsub_workers` has read the Outlook import live pass
+    /// flag on. The switch starts off, and a folder whose first import page
+    /// commits before that read imports without a live pass.
+    async fn wait_for_live_import_pass(&self) -> Result<(), Report> {
+        eventually(
+            "the workers to read the Outlook import live pass flag on",
+            STARTUP_TIMEOUT,
+            async || {
+                Ok(self
+                    .workers_log()
+                    .contains(LIVE_IMPORT_PASS_ON)
+                    .then_some(()))
+            },
+        )
+        .await
     }
 
     /// Starts `document_storage_service` on the scenario's database, Redis
@@ -528,9 +556,10 @@ impl Stack {
     }
 
     /// Whether `email_focus_worker` is done with the thread and left it
-    /// unclassified because its owner does not have the Focus flag. Nothing
-    /// else the worker does shows that, so the stack has it log the threads
-    /// it leaves at debug.
+    /// unclassified because nobody whose tab shows it is in the rollout: has
+    /// the Focus flag and has used Macro in the last week. Nothing else the
+    /// worker does shows that, so the stack has it log the threads it leaves
+    /// at debug.
     pub fn focus_skipped_without_flag(&self, thread_id: &str) -> bool {
         self.focus_worker_log().lines().any(|line| {
             line.contains(FOCUS_SKIPPED)
@@ -597,6 +626,13 @@ impl Stack {
                 macro_services: &macro_services,
                 queues,
             });
+            if options.outlook_import_live_pass {
+                env.insert("POSTHOG_HOST".to_owned(), macro_services.posthog_url());
+                env.insert(
+                    "POSTHOG_API_KEY".to_owned(),
+                    crate::focus::POSTHOG_PROJECT_KEY.to_owned(),
+                );
+            }
             env.extend(options.env.iter().cloned());
 
             // Held until now, so no listener of the harness took it.
@@ -789,7 +825,7 @@ impl Stack {
 
     /// Runs the hourly link maintenance once, as the cron does in
     /// production: the real `email_refresh_handler` enqueues a `HealthCheck`
-    /// on `link-manager` for every Gmail inbox that is due and a `Refresh`
+    /// on `link-maintenance` for every Gmail inbox that is due and a `Refresh`
     /// for those whose hour it is. The handler runs with a health interval
     /// of one hour, so every syncing Gmail inbox is due a health check on
     /// each run; which inboxes are refreshed depends on the hour and the

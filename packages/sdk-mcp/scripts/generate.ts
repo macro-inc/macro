@@ -646,6 +646,8 @@ const GROUP_NAMES: Readonly<Record<string, string>> = {
   foreign: 'linked_items',
   harnesses: 'agent_hosts',
   messages: 'comments',
+  'task-templates': 'tasks',
+  time: 'tasks',
 };
 
 /**

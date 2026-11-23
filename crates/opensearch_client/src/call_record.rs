@@ -4,7 +4,7 @@ use crate::{
     upsert::{
         self, BulkUpsertResult,
         call_record::{UpsertCallRecordSegmentArgs, bulk_upsert_call_record_segments},
-        properties::IndexedProperty,
+        properties::{IndexedProperty, PropertyUpdate},
     },
 };
 
@@ -39,7 +39,7 @@ impl OpensearchClient {
         &self,
         call_id: &str,
         properties: &[IndexedProperty],
-    ) -> Result<()> {
+    ) -> Result<PropertyUpdate> {
         resend_on_lost_connection(|| {
             upsert::call_record::update_call_record_properties(&self.inner, call_id, properties)
         })

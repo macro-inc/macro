@@ -182,7 +182,7 @@ await artifact('operations.json', `${JSON.stringify(operations, null, 2)}\n`);
 const { HOSTS } = await import(`${root}packages/sdk/src/config.ts`);
 await artifact('hosts.json', `${JSON.stringify(HOSTS, null, 2)}\n`);
 
-// Declarations that stored routine code is type-checked against, and the
+// Declarations that programs and stored routine code are type-checked against, and the
 // fingerprint a routine records: the SDK version plus a hash of these types,
 // so any change to the API's shape is a new fingerprint.
 const sdkRoot = join(root, 'packages/sdk');
@@ -207,7 +207,12 @@ const hash = new Bun.CryptoHasher('sha256')
   .update(JSON.stringify(files))
   .digest('hex')
   .slice(0, 12);
+// Handlebars' declarations stay out of the fingerprint: only attended
+// programs import it, and routines record the fingerprint.
+const handlebars = await Bun.file(
+  join(root, 'node_modules/handlebars/types/index.d.ts')
+).text();
 await artifact(
   'sdk-types.json',
-  `${JSON.stringify({ fingerprint: `${version}+${hash}`, files })}\n`
+  `${JSON.stringify({ fingerprint: `${version}+${hash}`, files, handlebars })}\n`
 );

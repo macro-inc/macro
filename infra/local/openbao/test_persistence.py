@@ -14,18 +14,25 @@ from bootstrap import LocalOpenBao
 from openbao_provisioning import provision_team as bootstrap
 
 
-def disposable_openbao(source, directory):
-    """A `run(*compose arguments)` for a fresh single-container Compose project."""
+def disposable_openbao(source: Path, directory: Path, refuse_initial_requests=False):
     project = "passwords-persistence-" + uuid4().hex
-    compose = directory / "compose.json"
-    compose.write_text(json.dumps({
+    # Mount readable copies: a private checkout's files are 0600, which
+    # the container's openbao user cannot read.
+    config = Path(directory) / "config"
+    config.mkdir(mode=0o755)
+    config.chmod(0o755)
+    for name in ("local.hcl", "start.sh"):
+        (config / name).write_bytes((source / name).read_bytes())
+        (config / name).chmod(0o644)
+    compose = Path(directory) / "compose.json"
+    definition = {
         "services": {"openbao": {
             "image": "openbao/openbao:2.7.2",
             "entrypoint": ["/usr/bin/dumb-init", "--", "/bin/sh", "/openbao/config/start.sh"],
             "environment": {"BAO_ADDR": "http://127.0.0.1:8200"},
             "volumes": [
-                str(source / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
-                str(source / "start.sh") + ":/openbao/config/start.sh:ro,z",
+                str(config / "local.hcl") + ":/openbao/config/macro-local.hcl:ro,z",
+                str(config / "start.sh") + ":/openbao/config/start.sh:ro,z",
                 "vault:/openbao/file",
             ],
             "ports": ["127.0.0.1::8200"],
@@ -33,7 +40,34 @@ def disposable_openbao(source, directory):
             "healthcheck": {"test": ["CMD", "bao", "status"], "interval": "1s", "timeout": "3s", "retries": 60},
         }},
         "volumes": {"vault": {}},
-    }))
+    }
+    if refuse_initial_requests:
+        tools = directory / "test-bin"
+        tools.mkdir(mode=0o755)
+        tools.chmod(0o755)
+        wrapper = tools / "bao"
+        # Real CLI requests hit a closed loopback port twice. Only the startup
+        # script inherits this flag; health probes must not consume the fault.
+        wrapper.write_text("""#!/bin/sh
+set -eu
+if [ "${OPENBAO_TEST_STARTUP:-}" = 1 ] && [ "${1:-}" != server ]; then
+    count=$(cat /openbao/file/startup-probes 2>/dev/null || printf 0)
+    if [ "$count" -lt 2 ]; then
+        printf '%s\\n' "$((count + 1))" > /openbao/file/startup-probes
+        export BAO_ADDR=http://127.0.0.1:1
+    fi
+fi
+exec /usr/bin/bao "$@"
+""")
+        wrapper.chmod(0o755)
+        service = definition["services"]["openbao"]
+        service["environment"]["PATH"] = "/openbao/test-bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        service["volumes"].append(str(tools) + ":/openbao/test-bin:ro,z")
+        service["entrypoint"] = [
+            "/usr/bin/dumb-init", "--", "/bin/sh", "-c",
+            "OPENBAO_TEST_STARTUP=1 exec /bin/sh /openbao/config/start.sh",
+        ]
+    compose.write_text(json.dumps(definition))
     command = ["docker", "compose", "-p", project, "-f", str(compose)]
 
     def run(*arguments):
@@ -49,6 +83,18 @@ def disposable_openbao(source, directory):
 
 @unittest.skipUnless(os.environ.get("PASSWORDS_TEST_OPENBAO_PERSISTENCE"), "disposable Docker lifecycle test opt-in required")
 class PersistenceIntegration(unittest.TestCase):
+    def test_connection_refused_during_startup_is_retried(self):
+        source = Path(__file__).resolve().parent
+        with tempfile.TemporaryDirectory() as directory:
+            run = disposable_openbao(source, Path(directory), refuse_initial_requests=True)
+            try:
+                run("up", "-d", "--wait", "--wait-timeout", "90")
+                self.assertEqual(run("exec", "-T", "openbao", "cat", "/openbao/file/startup-probes"), b"2\n")
+                credentials = json.loads(run("exec", "-T", "openbao", "cat", "/openbao/file/bootstrap.json"))
+                self.assertTrue(credentials["root_token"])
+            finally:
+                run("down", "--volumes")
+
     def test_an_empty_credentials_file_from_a_failed_init_is_retried(self):
         source = Path(__file__).resolve().parent
         with tempfile.TemporaryDirectory() as directory:

@@ -73,14 +73,15 @@
       # `crates/agent_harness/container/ensure_ready.sh` survives the prune;
       # `.ttf` and `.xml` for the fonts and preset shape definitions that
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
-      # `static_assets/schema.graphql` that `cache-core`'s build script reads;
+      # `static_assets/schema.graphql` that `cache-schema`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and timer shims;
+      # for the Deno bootstrap and timer shims; `.lua` for the Redis scripts
+      # `crates/rate_limit` embeds;
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto|lua)$" path != null;
       # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
@@ -541,6 +542,11 @@
           binaries = [ "notification_service" ];
         }
         {
+          serviceName = "search-freshness-probe";
+          packageName = "search_freshness_probe";
+          binaries = [ "search_freshness_probe" ];
+        }
+        {
           serviceName = "search-processing-service";
           packageName = "search_processing_service";
           binaries = [ "search_processing_service" ];
@@ -648,6 +654,61 @@
             '';
           }
         );
+
+      # The daemons baked into the Macro computer image (nix/macro-box), built
+      # like the deploy leaves: a pruned source, so only a change in their own
+      # crate closure rebuilds them, over third-party deps compiled once per
+      # Cargo.lock. A local stack with `--computers docker` builds these on
+      # every `run_local`.
+      guestBinaryDefinitions = [
+        {
+          pname = "macrod";
+          packageName = "coding_agent_worker";
+        }
+        {
+          pname = "harnessd";
+          packageName = "harnessd";
+        }
+      ];
+
+      guestCargoArtifacts = craneLib.buildDepsOnly (
+        commonArgs
+        // {
+          pname = "macro-box-guest-deps";
+          doCheck = false;
+          cargoCheckCommand = "true";
+          cargoExtraArgs =
+            "--locked "
+            + pkgs.lib.concatMapStringsSep " " (
+              def: "--package ${def.packageName} --bin ${def.pname}"
+            ) guestBinaryDefinitions;
+          CARGO_PROFILE = "release";
+        }
+      );
+
+      guestBinaryPackage =
+        { pname, packageName }:
+        craneLib.buildPackage (
+          commonArgs
+          // {
+            src = prunedDeploySrc "guest-${pname}" packageName;
+            cargoArtifacts = guestCargoArtifacts;
+            pname = "macro-box-${pname}";
+            doCheck = false;
+            cargoExtraArgs = "--locked --package ${packageName} --bin ${pname}";
+            CARGO_PROFILE = "release";
+            installPhaseCommand = ''
+              install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+            '';
+          }
+        );
+
+      guestBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "macro-box-${def.pname}";
+          value = guestBinaryPackage def;
+        }) guestBinaryDefinitions
+      );
 
       deployServiceBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
@@ -1281,6 +1342,7 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // guestBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;

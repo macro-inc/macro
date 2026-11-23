@@ -13,6 +13,7 @@ with node ID `macro-local` and cluster address `https://127.0.0.1:8201`. On firs
 `start.sh` generates a raw 32-byte seal key from `/dev/urandom` at
 `/openbao/file/seal.key`, starts the server, and initializes it once. The static
 seal uses key ID `macro-local-v1` and automatically unseals on subsequent starts.
+Startup waits for a listener response before attempting initialization.
 Initialization writes the root bootstrap token and recovery keys to
 `/openbao/file/bootstrap.json` with mode `0600`; they never enter git or application
 service environments. A failed initialization exits the container non-zero, so
@@ -31,9 +32,28 @@ It injects `OPENBAO_ADDRESS`, `PASSWORDS_JWT_SIGNING_KEY`, and
 `PASSWORDS_JWT_ISSUER` into the local service environment. Private keys and generated
 environment files are ignored by git. Applications receive no OpenBao root token.
 
-After the local stack starts, copy the bootstrap credentials into the ignored
-instance directory without printing them. Substitute the instance's actual
-container name and allocated OpenBao host port below:
+## Team vaults
+
+Creating a team does not create its vault namespace; until it exists, every
+Passwords action for that team fails with `vault_not_provisioned` ("This team's
+vault isn't set up yet."). As a stopgap until a provisioner does this
+automatically, `just run_local` and `just stack up` provision every existing
+team during stack startup through `bring_up`. `just stack update` does not
+provision team vaults. For a team created after startup, run:
+
+```sh
+just passwords_provision                   # default instance
+just passwords_provision --instance <name>
+```
+
+It copies the bootstrap credentials into the ignored instance directory
+(`infra/local/generated/<instance>/openbao-bootstrap.json`, mode `0600`, never
+printed) and runs `bootstrap.py` once with a `--team-id` per team. It is safe to
+repeat: provisioning never deletes or replaces values.
+
+To do the same by hand, copy the bootstrap credentials without printing them.
+Substitute the instance's actual container name and allocated OpenBao host port
+below; repeat `--team-id` for several teams:
 
 ```sh
 docker cp <instance-openbao-container>:/openbao/file/bootstrap.json \
@@ -48,8 +68,7 @@ python3 infra/local/openbao/bootstrap.py \
 ```
 
 The provisioning logic lives in `infra/openbao/openbao_provisioning.py`, shared with the
-hosted dev entrypoint (`infra/openbao/README.md`). Provision each new Macro team
-explicitly. The bootstrap refuses remote origins
+hosted dev entrypoint (`infra/openbao/README.md`). The bootstrap refuses remote origins
 and redirects. It may be repeated: it preserves existing values and versions,
 validates mount types, and reapplies policy/auth configuration.
 It does not create teams or change Postgres.

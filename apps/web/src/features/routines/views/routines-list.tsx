@@ -1,6 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { Accessor } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import type { RoutineRowMenuActions } from '../components/routine-row-menu';
 import {
   type RoutinesDiscover,
@@ -14,6 +14,7 @@ export function RoutinesListView(props: {
   source: RoutineListSource;
   userId: Accessor<string | undefined>;
   showTitle?: boolean;
+  mobileHeader?: (focusSearch: () => void) => JSX.Element;
   registerSearchFocus?: (focus: () => void) => void;
   onCreate(): void;
   onOpen(id: string): void;
@@ -34,6 +35,7 @@ export function RoutinesListView(props: {
   return (
     <RoutinesList
       showTitle={props.showTitle}
+      mobileHeader={props.mobileHeader}
       registerSearchFocus={props.registerSearchFocus}
       rows={rows()}
       loading={props.source.loading()}

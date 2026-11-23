@@ -1,5 +1,5 @@
 import '@entity/composed/ListEntity.css';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { MaybeEntityRow, MultiSelectCheckbox, UnreadIndicator } from '@entity';
 import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
@@ -30,14 +30,18 @@ type InboxListEntityProps = BaseListEntityProps & {
 };
 
 export function InboxListEntity(props: InboxListEntityProps) {
-  const channels = useChannelsContext();
+  const directory = useChannelDirectory();
 
   const entity = createMemo(() => {
     const scoped = scopeThreadNotifications(props.entity);
     if (scoped.type !== 'channel_thread') return scoped;
+    const current = loadedChannel(directory.lookup(scoped.channelId));
     return {
       ...scoped,
-      name: getChannelThreadName(scoped, channels.channelsById()),
+      name: getChannelThreadName(
+        scoped,
+        current ? { [current.id]: current } : {}
+      ),
     };
   });
 
@@ -62,19 +66,23 @@ export function InboxListEntity(props: InboxListEntityProps) {
         entityId={props.occurrenceKey ?? props.entity.id}
         config={props.entityRowConfig}
       >
-        <InboxCardLayout
-          class={props.cardClass}
-          item={item()}
-          selected={props.checked}
-          highlighted={props.highlighted}
-          focusable={props.focusable}
-          showUnreadIndicator={props.hideCheckbox}
-          onClick={props.onClick}
-        />
+        {/* The divider sits inside the swipe row, so a row folding away on
+            done takes its line with it. */}
+        <div class="flex w-full min-w-0 flex-col">
+          <InboxCardLayout
+            class={props.cardClass}
+            item={item()}
+            selected={props.checked}
+            highlighted={props.highlighted}
+            focusable={props.focusable}
+            showUnreadIndicator={props.hideCheckbox}
+            onClick={props.onClick}
+          />
+          <Show when={isTouchDevice() && !props.isLastInGroup}>
+            <InboxDivider />
+          </Show>
+        </div>
       </MaybeEntityRow>
-      <Show when={isTouchDevice() && !props.isLastInGroup}>
-        <InboxDivider />
-      </Show>
       {/* Select checkbox lives in the gutter the card reserves as its
           `--soup-row-padding-l` left padding;
           mobile has no gutter — the rail shows the unread dot instead. */}

@@ -206,11 +206,17 @@ export class SyncEngine<S extends GenericRootSchema, D> {
     this.log('info', 'engine.stop: ok');
   }
 
-  public async syncStateToLoro(state: InferType<S>) {
+  public async syncStateToLoro(state: StateToSync<S>) {
     if (!this._isRunning) return;
 
     await this.syncLock.runExclusive(async () => {
-      const syncResult = await this.loroManager.syncToLoro(state);
+      // A builder runs here, under the lock remote updates also take, so the
+      // stored state it reads includes every earlier write and remote change.
+      const next =
+        typeof state === 'function'
+          ? state(this.loroManager.state?.state)
+          : state;
+      const syncResult = await this.loroManager.syncToLoro(next);
 
       if (syncResult.isErr()) {
         this.log('error', 'syncStateToLoro: failed, resetting engine', {
@@ -515,6 +521,11 @@ export class SyncEngine<S extends GenericRootSchema, D> {
   }
 }
 
+/** The state to write, or a function that builds it from the state stored now. */
+export type StateToSync<S extends GenericRootSchema> =
+  | InferType<S>
+  | ((stored: InferType<S> | undefined) => InferType<S>);
+
 export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   isRunning: Accessor<boolean>;
   start: () => void;
@@ -522,7 +533,7 @@ export type ReactiveSyncEngine<S extends GenericRootSchema, D> = {
   reset: (
     snapshotThunk?: () => ResultAsync<Uint8Array, SyncError>
   ) => Promise<void>;
-  syncStateToLoro: (state: InferType<S>) => Promise<void>;
+  syncStateToLoro: (state: StateToSync<S>) => Promise<void>;
   syncAwarenessToLoro: (awareness: D) => void;
 };
 

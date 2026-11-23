@@ -7,6 +7,17 @@ import type { Initiative } from '../initiatives/initiative';
 import type { Project } from '../projects/project';
 import { entitySearch } from '../search/options';
 import { Team } from '../teams/team';
+import {
+  type LogTimeOptions,
+  logTime,
+  type StartTimerOptions,
+  startTimer,
+  type TimeEntriesOptions,
+  type TimerStart,
+  timeEntries,
+  timeLogged,
+} from '../time/task-time';
+import type { TimeEntry } from '../time/time-entry';
 import { User } from '../users/user';
 
 /**
@@ -18,6 +29,7 @@ const ASSIGNEES_PROPERTY_ID = '00000001-0000-0000-0000-000000000001';
 const STATUS_PROPERTY_ID = '00000001-0000-0000-0000-000000000002';
 const DUE_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000004';
 const PROJECT_PROPERTY_ID = '00000001-0000-0000-0000-000000000014';
+const START_DATE_PROPERTY_ID = '00000001-0000-0000-0000-000000000015';
 const NOT_STARTED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000001';
 const COMPLETED_STATUS_OPTION_ID = '00000001-0000-0000-0002-000000000004';
 
@@ -66,8 +78,8 @@ export class Task extends Document {
   }
 
   /**
-   * Create a task, with its initiative, assignees and due date in the same
-   * request. The task starts Not started.
+   * Create a task, with its initiative, assignees, start and due dates in the
+   * same request. The task starts Not started.
    */
   static async create(
     client: MacroClient,
@@ -80,10 +92,21 @@ export class Task extends Document {
       initiative?: Initiative;
       /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
       assignees?: User[];
+      /** The day the task is due, kept as a whole day. */
       dueDate?: Date;
+      /**
+       * The day work on the task starts, kept as a whole day. A start after
+       * `dueDate` is saved as the due date.
+       */
+      startDate?: Date;
+      /**
+       * Keeps the time of day of `startDate` and `dueDate`, making each an
+       * exact moment (a 2 to 4 PM block) instead of a whole day.
+       */
+      withTimes?: boolean;
       /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
       team?: Team;
-      /** Defaults to true. */
+      /** Defaults to team sharing, or private when the session cannot share. */
       shareWithTeam?: boolean;
     },
   ): Promise<Task> {
@@ -98,6 +121,8 @@ export class Task extends Document {
       initiative: true,
       assignees: true,
       dueDate: true,
+      startDate: true,
+      withTimes: true,
       team: true,
       shareWithTeam: true,
     });
@@ -110,7 +135,7 @@ export class Task extends Document {
           markdown: opts.markdown ?? null,
           projectId: opts.project?.id ?? null,
           teamId: opts.team?.id ?? null,
-          shareWithTeam: opts.shareWithTeam ?? true,
+          shareWithTeam: opts.shareWithTeam,
           propertyValues: await initialProperties(client, opts),
         },
       }),
@@ -246,6 +271,52 @@ export class Task extends Document {
   }
 
   /**
+   * Log time you spent on this task, as yourself; needs edit access, and an
+   * entry is at most 24 hours. `date` is the day in your own calendar
+   * (`YYYY-MM-DD`, today in UTC when omitted). The task's Time logged grows by
+   * `minutes`.
+   *
+   * @example
+   * await task.logTime({ minutes: 90, date: '2026-11-20', note: 'Review' });
+   *
+   * @write
+   */
+  logTime(opts: LogTimeOptions): Promise<TimeEntry> {
+    return logTime(this.client, this, opts);
+  }
+
+  /**
+   * Everyone's time entries on this task, newest day first, auto-paginated;
+   * `maxItems` caps the total.
+   *
+   * @readonly
+   */
+  timeEntries(opts?: TimeEntriesOptions): AsyncGenerator<TimeEntry> {
+    return timeEntries(this.client, this, opts);
+  }
+
+  /**
+   * The task's Time logged: the minutes of all its entries.
+   *
+   * @readonly
+   */
+  timeLogged(): Promise<number> {
+    return timeLogged(this.client, this);
+  }
+
+  /**
+   * Start your timer on this task, first stopping and saving any timer you
+   * have running, on this task too (`stopped`); check `macro.time.timer()`
+   * first. Needs edit access. A running timer past 8 hours throws
+   * `TimerOverLimitError` instead, naming that timer to resolve first.
+   *
+   * @write
+   */
+  startTimer(opts?: StartTimerOptions): Promise<TimerStart> {
+    return startTimer(this.client, this, opts);
+  }
+
+  /**
    * The task's URL in the Macro web app.
    *
    * @readonly
@@ -267,11 +338,20 @@ export class Task extends Document {
  * (creator assigned, Not started). Sending any value replaces those defaults,
  * so the defaults are spelled out here.
  */
+function dateValue(date: Date, withTime: boolean | undefined) {
+  return {
+    type: 'date' as const,
+    value: date.toISOString(),
+    ...(withTime ? { has_time: true } : {}),
+  };
+}
+
 async function initialProperties(
   client: MacroClient,
   opts: Parameters<typeof Task.create>[1],
 ): Promise<PropertyInput[] | null> {
-  if (!opts.initiative && !opts.assignees && !opts.dueDate) return null;
+  if (!opts.initiative && !opts.assignees && !opts.dueDate && !opts.startDate)
+    return null;
   const assignees = opts.assignees ?? [await User.me(client)];
   const values: PropertyInput[] = [
     {
@@ -303,7 +383,13 @@ async function initialProperties(
   if (opts.dueDate) {
     values.push({
       propertyId: DUE_DATE_PROPERTY_ID,
-      value: { type: 'date', value: opts.dueDate.toISOString() },
+      value: dateValue(opts.dueDate, opts.withTimes),
+    });
+  }
+  if (opts.startDate) {
+    values.push({
+      propertyId: START_DATE_PROPERTY_ID,
+      value: dateValue(opts.startDate, opts.withTimes),
     });
   }
   return values;

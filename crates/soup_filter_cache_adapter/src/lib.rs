@@ -31,10 +31,16 @@ pub mod live_query;
 pub mod mail;
 mod notifications;
 mod parsed_document;
+pub mod permissions;
 pub mod properties;
+mod write_passes;
+mod write_response;
 pub use notifications::{
-    notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
+    notification_deletion_updates, notification_projection_updates,
+    notification_projection_updates_for, optimistic_notification_updates,
 };
+pub use write_passes::{WritePassError, WritePassStep, WritePasses, write_passes};
+pub use write_response::WriteResponse;
 
 /// Failure to materialize or compile a Soup filter request.
 #[derive(Debug, thiserror::Error)]
@@ -303,12 +309,16 @@ fn walk_authoritative_object(
 
     let mut visited = HashSet::new();
     for field in fields {
+        // Only objects and arrays are walked. Every duplicate of a field reads the
+        // same value, so a scalar skip before the visited check changes nothing.
+        let Some(value @ (serde_json::Value::Object(_) | serde_json::Value::Array(_))) =
+            object.get(&field.response_key)
+        else {
+            continue;
+        };
         if !visited.insert((field.name.as_str(), field.response_key.as_str())) {
             continue;
         }
-        let Some(value) = object.get(&field.response_key) else {
-            continue;
-        };
         let Some(field_meta) = schema.field_meta(concrete_type, &field.name) else {
             continue;
         };

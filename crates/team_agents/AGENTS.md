@@ -9,6 +9,9 @@ PostHog flag. Served at `/team_agents` in authentication_service.
 ## How it works
 
 `POST /team_agents` (team admin, own credential) → flag check (fails closed) →
+`validate` parses the request into a `TeamAgentInvite` (`AgentName`,
+hosted_runtimes' `PurchaseKey`, profile and avatar checks), so a bad field is a
+400 before anything is created →
 account rows + `team_agents` row in one transaction (`"User"."isAgent"`, a
 placeholder `@agents.macro.invalid` address, no sign-in) →
 `TeamService::add_team_agent` (included seat, no Stripe change) → workspace
@@ -61,12 +64,17 @@ closed). `resolve(agent)` admits an account to its own team, for the vault's
 `AgentDirectory`, whose adapter lives in document_storage_service's outbound.
 
 An agent's status comes from its computer (`provisioning`, `paused`,
-`failed`, `released`), except that an up computer is `starting` until the
-agent first reports itself online and `running` after. The agent reports with
+`unhealthy`, `failed`, `released`), except that an up computer is `starting`
+until the agent first reports itself online and `running` after. An agent
+with no computer yet is `provisioning` for `ORPHANED_INVITE_AFTER` (10
+minutes) after its account was made, then `failed`: the invite that should
+have bought it died. The agent reports with
 its own API key: `POST /team_agents/me/online` (the starter agent calls it once
 per run when its presence socket opens) stamps `team_agents.first_online_at`
-once. Each report until then first tells the computer
-(`ComputerService::agent_online`), which ends its first start. The first
+once. Every report first tells the computer
+(`ComputerService::agent_online`, idempotent), which ends its first start and
+records its setup complete, so a computer that missed the first report catches
+up on the next. The first
 report sends the inviter the computer's `computer_setup`
 ready notice (same notification id as the operator's, so an older operator's
 send dedupes). `outbound/setup_notices.rs` (`IngressSetupNotices`) builds that

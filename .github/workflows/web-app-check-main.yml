@@ -1,7 +1,7 @@
 # DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
 # Source: tooling/xtask/crates/xtask_workflows/src/workflows/web_app_check_main.rs
 name: Web App Pr Checks
-'on':
+on:
   workflow_call: {}
 jobs:
   path-check:
@@ -15,127 +15,129 @@ jobs:
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
     timeout-minutes: 10
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        filter: blob:none
-        sparse-checkout: '.github'
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - id: filter
-      name: Filter changed paths
-      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
-      with:
-        filters: |
-          should_run:
-            - 'package.json'
-            - 'bun.lock'
-            - 'apps/web/**'
-            - 'packages/**'
-            - 'tooling/icons/**'
-            - 'crates/folds/agent_fold/**'
-            - 'crates/agent_runtime_protocol/**'
-            - 'crates/client/cache-core/**'
-            - 'crates/client/cache-turso/**'
-            - 'crates/client/cache-wasm/**'
-            - 'crates/client/turso-opfs/**'
-            - 'crates/database_sql/**'
-            - 'crates/filter_ast/**'
-            - 'crates/item_filters/**'
-            - 'crates/natural_time/**'
-            - 'crates/password_import/**'
-            - 'crates/password_import_wasm/**'
-            - 'static_assets/schema.graphql'
-            - 'Cargo.toml'
-            - 'Cargo.lock'
-            - 'rust-toolchain.toml'
-            - 'services/lexical-service/**'
-            - 'packages/sdk/**'
-            - 'packages/sdk-docs/**'
-            - 'services/ai-editing-worker/**'
-            - 'services/mcp-chatgpt-worker/**'
-            - 'packages/code-mode-sdk/**'
-            - 'packages/muppet/**'
-            - 'packages/starter-agent/**'
-            - 'tooling/scripts/starter-agent-lock.sh'
-            - 'crates/agent_code_mode/SKILL.md'
-            - '.github/actions/setup-reqs-web/**'
-          web_artifact_changed:
-            - 'package.json'
-            - 'bun.lock'
-            - 'apps/web/**'
-            - 'packages/**'
-            - 'tooling/icons/**'
-            - 'crates/folds/agent_fold/**'
-            - 'crates/agent_runtime_protocol/**'
-            - 'crates/client/cache-core/**'
-            - 'crates/client/cache-turso/**'
-            - 'crates/client/cache-wasm/**'
-            - 'crates/client/turso-opfs/**'
-            - 'crates/database_sql/**'
-            - 'crates/filter_ast/**'
-            - 'crates/item_filters/**'
-            - 'crates/natural_time/**'
-            - 'crates/password_import/**'
-            - 'crates/password_import_wasm/**'
-            - 'static_assets/schema.graphql'
-            - 'Cargo.toml'
-            - 'Cargo.lock'
-            - 'rust-toolchain.toml'
-          codegen_inputs:
-            - 'apps/web/scripts/generate-api-schema.ts'
-            - 'apps/web/scripts/services.ts'
-            - 'packages/sdk/**'
-            - 'apps/docs/**'
-            - '.github/actions/setup-reqs-web/**'
-          i18n_changed:
-            - 'apps/web/src/lib/i18n/**'
-            - 'apps/web/src/lib/core/component/ContextMenu.tsx'
-            - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
-            - 'apps/web/src/components/ui/components/Dropdown.tsx'
-            - 'apps/web/src/features/settings/**'
-          database_grid_changed:
-            - 'apps/web/src/features/database/**'
-            - 'apps/web/src/components/gantt/**'
-          calendar_details_changed:
-            - 'apps/web/src/features/calendar-view/**'
-            - 'apps/web/src/features/calendar/**'
-            - 'apps/web/src/lib/queries/calendar/**'
-    - id: codegen
-      name: Detect schema changes
-      run: |
-        set -euo pipefail
-        result() {
-          echo "$1"
-          echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
-          exit 0
-        }
-        [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
-        # The merge commit's first parent is the main this merge result was
-        # built on; a fresh fetch of main could be newer.
-        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
-        [ -n "$base" ] || result "No base commit to compare with." true
-        git fetch -q --depth=1 origin "$base"
-        names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
-        manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
-        if grep -E "^[-+].*($names)" <<< "$manifests"; then
-          result "A schema crate's version changed." true
-        fi
-        changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
-        while IFS= read -r file; do
-          [ -n "$file" ] || continue
-          for revision in HEAD "$base"; do
-            [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
-            contents=$(git show "$revision:$file")
-            if grep -E "$names" <<< "$contents" > /dev/null; then
-              result "$file names a schema item." true
-            fi
-          done
-        done <<< "$changed"
-        result "No changed Rust file names a schema item." false
-      env:
-        CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
+      - name: Checkout Repo # zizmor: ignore[artipacked] path-check runs git over the PR's commits
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          filter: blob:none
+          sparse-checkout: .github
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - id: filter
+        name: Filter changed paths
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+        with:
+          filters: |
+            should_run:
+              - 'package.json'
+              - 'bun.lock'
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'tooling/icons/**'
+              - 'crates/folds/agent_fold/**'
+              - 'crates/agent_runtime_protocol/**'
+              - 'crates/client/cache-core/**'
+              - 'crates/client/cache-schema/**'
+              - 'crates/client/cache-turso/**'
+              - 'crates/client/cache-wasm/**'
+              - 'crates/client/turso-opfs/**'
+              - 'crates/database_sql/**'
+              - 'crates/filter_ast/**'
+              - 'crates/item_filters/**'
+              - 'crates/natural_time/**'
+              - 'crates/password_import/**'
+              - 'crates/password_import_wasm/**'
+              - 'static_assets/schema.graphql'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+              - 'services/lexical-service/**'
+              - 'packages/sdk/**'
+              - 'packages/sdk-docs/**'
+              - 'services/ai-editing-worker/**'
+              - 'services/mcp-chatgpt-worker/**'
+              - 'packages/code-mode-sdk/**'
+              - 'packages/muppet/**'
+              - 'packages/starter-agent/**'
+              - 'tooling/scripts/starter-agent-lock.sh'
+              - 'crates/agent_code_mode/SKILL.md'
+              - '.github/actions/setup-reqs-web/**'
+            web_artifact_changed:
+              - 'package.json'
+              - 'bun.lock'
+              - 'apps/web/**'
+              - 'packages/**'
+              - 'tooling/icons/**'
+              - 'crates/folds/agent_fold/**'
+              - 'crates/agent_runtime_protocol/**'
+              - 'crates/client/cache-core/**'
+              - 'crates/client/cache-schema/**'
+              - 'crates/client/cache-turso/**'
+              - 'crates/client/cache-wasm/**'
+              - 'crates/client/turso-opfs/**'
+              - 'crates/database_sql/**'
+              - 'crates/filter_ast/**'
+              - 'crates/item_filters/**'
+              - 'crates/natural_time/**'
+              - 'crates/password_import/**'
+              - 'crates/password_import_wasm/**'
+              - 'static_assets/schema.graphql'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
+              - 'rust-toolchain.toml'
+            codegen_inputs:
+              - 'apps/web/scripts/generate-api-schema.ts'
+              - 'apps/web/scripts/services.ts'
+              - 'packages/sdk/**'
+              - 'apps/docs/**'
+              - '.github/actions/setup-reqs-web/**'
+            i18n_changed:
+              - 'apps/web/src/lib/i18n/**'
+              - 'apps/web/src/lib/core/component/ContextMenu.tsx'
+              - 'apps/web/src/lib/core/constant/settingsTabsConfig.tsx'
+              - 'apps/web/src/components/ui/components/Dropdown.tsx'
+              - 'apps/web/src/features/settings/**'
+            database_grid_changed:
+              - 'apps/web/src/features/database/**'
+              - 'apps/web/src/components/gantt/**'
+            calendar_details_changed:
+              - 'apps/web/src/features/calendar-view/**'
+              - 'apps/web/src/features/calendar/**'
+              - 'apps/web/src/lib/queries/calendar/**'
+      - id: codegen
+        name: Detect schema changes
+        run: |
+          set -euo pipefail
+          result() {
+            echo "$1"
+            echo "codegen_changed=$2" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          [ "$CODEGEN_INPUTS" = true ] && result "A generator input changed." true
+          # The merge commit's first parent is the main this merge result was
+          # built on; a fresh fetch of main could be newer.
+          base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | sed -n 1p)
+          [ -n "$base" ] || result "No base commit to compare with." true
+          git fetch -q --depth=1 origin "$base"
+          names='utoipa|ToSchema|IntoParams|specta|schemars|JsonSchema'
+          manifests=$(git diff "$base" HEAD -- Cargo.toml Cargo.lock)
+          if grep -E "^[-+].*($names)" <<< "$manifests"; then
+            result "A schema crate's version changed." true
+          fi
+          changed=$(git diff --name-only --no-renames "$base" HEAD -- 'crates/*.rs' 'services/*.rs')
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            for revision in HEAD "$base"; do
+              [ -n "$(git ls-tree "$revision" -- "$file")" ] || continue
+              contents=$(git show "$revision:$file")
+              if grep -E "$names" <<< "$contents" > /dev/null; then
+                result "$file names a schema item." true
+              fi
+            done
+          done <<< "$changed"
+          result "No changed Rust file names a schema item." false
+        env:
+          CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -145,507 +147,1097 @@ jobs:
       statuses: read
     timeout-minutes: 10
     steps:
-    - name: Checkout PR merge commit
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Setup Bun
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      with:
-        bun-version: '1.3.13'
-    - id: labels
-      name: Read the PR's current labels
-      run: |
-        set -euo pipefail
-        labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
-        echo "labels: ${labels:-<none>}"
-        if [[ ",${labels}," == *",skip-android-update,"* ]]; then
-          echo "skip=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-        fi
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-    - id: android-version
-      name: Require an Android version bump for native changes
-      if: steps.labels.outputs.skip != 'true'
-      run: |
-        set -euo pipefail
-        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
-        echo "Comparing the merge result with its base ${base:0:10}"
-        git fetch -q --depth=1 origin "$base"
-        bun scripts/android-version-check.mjs "$base"
-      shell: bash
-      working-directory: apps/web
-    - name: Keep the Android native build floor without a release
-      if: steps.labels.outputs.skip == 'true'
-      run: |
-        set -euo pipefail
-        base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
-        git fetch -q --depth=1 origin "$base"
-        bun scripts/android-version-check.mjs --skip-release "$base"
-      shell: bash
-      working-directory: apps/web
-    - name: Require the Play release to be live
-      if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
-      run: |
-        # --- authenticated fetch ------------------------------------------------------
-        # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
-        # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
-        # may persist credentials, so clear inherited headers before supplying one
-        # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
-        # Fails if the commit is unreachable (a force-pushed-away head).
-        gh_fetch() {
-          local auth
-          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          LD_LIBRARY_PATH= git -c "http.https://github.com/.extraheader=" \
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
-            fetch -q --depth=1 origin "$1"
-        }
-        # ------------------------------------------------------------------------------
-        # --- PR merge result ----------------------------------------------------------
-        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
-        # the merge result the native gates hash. GitHub computes it lazily
-        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
-        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
-        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
-        pr_merge_commit() {
-          local deadline pr_json mergeable merge
-          deadline=$(( $(date +%s) + 120 ))
-          while true; do
-            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
-            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
-            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
-            if [[ -n "$merge" ]]; then
-              echo "$merge"
-              return 0
-            fi
-            if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
-              return 1
-            fi
-            if (( $(date +%s) > deadline )); then
-              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
-              return 1
-            fi
-            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
-            sleep 10
-          done
-        }
-        # ------------------------------------------------------------------------------
-        # --- Android Play commit statuses ---------------------------------------------
-        # Only workflows that run main's copy may sign in to Google Play, so they
-        # record what they learn as commit statuses on the PR's commits, where the
-        # PR-side jobs (the merge gate, the drift check) read it:
-        #
-        #   android-play/release  set by Android Play Publish on the commit it built:
-        #                         pending just before the production promotion, then
-        #                         success or failure.
-        #   android-play/live     set by Android Release Watch on the PR head once the
-        #                         release is live on production.
-        #
-        # Readers match the descriptions exactly, so they are built only here.
-        # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
-
-        # android_release_description <version code> <native hash>
-        android_release_description() {
-          printf 'Version code %s (native tree %s)' "$1" "$2"
-        }
-
-        # android_live_description <version code> <native hash> <PR number>
-        android_live_description() {
-          printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
-        }
-
-        # commit_status <sha> <context>: `<state> <description>` of the commit's latest
-        # status with that context, or nothing.
-        commit_status() {
-          gh api "repos/${GH_REPO}/commits/$1/status" \
-            --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
-        }
-
-        # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
-        # #PR_NUMBER's last 100 commits that has a status with that context (its
-        # latest one), states in lower case like the REST API's.
-        pr_commit_statuses() {
-          gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
-            -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
-              repository(owner: $owner, name: $name) {
-                pullRequest(number: $pr) {
-                  commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
-                }
-              }
-            }' \
-            --jq '.data.repository.pullRequest.commits.nodes[].commit
-              | select(.status.context != null)
-              | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
-        }
-
-        # set_commit_status <sha> <context> <state> <description>, linking this run.
-        set_commit_status() {
-          gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
-            -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
-        }
-        # ------------------------------------------------------------------------------
-        set -euo pipefail
-        # The Android merge gate proper: version code $VERSION_CODE must be live on
-        # Google Play production, built from the Android native code of PR
-        # #PR_NUMBER's *current* merge result (fetched through the API: a re-run
-        # checks out the merge commit of the run's original event, which may predate
-        # native code landing on main). This job cannot sign in to Play — only
-        # workflows that run main's copy can — so it reads the `android-play/live`
-        # status that Android Release Watch sets once the release is live. Any of the
-        # PR's commits counts: web-only pushes after the release keep it valid, and
-        # the native hash in the description pins it to this merge result.
-        merge=$(pr_merge_commit)
-        gh_fetch "$merge"
-        native_hash=$(bun scripts/android-native.mjs hash "$merge")
-        echo "Merge result ${merge:0:10}: Android native hash ${native_hash}"
-        want=$(android_live_description "$VERSION_CODE" "$native_hash" "$PR_NUMBER")
-        statuses=$(pr_commit_statuses android-play/live)
-        while read -r sha state description; do
-          if [[ "$state" == success && "$description" == "$want" ]]; then
-            echo "${sha:0:10} is marked android-play/live: ${description}."
-            exit 0
+      - name: Checkout PR merge commit # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.13'
+      - id: labels
+        name: Read the PR's current labels
+        run: |
+          set -euo pipefail
+          labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
+          echo "labels: ${labels:-<none>}"
+          if [[ ",${labels}," == *",skip-android-update,"* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
-        done <<<"$statuses"
-        echo "Android native changes require version code ${VERSION_CODE} to be live on Google Play before merging," \
-          "built from native tree ${native_hash}, but no commit of this PR is marked so (android-play/live)." >&2
-        if [[ -n "$statuses" ]]; then
-          echo "android-play/live statuses on this PR's commits:" >&2
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - id: android-version
+        name: Require an Android version bump for native changes
+        if: steps.labels.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+          echo "Comparing the merge result with its base ${base:0:10}"
+          git fetch -q --depth=1 origin "$base"
+          bun scripts/android-version-check.mjs "$base"
+        shell: bash
+        working-directory: apps/web
+      - name: Keep the Android native build floor without a release
+        if: steps.labels.outputs.skip == 'true'
+        run: |
+          set -euo pipefail
+          base=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+          git fetch -q --depth=1 origin "$base"
+          bun scripts/android-version-check.mjs --skip-release "$base"
+        shell: bash
+        working-directory: apps/web
+      - name: Require the Play release to be live
+        if: steps.android-version.outputs.changed == 'true' && steps.labels.outputs.skip != 'true'
+        run: |
+          # --- authenticated fetch ------------------------------------------------------
+          # gh_fetch <sha|ref>: make a commit that is not in this checkout (the base
+          # commit, a moved PR head, GitHub's test merge commit) available. Checkouts
+          # may persist credentials, so clear inherited headers before supplying one
+          # explicitly. Keep Nix build libraries out of the host Git HTTPS helper.
+          # Fails if the commit is unreachable (a force-pushed-away head).
+          gh_fetch() {
+            local auth
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+            LD_LIBRARY_PATH='' git -c "http.https://github.com/.extraheader=" \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+              fetch -q --depth=1 origin "$1"
+          }
+          # ------------------------------------------------------------------------------
+          # --- PR merge result ----------------------------------------------------------
+          # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+          # the merge result the native gates hash. GitHub computes it lazily
+          # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+          # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+          # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+          pr_merge_commit() {
+            local deadline pr_json mergeable merge
+            deadline=$(( $(date +%s) + 120 ))
+            while true; do
+              pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+              mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+              merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+              if [[ -n "$merge" ]]; then
+                echo "$merge"
+                return 0
+              fi
+              if [[ "$mergeable" == "CONFLICTING" ]]; then
+                echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
+                return 1
+              fi
+              if (( $(date +%s) > deadline )); then
+                echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
+                return 1
+              fi
+              echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+              sleep 10
+            done
+          }
+          # ------------------------------------------------------------------------------
+          # --- Android Play commit statuses ---------------------------------------------
+          # Only workflows that run main's copy may sign in to Google Play, so they
+          # record what they learn as commit statuses on the PR's commits, where the
+          # PR-side jobs (the merge gate, the drift check) read it:
+          #
+          #   android-play/release  set by Android Play Publish on the commit it built:
+          #                         pending just before the production promotion, then
+          #                         success or failure.
+          #   android-play/live     set by Android Release Watch on the PR head once the
+          #                         release is live on production.
+          #
+          # Readers match the descriptions exactly, so they are built only here.
+          # Needs GH_TOKEN and GH_REPO; pr_commit_statuses also PR_NUMBER.
+
+          # android_release_description <version code> <native hash>
+          android_release_description() {
+            printf 'Version code %s (native tree %s)' "$1" "$2"
+          }
+
+          # android_live_description <version code> <native hash> <PR number>
+          android_live_description() {
+            printf 'Version code %s is live on Google Play (native tree %s, PR #%s)' "$1" "$2" "$3"
+          }
+
+          # commit_status <sha> <context>: `<state> <description>` of the commit's latest
+          # status with that context, or nothing.
+          commit_status() {
+            gh api "repos/${GH_REPO}/commits/$1/status" \
+              --jq ".statuses[] | select(.context == \"$2\") | \"\(.state) \(.description)\""
+          }
+
+          # pr_commit_statuses <context>: `<sha> <state> <description>` for each of PR
+          # #PR_NUMBER's last 100 commits that has a status with that context (its
+          # latest one), states in lower case like the REST API's.
+          pr_commit_statuses() {
+            gh api graphql -F owner="${GH_REPO%%/*}" -F name="${GH_REPO#*/}" -F pr="$PR_NUMBER" -F context="$1" \
+              -f query='query($owner: String!, $name: String!, $pr: Int!, $context: String!) {
+                repository(owner: $owner, name: $name) {
+                  pullRequest(number: $pr) {
+                    commits(last: 100) { nodes { commit { oid status { context(name: $context) { state description } } } } }
+                  }
+                }
+              }' \
+              --jq '.data.repository.pullRequest.commits.nodes[].commit
+                | select(.status.context != null)
+                | "\(.oid) \(.status.context.state | ascii_downcase) \(.status.context.description)"'
+          }
+
+          # set_commit_status <sha> <context> <state> <description>, linking this run.
+          set_commit_status() {
+            gh api "repos/${GH_REPO}/statuses/$1" -f context="$2" -f state="$3" -f description="$4" \
+              -f target_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" >/dev/null
+          }
+          # ------------------------------------------------------------------------------
+          set -euo pipefail
+          # The Android merge gate proper: version code $VERSION_CODE must be live on
+          # Google Play production, built from the Android native code of PR
+          # #PR_NUMBER's *current* merge result (fetched through the API: a re-run
+          # checks out the merge commit of the run's original event, which may predate
+          # native code landing on main). This job cannot sign in to Play — only
+          # workflows that run main's copy can — so it reads the `android-play/live`
+          # status that Android Release Watch sets once the release is live. Any of the
+          # PR's commits counts: web-only pushes after the release keep it valid, and
+          # the native hash in the description pins it to this merge result.
+          merge=$(pr_merge_commit)
+          gh_fetch "$merge"
+          native_hash=$(bun scripts/android-native.mjs hash "$merge")
+          echo "Merge result ${merge:0:10}: Android native hash ${native_hash}"
+          want=$(android_live_description "$VERSION_CODE" "$native_hash" "$PR_NUMBER")
+          statuses=$(pr_commit_statuses android-play/live)
           while read -r sha state description; do
-            echo "  ${sha:0:10} ${state}: ${description}" >&2
+            if [[ "$state" == success && "$description" == "$want" ]]; then
+              echo "${sha:0:10} is marked android-play/live: ${description}."
+              exit 0
+            fi
           done <<<"$statuses"
-        fi
-        cat >&2 <<'EOF'
-          - Not started yet? Add the `android-update` label to the PR to build, upload
-            and promote it.
-          - Promoted? Wait for Google review; the `Android Release Watch` workflow marks
-            the PR and re-runs this check within half an hour of the release.
-          - Native code changed since the release (pushed to the PR, or landed on main)?
-            Bump (`just android-bump`), commit, re-add `android-update`.
-          - If the native change doesn't break the native/web contract, add the
-            `skip-android-update` label instead.
-        EOF
-        exit 1
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-        VERSION_CODE: ${{ steps.android-version.outputs.version_code }}
-      working-directory: apps/web
-    - name: Skipped via label
-      if: steps.labels.outputs.skip == 'true'
-      run: echo "The skip-android-update label says this PR's Android native changes don't break the native/web contract — skipping the version bump and Play release gate."
+          echo "Android native changes require version code ${VERSION_CODE} to be live on Google Play before merging," \
+            "built from native tree ${native_hash}, but no commit of this PR is marked so (android-play/live)." >&2
+          if [[ -n "$statuses" ]]; then
+            echo "android-play/live statuses on this PR's commits:" >&2
+            while read -r sha state description; do
+              echo "  ${sha:0:10} ${state}: ${description}" >&2
+            done <<<"$statuses"
+          fi
+          cat >&2 <<'EOF'
+            - Not started yet? Add the `android-update` label to the PR to build, upload
+              and promote it.
+            - Promoted? Wait for Google review; the `Android Release Watch` workflow marks
+              the PR and re-runs this check within half an hour of the release.
+            - Native code changed since the release (pushed to the PR, or landed on main)?
+              Bump (`just android-bump`), commit, re-add `android-update`.
+            - If the native change doesn't break the native/web contract, add the
+              `skip-android-update` label instead.
+          EOF
+          exit 1
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          VERSION_CODE: ${{ steps.android-version.outputs.version_code }}
+        working-directory: apps/web
+      - name: Skipped via label
+        if: steps.labels.outputs.skip == 'true'
+        run: echo "The skip-android-update label says this PR's Android native changes don't break the native/web contract — skipping the version bump and Play release gate."
   typescript:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        fetch-depth: '0'
-        filter: blob:none
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Prepare the blobless checkout
-      run: |
-        if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
-        git config diff.renames false
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup Prereqs
-      uses: './.github/actions/setup-reqs-web'
-    - name: Install SDK Documentation Dependencies
-      run: bun install --frozen-lockfile
-      working-directory: packages/sdk
-    - name: Build SDK
-      run: bun run build
-      working-directory: packages/sdk
-    - name: Run checks
-      run: |
-        set -uo pipefail
-        logs="$RUNNER_TEMP/typecheck"
-        mkdir -p "$logs"
-        names=()
-        pids=()
-        check() {
-          local name="$1" directory="$2" command="$3"
-          ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
-          names+=("$name")
-          pids+=("$!")
-        }
-        check 'Check Types' 'apps/web' 'bun run type-check'
-        check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
-        check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
-        check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
-        check 'Check Observability Package' 'packages/observability' 'bun run type-check && bun run test'
-        check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
-        check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
-        check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
-        check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
-        check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
-        check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
-        check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
-        check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
-        check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
-        failed=0
-        for index in "${!names[@]}"; do
-          status=0
-          wait "${pids[$index]}" || status=$?
-          echo "::group::${names[$index]} (exit $status)"
-          cat "$logs/$index.log"
-          echo "::endgroup::"
-          if [ "$status" -ne 0 ]; then
-            echo "::error::${names[$index]} failed with exit code $status"
-            failed=1
-          fi
-        done
-        exit "$failed"
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: '0'
+          filter: blob:none
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Prepare the blobless checkout
+        run: |
+          if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
+          git config diff.renames false
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            ${{ github.workspace }}/node_modules
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Install SDK Documentation Dependencies
+        run: bun install --frozen-lockfile
+        working-directory: packages/sdk
+      - name: Build SDK
+        run: bun run build
+        working-directory: packages/sdk
+      - name: Run checks
+        run: |
+          set -uo pipefail
+          logs="$RUNNER_TEMP/typecheck"
+          mkdir -p "$logs"
+          names=()
+          pids=()
+          check() {
+            local name="$1" directory="$2" command="$3"
+            ( cd "$directory" && eval "$command" ) > "$logs/${#names[@]}.log" 2>&1 &
+            names+=("$name")
+            pids+=("$!")
+          }
+          check 'Check Types' 'apps/web' 'bun run type-check'
+          check 'Check Floating Promises' '.' 'bun run lint:oxlint --quiet'
+          check 'Check Functional Test Types' 'apps/web' 'bun ../../node_modules/typescript-native/bin/tsc --noEmit --skipLibCheck --project tests/functional/tsconfig.json'
+          check 'Check Collaboration Package Types' 'packages/collaboration' 'bun run type-check'
+          check 'Check Observability Package' 'packages/observability' 'bun run type-check && bun run test'
+          check 'Check Lexical Service Types' 'services/lexical-service' 'bun run check'
+          check 'Test Lexical Service Endpoints' 'services/lexical-service' 'bun test src'
+          check 'Check SDK Documentation' 'packages/sdk-docs' 'bun run type-check && bun run test'
+          check 'Check Editing Worker' 'services/ai-editing-worker' 'bun run type-check'
+          check 'Check Code Mode SDK' 'packages/code-mode-sdk' 'bun run type-check && bun run test'
+          check 'Check SDK MCP Tools' 'packages/sdk-mcp' 'bun run type-check && bun run test'
+          check 'Check MCP ChatGPT Worker' 'services/mcp-chatgpt-worker' 'bun run type-check && bun run test'
+          check 'Check Agent Runtime' 'packages/muppet' 'bun run typecheck && bun run test'
+          check 'Check Starter Agent' 'packages/starter-agent' 'bun run check && ../../tooling/scripts/starter-agent-lock.sh --check'
+          failed=0
+          for index in "${!names[@]}"; do
+            status=0
+            wait "${pids[$index]}" || status=$?
+            echo "::group::${names[$index]} (exit $status)"
+            cat "$logs/$index.log"
+            echo "::endgroup::"
+            if [ "$status" -ne 0 ]; then
+              echo "::error::${names[$index]} failed with exit code $status"
+              failed=1
+            fi
+          done
+          exit "$failed"
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   generated-code:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     env:
       CARGO_PROFILE_DEV_DEBUG: '0'
-      RUSTFLAGS: '-C link-arg=-fuse-ld=mold'
+      RUSTFLAGS: -C link-arg=-fuse-ld=mold
     timeout-minutes: 25
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
-          /home/runner/.cargo/registry
-          /home/runner/.cargo/git
-          ${{ github.workspace }}/target
-      continue-on-error: true
-    - name: Reuse the kept cargo target
-      run: "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n// Lets cargo reuse the `target` directory a CI job keeps on its cache\n// volume. Cargo counts a workspace crate as built when none of its\n// sources is newer than its last build, and a checkout stamps every file with\n// the current time, so without this every workspace crate rebuilds.\n//\n// The volume keeps, next to `target`, the time each tracked path's current\n// contents were first seen (`RECORD`). A path whose mode and object match the\n// record keeps that time; a changed or added path, and every directory above a\n// change (its tree object changes), gets the current time. A build made while\n// the contents were what they are now is newer than that time and stays fresh.\n// A build of other contents is older than it: units only an earlier, different\n// build left behind (other features, other dependencies) rebuild too.\n//\n// Some changes cargo can't see:\n// - sqlx reads `.sqlx` query data without telling rustc. A new query's data\n//   comes with the query's new source, so only changed data dates every path\n//   now and rebuilds every workspace crate. Removed data is not: another\n//   pull request's query, missing from this tree, is the common case. A job\n//   rebuilds everything when its own pull request changes data (see\n//   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while\n//   an unchanged query still needs it fails only a full build.\n// - rustc lists the file a symlink pointed to when it built, so a symlink that\n//   changed, appeared or went away dates the files it pointed to, before and\n//   after, now. A link is resolved by its text alone: one through another\n//   symlinked directory, or out of the repository, dates nothing.\n// Migrations need nothing here: `sqlx::migrate!` includes each file and\n// `macro_db_migrator`'s build script watches the directory. A build that checks\n// queries against a live database depends on the schema too; Cloud Storage's\n// test job dates those crates itself.\n//\n// A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace\n// crate anyway: Cloud Storage's jobs do when the pull request changes query\n// data.\n//\n// Units dated after now (another clock, or anything else writing `target`)\n// would look fresh against every change, so `target` starts over then.\n//\n// A job that builds into `target` without dating its checkout first (one whose\n// workflow predates this step, or a re-run of one) leaves units the record\n// doesn't describe. So the last step of a job that did date it writes `SEAL`,\n// and a unit newer than the seal rebuilds every workspace crate.\n//\n// It runs on a fresh checkout: it dates the index, not the work tree.\n\nimport { execFileSync } from \"node:child_process\";\nimport {\n\texistsSync,\n\tlutimesSync,\n\tmkdirSync,\n\treaddirSync,\n\treadFileSync,\n\treadlinkSync,\n\trmSync,\n\tstatfsSync,\n\tstatSync,\n\twriteFileSync,\n} from \"node:fs\";\nimport { dirname, join, posix } from \"node:path\";\n\nexport const TARGET = \"target\";\nexport const RECORD = `${TARGET}/.macro-source-times`;\n// Written by the last step of a job that dated its checkout; a unit newer than\n// it was built by a job that did not.\nexport const SEAL = `${TARGET}/.macro-sealed`;\n// Dependency upgrades leave old artifacts in `target`; start over if the volume\n// is nearly full. Namespace grows a volume as it fills (about 97 GB free at any\n// use, up to 100 GB used), so this guards a full disk, not the volume's size.\nconst MIN_FREE_BYTES = 20 * 1024 ** 3;\nconst SYMLINK = \"120000 \";\n// Directories under a profile that hold build outputs, not more profiles.\nconst UNIT_OUTPUTS = new Set([\"deps\", \"incremental\", \"examples\", \"doc\"]);\n\n/** Path to `<mode> <type> <object>`. */\nexport type Tree = Map<string, string>;\n/** Path to its signature and the time (seconds) those contents were first seen. */\nexport type SourceTimes = Map<string, { signature: string; time: number }>;\n\nexport type Plan = {\n\t/** What to date each tracked path, and to keep for the next run. */\n\trecord: SourceTimes;\n\tchanged: number;\n\t/** Why every path is dated now, when it is. */\n\trebuildAll?: string;\n};\n\n/** `git ls-tree -r -t -z` output. */\nexport function parseTree(output: string): Tree {\n\tconst tree: Tree = new Map();\n\tfor (const entry of output.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tif (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));\n\t}\n\treturn tree;\n}\n\nexport function parseRecord(text: string): SourceTimes {\n\tconst record: SourceTimes = new Map();\n\tfor (const entry of text.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tconst space = entry.indexOf(\" \");\n\t\tif (tab < 0 || space < 0 || space > tab) continue;\n\t\trecord.set(entry.slice(tab + 1), {\n\t\t\ttime: Number(entry.slice(0, space)),\n\t\t\tsignature: entry.slice(space + 1, tab),\n\t\t});\n\t}\n\treturn record;\n}\n\nexport function formatRecord(record: SourceTimes): string {\n\treturn [...record]\n\t\t.map(([path, { time, signature }]) => `${time} ${signature}\\t${path}\\0`)\n\t\t.join(\"\");\n}\n\n/** A symlink's signature carries what it points to, which the next run needs. */\nfunction signatureOf(mode: string, link: string | undefined): string {\n\treturn link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;\n}\n\n/** The repository path a symlink at `path` resolves to, when it stays inside. */\nfunction linkTarget(path: string, signature: string): string | undefined {\n\tif (!signature.startsWith(SYMLINK)) return;\n\tconst quoted = signature.indexOf(' \"');\n\tif (quoted < 0) return;\n\tconst target = posix.normalize(\n\t\tposix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),\n\t);\n\treturn target.startsWith(\"../\") || posix.isAbsolute(target)\n\t\t? undefined\n\t\t: target;\n}\n\n/** `links` holds what each tracked symlink in `tree` points to. */\nexport function plan(\n\tprevious: SourceTimes | undefined,\n\ttree: Tree,\n\tlinks: Map<string, string>,\n\tnow: number,\n\tforced?: string,\n): Plan {\n\tconst record: SourceTimes = new Map();\n\tconst linkedTo = new Set<string>();\n\tconst linked = (path: string, signature: string) => {\n\t\tconst target = linkTarget(path, signature);\n\t\tif (target !== undefined) linkedTo.add(target);\n\t};\n\tlet changed = 0;\n\tlet rebuildAll =\n\t\tforced || (previous ? undefined : \"no record of earlier builds\");\n\tfor (const [path, mode] of tree) {\n\t\tconst signature = signatureOf(mode, links.get(path));\n\t\tconst before = previous?.get(path);\n\t\tif (before?.signature === signature) {\n\t\t\trecord.set(path, before);\n\t\t\tcontinue;\n\t\t}\n\t\tchanged++;\n\t\trecord.set(path, { signature, time: now });\n\t\tlinked(path, signature);\n\t\tif (before) linked(path, before.signature);\n\t\tif (before && /(^|\\/)\\.sqlx\\//.test(path)) {\n\t\t\trebuildAll ??= `${path} (sqlx query data) changed`;\n\t\t}\n\t}\n\tfor (const [path, { signature }] of previous ?? []) {\n\t\tif (tree.has(path)) continue;\n\t\tchanged++;\n\t\tlinked(path, signature);\n\t}\n\tconst targets = [...linkedTo];\n\tfor (const [path, { signature, time }] of record) {\n\t\tconst dated =\n\t\t\trebuildAll !== undefined ||\n\t\t\ttargets.some(\n\t\t\t\t(target) => path === target || path.startsWith(`${target}/`),\n\t\t\t);\n\t\tif (dated && time !== now) record.set(path, { signature, time: now });\n\t}\n\treturn { record, changed, rebuildAll };\n}\n\nfunction git(...args: string[]): string {\n\treturn execFileSync(\"git\", args, { encoding: \"utf8\", maxBuffer: 1024 ** 3 });\n}\n\n/**\n * The newest time cargo compares sources against: a unit's fingerprint files\n * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in\n * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or\n * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).\n */\nfunction newestUnit(): number {\n\tlet newest = 0;\n\tconst consider = (path: string) => {\n\t\tif (existsSync(path)) {\n\t\t\tnewest = Math.max(newest, statSync(path).mtimeMs / 1000);\n\t\t}\n\t};\n\tconst children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);\n\tconst subdirectories = (dir: string) =>\n\t\texistsSync(dir)\n\t\t\t? readdirSync(dir, { withFileTypes: true })\n\t\t\t\t\t.filter((entry) => entry.isDirectory())\n\t\t\t\t\t.map((entry) => entry.name)\n\t\t\t: [];\n\tconst walk = (dir: string, depth: number) => {\n\t\tfor (const name of subdirectories(dir)) {\n\t\t\tconst path = join(dir, name);\n\t\t\tif (name === \".fingerprint\") {\n\t\t\t\tfor (const unit of children(path)) {\n\t\t\t\t\tfor (const file of children(join(path, unit))) {\n\t\t\t\t\t\tconsider(join(path, unit, file));\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else if (name === \"build\") {\n\t\t\t\tfor (const unit of children(path)) consider(join(path, unit, \"output\"));\n\t\t\t} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {\n\t\t\t\twalk(path, depth - 1);\n\t\t\t}\n\t\t}\n\t};\n\twalk(TARGET, 3);\n\treturn newest;\n}\n\nfunction emptyTarget(why: string) {\n\tconsole.log(`Emptying ${TARGET}: ${why}`);\n\tfor (const entry of readdirSync(TARGET))\n\t\trmSync(join(TARGET, entry), { recursive: true, force: true });\n}\n\nexport async function main() {\n\tconst now = Date.now() / 1000;\n\tmkdirSync(TARGET, { recursive: true });\n\tconst sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, \"utf8\")) : 0;\n\trmSync(SEAL, { force: true });\n\tconst { bavail, bsize } = statfsSync(TARGET);\n\tconsole.log(\n\t\t`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,\n\t);\n\tconst newest = newestUnit();\n\tif (bavail * bsize < MIN_FREE_BYTES) {\n\t\temptyTarget(\"the cache volume is running out of space\");\n\t} else if (newest > now) {\n\t\temptyTarget(\"a unit in it is dated after now\");\n\t}\n\n\tconst tree = parseTree(\n\t\tgit(\"ls-tree\", \"-r\", \"-t\", \"-z\", git(\"write-tree\").trim()),\n\t);\n\tconst links = new Map<string, string>();\n\tfor (const [path, mode] of tree) {\n\t\tif (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {\n\t\t\tlinks.set(path, readlinkSync(path));\n\t\t}\n\t}\n\tconst previous = existsSync(RECORD)\n\t\t? parseRecord(readFileSync(RECORD, \"utf8\"))\n\t\t: undefined;\n\tconst { record, changed, rebuildAll } = plan(\n\t\tprevious,\n\t\ttree,\n\t\tlinks,\n\t\tnow,\n\t\tprocess.env.CARGO_TARGET_REBUILD_ALL ||\n\t\t\t(previous && !(newest <= sealed)\n\t\t\t\t? \"a job built into it without dating its checkout\"\n\t\t\t\t: undefined),\n\t);\n\tfor (const [path, { time }] of record) {\n\t\ttry {\n\t\t\tlutimesSync(path, time, time);\n\t\t} catch (error) {\n\t\t\t// Paths outside a sparse checkout are not in the work tree.\n\t\t\tif ((error as NodeJS.ErrnoException).code !== \"ENOENT\") throw error;\n\t\t}\n\t}\n\twriteFileSync(RECORD, formatRecord(record));\n\tconsole.log(\n\t\trebuildAll\n\t\t\t? `Every workspace crate rebuilds: ${rebuildAll}`\n\t\t\t: `Reusing ${TARGET}: ${changed} paths differ from the last run`,\n\t);\n}\n\n/** The last step of a job that ran `main`: every unit it built is older than this. */\nexport async function seal() {\n\twriteFileSync(SEAL, String(Date.now() / 1000));\n\tconsole.log(`Sealed ${TARGET} for the next run`);\n}\n\nawait main();\nNODE_SCRIPT\n"
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup Prereqs
-      uses: './.github/actions/setup-reqs-web'
-      timeout-minutes: 15
-    - name: Configure Namespace remote sccache
-      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
-      run: |-
-        set -euo pipefail
-        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
-        trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
-          # Register credential values as masked BEFORE exporting: GitHub only
-          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
-          # ~24h Namespace workspace token (registry + cache write) — printed
-          # verbatim in every subsequent step's env dump. Masking is selective by
-          # key name: masking non-secrets like the endpoint URL or key prefix
-          # would redact those strings everywhere in the logs.
-          while IFS= read -r line; do
-            k="${line%%=*}"
-            v="${line#*=}"
-            [ -n "$v" ] && [ "$k" != "$line" ] || continue
-            case "$k" in
-              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
-            esac
-          done < "$env_file"
-          cat "$env_file" >> "$GITHUB_ENV"
-          # The server checks the WebDAV backend before it reports ready, and the
-          # client's default 10s wait can run out. This limit has no env var.
-          sccache_conf="$RUNNER_TEMP/sccache.toml"
-          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
-          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
-          # Force the next compiler invocation to start a server with the new remote
-          # backend even if a setup hook happened to launch one already.
-          sccache --stop-server >/dev/null 2>&1 || true
-        else
-          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
-        fi
-    - name: Build code-mode assets
-      run: |
-        set -euo pipefail
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            ${{ github.workspace }}/node_modules
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            ${{ github.workspace }}/target
+        continue-on-error: true
+      - name: Reuse the kept cargo target
+        run: |
+          node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+          // Lets cargo reuse the `target` directory a CI job keeps on its cache
+          // volume. Cargo counts a workspace crate as built when none of its
+          // sources is newer than its last build, and a checkout stamps every file with
+          // the current time, so without this every workspace crate rebuilds.
+          //
+          // The volume keeps, next to `target`, the time each tracked path's current
+          // contents were first seen (`RECORD`). A path whose mode and object match the
+          // record keeps that time; a changed or added path, and every directory above a
+          // change (its tree object changes), gets the current time. A build made while
+          // the contents were what they are now is newer than that time and stays fresh.
+          // A build of other contents is older than it: units only an earlier, different
+          // build left behind (other features, other dependencies) rebuild too.
+          //
+          // Some changes cargo can't see:
+          // - sqlx reads `.sqlx` query data without telling rustc. A new query's data
+          //   comes with the query's new source, so only changed data dates every path
+          //   now and rebuilds every workspace crate. Removed data is not: another
+          //   pull request's query, missing from this tree, is the common case. A job
+          //   rebuilds everything when its own pull request changes data (see
+          //   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while
+          //   an unchanged query still needs it fails only a full build.
+          // - rustc lists the file a symlink pointed to when it built, so a symlink that
+          //   changed, appeared or went away dates the files it pointed to, before and
+          //   after, now. A link is resolved by its text alone: one through another
+          //   symlinked directory, or out of the repository, dates nothing.
+          // Migrations need nothing here: `sqlx::migrate!` includes each file and
+          // `macro_db_migrator`'s build script watches the directory. A build that checks
+          // queries against a live database depends on the schema too; Cloud Storage's
+          // test job dates those crates itself.
+          //
+          // A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace
+          // crate anyway: Cloud Storage's jobs do when the pull request changes query
+          // data.
+          //
+          // Units dated after now (another clock, or anything else writing `target`)
+          // would look fresh against every change, so `target` starts over then.
+          //
+          // A job that builds into `target` without dating its checkout first (one whose
+          // workflow predates this step, or a re-run of one) leaves units the record
+          // doesn't describe. So the last step of a job that did date it writes `SEAL`,
+          // and a unit newer than the seal rebuilds every workspace crate.
+          //
+          // It runs on a fresh checkout: it dates the index, not the work tree.
 
-        # Build the code-mode assets once per SDK state, not once per job. Cache volumes
-        # are forks of past jobs, so most jobs miss the store path another job just built.
-        # The key is the store path, which covers every input of the build.
-        assets="$(nix eval --raw .#code-mode-assets.outPath)"
-        echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
+          import { execFileSync } from "node:child_process";
+          import {
+          	existsSync,
+          	lutimesSync,
+          	mkdirSync,
+          	readdirSync,
+          	readFileSync,
+          	readlinkSync,
+          	rmSync,
+          	statfsSync,
+          	statSync,
+          	writeFileSync,
+          } from "node:fs";
+          import { dirname, join, posix } from "node:path";
 
-        if nix-store --check-validity "$assets" 2>/dev/null; then
-          echo "Code-mode assets already in the store"
-          exit 0
-        fi
+          export const TARGET = "target";
+          export const RECORD = `${TARGET}/.macro-source-times`;
+          // Written by the last step of a job that dated its checkout; a unit newer than
+          // it was built by a job that did not.
+          export const SEAL = `${TARGET}/.macro-sealed`;
+          // Dependency upgrades leave old artifacts in `target`; start over if the volume
+          // is nearly full. Namespace grows a volume as it fills (about 97 GB free at any
+          // use, up to 100 GB used), so this guards a full disk, not the volume's size.
+          const MIN_FREE_BYTES = 20 * 1024 ** 3;
+          const SYMLINK = "120000 ";
+          // Directories under a profile that hold build outputs, not more profiles.
+          const UNIT_OUTPUTS = new Set(["deps", "incremental", "examples", "doc"]);
 
-        # Forks have no remote cache credentials.
-        if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
-          nix build --no-link --print-build-logs .#code-mode-assets
-          exit 0
-        fi
+          /** Path to `<mode> <type> <object>`. */
+          export type Tree = Map<string, string>;
+          /** Path to its signature and the time (seconds) those contents were first seen. */
+          export type SourceTimes = Map<string, { signature: string; time: number }>;
 
-        cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+          export type Plan = {
+          	/** What to date each tracked path, and to keep for the next run. */
+          	record: SourceTimes;
+          	changed: number;
+          	/** Why every path is dated now, when it is. */
+          	rebuildAll?: string;
+          };
 
-        # The token goes through a config descriptor so it stays out of curl's arguments.
-        cache_request() {
-          curl --fail --silent --show-error --max-time 30 --retry 2 \
-            -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
-        }
+          /** `git ls-tree -r -t -z` output. */
+          export function parseTree(output: string): Tree {
+          	const tree: Tree = new Map();
+          	for (const entry of output.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		if (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));
+          	}
+          	return tree;
+          }
 
-        if cache_request "$cache_url" | gunzip | nix-store --import; then
-          echo "Code-mode assets restored from the remote cache"
-          exit 0
-        fi
+          export function parseRecord(text: string): SourceTimes {
+          	const record: SourceTimes = new Map();
+          	for (const entry of text.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		const space = entry.indexOf(" ");
+          		if (tab < 0 || space < 0 || space > tab) continue;
+          		record.set(entry.slice(tab + 1), {
+          			time: Number(entry.slice(0, space)),
+          			signature: entry.slice(space + 1, tab),
+          		});
+          	}
+          	return record;
+          }
 
-        # Installing node_modules is most of a build and changes far less often than the SDK,
-        # so it has its own entry.
-        modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
-        modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
-        save_modules=false
+          export function formatRecord(record: SourceTimes): string {
+          	return [...record]
+          		.map(([path, { time, signature }]) => `${time} ${signature}\t${path}\0`)
+          		.join("");
+          }
 
-        if ! nix-store --check-validity "$modules" 2>/dev/null; then
-          # No retries: a retry would restart the stream into the same pipe, and past the limit
-          # a rebuild is faster.
-          if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
-            echo "node_modules restored from the remote cache"
+          /** A symlink's signature carries what it points to, which the next run needs. */
+          function signatureOf(mode: string, link: string | undefined): string {
+          	return link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;
+          }
+
+          /** The repository path a symlink at `path` resolves to, when it stays inside. */
+          function linkTarget(path: string, signature: string): string | undefined {
+          	if (!signature.startsWith(SYMLINK)) return;
+          	const quoted = signature.indexOf(' "');
+          	if (quoted < 0) return;
+          	const target = posix.normalize(
+          		posix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),
+          	);
+          	return target.startsWith("../") || posix.isAbsolute(target)
+          		? undefined
+          		: target;
+          }
+
+          /** `links` holds what each tracked symlink in `tree` points to. */
+          export function plan(
+          	previous: SourceTimes | undefined,
+          	tree: Tree,
+          	links: Map<string, string>,
+          	now: number,
+          	forced?: string,
+          ): Plan {
+          	const record: SourceTimes = new Map();
+          	const linkedTo = new Set<string>();
+          	const linked = (path: string, signature: string) => {
+          		const target = linkTarget(path, signature);
+          		if (target !== undefined) linkedTo.add(target);
+          	};
+          	let changed = 0;
+          	let rebuildAll =
+          		forced || (previous ? undefined : "no record of earlier builds");
+          	for (const [path, mode] of tree) {
+          		const signature = signatureOf(mode, links.get(path));
+          		const before = previous?.get(path);
+          		if (before?.signature === signature) {
+          			record.set(path, before);
+          			continue;
+          		}
+          		changed++;
+          		record.set(path, { signature, time: now });
+          		linked(path, signature);
+          		if (before) linked(path, before.signature);
+          		if (before && /(^|\/)\.sqlx\//.test(path)) {
+          			rebuildAll ??= `${path} (sqlx query data) changed`;
+          		}
+          	}
+          	for (const [path, { signature }] of previous ?? []) {
+          		if (tree.has(path)) continue;
+          		changed++;
+          		linked(path, signature);
+          	}
+          	const targets = [...linkedTo];
+          	for (const [path, { signature, time }] of record) {
+          		const dated =
+          			rebuildAll !== undefined ||
+          			targets.some(
+          				(target) => path === target || path.startsWith(`${target}/`),
+          			);
+          		if (dated && time !== now) record.set(path, { signature, time: now });
+          	}
+          	return { record, changed, rebuildAll };
+          }
+
+          function git(...args: string[]): string {
+          	return execFileSync("git", args, { encoding: "utf8", maxBuffer: 1024 ** 3 });
+          }
+
+          /**
+           * The newest time cargo compares sources against: a unit's fingerprint files
+           * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in
+           * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or
+           * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).
+           */
+          function newestUnit(): number {
+          	let newest = 0;
+          	const consider = (path: string) => {
+          		if (existsSync(path)) {
+          			newest = Math.max(newest, statSync(path).mtimeMs / 1000);
+          		}
+          	};
+          	const children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
+          	const subdirectories = (dir: string) =>
+          		existsSync(dir)
+          			? readdirSync(dir, { withFileTypes: true })
+          					.filter((entry) => entry.isDirectory())
+          					.map((entry) => entry.name)
+          			: [];
+          	const walk = (dir: string, depth: number) => {
+          		for (const name of subdirectories(dir)) {
+          			const path = join(dir, name);
+          			if (name === ".fingerprint") {
+          				for (const unit of children(path)) {
+          					for (const file of children(join(path, unit))) {
+          						consider(join(path, unit, file));
+          					}
+          				}
+          			} else if (name === "build") {
+          				for (const unit of children(path)) consider(join(path, unit, "output"));
+          			} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {
+          				walk(path, depth - 1);
+          			}
+          		}
+          	};
+          	walk(TARGET, 3);
+          	return newest;
+          }
+
+          function emptyTarget(why: string) {
+          	console.log(`Emptying ${TARGET}: ${why}`);
+          	for (const entry of readdirSync(TARGET))
+          		rmSync(join(TARGET, entry), { recursive: true, force: true });
+          }
+
+          export async function main() {
+          	const now = Date.now() / 1000;
+          	mkdirSync(TARGET, { recursive: true });
+          	const sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, "utf8")) : 0;
+          	rmSync(SEAL, { force: true });
+          	const { bavail, bsize } = statfsSync(TARGET);
+          	console.log(
+          		`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,
+          	);
+          	const newest = newestUnit();
+          	if (bavail * bsize < MIN_FREE_BYTES) {
+          		emptyTarget("the cache volume is running out of space");
+          	} else if (newest > now) {
+          		emptyTarget("a unit in it is dated after now");
+          	}
+
+          	const tree = parseTree(
+          		git("ls-tree", "-r", "-t", "-z", git("write-tree").trim()),
+          	);
+          	const links = new Map<string, string>();
+          	for (const [path, mode] of tree) {
+          		if (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {
+          			links.set(path, readlinkSync(path));
+          		}
+          	}
+          	const previous = existsSync(RECORD)
+          		? parseRecord(readFileSync(RECORD, "utf8"))
+          		: undefined;
+          	const { record, changed, rebuildAll } = plan(
+          		previous,
+          		tree,
+          		links,
+          		now,
+          		process.env.CARGO_TARGET_REBUILD_ALL ||
+          			(previous && !(newest <= sealed)
+          				? "a job built into it without dating its checkout"
+          				: undefined),
+          	);
+          	for (const [path, { time }] of record) {
+          		try {
+          			lutimesSync(path, time, time);
+          		} catch (error) {
+          			// Paths outside a sparse checkout are not in the work tree.
+          			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          		}
+          	}
+          	writeFileSync(RECORD, formatRecord(record));
+          	console.log(
+          		rebuildAll
+          			? `Every workspace crate rebuilds: ${rebuildAll}`
+          			: `Reusing ${TARGET}: ${changed} paths differ from the last run`,
+          	);
+          }
+
+          /** The last step of a job that ran `main`: every unit it built is older than this. */
+          export async function seal() {
+          	writeFileSync(SEAL, String(Date.now() / 1000));
+          	console.log(`Sealed ${TARGET} for the next run`);
+          }
+
+          await main();
+          NODE_SCRIPT
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+        timeout-minutes: 15
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
           else
-            save_modules=true
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
           fi
-        fi
+      - name: Build code-mode assets
+        run: |
+          set -euo pipefail
 
-        nix build --no-link --print-build-logs .#code-mode-assets
+          # Build the code-mode assets once per SDK state, not once per job. Cache volumes
+          # are forks of past jobs, so most jobs miss the store path another job just built.
+          # The key is the store path, which covers every input of the build.
+          assets="$(nix eval --raw .#code-mode-assets.outPath)"
+          echo "CODE_MODE_ASSETS_DIR=$assets" >> "$GITHUB_ENV"
 
-        if [ "$save_modules" = true ] \
-          && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
-          echo "::warning::Could not save node_modules to the remote cache"
-        fi
+          if nix-store --check-validity "$assets" 2>/dev/null; then
+            echo "Code-mode assets already in the store"
+            exit 0
+          fi
 
-        # Losing the upload costs the next job a rebuild, not a failure.
-        if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
-          echo "Code-mode assets saved to the remote cache"
-        else
-          echo "::warning::Could not save code-mode assets to the remote cache"
-        fi
-    - name: Build schema binaries
-      run: |
-        set -euo pipefail
-        read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
-        SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
-          --bin agent_fold_types --bin export_review_types
-    - name: Generate API Types
-      run: bun run gen-api -- --check
-      working-directory: apps/web
-    - name: Regenerate SDK code
-      run: |
-        bun install --frozen-lockfile
-        bun run sync-specs
-        bun run generate
-      working-directory: packages/sdk
-    - name: Verify SDK generated code is fresh
-      run: |
-        if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
-          echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
-          git status --porcelain -- packages/sdk
-          git diff -- packages/sdk | head -200
-          exit 1
-        fi
-    - name: Check Specta Types
-      run: |
-        just gen-agent-fold-types
-        just gen-database-sql-types
-        just gen-dynamic-ui-types
-        just gen-agent-review-types
-        if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
-          echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
-          exit 1
-        fi
-      env:
-        SPECTA_BIN_DIR: ${{ github.workspace }}/target/debug
-      working-directory: apps/web
-    - name: show sccache stats
-      if: always()
-      run: sccache --show-stats || true
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
-    - name: Seal the kept cargo target
-      run: "node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'\n// Lets cargo reuse the `target` directory a CI job keeps on its cache\n// volume. Cargo counts a workspace crate as built when none of its\n// sources is newer than its last build, and a checkout stamps every file with\n// the current time, so without this every workspace crate rebuilds.\n//\n// The volume keeps, next to `target`, the time each tracked path's current\n// contents were first seen (`RECORD`). A path whose mode and object match the\n// record keeps that time; a changed or added path, and every directory above a\n// change (its tree object changes), gets the current time. A build made while\n// the contents were what they are now is newer than that time and stays fresh.\n// A build of other contents is older than it: units only an earlier, different\n// build left behind (other features, other dependencies) rebuild too.\n//\n// Some changes cargo can't see:\n// - sqlx reads `.sqlx` query data without telling rustc. A new query's data\n//   comes with the query's new source, so only changed data dates every path\n//   now and rebuilds every workspace crate. Removed data is not: another\n//   pull request's query, missing from this tree, is the common case. A job\n//   rebuilds everything when its own pull request changes data (see\n//   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while\n//   an unchanged query still needs it fails only a full build.\n// - rustc lists the file a symlink pointed to when it built, so a symlink that\n//   changed, appeared or went away dates the files it pointed to, before and\n//   after, now. A link is resolved by its text alone: one through another\n//   symlinked directory, or out of the repository, dates nothing.\n// Migrations need nothing here: `sqlx::migrate!` includes each file and\n// `macro_db_migrator`'s build script watches the directory. A build that checks\n// queries against a live database depends on the schema too; Cloud Storage's\n// test job dates those crates itself.\n//\n// A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace\n// crate anyway: Cloud Storage's jobs do when the pull request changes query\n// data.\n//\n// Units dated after now (another clock, or anything else writing `target`)\n// would look fresh against every change, so `target` starts over then.\n//\n// A job that builds into `target` without dating its checkout first (one whose\n// workflow predates this step, or a re-run of one) leaves units the record\n// doesn't describe. So the last step of a job that did date it writes `SEAL`,\n// and a unit newer than the seal rebuilds every workspace crate.\n//\n// It runs on a fresh checkout: it dates the index, not the work tree.\n\nimport { execFileSync } from \"node:child_process\";\nimport {\n\texistsSync,\n\tlutimesSync,\n\tmkdirSync,\n\treaddirSync,\n\treadFileSync,\n\treadlinkSync,\n\trmSync,\n\tstatfsSync,\n\tstatSync,\n\twriteFileSync,\n} from \"node:fs\";\nimport { dirname, join, posix } from \"node:path\";\n\nexport const TARGET = \"target\";\nexport const RECORD = `${TARGET}/.macro-source-times`;\n// Written by the last step of a job that dated its checkout; a unit newer than\n// it was built by a job that did not.\nexport const SEAL = `${TARGET}/.macro-sealed`;\n// Dependency upgrades leave old artifacts in `target`; start over if the volume\n// is nearly full. Namespace grows a volume as it fills (about 97 GB free at any\n// use, up to 100 GB used), so this guards a full disk, not the volume's size.\nconst MIN_FREE_BYTES = 20 * 1024 ** 3;\nconst SYMLINK = \"120000 \";\n// Directories under a profile that hold build outputs, not more profiles.\nconst UNIT_OUTPUTS = new Set([\"deps\", \"incremental\", \"examples\", \"doc\"]);\n\n/** Path to `<mode> <type> <object>`. */\nexport type Tree = Map<string, string>;\n/** Path to its signature and the time (seconds) those contents were first seen. */\nexport type SourceTimes = Map<string, { signature: string; time: number }>;\n\nexport type Plan = {\n\t/** What to date each tracked path, and to keep for the next run. */\n\trecord: SourceTimes;\n\tchanged: number;\n\t/** Why every path is dated now, when it is. */\n\trebuildAll?: string;\n};\n\n/** `git ls-tree -r -t -z` output. */\nexport function parseTree(output: string): Tree {\n\tconst tree: Tree = new Map();\n\tfor (const entry of output.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tif (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));\n\t}\n\treturn tree;\n}\n\nexport function parseRecord(text: string): SourceTimes {\n\tconst record: SourceTimes = new Map();\n\tfor (const entry of text.split(\"\\0\")) {\n\t\tconst tab = entry.indexOf(\"\\t\");\n\t\tconst space = entry.indexOf(\" \");\n\t\tif (tab < 0 || space < 0 || space > tab) continue;\n\t\trecord.set(entry.slice(tab + 1), {\n\t\t\ttime: Number(entry.slice(0, space)),\n\t\t\tsignature: entry.slice(space + 1, tab),\n\t\t});\n\t}\n\treturn record;\n}\n\nexport function formatRecord(record: SourceTimes): string {\n\treturn [...record]\n\t\t.map(([path, { time, signature }]) => `${time} ${signature}\\t${path}\\0`)\n\t\t.join(\"\");\n}\n\n/** A symlink's signature carries what it points to, which the next run needs. */\nfunction signatureOf(mode: string, link: string | undefined): string {\n\treturn link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;\n}\n\n/** The repository path a symlink at `path` resolves to, when it stays inside. */\nfunction linkTarget(path: string, signature: string): string | undefined {\n\tif (!signature.startsWith(SYMLINK)) return;\n\tconst quoted = signature.indexOf(' \"');\n\tif (quoted < 0) return;\n\tconst target = posix.normalize(\n\t\tposix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),\n\t);\n\treturn target.startsWith(\"../\") || posix.isAbsolute(target)\n\t\t? undefined\n\t\t: target;\n}\n\n/** `links` holds what each tracked symlink in `tree` points to. */\nexport function plan(\n\tprevious: SourceTimes | undefined,\n\ttree: Tree,\n\tlinks: Map<string, string>,\n\tnow: number,\n\tforced?: string,\n): Plan {\n\tconst record: SourceTimes = new Map();\n\tconst linkedTo = new Set<string>();\n\tconst linked = (path: string, signature: string) => {\n\t\tconst target = linkTarget(path, signature);\n\t\tif (target !== undefined) linkedTo.add(target);\n\t};\n\tlet changed = 0;\n\tlet rebuildAll =\n\t\tforced || (previous ? undefined : \"no record of earlier builds\");\n\tfor (const [path, mode] of tree) {\n\t\tconst signature = signatureOf(mode, links.get(path));\n\t\tconst before = previous?.get(path);\n\t\tif (before?.signature === signature) {\n\t\t\trecord.set(path, before);\n\t\t\tcontinue;\n\t\t}\n\t\tchanged++;\n\t\trecord.set(path, { signature, time: now });\n\t\tlinked(path, signature);\n\t\tif (before) linked(path, before.signature);\n\t\tif (before && /(^|\\/)\\.sqlx\\//.test(path)) {\n\t\t\trebuildAll ??= `${path} (sqlx query data) changed`;\n\t\t}\n\t}\n\tfor (const [path, { signature }] of previous ?? []) {\n\t\tif (tree.has(path)) continue;\n\t\tchanged++;\n\t\tlinked(path, signature);\n\t}\n\tconst targets = [...linkedTo];\n\tfor (const [path, { signature, time }] of record) {\n\t\tconst dated =\n\t\t\trebuildAll !== undefined ||\n\t\t\ttargets.some(\n\t\t\t\t(target) => path === target || path.startsWith(`${target}/`),\n\t\t\t);\n\t\tif (dated && time !== now) record.set(path, { signature, time: now });\n\t}\n\treturn { record, changed, rebuildAll };\n}\n\nfunction git(...args: string[]): string {\n\treturn execFileSync(\"git\", args, { encoding: \"utf8\", maxBuffer: 1024 ** 3 });\n}\n\n/**\n * The newest time cargo compares sources against: a unit's fingerprint files\n * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in\n * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or\n * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).\n */\nfunction newestUnit(): number {\n\tlet newest = 0;\n\tconst consider = (path: string) => {\n\t\tif (existsSync(path)) {\n\t\t\tnewest = Math.max(newest, statSync(path).mtimeMs / 1000);\n\t\t}\n\t};\n\tconst children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);\n\tconst subdirectories = (dir: string) =>\n\t\texistsSync(dir)\n\t\t\t? readdirSync(dir, { withFileTypes: true })\n\t\t\t\t\t.filter((entry) => entry.isDirectory())\n\t\t\t\t\t.map((entry) => entry.name)\n\t\t\t: [];\n\tconst walk = (dir: string, depth: number) => {\n\t\tfor (const name of subdirectories(dir)) {\n\t\t\tconst path = join(dir, name);\n\t\t\tif (name === \".fingerprint\") {\n\t\t\t\tfor (const unit of children(path)) {\n\t\t\t\t\tfor (const file of children(join(path, unit))) {\n\t\t\t\t\t\tconsider(join(path, unit, file));\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t} else if (name === \"build\") {\n\t\t\t\tfor (const unit of children(path)) consider(join(path, unit, \"output\"));\n\t\t\t} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {\n\t\t\t\twalk(path, depth - 1);\n\t\t\t}\n\t\t}\n\t};\n\twalk(TARGET, 3);\n\treturn newest;\n}\n\nfunction emptyTarget(why: string) {\n\tconsole.log(`Emptying ${TARGET}: ${why}`);\n\tfor (const entry of readdirSync(TARGET))\n\t\trmSync(join(TARGET, entry), { recursive: true, force: true });\n}\n\nexport async function main() {\n\tconst now = Date.now() / 1000;\n\tmkdirSync(TARGET, { recursive: true });\n\tconst sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, \"utf8\")) : 0;\n\trmSync(SEAL, { force: true });\n\tconst { bavail, bsize } = statfsSync(TARGET);\n\tconsole.log(\n\t\t`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,\n\t);\n\tconst newest = newestUnit();\n\tif (bavail * bsize < MIN_FREE_BYTES) {\n\t\temptyTarget(\"the cache volume is running out of space\");\n\t} else if (newest > now) {\n\t\temptyTarget(\"a unit in it is dated after now\");\n\t}\n\n\tconst tree = parseTree(\n\t\tgit(\"ls-tree\", \"-r\", \"-t\", \"-z\", git(\"write-tree\").trim()),\n\t);\n\tconst links = new Map<string, string>();\n\tfor (const [path, mode] of tree) {\n\t\tif (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {\n\t\t\tlinks.set(path, readlinkSync(path));\n\t\t}\n\t}\n\tconst previous = existsSync(RECORD)\n\t\t? parseRecord(readFileSync(RECORD, \"utf8\"))\n\t\t: undefined;\n\tconst { record, changed, rebuildAll } = plan(\n\t\tprevious,\n\t\ttree,\n\t\tlinks,\n\t\tnow,\n\t\tprocess.env.CARGO_TARGET_REBUILD_ALL ||\n\t\t\t(previous && !(newest <= sealed)\n\t\t\t\t? \"a job built into it without dating its checkout\"\n\t\t\t\t: undefined),\n\t);\n\tfor (const [path, { time }] of record) {\n\t\ttry {\n\t\t\tlutimesSync(path, time, time);\n\t\t} catch (error) {\n\t\t\t// Paths outside a sparse checkout are not in the work tree.\n\t\t\tif ((error as NodeJS.ErrnoException).code !== \"ENOENT\") throw error;\n\t\t}\n\t}\n\twriteFileSync(RECORD, formatRecord(record));\n\tconsole.log(\n\t\trebuildAll\n\t\t\t? `Every workspace crate rebuilds: ${rebuildAll}`\n\t\t\t: `Reusing ${TARGET}: ${changed} paths differ from the last run`,\n\t);\n}\n\n/** The last step of a job that ran `main`: every unit it built is older than this. */\nexport async function seal() {\n\twriteFileSync(SEAL, String(Date.now() / 1000));\n\tconsole.log(`Sealed ${TARGET} for the next run`);\n}\n\nawait seal();\nNODE_SCRIPT\n"
+          # Forks have no remote cache credentials.
+          if [ -z "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
+            nix build --no-link --print-build-logs .#code-mode-assets
+            exit 0
+          fi
+
+          cache_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$assets").closure.gz"
+
+          # The token goes through a config descriptor so it stays out of curl's arguments.
+          cache_request() {
+            curl --fail --silent --show-error --max-time 30 --retry 2 \
+              -K <(printf 'header = "Authorization: Bearer %s"\n' "$SCCACHE_WEBDAV_TOKEN") "$@"
+          }
+
+          if cache_request "$cache_url" | gunzip | nix-store --import; then
+            echo "Code-mode assets restored from the remote cache"
+            exit 0
+          fi
+
+          # Installing node_modules is most of a build and changes far less often than the SDK,
+          # so it has its own entry.
+          modules="$(nix eval --raw .#macro-js-node-modules.outPath)"
+          modules_url="$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename "$modules").zst"
+          save_modules=false
+
+          if ! nix-store --check-validity "$modules" 2>/dev/null; then
+            # No retries: a retry would restart the stream into the same pipe, and past the limit
+            # a rebuild is faster.
+            if cache_request --retry 0 --max-time 60 "$modules_url" | zstd -d | nix-store --import; then
+              echo "node_modules restored from the remote cache"
+            else
+              save_modules=true
+            fi
+          fi
+
+          nix build --no-link --print-build-logs .#code-mode-assets
+
+          if [ "$save_modules" = true ] \
+            && ! nix-store --export "$modules" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - "$modules_url"; then
+            echo "::warning::Could not save node_modules to the remote cache"
+          fi
+
+          # Losing the upload costs the next job a rebuild, not a failure.
+          if nix-store --export "$assets" | gzip | cache_request --upload-file - "$cache_url"; then
+            echo "Code-mode assets saved to the remote cache"
+          else
+            echo "::warning::Could not save code-mode assets to the remote cache"
+          fi
+      - name: Build schema binaries
+        run: |
+          set -euo pipefail
+          read -ra openapi_bins <<< "$(cd apps/web && bun scripts/generate-api-schema.ts --print-cargo-bins)"
+          SQLX_OFFLINE=true cargo build "${openapi_bins[@]}" --bin gen_tool_schemas \
+            --bin agent_fold_types --bin export_review_types
+      - name: Generate API Types
+        run: bun run gen-api -- --check
+        working-directory: apps/web
+      - name: Regenerate SDK code
+        run: |
+          bun install --frozen-lockfile
+          bun run sync-specs
+          bun run generate
+        working-directory: packages/sdk
+      - name: Verify SDK generated code is fresh
+        run: |
+          if [ -n "$(git status --porcelain -- packages/sdk)" ]; then
+            echo "packages/sdk generated code is stale. Run 'just update-generated' in packages/sdk and commit the result."
+            git status --porcelain -- packages/sdk
+            git diff -- packages/sdk | head -200
+            exit 1
+          fi
+      - name: Check Specta Types
+        run: |
+          just gen-agent-fold-types
+          just gen-database-sql-types
+          just gen-dynamic-ui-types
+          just gen-agent-review-types
+          if ! git diff --exit-code -- src/lib/service-clients/service-agent-fold/generated src/lib/core/database-sql/generated src/features/dynamic-ui/generated ../../packages/lexical-core/generated src/lib/service-clients/service-agent-reviews/generated ../../packages/sdk/generated/agent-reviews; then
+            echo "Generated specta types are stale. Run 'just gen-agent-fold-types', 'just gen-database-sql-types', 'just gen-dynamic-ui-types' and 'just gen-agent-review-types' in apps/web and commit the result."
+            exit 1
+          fi
+        env:
+          SPECTA_BIN_DIR: ${{ github.workspace }}/target/debug
+        working-directory: apps/web
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
+      - name: Seal the kept cargo target
+        run: |
+          node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
+          // Lets cargo reuse the `target` directory a CI job keeps on its cache
+          // volume. Cargo counts a workspace crate as built when none of its
+          // sources is newer than its last build, and a checkout stamps every file with
+          // the current time, so without this every workspace crate rebuilds.
+          //
+          // The volume keeps, next to `target`, the time each tracked path's current
+          // contents were first seen (`RECORD`). A path whose mode and object match the
+          // record keeps that time; a changed or added path, and every directory above a
+          // change (its tree object changes), gets the current time. A build made while
+          // the contents were what they are now is newer than that time and stays fresh.
+          // A build of other contents is older than it: units only an earlier, different
+          // build left behind (other features, other dependencies) rebuild too.
+          //
+          // Some changes cargo can't see:
+          // - sqlx reads `.sqlx` query data without telling rustc. A new query's data
+          //   comes with the query's new source, so only changed data dates every path
+          //   now and rebuilds every workspace crate. Removed data is not: another
+          //   pull request's query, missing from this tree, is the common case. A job
+          //   rebuilds everything when its own pull request changes data (see
+          //   `CARGO_TARGET_REBUILD_ALL` below); data that the base branch removed while
+          //   an unchanged query still needs it fails only a full build.
+          // - rustc lists the file a symlink pointed to when it built, so a symlink that
+          //   changed, appeared or went away dates the files it pointed to, before and
+          //   after, now. A link is resolved by its text alone: one through another
+          //   symlinked directory, or out of the repository, dates nothing.
+          // Migrations need nothing here: `sqlx::migrate!` includes each file and
+          // `macro_db_migrator`'s build script watches the directory. A build that checks
+          // queries against a live database depends on the schema too; Cloud Storage's
+          // test job dates those crates itself.
+          //
+          // A job sets `CARGO_TARGET_REBUILD_ALL` to a reason to rebuild every workspace
+          // crate anyway: Cloud Storage's jobs do when the pull request changes query
+          // data.
+          //
+          // Units dated after now (another clock, or anything else writing `target`)
+          // would look fresh against every change, so `target` starts over then.
+          //
+          // A job that builds into `target` without dating its checkout first (one whose
+          // workflow predates this step, or a re-run of one) leaves units the record
+          // doesn't describe. So the last step of a job that did date it writes `SEAL`,
+          // and a unit newer than the seal rebuilds every workspace crate.
+          //
+          // It runs on a fresh checkout: it dates the index, not the work tree.
+
+          import { execFileSync } from "node:child_process";
+          import {
+          	existsSync,
+          	lutimesSync,
+          	mkdirSync,
+          	readdirSync,
+          	readFileSync,
+          	readlinkSync,
+          	rmSync,
+          	statfsSync,
+          	statSync,
+          	writeFileSync,
+          } from "node:fs";
+          import { dirname, join, posix } from "node:path";
+
+          export const TARGET = "target";
+          export const RECORD = `${TARGET}/.macro-source-times`;
+          // Written by the last step of a job that dated its checkout; a unit newer than
+          // it was built by a job that did not.
+          export const SEAL = `${TARGET}/.macro-sealed`;
+          // Dependency upgrades leave old artifacts in `target`; start over if the volume
+          // is nearly full. Namespace grows a volume as it fills (about 97 GB free at any
+          // use, up to 100 GB used), so this guards a full disk, not the volume's size.
+          const MIN_FREE_BYTES = 20 * 1024 ** 3;
+          const SYMLINK = "120000 ";
+          // Directories under a profile that hold build outputs, not more profiles.
+          const UNIT_OUTPUTS = new Set(["deps", "incremental", "examples", "doc"]);
+
+          /** Path to `<mode> <type> <object>`. */
+          export type Tree = Map<string, string>;
+          /** Path to its signature and the time (seconds) those contents were first seen. */
+          export type SourceTimes = Map<string, { signature: string; time: number }>;
+
+          export type Plan = {
+          	/** What to date each tracked path, and to keep for the next run. */
+          	record: SourceTimes;
+          	changed: number;
+          	/** Why every path is dated now, when it is. */
+          	rebuildAll?: string;
+          };
+
+          /** `git ls-tree -r -t -z` output. */
+          export function parseTree(output: string): Tree {
+          	const tree: Tree = new Map();
+          	for (const entry of output.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		if (tab > 0) tree.set(entry.slice(tab + 1), entry.slice(0, tab));
+          	}
+          	return tree;
+          }
+
+          export function parseRecord(text: string): SourceTimes {
+          	const record: SourceTimes = new Map();
+          	for (const entry of text.split("\0")) {
+          		const tab = entry.indexOf("\t");
+          		const space = entry.indexOf(" ");
+          		if (tab < 0 || space < 0 || space > tab) continue;
+          		record.set(entry.slice(tab + 1), {
+          			time: Number(entry.slice(0, space)),
+          			signature: entry.slice(space + 1, tab),
+          		});
+          	}
+          	return record;
+          }
+
+          export function formatRecord(record: SourceTimes): string {
+          	return [...record]
+          		.map(([path, { time, signature }]) => `${time} ${signature}\t${path}\0`)
+          		.join("");
+          }
+
+          /** A symlink's signature carries what it points to, which the next run needs. */
+          function signatureOf(mode: string, link: string | undefined): string {
+          	return link === undefined ? mode : `${mode} ${JSON.stringify(link)}`;
+          }
+
+          /** The repository path a symlink at `path` resolves to, when it stays inside. */
+          function linkTarget(path: string, signature: string): string | undefined {
+          	if (!signature.startsWith(SYMLINK)) return;
+          	const quoted = signature.indexOf(' "');
+          	if (quoted < 0) return;
+          	const target = posix.normalize(
+          		posix.join(posix.dirname(path), JSON.parse(signature.slice(quoted + 1))),
+          	);
+          	return target.startsWith("../") || posix.isAbsolute(target)
+          		? undefined
+          		: target;
+          }
+
+          /** `links` holds what each tracked symlink in `tree` points to. */
+          export function plan(
+          	previous: SourceTimes | undefined,
+          	tree: Tree,
+          	links: Map<string, string>,
+          	now: number,
+          	forced?: string,
+          ): Plan {
+          	const record: SourceTimes = new Map();
+          	const linkedTo = new Set<string>();
+          	const linked = (path: string, signature: string) => {
+          		const target = linkTarget(path, signature);
+          		if (target !== undefined) linkedTo.add(target);
+          	};
+          	let changed = 0;
+          	let rebuildAll =
+          		forced || (previous ? undefined : "no record of earlier builds");
+          	for (const [path, mode] of tree) {
+          		const signature = signatureOf(mode, links.get(path));
+          		const before = previous?.get(path);
+          		if (before?.signature === signature) {
+          			record.set(path, before);
+          			continue;
+          		}
+          		changed++;
+          		record.set(path, { signature, time: now });
+          		linked(path, signature);
+          		if (before) linked(path, before.signature);
+          		if (before && /(^|\/)\.sqlx\//.test(path)) {
+          			rebuildAll ??= `${path} (sqlx query data) changed`;
+          		}
+          	}
+          	for (const [path, { signature }] of previous ?? []) {
+          		if (tree.has(path)) continue;
+          		changed++;
+          		linked(path, signature);
+          	}
+          	const targets = [...linkedTo];
+          	for (const [path, { signature, time }] of record) {
+          		const dated =
+          			rebuildAll !== undefined ||
+          			targets.some(
+          				(target) => path === target || path.startsWith(`${target}/`),
+          			);
+          		if (dated && time !== now) record.set(path, { signature, time: now });
+          	}
+          	return { record, changed, rebuildAll };
+          }
+
+          function git(...args: string[]): string {
+          	return execFileSync("git", args, { encoding: "utf8", maxBuffer: 1024 ** 3 });
+          }
+
+          /**
+           * The newest time cargo compares sources against: a unit's fingerprint files
+           * and, for a build script's `rerun-if-changed`, its `output`. Profiles sit in
+           * `target/<profile>`, and deeper under another `CARGO_TARGET_DIR` inside it or
+           * a `--target` triple (`target/cache-wasm/wasm32-unknown-unknown/release`).
+           */
+          function newestUnit(): number {
+          	let newest = 0;
+          	const consider = (path: string) => {
+          		if (existsSync(path)) {
+          			newest = Math.max(newest, statSync(path).mtimeMs / 1000);
+          		}
+          	};
+          	const children = (dir: string) => (existsSync(dir) ? readdirSync(dir) : []);
+          	const subdirectories = (dir: string) =>
+          		existsSync(dir)
+          			? readdirSync(dir, { withFileTypes: true })
+          					.filter((entry) => entry.isDirectory())
+          					.map((entry) => entry.name)
+          			: [];
+          	const walk = (dir: string, depth: number) => {
+          		for (const name of subdirectories(dir)) {
+          			const path = join(dir, name);
+          			if (name === ".fingerprint") {
+          				for (const unit of children(path)) {
+          					for (const file of children(join(path, unit))) {
+          						consider(join(path, unit, file));
+          					}
+          				}
+          			} else if (name === "build") {
+          				for (const unit of children(path)) consider(join(path, unit, "output"));
+          			} else if (depth > 0 && !UNIT_OUTPUTS.has(name)) {
+          				walk(path, depth - 1);
+          			}
+          		}
+          	};
+          	walk(TARGET, 3);
+          	return newest;
+          }
+
+          function emptyTarget(why: string) {
+          	console.log(`Emptying ${TARGET}: ${why}`);
+          	for (const entry of readdirSync(TARGET))
+          		rmSync(join(TARGET, entry), { recursive: true, force: true });
+          }
+
+          export async function main() {
+          	const now = Date.now() / 1000;
+          	mkdirSync(TARGET, { recursive: true });
+          	const sealed = existsSync(SEAL) ? Number(readFileSync(SEAL, "utf8")) : 0;
+          	rmSync(SEAL, { force: true });
+          	const { bavail, bsize } = statfsSync(TARGET);
+          	console.log(
+          		`${Math.round((bavail * bsize) / 1024 ** 3)} GB free on the cache volume`,
+          	);
+          	const newest = newestUnit();
+          	if (bavail * bsize < MIN_FREE_BYTES) {
+          		emptyTarget("the cache volume is running out of space");
+          	} else if (newest > now) {
+          		emptyTarget("a unit in it is dated after now");
+          	}
+
+          	const tree = parseTree(
+          		git("ls-tree", "-r", "-t", "-z", git("write-tree").trim()),
+          	);
+          	const links = new Map<string, string>();
+          	for (const [path, mode] of tree) {
+          		if (mode.startsWith(SYMLINK) && existsSync(dirname(path))) {
+          			links.set(path, readlinkSync(path));
+          		}
+          	}
+          	const previous = existsSync(RECORD)
+          		? parseRecord(readFileSync(RECORD, "utf8"))
+          		: undefined;
+          	const { record, changed, rebuildAll } = plan(
+          		previous,
+          		tree,
+          		links,
+          		now,
+          		process.env.CARGO_TARGET_REBUILD_ALL ||
+          			(previous && !(newest <= sealed)
+          				? "a job built into it without dating its checkout"
+          				: undefined),
+          	);
+          	for (const [path, { time }] of record) {
+          		try {
+          			lutimesSync(path, time, time);
+          		} catch (error) {
+          			// Paths outside a sparse checkout are not in the work tree.
+          			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          		}
+          	}
+          	writeFileSync(RECORD, formatRecord(record));
+          	console.log(
+          		rebuildAll
+          			? `Every workspace crate rebuilds: ${rebuildAll}`
+          			: `Reusing ${TARGET}: ${changed} paths differ from the last run`,
+          	);
+          }
+
+          /** The last step of a job that ran `main`: every unit it built is older than this. */
+          export async function seal() {
+          	writeFileSync(SEAL, String(Date.now() / 1000));
+          	console.log(`Sealed ${TARGET} for the next run`);
+          }
+
+          await seal();
+          NODE_SCRIPT
   biome-check:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 20
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      with:
-        fetch-depth: '0'
-        filter: blob:none
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Prepare the blobless checkout
-      run: |
-        if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
-        git config diff.renames false
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup Nix dev shell
-      uses: './.github/actions/setup-nix-dev-shell'
-    - name: Run Biome
-      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
-      working-directory: apps/web
-    - name: Run Collaboration Package Biome
-      run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
-      working-directory: packages/collaboration
-    - name: Check Browser Floor and Native Permissions
-      run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          fetch-depth: '0'
+          filter: blob:none
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Prepare the blobless checkout
+        run: |
+          if git config extensions.partialclone >/dev/null; then git config --unset extensions.partialclone; fi
+          git config diff.renames false
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+      - name: Run Biome
+        run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+        working-directory: apps/web
+      - name: Run Collaboration Package Biome
+        run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
+        working-directory: packages/collaboration
+      - name: Check Browser Floor and Native Permissions
+        run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   test:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -653,318 +1245,319 @@ jobs:
     strategy:
       matrix:
         shard:
-        - 1
-        - 2
-        - 3
-        - 4
-        - 5
-        - 6
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
       fail-fast: false
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
-          /home/runner/.cargo/registry
-          /home/runner/.cargo/git
-          /home/runner/.cache/.wasm-pack
-          /home/runner/.cache/vitest-modules
-          /home/runner/.cache/wasm-pkgs
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup
-      uses: './.github/actions/setup-reqs-web'
-    - name: Configure Namespace remote sccache
-      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
-      run: |-
-        set -euo pipefail
-        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
-        trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
-          # Register credential values as masked BEFORE exporting: GitHub only
-          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
-          # ~24h Namespace workspace token (registry + cache write) — printed
-          # verbatim in every subsequent step's env dump. Masking is selective by
-          # key name: masking non-secrets like the endpoint URL or key prefix
-          # would redact those strings everywhere in the logs.
-          while IFS= read -r line; do
-            k="${line%%=*}"
-            v="${line#*=}"
-            [ -n "$v" ] && [ "$k" != "$line" ] || continue
-            case "$k" in
-              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
-            esac
-          done < "$env_file"
-          cat "$env_file" >> "$GITHUB_ENV"
-          # The server checks the WebDAV backend before it reports ready, and the
-          # client's default 10s wait can run out. This limit has no env var.
-          sccache_conf="$RUNNER_TEMP/sccache.toml"
-          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
-          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
-          # Force the next compiler invocation to start a server with the new remote
-          # backend even if a setup hook happened to launch one already.
-          sccache --stop-server >/dev/null 2>&1 || true
-        else
-          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
-        fi
-    - name: Build agent-fold WASM for tests
-      run: just build-agent-fold-wasm
-      env:
-        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-        WASM_PKG_HTTP_CACHE: '1'
-      timeout-minutes: 15
-      working-directory: apps/web
-    - name: Build natural-time WASM for tests
-      run: just build-natural-time-wasm
-      env:
-        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-        WASM_PKG_HTTP_CACHE: '1'
-      timeout-minutes: 15
-      working-directory: apps/web
-    - name: Test
-      run: bun run test --shard=${{ matrix.shard }}/6
-      env:
-        VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
-      working-directory: apps/web
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            ${{ github.workspace }}/node_modules
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cache/.wasm-pack
+            /home/runner/.cache/vitest-modules
+            /home/runner/.cache/wasm-pkgs
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - name: Build agent-fold WASM for tests
+        run: just build-agent-fold-wasm
+        env:
+          WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+          WASM_PKG_HTTP_CACHE: '1'
+        timeout-minutes: 15
+        working-directory: apps/web
+      - name: Build natural-time WASM for tests
+        run: just build-natural-time-wasm
+        env:
+          WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+          WASM_PKG_HTTP_CACHE: '1'
+        timeout-minutes: 15
+        working-directory: apps/web
+      - name: Test
+        run: bun run test --shard="${SHARD}/6"
+        env:
+          SHARD: ${{ matrix.shard }}
+          VITEST_MODULE_CACHE_DIR: /home/runner/.cache/vitest-modules
+        working-directory: apps/web
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   functional:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Functional Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
-          /home/runner/.cargo/registry
-          /home/runner/.cargo/git
-          /home/runner/.cache/.wasm-pack
-          /home/runner/.cache/wasm-pkgs
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup
-      uses: './.github/actions/setup-reqs-web'
-      with:
-        playwright: 'true'
-    - name: Configure Namespace remote sccache
-      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
-      run: |-
-        set -euo pipefail
-        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
-        trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
-          # Register credential values as masked BEFORE exporting: GitHub only
-          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
-          # ~24h Namespace workspace token (registry + cache write) — printed
-          # verbatim in every subsequent step's env dump. Masking is selective by
-          # key name: masking non-secrets like the endpoint URL or key prefix
-          # would redact those strings everywhere in the logs.
-          while IFS= read -r line; do
-            k="${line%%=*}"
-            v="${line#*=}"
-            [ -n "$v" ] && [ "$k" != "$line" ] || continue
-            case "$k" in
-              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
-            esac
-          done < "$env_file"
-          cat "$env_file" >> "$GITHUB_ENV"
-          # The server checks the WebDAV backend before it reports ready, and the
-          # client's default 10s wait can run out. This limit has no env var.
-          sccache_conf="$RUNNER_TEMP/sccache.toml"
-          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
-          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
-          # Force the next compiler invocation to start a server with the new remote
-          # backend even if a setup hook happened to launch one already.
-          sccache --stop-server >/dev/null 2>&1 || true
-        else
-          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
-        fi
-    - name: Start sccache server
-      run: sccache --start-server
-    - name: Build wasm packages
-      run: just build-wasm
-      env:
-        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
-        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
-        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
-        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-        WASM_PKG_HTTP_CACHE: '1'
-      working-directory: apps/web
-    - name: Functional Browser Tests
-      run: bun run test:functional
-      env:
-        FUNCTIONAL_TEST_WORKERS: '8'
-      working-directory: apps/web
-    - name: show sccache stats
-      if: always()
-      run: sccache --show-stats || true
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            ${{ github.workspace }}/node_modules
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cache/.wasm-pack
+            /home/runner/.cache/wasm-pkgs
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+        with:
+          playwright: 'true'
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: Build wasm packages
+        run: just build-wasm
+        env:
+          CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+          CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+          CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+          WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+          WASM_PKG_HTTP_CACHE: '1'
+        working-directory: apps/web
+      - name: Functional Browser Tests
+        run: bun run test:functional
+        env:
+          FUNCTIONAL_TEST_WORKERS: '8'
+        working-directory: apps/web
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   browser:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Browser Tests
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 20
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          ${{ github.workspace }}/node_modules
-          /home/runner/.cargo/registry
-          /home/runner/.cargo/git
-          /home/runner/.cache/.wasm-pack
-          /home/runner/.cache/vitest-modules
-          /home/runner/.cache/wasm-pkgs
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup
-      uses: './.github/actions/setup-reqs-web'
-      with:
-        playwright: 'true'
-    - name: Configure Namespace remote sccache
-      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
-      run: |-
-        set -euo pipefail
-        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
-        trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
-          # Register credential values as masked BEFORE exporting: GitHub only
-          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
-          # ~24h Namespace workspace token (registry + cache write) — printed
-          # verbatim in every subsequent step's env dump. Masking is selective by
-          # key name: masking non-secrets like the endpoint URL or key prefix
-          # would redact those strings everywhere in the logs.
-          while IFS= read -r line; do
-            k="${line%%=*}"
-            v="${line#*=}"
-            [ -n "$v" ] && [ "$k" != "$line" ] || continue
-            case "$k" in
-              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
-            esac
-          done < "$env_file"
-          cat "$env_file" >> "$GITHUB_ENV"
-          # The server checks the WebDAV backend before it reports ready, and the
-          # client's default 10s wait can run out. This limit has no env var.
-          sccache_conf="$RUNNER_TEMP/sccache.toml"
-          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
-          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
-          # Force the next compiler invocation to start a server with the new remote
-          # backend even if a setup hook happened to launch one already.
-          sccache --stop-server >/dev/null 2>&1 || true
-        else
-          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
-        fi
-    - name: Build agent-fold WASM for tests
-      run: just build-agent-fold-wasm
-      env:
-        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-        WASM_PKG_HTTP_CACHE: '1'
-      timeout-minutes: 15
-      working-directory: apps/web
-    - name: Sign-up Browser Tests
-      run: just test-signup-browser
-      working-directory: apps/web
-    - name: Interface Language Browser Tests
-      if: needs.path-check.outputs.i18n_changed == 'true'
-      run: |-
-        bunx playwright install-deps chromium
-        just test-i18n-browser
-      working-directory: apps/web
-    - name: Database Grid Browser Tests
-      if: needs.path-check.outputs.database_grid_changed == 'true'
-      run: |-
-        bunx playwright install-deps chromium
-        just test-database-browser
-      working-directory: apps/web
-    - name: Calendar Event Details Browser Tests
-      if: needs.path-check.outputs.calendar_details_changed == 'true'
-      run: |-
-        bunx playwright install-deps chromium
-        just test-calendar-details-browser
-      working-directory: apps/web
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            ${{ github.workspace }}/node_modules
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cache/.wasm-pack
+            /home/runner/.cache/vitest-modules
+            /home/runner/.cache/wasm-pkgs
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+        with:
+          playwright: 'true'
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - name: Build agent-fold WASM for tests
+        run: just build-agent-fold-wasm
+        env:
+          WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+          WASM_PKG_HTTP_CACHE: '1'
+        timeout-minutes: 15
+        working-directory: apps/web
+      - name: Sign-up Browser Tests
+        run: just test-signup-browser
+        working-directory: apps/web
+      - name: Interface Language Browser Tests
+        if: needs.path-check.outputs.i18n_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-i18n-browser
+        working-directory: apps/web
+      - name: Database Grid Browser Tests
+        if: needs.path-check.outputs.database_grid_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-database-browser
+        working-directory: apps/web
+      - name: Calendar Event Details Browser Tests
+        if: needs.path-check.outputs.calendar_details_changed == 'true'
+        run: |-
+          bunx playwright install-deps chromium
+          just test-calendar-details-browser
+        working-directory: apps/web
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   cycles:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Cycles Import Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
     steps:
-    - name: Checkout
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount /nix cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-      with:
-        seed-cache: sccache-ci
-    - name: Setup Nix dev shell
-      uses: './.github/actions/setup-nix-dev-shell'
-    - name: Cycles Import Check
-      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-      working-directory: apps/web
-    - name: Collaboration Package Cycles Import Check
-      run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
-      working-directory: packages/collaboration
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount /nix cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+        with:
+          seed-cache: sccache-ci
+      - name: Setup Nix dev shell
+        uses: ./.github/actions/setup-nix-dev-shell
+      - name: Cycles Import Check
+        run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+        working-directory: apps/web
+      - name: Collaboration Package Cycles Import Check
+        run: biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles
+        working-directory: packages/collaboration
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   build:
     needs:
-    - path-check
+      - path-check
     if: needs.path-check.outputs.should_run == 'true'
     name: Build
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
@@ -973,140 +1566,150 @@ jobs:
       pull-requests: write
     timeout-minutes: 15
     steps:
-    - name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - name: Mount Namespace cache volume
-      uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
-      with:
-        cache: nix
-        path: |-
-          /home/runner/.bun/install/cache
-          /home/runner/.cargo/registry
-          /home/runner/.cargo/git
-          /home/runner/.cache/.wasm-pack
-          /home/runner/.cache/wasm-pkgs
-      continue-on-error: true
-    - name: Setup Nix
-      uses: './.github/actions/setup-nix'
-    - name: Setup
-      uses: './.github/actions/setup-reqs-web'
-    - name: Configure Namespace remote sccache
-      if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
-      run: |-
-        set -euo pipefail
-        env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
-        trap 'rm -f "$env_file"' EXIT
-        if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
-          # Register credential values as masked BEFORE exporting: GitHub only
-          # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
-          # ~24h Namespace workspace token (registry + cache write) — printed
-          # verbatim in every subsequent step's env dump. Masking is selective by
-          # key name: masking non-secrets like the endpoint URL or key prefix
-          # would redact those strings everywhere in the logs.
-          while IFS= read -r line; do
-            k="${line%%=*}"
-            v="${line#*=}"
-            [ -n "$v" ] && [ "$k" != "$line" ] || continue
-            case "$k" in
-              *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
-            esac
-          done < "$env_file"
-          cat "$env_file" >> "$GITHUB_ENV"
-          # The server checks the WebDAV backend before it reports ready, and the
-          # client's default 10s wait can run out. This limit has no env var.
-          sccache_conf="$RUNNER_TEMP/sccache.toml"
-          echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
-          echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
-          # Force the next compiler invocation to start a server with the new remote
-          # backend even if a setup hook happened to launch one already.
-          sccache --stop-server >/dev/null 2>&1 || true
-        else
-          echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
-        fi
-    - name: Start sccache server
-      run: sccache --start-server
-    - name: Build
-      run: just build-dev
-      env:
-        CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
-        CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
-        CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
-        CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
-        WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
-        WASM_PKG_HTTP_CACHE: '1'
-        VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-        VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-      working-directory: apps/web
-    - name: show sccache stats
-      if: always()
-      run: sccache --show-stats || true
-    - id: preview-credentials
-      name: Configure AWS Credentials
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
-      uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: us-east-1
-      continue-on-error: true
-    - id: preview-id
-      name: Get or create preview ID
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
-      run: |
-        PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
-          --pr ${{ github.event.pull_request.number }} \
-          --repo ${{ github.repository }} \
-          --token ${{ secrets.GITHUB_TOKEN }} \
-          --branch "${{ github.head_ref }}")
-        echo "id=$PREVIEW_ID" >> $GITHUB_OUTPUT
-        echo "Preview ID: $PREVIEW_ID"
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
-    - id: preview-bucket
-      name: Validate bucket name
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
-      run: |
-        if [[ "${{ env.PREVIEW_BUCKET }}" != "macro-preview-assets-dev" ]]; then
-          echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
-          exit 1
-        fi
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-    - id: preview-deploy
-      name: Deploy to S3
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
-      run: |
-        bun scripts/preview/deploy.ts \
-          --preview-id ${{ steps.preview-id.outputs.id }} \
-          --skip-build
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
-    - name: Comment on PR
-      if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
-      run: |
-        bun scripts/preview/post-comment.ts \
-          --pr ${{ github.event.pull_request.number }} \
-          --repo ${{ github.repository }} \
-          --token ${{ secrets.GITHUB_TOKEN }} \
-          --preview-id ${{ steps.preview-id.outputs.id }} \
-          --sha ${{ github.sha }}
-      env:
-        PREVIEW_BUCKET: macro-preview-assets-dev
-      continue-on-error: true
-      working-directory: apps/web
-    - name: Teardown Nix
-      if: always()
-      uses: './.github/actions/teardown-nix'
+      - name: Checkout Repo # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - name: Mount Namespace cache volume
+        uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
+        with:
+          cache: nix
+          path: |-
+            /home/runner/.bun/install/cache
+            /home/runner/.cargo/registry
+            /home/runner/.cargo/git
+            /home/runner/.cache/.wasm-pack
+            /home/runner/.cache/wasm-pkgs
+        continue-on-error: true
+      - name: Setup Nix
+        uses: ./.github/actions/setup-nix
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+      - name: Configure Namespace remote sccache
+        if: (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') || github.event.pull_request.head.repo.full_name == github.repository
+        run: |-
+          set -euo pipefail
+          env_file="$(mktemp "$RUNNER_TEMP/namespace-sccache.XXXXXX")"
+          trap 'rm -f "$env_file"' EXIT
+          if nsc cache sccache setup --cache_name web-ci > "$env_file"; then
+            # Register credential values as masked BEFORE exporting: GitHub only
+            # masks `secrets.*`, so without this SCCACHE_WEBDAV_TOKEN — a broad,
+            # ~24h Namespace workspace token (registry + cache write) — printed
+            # verbatim in every subsequent step's env dump. Masking is selective by
+            # key name: masking non-secrets like the endpoint URL or key prefix
+            # would redact those strings everywhere in the logs.
+            while IFS= read -r line; do
+              k="${line%%=*}"
+              v="${line#*=}"
+              [ -n "$v" ] && [ "$k" != "$line" ] || continue
+              case "$k" in
+                *TOKEN*|*SECRET*|*PASSWORD*) echo "::add-mask::$v" ;;
+              esac
+            done < "$env_file"
+            cat "$env_file" >> "$GITHUB_ENV"
+            # The server checks the WebDAV backend before it reports ready, and the
+            # client's default 10s wait can run out. This limit has no env var.
+            sccache_conf="$RUNNER_TEMP/sccache.toml"
+            echo 'server_startup_timeout_ms = 60000' > "$sccache_conf"
+            echo "SCCACHE_CONF=$sccache_conf" >> "$GITHUB_ENV"
+            # Force the next compiler invocation to start a server with the new remote
+            # backend even if a setup hook happened to launch one already.
+            sccache --stop-server >/dev/null 2>&1 || true
+          else
+            echo "::warning::Namespace remote sccache setup failed; using local cache fallback"
+          fi
+      - name: Start sccache server
+        run: sccache --start-server
+      - name: Build
+        run: just build-dev
+        env:
+          CARGO_PROFILE_FIG_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_FIG_ENGINE_WASM_CODEGEN_UNITS: '16'
+          CARGO_PROFILE_PSD_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_PSD_ENGINE_WASM_CODEGEN_UNITS: '16'
+          CARGO_PROFILE_AI_ENGINE_WASM_LTO: 'off'
+          CARGO_PROFILE_AI_ENGINE_WASM_CODEGEN_UNITS: '16'
+          WASM_PKG_CACHE_DIR: /home/runner/.cache/wasm-pkgs
+          WASM_PKG_HTTP_CACHE: '1'
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+          VITE_POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
+        working-directory: apps/web
+      - name: show sccache stats
+        if: always()
+        run: sccache --show-stats || true
+      - id: preview-credentials
+        name: Configure AWS Credentials
+        if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b
+        with:
+          aws-region: us-east-1
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        continue-on-error: true
+      - id: preview-id
+        name: Get or create preview ID
+        if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-credentials.outcome == 'success'
+        run: |
+          PREVIEW_ID=$(bun scripts/preview/get-or-create-id.ts \
+            --pr "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --branch "$BRANCH")
+          echo "id=$PREVIEW_ID" >> "$GITHUB_OUTPUT"
+          echo "Preview ID: $PREVIEW_ID"
+        env:
+          BRANCH: ${{ github.head_ref }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_BUCKET: macro-preview-assets-dev
+        continue-on-error: true
+        working-directory: apps/web
+      - id: preview-bucket
+        name: Validate bucket name
+        if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-id.outcome == 'success'
+        run: |
+          if [[ "$PREVIEW_BUCKET" != "macro-preview-assets-dev" ]]; then
+            echo "ERROR: PREVIEW_BUCKET must be 'macro-preview-assets-dev'"
+            exit 1
+          fi
+        env:
+          PREVIEW_BUCKET: macro-preview-assets-dev
+        continue-on-error: true
+      - id: preview-deploy
+        name: Deploy to S3
+        if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-bucket.outcome == 'success'
+        run: |
+          bun scripts/preview/deploy.ts \
+            --preview-id "$PREVIEW_ID" \
+            --skip-build
+        env:
+          PREVIEW_ID: ${{ steps.preview-id.outputs.id }}
+          PREVIEW_BUCKET: macro-preview-assets-dev
+        continue-on-error: true
+        working-directory: apps/web
+      - name: Comment on PR
+        if: needs.path-check.outputs.web_artifact_changed == 'true' && !contains(github.event.pull_request.title, '[no preview]') && github.event.pull_request.head.repo.full_name == github.repository && steps.preview-deploy.outcome == 'success'
+        run: |
+          bun scripts/preview/post-comment.ts \
+            --pr "$PR_NUMBER" \
+            --repo "$REPOSITORY" \
+            --token "$GITHUB_TOKEN" \
+            --preview-id "$PREVIEW_ID" \
+            --sha "$SHA"
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREVIEW_ID: ${{ steps.preview-id.outputs.id }}
+          SHA: ${{ github.sha }}
+          PREVIEW_BUCKET: macro-preview-assets-dev
+        continue-on-error: true
+        working-directory: apps/web
+      - name: Teardown Nix
+        if: always()
+        uses: ./.github/actions/teardown-nix
   ios-native-check:
     name: iOS Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -1115,365 +1718,365 @@ jobs:
       pull-requests: write
     timeout-minutes: 10
     steps:
-    - id: checkout
-      name: Checkout Repo
-      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-      env:
-        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
-        GIT_HTTP_LOW_SPEED_TIME: '60'
-    - id: native-filter
-      name: Detect native iOS changes
-      uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
-      with:
-        predicate-quantifier: every
-        filters: |
-          ios_native:
-            - 'apps/web/tauri/**'
-            - '!apps/web/tauri/**/android/**'
-            - '!apps/web/tauri/**/android_*'
-            - '!apps/web/tauri/**/android_*/**'
-            - '!apps/web/tauri/**/android.*'
-            - '!apps/web/tauri/**/*.android.*'
-            - '!apps/web/tauri/**/macos/**'
-            - '!apps/web/tauri/**/macos_*'
-            - '!apps/web/tauri/**/macos_*/**'
-            - '!apps/web/tauri/**/macos.*'
-            - '!apps/web/tauri/**/*.macos.*'
-            - '!apps/web/tauri/**/linux_*'
-            - '!apps/web/tauri/**/linux_*/**'
-            - '!apps/web/tauri/**/desktop/**'
-            - '!apps/web/tauri/**/desktop-*'
-            - '!apps/web/tauri/**/desktop-*/**'
-            - '!apps/web/tauri/**/desktop.*'
-            - '!apps/web/tauri/desktop-release.json'
-            - '!apps/web/tauri/.helix/**'
-            - '!apps/web/tauri/**/*.md'
-    - id: cache-wasm
-      name: Detect a client cache wasm version bump
-      run: |
-        set -euo pipefail
-        manifest=crates/client/cache-wasm/Cargo.toml
-        version() { git show "$1:$manifest" 2>/dev/null | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none; }
-        # The merge commit's first parent is the main this merge result was
-        # built on; a fresh fetch of main could be newer and misattribute
-        # its bumps to the PR.
-        base_sha=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
-        git fetch -q --depth=1 origin "$base_sha"
-        echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
-        base=$(version "$base_sha")
-        head=$(version HEAD)
-        echo "cache-wasm version: base ${base} (${base_sha:0:10}), merge result ${head}"
-        if [[ "$base" != "$head" ]]; then
-          echo "bumped=true" >> "$GITHUB_OUTPUT"
-          echo "The client cache wasm version moved; the native app compiles that cache, so this counts as a native change."
-        else
-          echo "bumped=false" >> "$GITHUB_OUTPUT"
-        fi
-      shell: bash
-    - id: labels
-      name: Read the PR's current labels
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true')
-      run: |
-        set -euo pipefail
-        labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
-        echo "labels: ${labels:-<none>}"
-        if [[ ",${labels}," == *",skip-ios-update,"* ]]; then
-          echo "skip=true" >> "$GITHUB_OUTPUT"
-        else
-          echo "skip=false" >> "$GITHUB_OUTPUT"
-        fi
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-    - id: bun
-      name: Setup Bun
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
-      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
-      with:
-        bun-version: '1.3.13'
-    - id: bump
-      name: Verify iOS release numbers were bumped
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
-      run: bun scripts/ios-verify-native-bump.mjs
-      env:
-        BASE_REF: ${{ steps.cache-wasm.outputs.base_sha }}
-      working-directory: apps/web
-    - id: credentials
-      name: Fetch App Store Connect credentials from Doppler
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
-      run: |
-        set -euo pipefail
-        # Fetch the App Store Connect credentials from Doppler (ios-release/prd) —
-        # the same shape as the DMG workflow's notarization step — and hand them to
-        # later steps the way the iOS scripts expect them:
-        #   APPLE_API_KEY / APPLE_API_ISSUER            exported via GITHUB_ENV
-        #   ~/.appstoreconnect/private_keys/AuthKey_<ID>.p8   the private key, where
-        #     altool, tauri (APPLE_API_KEY_PATH default) and ios-app-store.mjs look
-        # With IOS_DISTRIBUTION_CERTIFICATE=1 the optional Apple Distribution .p12 is
-        # decoded to $RUNNER_TEMP and exported as APPLE_DISTRIBUTION_CERTIFICATE_PATH
-        # / _PASSWORD for the signing step.
-        if [ -z "${DOPPLER_TOKEN:-}" ]; then
-          echo "DOPPLER_TOKEN is empty: the IOS_RELEASE_DOPPLER_TOKEN secret is missing, or this is a fork PR (secrets are not available to forks; a maintainer must run the release from a branch in this repository, or add skip-ios-update if the change is non-breaking)." >&2
-          exit 1
-        fi
-
-        umask 077
-        secrets=$(mktemp)
-        trap 'rm -f "$secrets"' EXIT
-        curl --fail --silent --show-error --retry 3 \
-          --header "Authorization: Bearer $DOPPLER_TOKEN" \
-          'https://api.doppler.com/v3/configs/config/secrets/download?project=ios-release&config=prd&format=json' \
-          > "$secrets"
-
-        required() {
-          jq -er --arg name "$1" '.[$name] | strings | select(length > 0)' "$secrets" \
-            || { echo "ios-release/prd is missing $1" >&2; exit 1; }
-        }
-        key_id=$(required APPLE_API_KEY_ID)
-        issuer=$(required APPLE_API_ISSUER)
-
-        key_dir="$HOME/.appstoreconnect/private_keys"
-        mkdir -p "$key_dir"
-        key_path="$key_dir/AuthKey_${key_id}.p8"
-        required APPLE_API_PRIVATE_KEY > "$key_path"
-        echo "::add-mask::$issuer"
-        {
-          echo "APPLE_API_KEY=$key_id"
-          echo "APPLE_API_ISSUER=$issuer"
-        } >> "$GITHUB_ENV"
-        echo "Wrote App Store Connect API key $key_id to $key_path"
-
-        if [ "${IOS_DISTRIBUTION_CERTIFICATE:-}" = "1" ]; then
-          certificate=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 // empty' "$secrets")
-          if [ -z "$certificate" ]; then
-            echo "No APPLE_DISTRIBUTION_CERTIFICATE_BASE64 in ios-release/prd; the build will" \
-              "rely on Xcode cloud signing via the API key."
-            exit 0
+      - id: checkout # zizmor: ignore[artipacked] check and preview steps run git and scripts from the checkout
+        name: Checkout Repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
+      - id: native-filter
+        name: Detect native iOS changes
+        uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590
+        with:
+          filters: |
+            ios_native:
+              - 'apps/web/tauri/**'
+              - '!apps/web/tauri/**/android/**'
+              - '!apps/web/tauri/**/android_*'
+              - '!apps/web/tauri/**/android_*/**'
+              - '!apps/web/tauri/**/android.*'
+              - '!apps/web/tauri/**/*.android.*'
+              - '!apps/web/tauri/**/macos/**'
+              - '!apps/web/tauri/**/macos_*'
+              - '!apps/web/tauri/**/macos_*/**'
+              - '!apps/web/tauri/**/macos.*'
+              - '!apps/web/tauri/**/*.macos.*'
+              - '!apps/web/tauri/**/linux_*'
+              - '!apps/web/tauri/**/linux_*/**'
+              - '!apps/web/tauri/**/desktop/**'
+              - '!apps/web/tauri/**/desktop-*'
+              - '!apps/web/tauri/**/desktop-*/**'
+              - '!apps/web/tauri/**/desktop.*'
+              - '!apps/web/tauri/desktop-release.json'
+              - '!apps/web/tauri/.helix/**'
+              - '!apps/web/tauri/**/*.md'
+          predicate-quantifier: every
+      - id: cache-wasm
+        name: Detect a client cache wasm version bump
+        run: |
+          set -euo pipefail
+          manifest=crates/client/cache-wasm/Cargo.toml
+          version() { git show "$1:$manifest" 2>/dev/null | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none; }
+          # The merge commit's first parent is the main this merge result was
+          # built on; a fresh fetch of main could be newer and misattribute
+          # its bumps to the PR.
+          base_sha=$(git cat-file -p HEAD | sed -n 's/^parent //p' | head -1)
+          git fetch -q --depth=1 origin "$base_sha"
+          echo "base_sha=${base_sha}" >> "$GITHUB_OUTPUT"
+          base=$(version "$base_sha")
+          head=$(version HEAD)
+          echo "cache-wasm version: base ${base} (${base_sha:0:10}), merge result ${head}"
+          if [[ "$base" != "$head" ]]; then
+            echo "bumped=true" >> "$GITHUB_OUTPUT"
+            echo "The client cache wasm version moved; the native app compiles that cache, so this counts as a native change."
+          else
+            echo "bumped=false" >> "$GITHUB_OUTPUT"
           fi
-          certificate_path="$RUNNER_TEMP/apple-distribution.p12"
-          printf '%s' "$certificate" | base64 --decode > "$certificate_path" 2>/dev/null \
-            || printf '%s' "$certificate" | base64 -D > "$certificate_path"
-          password=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD // empty' "$secrets")
-          [ -z "$password" ] || echo "::add-mask::$password"
+        shell: bash
+      - id: labels
+        name: Read the PR's current labels
+        if: steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true'
+        run: |
+          set -euo pipefail
+          labels=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json labels --jq '[.labels[].name] | join(",")')
+          echo "labels: ${labels:-<none>}"
+          if [[ ",${labels}," == *",skip-ios-update,"* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+      - id: bun
+        name: Setup Bun
+        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: '1.3.13'
+      - id: bump
+        name: Verify iOS release numbers were bumped
+        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
+        run: bun scripts/ios-verify-native-bump.mjs
+        env:
+          BASE_REF: ${{ steps.cache-wasm.outputs.base_sha }}
+        working-directory: apps/web
+      - id: credentials
+        name: Fetch App Store Connect credentials from Doppler
+        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          # Fetch the App Store Connect credentials from Doppler (ios-release/prd) —
+          # the same shape as the DMG workflow's notarization step — and hand them to
+          # later steps the way the iOS scripts expect them:
+          #   APPLE_API_KEY / APPLE_API_ISSUER            exported via GITHUB_ENV
+          #   ~/.appstoreconnect/private_keys/AuthKey_<ID>.p8   the private key, where
+          #     altool, tauri (APPLE_API_KEY_PATH default) and ios-app-store.mjs look
+          # With IOS_DISTRIBUTION_CERTIFICATE=1 the optional Apple Distribution .p12 is
+          # decoded to $RUNNER_TEMP and exported as APPLE_DISTRIBUTION_CERTIFICATE_PATH
+          # / _PASSWORD for the signing step.
+          if [ -z "${DOPPLER_TOKEN:-}" ]; then
+            echo "DOPPLER_TOKEN is empty: the IOS_RELEASE_DOPPLER_TOKEN secret is missing, or this is a fork PR (secrets are not available to forks; a maintainer must run the release from a branch in this repository, or add skip-ios-update if the change is non-breaking)." >&2
+            exit 1
+          fi
+
+          umask 077
+          secrets=$(mktemp)
+          trap 'rm -f "$secrets"' EXIT
+          curl --fail --silent --show-error --retry 3 \
+            --header "Authorization: Bearer $DOPPLER_TOKEN" \
+            'https://api.doppler.com/v3/configs/config/secrets/download?project=ios-release&config=prd&format=json' \
+            > "$secrets"
+
+          required() {
+            jq -er --arg name "$1" '.[$name] | strings | select(length > 0)' "$secrets" \
+              || { echo "ios-release/prd is missing $1" >&2; exit 1; }
+          }
+          key_id=$(required APPLE_API_KEY_ID)
+          issuer=$(required APPLE_API_ISSUER)
+
+          key_dir="$HOME/.appstoreconnect/private_keys"
+          mkdir -p "$key_dir"
+          key_path="$key_dir/AuthKey_${key_id}.p8"
+          required APPLE_API_PRIVATE_KEY > "$key_path"
+          echo "::add-mask::$issuer"
           {
-            echo "APPLE_DISTRIBUTION_CERTIFICATE_PATH=$certificate_path"
-            echo "APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD=$password"
+            echo "APPLE_API_KEY=$key_id"
+            echo "APPLE_API_ISSUER=$issuer"
           } >> "$GITHUB_ENV"
-          echo "Wrote Apple Distribution certificate to $certificate_path"
-        fi
-      shell: bash
-      env:
-        DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
-    - id: live
-      name: Require Apple's approval of the App Store release
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
-      run: |
-        # --- native tree ------------------------------------------------------------
-        # Hash identifying "the iOS native code" at a commit: every tracked blob under
-        # apps/web/tauri except the paths that never reach the iOS binary, recognised
-        # by the same naming convention the Android gate uses (android-native.mjs,
-        # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
-        # component that is `android`, `macos`, `linux` or `windows` or starts with
-        # that name plus `_`, `.` or `-`; one that is `desktop` or starts with
-        # `desktop.` / `desktop-` (not `desktop_`: desktop_update and its Status type
-        # compile into mobile, only desktop_update/desktop/ is cfg(desktop)); or an
-        # extension-style `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the
-        # android_* plugins, tauri.android.conf.json and tauri.macos.conf.json,
-        # src/desktop/, desktop-cef, linux_notification, the macos icons; the Rust
-        # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
-        # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
-        # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
-        # version of the client cache wasm package
-        # (crates/client/cache-wasm/Cargo.toml). The app compiles the cache crates
-        # natively, and the team bumps that version when a cache change must ship, so
-        # the bump — not every edit under crates/client — is the native signal. The
-        # release stamps uploaded builds with the hash, the merge gate compares the
-        # approved build's stamp against the merge result's, and the drift / head guards
-        # compare commits with it. Must match nativeTreeHash() in
-        # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
-        # detection (web_app_check_main/ios_native_check.rs).
-        NATIVE_TREE_PATH=apps/web/tauri
-        CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
-        export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows)([_./-]|$)|(^|/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
+          echo "Wrote App Store Connect API key $key_id to $key_path"
 
-        # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
-        # lines plus the cache wasm version — fails if the path is missing.
-        # (--full-tree: ls-tree otherwise narrows its output to the current directory,
-        # which would silently hash nothing when run from apps/web.)
-        native_tree_listing() {
-          git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
-          git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
-            | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
-          echo "cache-wasm-version $(cache_wasm_version "$1")"
-        }
-
-        # native_tree_hash <commit>: prints the hash of the listing, and fails when the
-        # listing does (a pipe would hash nothing and succeed).
-        native_tree_hash() {
-          local listing
-          listing=$(native_tree_listing "$1") || return 1
-          git hash-object --stdin <<<"$listing"
-        }
-
-        # cache_wasm_version <commit>: the `version` of the client cache wasm package
-        # at that commit ("none" before the package existed).
-        cache_wasm_version() {
-          git show "$1:${CACHE_WASM_MANIFEST}" 2>/dev/null \
-            | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none
-        }
-
-        # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
-        # PR head, GitHub's test merge commit, the pre-push head) available to
-        # native_tree_hash. Some callers persist actions/checkout credentials; clear
-        # inherited headers before adding ours so Git sends Authorization exactly once.
-        # Fails if the commit is unreachable (a force-pushed-away head).
-        native_tree_fetch() {
-          local auth
-          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
-          git -c "http.https://github.com/.extraheader=" \
-            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
-            fetch -q --depth=1 origin "$1"
-        }
-        # ----------------------------------------------------------------------------
-        # --- PR merge result ----------------------------------------------------------
-        # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
-        # the merge result the native gates hash. GitHub computes it lazily
-        # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
-        # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
-        # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
-        pr_merge_commit() {
-          local deadline pr_json mergeable merge
-          deadline=$(( $(date +%s) + 120 ))
-          while true; do
-            pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
-            mergeable=$(jq -r '.mergeable' <<<"$pr_json")
-            merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
-            if [[ -n "$merge" ]]; then
-              echo "$merge"
-              return 0
+          if [ "${IOS_DISTRIBUTION_CERTIFICATE:-}" = "1" ]; then
+            certificate=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_BASE64 // empty' "$secrets")
+            if [ -z "$certificate" ]; then
+              echo "No APPLE_DISTRIBUTION_CERTIFICATE_BASE64 in ios-release/prd; the build will" \
+                "rely on Xcode cloud signing via the API key."
+              exit 0
             fi
-            if [[ "$mergeable" == "CONFLICTING" ]]; then
-              echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
-              return 1
-            fi
-            if (( $(date +%s) > deadline )); then
-              echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
-              return 1
-            fi
-            echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
-            sleep 10
-          done
-        }
-        # ------------------------------------------------------------------------------
-        set -euo pipefail
-        # The gate proper: Apple must have approved the committed version + build
-        # (held for release or live), built from the native code of the PR's current
-        # merge result.
-        merge=$(pr_merge_commit)
-        native_tree_fetch "$merge"
-        native_tree=$(native_tree_hash "$merge")
-        echo "Merge result ${merge:0:10}: native tree ${native_tree}"
-        bun scripts/ios-app-store.mjs status --require-approved --native-tree "$native_tree"
-      shell: bash
-      env:
-        GH_TOKEN: ${{ github.token }}
-        GH_REPO: ${{ github.repository }}
-        PR_NUMBER: ${{ github.event.pull_request.number }}
-      working-directory: apps/web
-    - name: Skipped via label
-      if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip == 'true'
-      run: echo "Native iOS changes detected, but the skip-ios-update label says they don't break the native/web contract — skipping the App Store release gate."
-    - name: Update iOS gate status on the PR
-      if: '!cancelled() && github.event.pull_request.head.repo.full_name == github.repository'
-      uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
-      with:
-        script: |
-          const marker = '<!-- ios-native-check-status -->';
-          const steps = JSON.parse(process.env.IOS_GATE_STEPS);
-          const { owner, repo } = context.repo;
-          const issue_number = context.issue.number;
-          const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
-          // A rerun uses the original event. Never replace the current head's status
-          // with an older commit's result, or create comments after the PR has closed.
-          if (pr.state !== 'open' || pr.head.sha !== context.payload.pull_request.head.sha) return;
+            certificate_path="$RUNNER_TEMP/apple-distribution.p12"
+            printf '%s' "$certificate" | base64 --decode > "$certificate_path" 2>/dev/null \
+              || printf '%s' "$certificate" | base64 -D > "$certificate_path"
+            password=$(jq -r '.APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD // empty' "$secrets")
+            [ -z "$password" ] || echo "::add-mask::$password"
+            {
+              echo "APPLE_DISTRIBUTION_CERTIFICATE_PATH=$certificate_path"
+              echo "APPLE_DISTRIBUTION_CERTIFICATE_PASSWORD=$password"
+            } >> "$GITHUB_ENV"
+            echo "Wrote Apple Distribution certificate to $certificate_path"
+          fi
+        shell: bash
+        env:
+          DOPPLER_TOKEN: ${{ secrets.IOS_RELEASE_DOPPLER_TOKEN }}
+      - id: live
+        name: Require Apple's approval of the App Store release
+        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip != 'true'
+        run: |
+          # --- native tree ------------------------------------------------------------
+          # Hash identifying "the iOS native code" at a commit: every tracked blob under
+          # apps/web/tauri except the paths that never reach the iOS binary, recognised
+          # by the same naming convention the Android gate uses (android-native.mjs,
+          # which excludes iOS/macOS/linux/windows/apple/desktop-named paths): a path
+          # component that is `android`, `macos`, `linux` or `windows` or starts with
+          # that name plus `_`, `.` or `-`; one that is `desktop` or starts with
+          # `desktop.` / `desktop-` (not `desktop_`: desktop_update and its Status type
+          # compile into mobile, only desktop_update/desktop/ is cfg(desktop)); or an
+          # extension-style `.android.` / `.macos.` / `.linux.` / `.windows.` infix (the
+          # android_* plugins, tauri.android.conf.json and tauri.macos.conf.json,
+          # src/desktop/, desktop-cef, linux_notification, the macos icons; the Rust
+          # ones are all behind cfg(target_os) / cfg(desktop)) — plus the desktop
+          # updater manifest, editor config and Markdown docs. `apple`/`ios` paths
+          # stay included: gen/apple is the Xcode project. Plus one thing outside that tree: the
+          # version of the client cache wasm package
+          # (crates/client/cache-wasm/Cargo.toml). The app compiles the cache crates
+          # natively, and the team bumps that version when a cache change must ship, so
+          # the bump — not every edit under crates/client — is the native signal. The
+          # release stamps uploaded builds with the hash, the merge gate compares the
+          # approved build's stamp against the merge result's, and the drift / head guards
+          # compare commits with it. Must match nativeTreeHash() in
+          # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
+          # detection (web_app_check_main/ios_native_check.rs).
+          NATIVE_TREE_PATH=apps/web/tauri
+          CACHE_WASM_MANIFEST=crates/client/cache-wasm/Cargo.toml
+          export NATIVE_TREE_EXCLUDE='(^|/)(android|macos|linux|windows)([_./-]|$)|(^|/)desktop([./-]|$)|\.(android|macos|linux|windows)\.|\.md$|^desktop-release\.json$|^\.helix/'
 
-          const comments = await github.paginate(github.rest.issues.listComments, {
-            owner, repo, issue_number, per_page: 100,
-          });
-          const existing = comments.find((comment) =>
-            comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
-          const native = steps['native-filter']?.outputs?.ios_native === 'true'
-            || steps['cache-wasm']?.outputs?.bumped === 'true';
-          const detectionComplete = steps['native-filter']?.outcome === 'success'
-            && steps['cache-wasm']?.outcome === 'success';
-          const failed = Object.entries(steps).filter(([, step]) => step.outcome === 'failure');
-          if (!native && failed.length === 0 && !existing) return;
+          # native_tree_listing <commit>: what the hash covers — the filtered ls-tree
+          # lines plus the cache wasm version — fails if the path is missing.
+          # (--full-tree: ls-tree otherwise narrows its output to the current directory,
+          # which would silently hash nothing when run from apps/web.)
+          native_tree_listing() {
+            git rev-parse -q --verify "$1:${NATIVE_TREE_PATH}" >/dev/null || return 1
+            git ls-tree -r --full-tree "$1:${NATIVE_TREE_PATH}" \
+              | awk -F'\t' '$2 !~ ENVIRON["NATIVE_TREE_EXCLUDE"]'
+            echo "cache-wasm-version $(cache_wasm_version "$1")"
+          }
 
-          const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`;
-          const guideUrl = `${context.serverUrl}/${owner}/${repo}/blob/${pr.head.sha}/apps/web/docs/ios-releases.md`;
-          const release = steps.live?.outputs?.gate_result
-            ? JSON.parse(steps.live.outputs.gate_result) : null;
-          const labels = pr.labels.map((label) => label.name);
-          const lines = [marker];
-          if (failed.length && !release) {
-            const names = {
-              checkout: 'Checkout Repo',
-              bun: 'Setup Bun',
-              'native-filter': 'Detect native iOS changes',
-              'cache-wasm': 'Detect a client cache wasm version bump',
-              labels: "Read the PR's labels",
-              bump: 'Verify iOS release numbers were bumped',
-              credentials: 'Fetch App Store Connect credentials',
-              live: 'Fetch the merge result and check App Store status',
-            };
-            lines.push('### iOS release check could not complete', '',
-              `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
-              `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
-              'This failure does not establish whether Apple approved the App Store release.');
-          } else if (!native && detectionComplete) {
-            lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
-          } else if (steps.labels?.outputs?.skip === 'true') {
-            lines.push('### iOS release gate bypassed', '',
-              'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
-          } else if (release) {
-            const name = `iOS ${release.version} (build ${release.build})`;
-            if (release.kind === 'approved') {
-              lines.push(`### ${name} is approved and verified`, '',
-                'Apple approved the App Store build, and it matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
-              if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
-            } else {
-              lines.push(`### ${name} must be approved before this PR can merge`, '', release.reason);
-              if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
-              if (release.kind === 'waiting') {
-                lines.push('', 'Wait for Apple to approve the release.');
-              } else if (release.kind === 'mismatch') {
-                lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
+          # native_tree_hash <commit>: prints the hash of the listing, and fails when the
+          # listing does (a pipe would hash nothing and succeed).
+          native_tree_hash() {
+            local listing
+            listing=$(native_tree_listing "$1") || return 1
+            git hash-object --stdin <<<"$listing"
+          }
+
+          # cache_wasm_version <commit>: the `version` of the client cache wasm package
+          # at that commit ("none" before the package existed).
+          cache_wasm_version() {
+            git show "$1:${CACHE_WASM_MANIFEST}" 2>/dev/null \
+              | sed -n 's/^version *= *"\([^"]*\)".*/\1/p' | head -1 | grep . || echo none
+          }
+
+          # native_tree_fetch <sha>: make a commit that is not in this checkout (a new
+          # PR head, GitHub's test merge commit, the pre-push head) available to
+          # native_tree_hash. Some callers persist actions/checkout credentials; clear
+          # inherited headers before adding ours so Git sends Authorization exactly once.
+          # Fails if the commit is unreachable (a force-pushed-away head).
+          native_tree_fetch() {
+            local auth
+            auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+            git -c "http.https://github.com/.extraheader=" \
+              -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+              fetch -q --depth=1 origin "$1"
+          }
+          # ----------------------------------------------------------------------------
+          # --- PR merge result ----------------------------------------------------------
+          # pr_merge_commit: print the sha of GitHub's test merge commit for $PR_NUMBER —
+          # the merge result the native gates hash. GitHub computes it lazily
+          # (mergeable=UNKNOWN until it has), so poll a little; a PR that really
+          # conflicts with its base cannot merge anyway. Needs GH_TOKEN, GH_REPO,
+          # PR_NUMBER. Progress goes to stderr so `merge=$(pr_merge_commit)` works.
+          pr_merge_commit() {
+            local deadline pr_json mergeable merge
+            deadline=$(( $(date +%s) + 120 ))
+            while true; do
+              pr_json=$(gh pr view "$PR_NUMBER" --repo "$GH_REPO" --json mergeable,potentialMergeCommit)
+              mergeable=$(jq -r '.mergeable' <<<"$pr_json")
+              merge=$(jq -r '.potentialMergeCommit.oid // empty' <<<"$pr_json")
+              if [[ -n "$merge" ]]; then
+                echo "$merge"
+                return 0
+              fi
+              if [[ "$mergeable" == "CONFLICTING" ]]; then
+                echo "PR #${PR_NUMBER} conflicts with its base branch, so GitHub has no merge result for it." >&2
+                return 1
+              fi
+              if (( $(date +%s) > deadline )); then
+                echo "GitHub has not computed PR #${PR_NUMBER}'s merge commit yet (mergeable=${mergeable})." >&2
+                return 1
+              fi
+              echo "Merge commit not computed yet (mergeable=${mergeable}); waiting." >&2
+              sleep 10
+            done
+          }
+          # ------------------------------------------------------------------------------
+          set -euo pipefail
+          # The gate proper: Apple must have approved the committed version + build
+          # (held for release or live), built from the native code of the PR's current
+          # merge result.
+          merge=$(pr_merge_commit)
+          native_tree_fetch "$merge"
+          native_tree=$(native_tree_hash "$merge")
+          echo "Merge result ${merge:0:10}: native tree ${native_tree}"
+          bun scripts/ios-app-store.mjs status --require-approved --native-tree "$native_tree"
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        working-directory: apps/web
+      - name: Skipped via label
+        if: (steps.native-filter.outputs.ios_native == 'true' || steps.cache-wasm.outputs.bumped == 'true') && steps.labels.outputs.skip == 'true'
+        run: echo "Native iOS changes detected, but the skip-ios-update label says they don't break the native/web contract — skipping the App Store release gate."
+      - name: Update iOS gate status on the PR
+        if: '!cancelled() && github.event.pull_request.head.repo.full_name == github.repository'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
+        with:
+          script: |
+            const marker = '<!-- ios-native-check-status -->';
+            const steps = JSON.parse(process.env.IOS_GATE_STEPS);
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            // A rerun uses the original event. Never replace the current head's status
+            // with an older commit's result, or create comments after the PR has closed.
+            if (pr.state !== 'open' || pr.head.sha !== context.payload.pull_request.head.sha) return;
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find((comment) =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker));
+            const native = steps['native-filter']?.outputs?.ios_native === 'true'
+              || steps['cache-wasm']?.outputs?.bumped === 'true';
+            const detectionComplete = steps['native-filter']?.outcome === 'success'
+              && steps['cache-wasm']?.outcome === 'success';
+            const failed = Object.entries(steps).filter(([, step]) => step.outcome === 'failure');
+            if (!native && failed.length === 0 && !existing) return;
+
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}/attempts/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}`;
+            const guideUrl = `${context.serverUrl}/${owner}/${repo}/blob/${pr.head.sha}/apps/web/docs/ios-releases.md`;
+            const release = steps.live?.outputs?.gate_result
+              ? JSON.parse(steps.live.outputs.gate_result) : null;
+            const labels = pr.labels.map((label) => label.name);
+            const lines = [marker];
+            if (failed.length && !release) {
+              const names = {
+                checkout: 'Checkout Repo',
+                bun: 'Setup Bun',
+                'native-filter': 'Detect native iOS changes',
+                'cache-wasm': 'Detect a client cache wasm version bump',
+                labels: "Read the PR's labels",
+                bump: 'Verify iOS release numbers were bumped',
+                credentials: 'Fetch App Store Connect credentials',
+                live: 'Fetch the merge result and check App Store status',
+              };
+              lines.push('### iOS release check could not complete', '',
+                `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
+                `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
+                'This failure does not establish whether Apple approved the App Store release.');
+            } else if (!native && detectionComplete) {
+              lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
+            } else if (steps.labels?.outputs?.skip === 'true') {
+              lines.push('### iOS release gate bypassed', '',
+                'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
+            } else if (release) {
+              const name = `iOS ${release.version} (build ${release.build})`;
+              if (release.kind === 'approved') {
+                lines.push(`### ${name} is approved and verified`, '',
+                  'Apple approved the App Store build, and it matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+                if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
               } else {
-                lines.push('', labels.includes('ios-update')
-                  ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
-                  : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
+                lines.push(`### ${name} must be approved before this PR can merge`, '', release.reason);
+                if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
+                if (release.kind === 'waiting') {
+                  lines.push('', 'Wait for Apple to approve the release.');
+                } else if (release.kind === 'mismatch') {
+                  lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
+                } else {
+                  lines.push('', labels.includes('ios-update')
+                    ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
+                    : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
+                }
+                lines.push('', 'After approval, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
               }
-              lines.push('', 'After approval, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
+              lines.push('', `The next prod deploy releases ${name} on the App Store and makes the web bundle require iOS build **${release.floor}** or later, as committed in this PR.`,
+                '', `[App Store Connect](${release.distributionUrl})`);
+            } else {
+              // No structured result means verification never completed; never infer an
+              // Apple state from an exit code or unstructured log text.
+              lines.push('### iOS release status unavailable', '',
+                `The check produced no App Store result. Inspect the [workflow logs](${runUrl}) and rerun it.`);
             }
-            lines.push('', `The next prod deploy releases ${name} on the App Store and makes the web bundle require iOS build **${release.floor}** or later, as committed in this PR.`,
-              '', `[App Store Connect](${release.distributionUrl})`);
-          } else {
-            // No structured result means verification never completed; never infer an
-            // Apple state from an exit code or unstructured log text.
-            lines.push('### iOS release status unavailable', '',
-              `The check produced no App Store result. Inspect the [workflow logs](${runUrl}) and rerun it.`);
-          }
-          lines.push('', `[Workflow run](${runUrl}) · [Release guide](${guideUrl})`);
-          const body = lines.join('\n');
-          await core.summary.addRaw(body.replace(`${marker}\n`, '')).write();
-          if (existing) {
-            if (existing.body !== body) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            lines.push('', `[Workflow run](${runUrl}) · [Release guide](${guideUrl})`);
+            const body = lines.join('\n');
+            await core.summary.addRaw(body.replace(`${marker}\n`, '')).write();
+            if (existing) {
+              if (existing.body !== body) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+              }
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
             }
-          } else {
-            await github.rest.issues.createComment({ owner, repo, issue_number, body });
-          }
-      env:
-        IOS_GATE_STEPS: ${{ toJSON(steps) }}
+        env:
+          IOS_GATE_STEPS: ${{ toJSON(steps) }}

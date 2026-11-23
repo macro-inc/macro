@@ -37,6 +37,7 @@ fn matches(message: &Message, filter: &Filter) -> Result<bool, GraphError> {
             }
             _ => Err(unsupported(name)),
         },
+        Filter::Since { name, .. } => Err(unsupported(name)),
     }
 }
 
@@ -130,6 +131,11 @@ fn decode_cursor(token: &str) -> Option<DeltaCursor> {
 /// odata.maxpagesize` asks for, 10 without it; the links do not carry it, so
 /// every page of a round must send it. `$top` caps the whole round, not a
 /// page.
+///
+/// As in Graph, the first request may also ask for
+/// `$orderby=receivedDateTime desc` and a `$filter` of `receivedDateTime ge`
+/// or `gt` a time, and nothing else. The tokens carry them, with `$select`
+/// and `$top`, so every page and later round keeps them.
 pub(crate) fn delta(ctx: &mut Ctx<'_>, folder: &str) -> Handled {
     let now_ms = ctx.state.now_ms();
     let query = ctx.query.clone();
@@ -148,12 +154,34 @@ pub(crate) fn delta(ctx: &mut Ctx<'_>, folder: &str) -> Handled {
             cursor
         }
         None => {
-            if query.filter.is_some() || query.order_by.is_some() {
-                return Err(GraphError::bad_request(
-                    "The emulator's delta query supports only $select and $top.",
-                ));
-            }
-            mailbox.delta_start(&folder, query.select_text(), query.top, now_ms)
+            let newest_first = match &query.order_by {
+                None => false,
+                Some((property, true)) if property == "receivedDateTime" => true,
+                Some(_) => {
+                    return Err(GraphError::bad_request(
+                        "Invalid $orderby clause: a message delta query orders only by \
+                         receivedDateTime desc.",
+                    ));
+                }
+            };
+            let received = match &query.filter {
+                None => None,
+                Some(Filter::Since { name, since }) if name == "receivedDateTime" => Some(*since),
+                Some(_) => {
+                    return Err(GraphError::bad_request(
+                        "Invalid filter clause: a message delta query filters only by \
+                         receivedDateTime ge or gt a date and time.",
+                    ));
+                }
+            };
+            mailbox.delta_start(
+                &folder,
+                query.select_text(),
+                query.top,
+                newest_first,
+                received,
+                now_ms,
+            )
         }
     };
 

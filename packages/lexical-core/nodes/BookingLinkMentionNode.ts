@@ -13,6 +13,7 @@ import {
 } from 'lexical';
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
+import { isAllowedLinkUrl } from '../utils/link-url';
 
 const VERSION = 1;
 
@@ -98,8 +99,9 @@ export class BookingLinkMentionNode extends DecoratorNode<
     this.__profileId = profileId;
     this.__slug = slug;
     this.__label = label;
+    // Saved state can hold any URL; one a link may not open is rebuilt.
     this.__url =
-      url ||
+      (url && isAllowedLinkUrl(url) ? url : undefined) ||
       buildBookingUrl(profileId, slug) ||
       `https://macro.com/app/book/${profileId}`;
   }

@@ -53,7 +53,10 @@ describe('buildTools', () => {
     const tools = buildTools(catalog, 'entity');
     const read = tools.find((tool) => tool.name === 'documents_read');
     const write = tools.find((tool) => tool.name === 'documents_write');
-    const create = tools.find((tool) => tool.name === 'tasks_write');
+    const taskWrite = tools.find((tool) => tool.name === 'tasks_write');
+    const create = buildTools(catalog, 'method').find(
+      (tool) => tool.name === 'tasks-create'
+    );
     const remove = tools.find((tool) => tool.name === 'documents_delete');
 
     expect(read?.annotations).toMatchObject({
@@ -63,6 +66,22 @@ describe('buildTools', () => {
     });
     // Edits can overwrite, and a change reaches collaborators.
     expect(write?.annotations).toMatchObject({
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    });
+    // A grouped task tool also edits templates and time entries, so the
+    // whole tool is destructive.
+    expect([...(taskWrite?.operations.keys() ?? [])]).toEqual([
+      'Task.logTime',
+      'Task.startTimer',
+      'tasks.create',
+      'TaskTemplate.update',
+      'taskTemplates.create',
+      'TimeEntry.edit',
+      'Timer.stop',
+    ]);
+    expect(taskWrite?.annotations).toMatchObject({
       readOnlyHint: false,
       destructiveHint: true,
       openWorldHint: true,

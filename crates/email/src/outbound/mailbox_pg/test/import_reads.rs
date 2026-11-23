@@ -3,8 +3,8 @@
 use super::fixture;
 use crate::domain::mailbox::*;
 use email_api_client::domain::models::{
-    EmailApiError, MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition,
-    StreamToken,
+    EmailApiError, MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId,
+    RoundStart, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -23,15 +23,16 @@ impl Provider {
 }
 
 impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         self.served("folders");
-        Ok(Vec::new())
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.served("changes");
         Ok(MailboxChangePage {
@@ -96,14 +97,13 @@ async fn an_import_reads_through_the_import_provider_and_live_work_through_the_l
     .await
     .unwrap();
     assert!(service.enumerate_once().await.unwrap());
-    // Live rows are claimed first. Neither message is found yet, so both
-    // are released to be read again.
-    for _ in 0..2 {
-        assert!(matches!(
-            service.reconcile_once().await,
-            Err(MailboxError::LocationUnsettled)
-        ));
-    }
+    // Live rows are claimed first. Neither message is found: the live one
+    // is released to be read again, the import one settles as gone.
+    assert!(matches!(
+        service.reconcile_once().await,
+        Err(MailboxError::LocationUnsettled)
+    ));
+    assert!(service.reconcile_once().await.unwrap());
 
     assert_eq!(
         *reads.lock().unwrap(),

@@ -13,7 +13,7 @@ import type { OnboardingStateSuggestedTeamDomain } from './onboardingStateSugges
 staged entities are served separately by `GET /import/state`.
  */
 export interface OnboardingState {
-  /** The user's MCP server connections. */
+  /** The user's usable connections. */
   connected_servers: ConnectedServer[];
   /** The user's onboarding row. */
   row: OnboardingRow;

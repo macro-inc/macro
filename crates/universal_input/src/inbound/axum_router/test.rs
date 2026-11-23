@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::temporal::thread_due_date::{DeadlineFact, ThreadFacts};
+use crate::domain::temporal::thread_due_date::{DeadlineFact, ExtractedFacts, ThreadFacts};
 use ai_billing::DisabledAiAdmissionService;
 use ai_usage::UsageContext;
 use axum::{
@@ -133,17 +133,21 @@ impl ThreadFactExtractor for Facts {
         &self,
         _: &ThreadDueDateRequest,
         usage: UsageContext,
-    ) -> Result<ThreadFacts, InputError> {
+    ) -> Result<ExtractedFacts, InputError> {
         self.metered.lock().unwrap().push(usage);
-        Ok(ThreadFacts {
-            deadlines: vec![DeadlineFact {
-                message: 0,
-                date: serde_json::from_value(json!({
-                    "kind": "weekday", "span": "Friday", "weekday": "friday", "week": "upcoming"
-                }))
-                .unwrap(),
-            }],
-            closures: vec![],
+        Ok(ExtractedFacts {
+            facts: ThreadFacts {
+                deadlines: vec![DeadlineFact {
+                    message: 0,
+                    date: serde_json::from_value(json!({
+                        "kind": "weekday", "span": "Friday", "weekday": "friday", "week": "upcoming"
+                    }))
+                    .unwrap(),
+                }],
+                closures: vec![],
+                events: vec![],
+            },
+            usage: None,
         })
     }
 }

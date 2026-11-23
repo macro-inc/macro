@@ -9,6 +9,8 @@
 //! answers `200 {}` and records the request, so a scenario can assert on what
 //! the email services told them. On a stack that runs the real
 //! `document_storage_service`, its requests are recorded and passed on to it.
+//! It also answers PostHog's flag evaluation (`/flags/`), for a stack whose
+//! email services are pointed here with the Outlook import live pass on.
 
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError};
@@ -35,6 +37,9 @@ const EMULATOR_AUTHENTICATION_PATH: &str = "/_emulator/authentication-service";
 const FORWARD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// The largest request body the stand-ins read.
 const BODY_LIMIT: usize = 32 * 1024 * 1024;
+/// The PostHog flag that turns the Outlook import live pass on, as
+/// `email_service::outlook_flags::LIVE_IMPORT_PASS_FLAG` names it.
+const LIVE_IMPORT_PASS_FLAG: &str = "enable-outlook-import-live-pass";
 
 /// A request one of the email services made to another Macro service.
 #[derive(Clone, Debug)]
@@ -233,7 +238,10 @@ impl MacroServices {
             .await
             .context("could not bind the Macro services stand-in")?;
         let address = listener.local_addr()?;
-        let app = Router::new().fallback(answer).with_state(routes);
+        let app = Router::new()
+            .route("/flags/", axum::routing::post(flags))
+            .fallback(answer)
+            .with_state(routes);
 
         let tracker = TaskTracker::new();
         let stopped = cancel.clone();
@@ -266,6 +274,12 @@ impl MacroServices {
     /// The authentication service stand-in's base URL.
     pub(crate) fn authentication_url(&self) -> String {
         self.url(AUTHENTICATION)
+    }
+
+    /// The PostHog host the stand-in answers flag evaluations as: an origin,
+    /// as PostHog's is.
+    pub(crate) fn posthog_url(&self) -> String {
+        format!("http://{}", self.address)
     }
 
     /// Every request the other stand-ins received, oldest first.
@@ -564,4 +578,15 @@ fn stand_in_answer(
         (CONNECTION_GATEWAY, _) => serde_json::json!({ "receipts": [] }),
         _ => serde_json::json!({}),
     }
+}
+
+/// PostHog's flag evaluation, in the shape `feature_flags::outbound::posthog`
+/// reads: the Outlook import live pass is on.
+async fn flags() -> axum::Json<Value> {
+    let mut flags = serde_json::Map::new();
+    flags.insert(
+        LIVE_IMPORT_PASS_FLAG.to_owned(),
+        serde_json::json!({ "key": LIVE_IMPORT_PASS_FLAG, "enabled": true }),
+    );
+    axum::Json(serde_json::json!({ "flags": flags, "errorsWhileComputingFlags": false }))
 }

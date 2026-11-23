@@ -93,8 +93,11 @@ calls, gaps and failures, for finding out why a session was slow or wrong.
   `turn_context.py`.
 - The deploy commit: no span carries a version. The span's ECS
   `task_family` tag names a task definition; the "Deploy Production Release"
-  run that was running when it was registered has the commit. Otherwise the
-  last production deploy before the turn is used and labelled "closest" with
+  run that was running when it was registered has the commit, whatever the
+  run's conclusion: one failed job (an unrelated worker) marks a run
+  "failure" though the services deployed. Otherwise the newest release
+  deployed before the turn (its run, or a re-run's first attempt, finished;
+  with no run listed, it was published) is used and labelled "inferred" with
   the reason; dev sessions always get the last `main` commit before the turn.
 - Reconstructed parts: "verified" means the span's SHA-256 prefix (or, with
   no hash, its byte count) matches; "mismatch" is shown in red and as the

@@ -9,11 +9,17 @@ use serde::{Deserialize, Serialize};
 pub struct ExampleEventPublisher;
 
 impl EventPublisher for ExampleEventPublisher {
-    async fn publish<T: Topic>(&self, key: &str, payload: &[u8]) -> Result<(), EventBrokerError> {
+    async fn publish<T: Topic>(
+        &self,
+        key: &str,
+        event_type: Option<&str>,
+        payload: &[u8],
+    ) -> Result<(), EventBrokerError> {
         println!(
-            "publishing topic={} key={} payload={}",
+            "publishing topic={} key={} event_type={} payload={}",
             T::TOPIC_STR,
             key,
+            event_type.unwrap_or("unknown"),
             String::from_utf8_lossy(payload)
         );
         Ok(())

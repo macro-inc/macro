@@ -103,7 +103,6 @@ export default {
     close: '關閉',
     delete: '刪除',
     rename: '重新命名',
-    more: '更多',
     search: '搜尋',
     settings: '設定',
   },
@@ -499,6 +498,9 @@ export default {
       other: '已刪除 {{count}} 個項目',
     },
     toastDeleteFailed: '無法刪除',
+    toastPropertySet: {
+      other: '已為 {{count}} 個項目設定 {{property}}',
+    },
     toastAddedToFavorites: '已加入我的最愛',
     toastAddedCountToFavorites: {
       other: '已將 {{count}} 個項目加入我的最愛',
@@ -730,7 +732,6 @@ export default {
     searchNoResults: '找不到設定。試試「簽名」、「主題」或「行事曆」。',
     backToSettings: '返回設定',
     closeSettings: '關閉設定',
-    goToTab: '前往設定分頁 {{number}}',
     editProfile: '編輯個人資料',
     logOut: '登出',
     yourAccount: '我的帳號',

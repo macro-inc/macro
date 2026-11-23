@@ -20,6 +20,12 @@ use crate::domain::ports::{
 
 /// Billing effects leased per worker pass.
 const BILLING_BATCH: u32 = 16;
+/// How soon a billing effect refused because another change to the team's
+/// subscription is still in flight runs again. That change settles within
+/// the teams guard's own window (five minutes at most), so this never spins
+/// for long, and it spends no attempt.
+pub(crate) const CHANGE_IN_FLIGHT_RETRY: chrono::Duration = chrono::Duration::seconds(5);
+
 /// How long a leased billing effect stays hidden from other workers.
 const BILLING_LEASE: chrono::Duration = chrono::Duration::minutes(2);
 /// Failed attempts after which a billing item removal stops retrying and
@@ -56,9 +62,11 @@ fn readd_key(computer: &crate::domain::models::Computer, purpose: &str, attempt:
     )
 }
 
-/// The key of one generation of a billing effect's item removal.
-fn removal_key(effect_id: i64, generation: u32) -> String {
-    format!("computer-remove:{effect_id}:{generation}")
+/// The key of one generation of a billing effect's item removal. Effect ids
+/// come from each database's own sequence, so environments sharing one
+/// Stripe account reuse them; the computer id makes the key unique there.
+pub(super) fn removal_key(computer_id: ComputerId, effect_id: i64, generation: u32) -> String {
+    format!("computer-remove:{computer_id}:{effect_id}:{generation}")
 }
 
 /// One removal per stray item and snapshot: a later snapshot tries again.
@@ -613,6 +621,16 @@ impl<
                 // Not the removal's failure: it runs again once its lease
                 // expires, without spending an attempt.
                 Err(error) if error.is_storage_unavailable() => Err(error),
+                // Turned away, not failed: nothing was sent while another
+                // change to the subscription settles.
+                Err(ComputerError::Billing(BillingError::ChangeInFlight)) => {
+                    tracing::info!(effect_id = pending.id,
+                        "another subscription change is in flight; billing effect deferred");
+                    self.repo
+                        .defer_effect(pending.id, self.clock.now() + CHANGE_IN_FLIGHT_RETRY)
+                        .await
+                        .map_err(internal)
+                }
                 Err(error) => {
                     super::super::telemetry::effect_failed("billing");
                     tracing::Span::current().record("otel.status_code", "ERROR");
@@ -822,7 +840,7 @@ impl<
                 return Ok(());
             }
         }
-        let Some(key) = self.removal_key(pending.id).await? else {
+        let Some(key) = self.removal_key(pending).await? else {
             tracing::info!(subscription_item = %subscription_item,
                 "an earlier attempt removed this item");
             return Ok(());
@@ -878,17 +896,25 @@ impl<
         team_id: Uuid,
         computer_id: ComputerId,
     ) -> Result<(), ComputerError> {
-        let refund = match self
+        let (refund, subscription_gone) = match self
             .billing
             .refund_computer_purchase(team_id, computer_id, &refund_key(computer_id))
             .await
         {
-            Ok(refund) => refund,
+            Ok(refund) => (refund, false),
             // A subscription that is gone was canceled with its team.
-            Err(BillingError::NoSubscription) => None,
+            Err(BillingError::NoSubscription) => (None, true),
             Err(error) => return Err(error.into()),
         };
         tracing::Span::current().record("refunded", refund.is_some());
+        if subscription_gone {
+            tracing::info!(%computer_id, "computer purchase refund skipped: the team's subscription is gone");
+        } else if refund.is_none() {
+            // The computer was billed on an item, so a purchase invoice
+            // should exist: it may still be open, or older than the invoices
+            // searched. Alerting keys on this event; see the crate's AGENTS.md.
+            tracing::error!(%computer_id, "computer purchase refund found no paid purchase");
+        }
         if let Some(refund) = refund {
             self.repo
                 .apply(
@@ -909,7 +935,7 @@ impl<
         team_id: Uuid,
         subscription_item: &SubscriptionItemId,
     ) -> Result<(), ComputerError> {
-        let Some(key) = self.removal_key(pending.id).await? else {
+        let Some(key) = self.removal_key(pending).await? else {
             return Ok(());
         };
         match self
@@ -928,9 +954,9 @@ impl<
     /// generation whose change definitely did not apply (given up while its
     /// outcome was unknown) is spent, and the next one is used. `None` when
     /// a generation already removed the item.
-    async fn removal_key(&self, effect_id: i64) -> Result<Option<String>, ComputerError> {
+    async fn removal_key(&self, pending: &PendingEffect) -> Result<Option<String>, ComputerError> {
         for generation in 0..MAX_BILLING_ATTEMPTS {
-            let key = removal_key(effect_id, generation);
+            let key = removal_key(pending.computer_id, pending.id, generation);
             match self.billing.charge_status(&key).await? {
                 Some(ChargeStatus::NotApplied) => continue,
                 Some(ChargeStatus::Applied) => return Ok(None),

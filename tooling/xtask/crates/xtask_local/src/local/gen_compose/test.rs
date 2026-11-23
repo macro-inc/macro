@@ -18,7 +18,21 @@ fn passwords_vault_persists_in_isolated_local_storage_without_dev_credentials() 
             format!("127.0.0.1:{}:8200", instance.port(Port::OpenBao))
         );
         assert_eq!(vault["networks"]["services"]["aliases"][0], "openbao");
-        assert!(vault["volumes"][0].as_str().unwrap().ends_with(":ro,z"));
+        let config = passwords_vault::config_dir(&instance);
+        assert_eq!(
+            vault["volumes"][0],
+            format!(
+                "{}:/openbao/config/start.sh:ro,z",
+                config.join("start.sh").display()
+            )
+        );
+        assert_eq!(
+            vault["volumes"][1],
+            format!(
+                "{}:/openbao/config/macro-local.hcl:ro,z",
+                config.join("macro-local.hcl").display()
+            )
+        );
         assert_eq!(
             vault["entrypoint"],
             serde_yaml::to_value([

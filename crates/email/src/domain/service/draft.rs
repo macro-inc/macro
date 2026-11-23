@@ -99,7 +99,7 @@ where
             .await
     }
 
-    #[tracing::instrument(err, skip(self, input))]
+    #[tracing::instrument(err, skip(self, macro_id, input))]
     pub(crate) async fn save_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -240,7 +240,7 @@ where
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, macro_id))]
     pub(crate) async fn delete_draft_for_user_impl(
         &self,
         macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
@@ -312,8 +312,7 @@ where
                 Some(macro_id.as_ref()),
                 expected_generation,
             )
-            .await
-            .map_err(anyhow::Error::from)?;
+            .await?;
 
         let Some(deletion) = deletion else {
             // The guarded delete matched nothing: between the read above and
@@ -470,11 +469,26 @@ where
             input.provider_id = None;
             input.provider_thread_id = None;
         }
+        let adopted_from = self
+            .keep_stored_reply_target(&mut input, &accessible_link_ids)
+            .await?;
         // Authorize the reply target before validate_existing_message can move
         // the draft to another inbox, so a refused target leaves it in place.
-        let reply_target = self
+        let reply_target = match self
             .authorized_reply_target(&input, &accessible_link_ids)
-            .await?;
+            .await
+        {
+            // A draft save that named no target and stays in its inbox drops a
+            // stored target the user can no longer reach (a shared thread's
+            // grant revoked) instead of refusing the content. A send, or a save
+            // that moves the draft to another inbox, is still refused: the
+            // draft stays where it is and never goes out as a new email.
+            Err(EmailErr::MessageNotFound(_)) if is_draft && adopted_from == Some(link_id) => {
+                input.replying_to_id = None;
+                None
+            }
+            result => result?,
+        };
         let source_inbox = self
             .validate_existing_message(link_id, accessible_inboxes, &mut input, defer_inbox_move)
             .await?;
@@ -672,8 +686,7 @@ where
                     input.actor.as_ref().map(|actor| actor.as_ref()),
                     input.draft_generation,
                 )
-                .await
-                .map_err(anyhow::Error::from)?;
+                .await?;
             if deleted.is_none()
                 && let Some(retained) = self
                     .email_repo
@@ -697,6 +710,33 @@ where
         input.provider_thread_id = msg.provider_thread_id;
 
         Ok(None)
+    }
+
+    /// A save of a stored draft that names no reply target keeps the one the
+    /// draft has: clients that edit only the content (the SDK, REST) omit it,
+    /// and saving it as null would drop the draft from its reply thread. The
+    /// adopted target is then authorized like one the client sent. Returns
+    /// the stored draft's inbox when it adopted one.
+    async fn keep_stored_reply_target(
+        &self,
+        input: &mut CreateDraftInput,
+        accessible_link_ids: &[Uuid],
+    ) -> Result<Option<Uuid>, EmailErr> {
+        let Some(db_id) = input.db_id.filter(|_| input.replying_to_id.is_none()) else {
+            return Ok(None);
+        };
+        let Some((target, stored_inbox)) = self
+            .email_repo
+            .get_simple_message(db_id, accessible_link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .filter(|stored| stored.is_draft && !stored.is_sent)
+            .and_then(|stored| Some((stored.replying_to_id?, stored.link_id)))
+        else {
+            return Ok(None);
+        };
+        input.replying_to_id = Some(target);
+        Ok(Some(stored_inbox))
     }
 
     /// The reply target, authorized on every save, before an existing reply
@@ -728,23 +768,33 @@ where
             return Ok(());
         };
 
-        // An explicit, validated identity must never be retargeted to a newer
-        // reply draft by a delayed save from an obsolete composer.
+        // A resolved identity already identifies the reply being saved.
         if input.db_id.is_some() {
             return Ok(());
         }
-        // The draft replying to this message lives in the inbox being sent from.
         if let Some(existing_draft) = self
             .email_repo
             .get_draft_replying_to(link_id, reply_target.db_id)
             .await
             .map_err(anyhow::Error::from)?
         {
-            self.apply_existing_draft(input, existing_draft);
-        } else {
-            apply_reply_target(link_id, input, reply_target);
+            // A first save can adopt an unbound draft. Undo can also restore
+            // a bound draft for this target while another composer is writing.
+            let bound_to_another = match input.draft_client_binding {
+                Some(handle) => self
+                    .email_repo
+                    .draft_bound_to_another_handle(existing_draft.db_id, link_id, handle)
+                    .await
+                    .map_err(anyhow::Error::from)?,
+                None => false,
+            };
+            if !bound_to_another {
+                self.apply_existing_draft(input, existing_draft);
+                return Ok(());
+            }
         }
 
+        apply_reply_target(link_id, input, reply_target);
         Ok(())
     }
 

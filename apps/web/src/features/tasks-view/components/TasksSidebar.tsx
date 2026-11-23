@@ -1,28 +1,20 @@
-import {
-  CollapsibleSection,
-  useViewTabHotkeys,
-  ViewSidebar,
-} from '@app/components/view-shell';
+import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { ConnectorImportSidebar } from '@app/features/connector-import/connector-import';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { FavoriteUnreadIndicator } from '@app/features/favorites/FavoriteUnreadIndicator';
+import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
+import { ProjectSavedViewsList } from '@app/features/projects/views/project-saved-views';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
 import { t } from '@app/lib/i18n';
-import { useParams } from '@app/lib/split-router';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CheckSquareIcon from '@icon/system/regular/check-square.svg';
-import ProjectIcon from '@icon/system/regular/cube.svg';
-import ListChecksIcon from '@icon/system/regular/list-checks.svg';
-import NoteIcon from '@icon/system/regular/note-pencil.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -31,37 +23,34 @@ import { Dynamic } from 'solid-js/web';
 import {
   BUILT_IN_TASK_TABS,
   PROJECT_TABS,
-  TASK_TABS,
   type TaskTabItem,
 } from '../constants';
-import { isProjectTab } from '../core/task-navigation';
+import { isProjectTab, projectScopeForTab } from '../core/task-navigation';
 import { TasksCreateAction } from '../tasks-create-action';
 import { useTasksView } from '../tasks-view-context';
 import type { TasksTab } from '../types';
 import { TaskSavedViewsList } from '../views/task-saved-views';
-
-const TAB_ICONS: Record<TasksTab, typeof NoteIcon> = {
-  'my-tasks': CheckSquareIcon,
-  'team-tasks': ListChecksIcon,
-  'created-by-me': NoteIcon,
-  'my-projects': ProjectIcon,
-  projects: ProjectIcon,
-  'created-projects': NoteIcon,
-};
+import { TAB_ICONS } from './task-view-icons';
 
 function TasksNavigation(props: {
   items: readonly TaskTabItem[];
   label: string;
+  onSelect(id: TasksTab): void;
 }) {
-  const { state, setTab } = useTasksView();
+  const { state } = useTasksView();
+  const projectViews = useProjectSavedViews();
+  const isActive = (id: TasksTab) =>
+    !state.savedViewActive &&
+    state.tab === id &&
+    (!isProjectTab(id) || !projectViews?.selectedId());
 
   return (
     <ViewSidebar.Nav aria-label={props.label}>
       <For each={props.items}>
         {(item) => (
           <ViewSidebar.Item
-            active={!state.savedViewActive && state.tab === item.id}
-            onClick={() => setTab(item.id)}
+            active={isActive(item.id)}
+            onClick={() => props.onSelect(item.id)}
           >
             <ViewSidebar.Icon>
               <Dynamic component={TAB_ICONS[item.id]} class="size-4" />
@@ -131,13 +120,17 @@ function TaskFavorites(props: {
   return (
     <Show when={favorites().length > 0}>
       <CollapsibleSection.Root
+        sectionId="favorites"
+        sectionLabel="Favorites"
         open={props.open}
         onOpenChange={props.onOpenChange}
       >
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <ViewSidebar.Nav aria-label="Favorite tasks">
             <For each={favorites()}>
@@ -154,30 +147,21 @@ function TaskFavorites(props: {
 
 export function TasksSidebar() {
   const layout = useSplitLayout();
-  const panel = useSplitPanelOrThrow();
-  const {
-    state,
-    setTab,
-    selectedTask,
-    isSidebarSectionOpen,
-    setSidebarSectionOpen,
-  } = useTasksView();
-  const params = useParams<{ projectId?: string }>();
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-    ids: () => TASK_TABS.map((tab) => tab.id),
-    activeId: () => state.tab,
-    setActiveId: (id) => setTab(id as TasksTab),
-    // Tab cycles these tabs over a list and is focus order over an open project
-    // or task. A pane's own override can't hold this: the sidebar remounts after
-    // it whenever the view crosses its layout breakpoint.
-    shouldHandleSequentialKeyEvent: () => !params.projectId && !selectedTask(),
-  });
+  const { state, setTab, isSidebarSectionOpen, setSidebarSectionOpen } =
+    useTasksView();
+  const projectViews = useProjectSavedViews();
+  const selectTab = (id: TasksTab) => {
+    if (isProjectTab(id) && projectViews)
+      projectViews.selectScope(projectScopeForTab(id));
+    else setTab(id);
+  };
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="relative">
+    <ViewSidebar.Root
+      reorderId="tasks"
+      aria-label="Tasks navigation"
+      class="relative"
+    >
       <SidebarCreateHeader
         title="Tasks"
         createAction={
@@ -196,11 +180,22 @@ export function TasksSidebar() {
 
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="tasks" />
-        <TasksNavigation
-          items={BUILT_IN_TASK_TABS}
+        <ViewSidebar.Section
+          id="views"
           label={t('viewMenus.taskViews')}
-        />
+          headerless
+          class="flex min-w-0 flex-col gap-(--sidebar-row-gap)"
+        >
+          <TasksNavigation
+            items={BUILT_IN_TASK_TABS}
+            label={t('viewMenus.taskViews')}
+            onSelect={selectTab}
+          />
+          <TaskSavedViewsList />
+        </ViewSidebar.Section>
         <CollapsibleSection.Root
+          sectionId="projects"
+          sectionLabel={t('viewMenus.projects')}
           open={isSidebarSectionOpen('projects')}
           onOpenChange={(open) => setSidebarSectionOpen('projects', open)}
         >
@@ -222,13 +217,16 @@ export function TasksSidebar() {
             </CollapsibleSection.Action>
           </CollapsibleSection.Header>
           <CollapsibleSection.Content>
-            <TasksNavigation
-              items={PROJECT_TABS}
-              label={t('viewMenus.projectViews')}
-            />
+            <div class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
+              <TasksNavigation
+                items={PROJECT_TABS}
+                label={t('viewMenus.projectViews')}
+                onSelect={selectTab}
+              />
+              <ProjectSavedViewsList />
+            </div>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
-        <TaskSavedViewsList />
 
         <TaskFavorites
           open={isSidebarSectionOpen('favorites')}

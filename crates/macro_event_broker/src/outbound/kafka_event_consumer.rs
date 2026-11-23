@@ -90,6 +90,22 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
     pub fn assignment(&self) -> Result<TopicPartitionList, rootcause::Report> {
         Ok(self.inner.assignment()?)
     }
+
+    /// Each assigned partition's next record to receive, from the client's
+    /// state; see [`KafkaEventConsumer::position`].
+    pub fn position(&self) -> Result<TopicPartitionList, rootcause::Report> {
+        Ok(self.inner.position()?)
+    }
+
+    /// A partition's watermarks as of the client's last fetch from it; see
+    /// [`KafkaEventConsumer::cached_watermarks`].
+    pub fn cached_watermarks(
+        &self,
+        topic: &str,
+        partition: i32,
+    ) -> Result<(i64, i64), rootcause::Report> {
+        Ok(self.inner.cached_watermarks(topic, partition)?)
+    }
 }
 
 impl<T, M: MacroEventCollection> KafkaConsumerAdapter<T, M> {

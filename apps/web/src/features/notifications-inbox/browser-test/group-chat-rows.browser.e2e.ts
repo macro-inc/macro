@@ -54,6 +54,64 @@ for (const size of SIZES) {
         fullPage: true,
       });
     });
+
+    for (const operation of ['done', 'seen', 'undo']) {
+      test(`notification ${operation} preserves its dispatch generation across startup`, async ({
+        page,
+      }) => {
+        await page.route('**/*', (route) => {
+          const url = new URL(route.request().url());
+          if (
+            ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) &&
+            !url.pathname.startsWith('/__macro_dev/')
+          )
+            return route.continue();
+          return route.abort('blockedbyclient');
+        });
+        await page.goto(`${PAGE}?generation=${operation}`);
+        await expect(page.getByTestId('generation-row')).toContainText(
+          '2 notifications',
+          { timeout: 180_000 }
+        );
+        await page.getByRole('button', { name: 'Start mutation' }).click();
+        await expect(page.getByTestId('generation-phase')).toHaveText(
+          'pending'
+        );
+        const dispatched = await page
+          .getByTestId('generation-dispatched')
+          .innerText();
+        expect(dispatched).not.toBe('');
+
+        await page
+          .getByRole('button', { name: 'Learn owner baseline' })
+          .click();
+        await expect(page.getByTestId('generation-baseline')).not.toHaveText(
+          ''
+        );
+        await expect(page.getByTestId('generation-baseline')).not.toHaveText(
+          dispatched
+        );
+        await page.getByRole('button', { name: 'Release response' }).click();
+
+        await expect(page.getByTestId('generation-phase')).toHaveText(
+          'settled'
+        );
+        await expect(page.getByTestId('generation-error')).toHaveText('');
+        await expect(page.getByTestId('generation-written')).toHaveText(
+          dispatched
+        );
+        await expect(page.getByTestId('generation-revision')).toHaveText(
+          'confirmed'
+        );
+        await expect(page.getByTestId('generation-row')).toContainText(
+          operation === 'done' ? '1 notifications' : '2 notifications'
+        );
+        if (operation === 'seen')
+          await expect(page.getByTestId('generation-row')).toContainText(
+            '2 notifications, seen'
+          );
+      });
+    }
   });
 }
 
@@ -67,11 +125,6 @@ test('Team request cards follow current vault visibility and pass their row to t
     const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
     if (loopback && request.method() === 'GET') {
       const responses: Record<string, object> = {
-        '/__macro_dev/gateway/dss/comms/channels': {
-          items: [],
-          next_cursor: null,
-        },
-        '/__macro_dev/gateway/dss/channels/activity': [],
         '/__macro_dev/gateway/email/email/links': { links: [] },
       };
       const response = responses[url.pathname];
