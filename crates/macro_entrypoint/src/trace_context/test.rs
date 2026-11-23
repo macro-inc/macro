@@ -58,6 +58,10 @@ fn malformed_traceparents_are_still_refused() {
         format!("00-{TRACE_ID}-{SPAN_ID}-zz"),
         format!("00-{TRACE_ID}-{SPAN_ID}-0301"),
         format!("00-{TRACE_ID}-{SPAN_ID}-+3"),
+        // The SDK alone reads these as sampled and not sampled.
+        format!("00-{TRACE_ID}-{SPAN_ID}-+1"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-+0"),
+        format!("00-{TRACE_ID}-{SPAN_ID}-0A"),
         format!("00-{TRACE_ID}-{SPAN_ID}-0B"),
         format!("00-00000000000000000000000000000000-{SPAN_ID}-03"),
         format!("00-{TRACE_ID}-0000000000000000-03"),
@@ -85,4 +89,19 @@ fn injection_is_the_stock_propagators() {
         headers.get(TRACEPARENT).map(String::as_str),
         Some(format!("00-{TRACE_ID}-{SPAN_ID}-01").as_str())
     );
+}
+
+#[test]
+fn a_flag_the_sdk_reads_leniently_is_refused() {
+    let traceparent = format!("00-{TRACE_ID}-{SPAN_ID}-+1");
+    let headers = HashMap::from([(TRACEPARENT.to_owned(), traceparent.clone())]);
+    assert!(
+        TraceContextPropagator::new()
+            .extract(&headers)
+            .span()
+            .span_context()
+            .is_sampled(),
+        "the stock propagator takes +1 as sampled"
+    );
+    assert!(!extract(&traceparent).is_valid());
 }

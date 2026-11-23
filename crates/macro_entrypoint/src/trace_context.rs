@@ -48,45 +48,63 @@ impl TextMapPropagator for TraceContextLevel2 {
 /// An extractor whose version-00 `traceparent` keeps only the `sampled` flag.
 struct KnownFlags<'a> {
     inner: &'a dyn Extractor,
-    traceparent: Option<String>,
+    traceparent: Traceparent,
 }
 
 impl<'a> KnownFlags<'a> {
     fn new(inner: &'a dyn Extractor) -> Self {
-        let traceparent = inner.get(TRACEPARENT).and_then(known_flags_only);
+        let traceparent = inner
+            .get(TRACEPARENT)
+            .map_or(Traceparent::AsSent, known_flags_only);
         Self { inner, traceparent }
     }
 }
 
-/// `value` with its flags narrowed to `sampled`, when it is a version-00
-/// `traceparent` carrying other flags; `None` leaves it as it came.
-fn known_flags_only(value: &str) -> Option<String> {
+/// What the SDK is shown of a `traceparent`.
+#[derive(Debug, PartialEq)]
+enum Traceparent {
+    /// The header as it came: absent, not version 00, or with `sampled` at
+    /// most.
+    AsSent,
+    /// A version-00 header with its flags narrowed to `sampled`.
+    Narrowed(String),
+    /// A version-00 header whose flags are not two lowercase hex digits,
+    /// which the SDK would read leniently (`+1` as sampled): none at all.
+    Refused,
+}
+
+/// What to show of a `traceparent` sent as `value`.
+fn known_flags_only(value: &str) -> Traceparent {
     let value = value.trim();
     if value.len() != VERSION_00_LEN || !value.starts_with("00-") {
-        return None;
+        return Traceparent::AsSent;
     }
-    let flags = value.get(FLAGS_AT..)?;
+    let Some((prefix, flags)) = value.split_at_checked(FLAGS_AT) else {
+        return Traceparent::Refused;
+    };
     // Two lowercase hex digits, as the header requires; `from_str_radix`
     // alone would also take `+3`.
     if !flags
         .bytes()
         .all(|digit| matches!(digit, b'0'..=b'9' | b'a'..=b'f'))
     {
-        return None;
+        return Traceparent::Refused;
     }
-    let flags = u8::from_str_radix(flags, 16).ok()?;
-    if flags & !SAMPLED == 0 {
-        return None;
+    match u8::from_str_radix(flags, 16) {
+        Ok(flags) if flags & !SAMPLED == 0 => Traceparent::AsSent,
+        Ok(flags) => Traceparent::Narrowed(format!("{prefix}{:02x}", flags & SAMPLED)),
+        Err(_) => Traceparent::Refused,
     }
-    Some(format!("{}{:02x}", value.get(..FLAGS_AT)?, flags & SAMPLED))
 }
 
 impl Extractor for KnownFlags<'_> {
     fn get(&self, key: &str) -> Option<&str> {
-        if key.eq_ignore_ascii_case(TRACEPARENT)
-            && let Some(traceparent) = &self.traceparent
-        {
-            return Some(traceparent);
+        if key.eq_ignore_ascii_case(TRACEPARENT) {
+            return match &self.traceparent {
+                Traceparent::AsSent => self.inner.get(key),
+                Traceparent::Narrowed(traceparent) => Some(traceparent),
+                Traceparent::Refused => None,
+            };
         }
         self.inner.get(key)
     }
