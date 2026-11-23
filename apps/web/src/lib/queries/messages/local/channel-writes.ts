@@ -1,14 +1,16 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { ThrownResultError } from '@core/util/result';
+import { ThrownResultError, thrownResultErrorHasCode } from '@core/util/result';
 import {
   executeOptimisticMutation,
   type OptimisticResponse,
   optimisticMutationDispositionOf,
 } from '@graphql-cache/exchange/optimistic';
+import type { CacheGenerationChange } from '@graphql-cache/host/types';
 import type { CacheHost } from '@graphql-cache/index';
 import type { MutationSettlement } from '@graphql-cache/protocol';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
+  ChannelMessageDocument,
   type ChannelMessageFieldsFragment,
   type ChannelMessageWriteFieldsFragment,
   DeleteChannelMessageDocument,
@@ -38,11 +40,39 @@ import {
   mapChannelTimelineEntry,
   unplacedSortKey,
 } from './channel-map';
+import { queryChannelNetwork } from './channel-network';
 import type { ChannelPageEntry } from './channel-pages';
 import { readTimelineRecords } from './channel-pages';
 import type { ChannelSyncRuntime } from './channel-sync-runtime';
 
 const WRITE_TYPENAME = 'GraphqlChannelMessageWrite';
+const SEND_OPERATION = 'channel.write.send';
+/** The queue's code for a write it stopped retrying. */
+const RETRY_EXHAUSTED = 'MUTATION_RETRY_EXHAUSTED';
+
+/** Reads one message from the server; null when the server does not have it. */
+export type FetchChannelMessage = (
+  channelId: string,
+  messageId: string
+) => Promise<ChannelMessageFieldsFragment | null>;
+
+const fetchServerMessage: FetchChannelMessage = async (
+  channelId,
+  messageId
+) => {
+  const { data, cached } = await queryChannelNetwork(ChannelMessageDocument, {
+    channelId,
+    messageId,
+  });
+  // The views reread when the write ends, so the device should hold it then;
+  // a copy that could not be stored is still the answer.
+  try {
+    await cached;
+  } catch (error) {
+    Telemetry.error(error, { surface: 'channel-writes' });
+  }
+  return data.user.channelMessage;
+};
 
 /**
  * Writes through the device queue run offline too: the queue holds them until
@@ -124,6 +154,8 @@ export interface ChannelWritesDeps {
   client: () => Pick<Client, 'mutation'>;
   /** The device clock, read once per write. */
   now?: () => Date;
+  /** Reads a message from the server, to learn whether a send arrived. */
+  fetchMessage?: FetchChannelMessage;
 }
 
 /** A reply this page sent, under its thread root. */
@@ -191,25 +223,54 @@ function refusalOf(error: CombinedError): ThrownResultError {
 /**
  * Waits for the queue to settle a transaction, or the one that replaced it.
  * Listening starts before the write is handed over, so a settlement that lands
- * between the queue's answer and the wait is not missed. A storage reset
- * empties the queue: the write is gone and will never settle, so each wait
- * races the reset. A retired host (`retired`, from `ChannelWrites.retire`)
- * reports nothing more, so each wait races that too.
+ * between the queue's answer and the wait is not missed. A retired host
+ * (`retired`, from `ChannelWrites.retire`) reports nothing more, so each wait
+ * races that.
  *
  * A page the browser suspended (the back/forward cache) hears no settlement
- * while away, and another tab can deliver its write meanwhile. When the
- * engine comes back with its storage kept, a wait whose transaction left the
- * queue unheard ends as `missed`: the caller reads the outcome from the device.
+ * while away, and another tab can deliver its write meanwhile. A host that
+ * comes back cannot tell what changed while it was frozen and may report a
+ * reset with its storage intact. So after any generation change, heard
+ * before or during the wait, the queue is asked: a write it still holds keeps
+ * waiting, and one that left it unheard ends as `missed`, whose outcome the
+ * caller reads from the device and then the server. A reset whose queue
+ * cannot be asked loses the write (`CACHE_RESET`).
  */
 function watchSettlements(host: ChannelWriteHost, retired: Lost) {
   const settlements = new Map<string, Deferred.Deferred<MutationSettlement>>();
   const reset: Lost = Deferred.makeUnsafe();
   const missed = Deferred.makeUnsafe<'missed'>();
   let waiting: string | undefined;
-  const checkQueued = async () => {
+  // A generation change heard before the wait had a transaction to check.
+  let unchecked: CacheGenerationChange['storage'] | undefined;
+  const lost = () =>
+    Deferred.doneUnsafe(
+      reset,
+      Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
+    );
+  /**
+   * After the engine comes back, with its storage kept or (as a host that
+   * was suspended conservatively reports) reset, asks the queue: a write it
+   * still holds keeps waiting, and one that left it unheard is `missed`.
+   * Without an answer, a reset loses the write.
+   */
+  const checkQueued = async (storage: CacheGenerationChange['storage']) => {
     const transactionId = waiting;
-    if (!transactionId || !host.inspectMutations) return;
-    const queue = await host.inspectMutations();
+    if (!transactionId) {
+      if (storage === 'reset' || !unchecked) unchecked = storage;
+      return;
+    }
+    let queue: Awaited<
+      ReturnType<NonNullable<ChannelWriteHost['inspectMutations']>>
+    >;
+    try {
+      if (!host.inspectMutations) throw new Error('queue cannot be listed');
+      queue = await host.inspectMutations();
+    } catch (error) {
+      if (storage === 'reset') lost();
+      else Telemetry.error(error, { surface: 'channel-writes' });
+      return;
+    }
     if (waiting !== transactionId) return;
     if (queue.some((entry) => entry.transactionId === transactionId)) return;
     Deferred.doneUnsafe(missed, Effect.succeed('missed' as const));
@@ -229,14 +290,7 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
     );
   });
   const stopReset = host.onCacheGenerationChanged((change) => {
-    if (change.storage === 'preserved') {
-      fireAndForget(checkQueued(), 'channel-writes');
-      return;
-    }
-    Deferred.doneUnsafe(
-      reset,
-      Effect.fail(refusal('CACHE_RESET', 'device cache was reset'))
-    );
+    fireAndForget(checkQueued(change.storage), 'channel-writes');
   });
   const settledOrReset = (transactionId: string) =>
     Effect.raceAllFirst([
@@ -250,6 +304,9 @@ function watchSettlements(host: ChannelWriteHost, retired: Lost) {
   ): Effect.Effect<'committed' | 'missed', ThrownResultError> =>
     Effect.gen(function* () {
       waiting = transactionId;
+      const heard = unchecked;
+      unchecked = undefined;
+      if (heard) fireAndForget(checkQueued(heard), 'channel-writes');
       const settlement = yield* settledOrReset(transactionId);
       if (settlement === 'missed') return settlement;
       if (settlement.status === 'committed') return settlement.status;
@@ -414,19 +471,63 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
   }
 
   /**
-   * A write that left the queue while this page heard nothing: a send the
-   * device holds was delivered, and one it does not hold was rolled back.
-   * Other writes resolve with the device's copy, which the views reread.
+   * The server's copy of a message this page sent; null when the server does
+   * not have it, undefined when it could not say. Reading it stores it on the
+   * device, so the views show it.
+   */
+  async function serverCopy(
+    write: Pick<Write<unknown, AnyVariables>, 'channelId' | 'messageId'>
+  ): Promise<Message | null | undefined> {
+    try {
+      const message = await (deps.fetchMessage ?? fetchServerMessage)(
+        write.channelId,
+        write.messageId
+      );
+      return message && mapChannelMessage(message);
+    } catch (error) {
+      Telemetry.error(error, { surface: 'channel-writes' });
+      return undefined;
+    }
+  }
+
+  /**
+   * A write that left the queue while this page heard nothing. A send is
+   * delivered when the device or the server holds it, and was not sent when
+   * neither does; other writes resolve with the device's copy, which the
+   * views reread.
    */
   async function missedOutcome(
-    write: Pick<Write<unknown, AnyVariables>, 'messageId' | 'operation'>
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation'
+    >
   ): Promise<Message> {
     const message = await readMessage(write.messageId);
     if (message) return mapChannelMessage(message);
+    const send = write.operation === SEND_OPERATION;
+    const delivered = send ? await serverCopy(write) : undefined;
+    if (delivered) return delivered;
     throw refusal(
-      write.operation === 'channel.write.send' ? 'NOT_SENT' : 'NOT_FOUND',
+      send ? 'NOT_SENT' : 'NOT_FOUND',
       'the write left the queue while the page was away'
     );
+  }
+
+  /**
+   * A send the queue gave up on after retrying it may still have reached the
+   * server: a restored draft would go out again under a new id. The server's
+   * copy, when it has one, is the send's answer.
+   */
+  async function deliveredAfterAll(
+    write: Pick<
+      Write<unknown, AnyVariables>,
+      'channelId' | 'messageId' | 'operation'
+    >,
+    error: unknown
+  ): Promise<Message | undefined> {
+    if (write.operation !== SEND_OPERATION) return undefined;
+    if (!thrownResultErrorHasCode(error, RETRY_EXHAUSTED)) return undefined;
+    return (await serverCopy(write)) ?? undefined;
   }
 
   async function queuedWrite<TData, TVariables extends AnyVariables>(
@@ -463,7 +564,14 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       );
       const disposition = optimisticMutationDispositionOf(result);
       if (disposition?.kind === 'queued') {
-        const outcome = await settlements.committed(disposition.transactionId);
+        let outcome: 'committed' | 'missed';
+        try {
+          outcome = await settlements.committed(disposition.transactionId);
+        } catch (error) {
+          const delivered = await deliveredAfterAll(write, error);
+          if (delivered) return delivered;
+          throw error;
+        }
         if (outcome === 'missed') return await missedOutcome(write);
         return await stored(write);
       }
@@ -491,7 +599,7 @@ export function createChannelWrites(deps: ChannelWritesDeps): ChannelWrites {
       const root = rootId && predicted ? await readMessage(rootId) : undefined;
       const entry = predicted && mapChannelTimelineEntry(predicted);
       return queuedWrite({
-        operation: 'channel.write.send',
+        operation: SEND_OPERATION,
         trace,
         channelId: send.channelId,
         messageId: send.id,

@@ -73,9 +73,12 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   const device = fakeHost([], { records });
   // Transactions the queue still holds, as `inspectMutations` lists them.
   const queued: string[] = [];
+  // Set to make the queue unreadable, as an engine that did not come back.
+  const queue = { unreadable: false };
   const host: ChannelWriteHost = {
     readRecordsByKeys: device.readRecordsByKeys,
     async inspectMutations() {
+      if (queue.unreadable) throw new Error('queue unreadable');
       return queued.map(
         (transactionId) =>
           ({ transactionId }) as Awaited<
@@ -97,6 +100,7 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
     device,
     listeners,
     queued,
+    queue,
     /** The engine comes back with its storage kept, as after Back. */
     restore() {
       for (const listener of [...resets])
@@ -112,20 +116,30 @@ export function writeHost(records: ChannelMessageFieldsFragment[] = []) {
   };
 }
 
+/**
+ * Writes over a fake client and device. `server` holds the messages the
+ * server answers a single-message read with; `fetched` lists those reads.
+ */
 export function setup(
   answer: (variables: unknown) => Answer | Promise<Answer>,
-  records: ChannelMessageFieldsFragment[] = []
+  records: ChannelMessageFieldsFragment[] = [],
+  server: ChannelMessageFieldsFragment[] = []
 ) {
   const { client, calls } = fakeClient(answer);
   const device = writeHost(records);
   const runtime = { notifyChanged: vi.fn() };
+  const fetched: string[] = [];
   const writes = createChannelWrites({
     host: device.host,
     runtime,
     client: () => client,
     now: () => NOW,
+    async fetchMessage(_channelId, messageId) {
+      fetched.push(messageId);
+      return server.find((message) => message.id === messageId) ?? null;
+    },
   });
-  return { writes, calls, runtime, ...device };
+  return { writes, calls, runtime, fetched, ...device };
 }
 
 export const written = (

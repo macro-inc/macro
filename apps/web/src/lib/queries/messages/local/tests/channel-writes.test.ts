@@ -225,17 +225,119 @@ describe('createChannelWrites', () => {
     await expect(sending).resolves.toEqual(mapChannelMessage(stored));
   });
 
-  it('rejects a held write when the device cache is reset', async () => {
-    const { writes, reset, listeners } = setup(() => ({
+  it('rejects a held write when the device cache is reset and its queue cannot be read', async () => {
+    const { writes, reset, queue, listeners } = setup(() => ({
       disposition: { kind: 'queued', transactionId: '4' },
     }));
     const sending = writes.send(send(graphqlMessage(7).id));
     await settleMicrotasks();
+    queue.unreadable = true;
     reset();
     const error = await sending.catch((thrown: unknown) => thrown);
     expect(thrownResultErrorHasCode(error, 'CACHE_RESET')).toBe(true);
     expect(listeners.size).toBe(0);
     expect(writes.pendingCount(CHANNEL_ID)).toBe(0);
+  });
+
+  it('rejects a send a reset emptied from the queue that the server never got', async () => {
+    const id = graphqlMessage(7).id;
+    const { writes, reset, fetched } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const sending = writes.send(send(id));
+    await settleMicrotasks();
+    reset();
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'NOT_SENT')).toBe(true);
+    expect(fetched).toEqual([id]);
+  });
+
+  // A host back from the back/forward cache reports a reset without knowing
+  // whether its storage changed while it was frozen.
+  it('keeps waiting for a write the queue still holds after a reported reset', async () => {
+    const stored = graphqlMessage(7);
+    const { writes, queued, reset, settle } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [stored]
+    );
+    queued.push('4');
+    const sending = writes.send(send(stored.id));
+    await settleMicrotasks();
+    reset();
+    await settleMicrotasks();
+    expect(writes.pendingCount(CHANNEL_ID)).toBe(1);
+
+    settle({ transactionId: '4', status: 'committed' });
+    await expect(sending).resolves.toEqual(mapChannelMessage(stored));
+  });
+
+  it('checks the queue after a return heard before the write was handed over', async () => {
+    const stored = graphqlMessage(7);
+    let restoreEarly: () => void = () => undefined;
+    const { writes, restore } = setup(async () => {
+      // The page comes back while the write is being handed over; the queue
+      // has already delivered it from another tab.
+      restoreEarly();
+      return { disposition: { kind: 'queued', transactionId: '4' } };
+    }, [stored]);
+    restoreEarly = restore;
+    await expect(writes.send(send(stored.id))).resolves.toEqual(
+      mapChannelMessage(stored)
+    );
+  });
+
+  it('resolves a send that left the queue unheard from the server copy', async () => {
+    const delivered = graphqlMessage(7);
+    const { writes, queued, restore, fetched } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [],
+      [delivered]
+    );
+    queued.push('4');
+    const sending = writes.send(send(delivered.id));
+    await settleMicrotasks();
+    queued.length = 0;
+    restore();
+    await expect(sending).resolves.toEqual(mapChannelMessage(delivered));
+    expect(fetched).toEqual([delivered.id]);
+  });
+
+  it('answers with the server copy of a send the queue stopped retrying', async () => {
+    const delivered = graphqlMessage(7);
+    const { writes, settle } = setup(
+      () => ({ disposition: { kind: 'queued', transactionId: '4' } }),
+      [],
+      [delivered]
+    );
+    const sending = writes.send(send(delivered.id));
+    await settleMicrotasks();
+    settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    await expect(sending).resolves.toEqual(mapChannelMessage(delivered));
+  });
+
+  it('rejects a send the queue stopped retrying that the server does not have', async () => {
+    const id = graphqlMessage(7).id;
+    const { writes, settle, fetched } = setup(() => ({
+      disposition: { kind: 'queued', transactionId: '4' },
+    }));
+    const sending = writes.send(send(id));
+    await settleMicrotasks();
+    settle({
+      transactionId: '4',
+      status: 'permanently-failed',
+      errorCode: 'MUTATION_RETRY_EXHAUSTED',
+      error: 'stopped after 3 server failures',
+    });
+    const error = await sending.catch((thrown: unknown) => thrown);
+    expect(thrownResultErrorHasCode(error, 'MUTATION_RETRY_EXHAUSTED')).toBe(
+      true
+    );
+    expect(fetched).toEqual([id]);
   });
 
   it('resolves a send another tab delivered while this page was away', async () => {
