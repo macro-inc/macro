@@ -299,11 +299,31 @@ impl ImapConnectionRepository for PgImapConnections {
             .ok_or(ImapConnectionError::Changed)
     }
 
+    async fn lease(
+        &self,
+        attempt: &ImapConnectionAttempt,
+    ) -> Result<ImapConnectionLease, ImapConnectionError> {
+        recovery::lease(self, attempt).await
+    }
+
+    async fn claim_pending(&self) -> Result<Option<ImapConnectionLease>, ImapConnectionError> {
+        recovery::claim_pending(self).await
+    }
+
+    async fn defer(
+        &self,
+        lease: &ImapConnectionLease,
+        delay: chrono::Duration,
+    ) -> Result<(), ImapConnectionError> {
+        recovery::defer(self, lease, delay).await
+    }
+
     #[tracing::instrument(skip_all, name = "email.imap.connection.activate", fields(
-        mailbox.link_id = %attempt.binding.link_id,
+        mailbox.link_id = %lease.attempt.binding.link_id,
         sync.provider_retry_at = tracing::field::Empty,
     ))]
-    async fn activate(&self, attempt: &ImapConnectionAttempt) -> Result<Uuid, ImapConnectionError> {
+    async fn activate(&self, lease: &ImapConnectionLease) -> Result<Uuid, ImapConnectionError> {
+        let attempt = &lease.attempt;
         let mut tx = self.0.begin().await.map_err(failure)?;
         sqlx::query!(
             r#"
@@ -347,11 +367,13 @@ impl ImapConnectionRepository for PgImapConnections {
                 id = $1
                 AND user_id = $2
                 AND link_id = $3
+                AND (completed OR (lease_id = $4 AND lease_until > now()))
             FOR UPDATE
             "#,
             attempt.id,
             attempt.owner.as_ref(),
             attempt.binding.link_id,
+            lease.nonce,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -510,6 +532,8 @@ impl ImapConnectionRepository for PgImapConnections {
                 email_imap_connection_attempts
             SET
                 completed = true,
+                lease_id = NULL,
+                lease_until = NULL,
                 updated_at = now()
             WHERE
                 id = $1
@@ -528,7 +552,8 @@ impl ImapConnectionRepository for PgImapConnections {
         Ok(attempt.binding.link_id)
     }
 
-    async fn abandon(&self, attempt: &ImapConnectionAttempt) -> Result<(), ImapConnectionError> {
+    async fn abandon(&self, lease: &ImapConnectionLease) -> Result<(), ImapConnectionError> {
+        let attempt = &lease.attempt;
         let mut tx = self.0.begin().await.map_err(failure)?;
         sqlx::query!(
             r#"
@@ -538,6 +563,34 @@ impl ImapConnectionRepository for PgImapConnections {
         .execute(&mut *tx)
         .await
         .map_err(failure)?;
+        // Remove the fenced reservation first. A stale worker must never delete
+        // the provisional link owned by a newer lease or a completed promotion.
+        let removed = sqlx::query_scalar!(
+            r#"
+            WITH locked AS MATERIALIZED (
+                SELECT id, completed, lease_id, lease_until
+                FROM email_imap_connection_attempts
+                WHERE id = $1 AND user_id = $2
+                FOR UPDATE
+            )
+            DELETE FROM email_imap_connection_attempts a
+            USING locked
+            WHERE a.id = $1 AND a.id = locked.id
+                AND NOT locked.completed
+                AND locked.lease_id = $3
+                AND locked.lease_until > now()
+            RETURNING a.id
+            "#,
+            attempt.id,
+            attempt.owner.as_ref(),
+            lease.nonce,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(failure)?;
+        if removed.is_none() {
+            return Err(ImapConnectionError::Changed);
+        }
         if attempt.expected_generation.is_none() {
             sqlx::query!(
                 r#"
@@ -556,51 +609,9 @@ impl ImapConnectionRepository for PgImapConnections {
             .await
             .map_err(failure)?;
         }
-        sqlx::query!(
-            r#"
-            DELETE FROM email_imap_connection_attempts
-            WHERE id = $1
-                AND user_id = $2
-                AND NOT completed
-            "#,
-            attempt.id,
-            attempt.owner.as_ref(),
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(failure)?;
         tx.commit().await.map_err(failure)
     }
 
-    async fn pending(&self) -> Result<Vec<ImapConnectionAttempt>, ImapConnectionError> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                id,
-                user_id
-            FROM
-                email_imap_connection_attempts
-            WHERE
-                NOT completed
-            ORDER BY
-                created_at,
-                id
-            LIMIT 100
-            "#,
-        )
-        .fetch_all(&self.0)
-        .await
-        .map_err(failure)?;
-        let mut attempts = Vec::new();
-        for row in rows {
-            let actor = MacroUserIdStr::try_from(row.user_id)
-                .map_err(|_| ImapConnectionError::Unavailable)?;
-            if let Some(attempt) = self.attempt(&actor, row.id).await? {
-                attempts.push(attempt)
-            }
-        }
-        Ok(attempts)
-    }
     async fn owned_address_is_connected(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -690,6 +701,8 @@ impl ImapConnectionEnrollment for ImapEnrollment {
             .unwrap_or(false)
     }
 }
+
+mod recovery;
 
 #[cfg(test)]
 mod test;

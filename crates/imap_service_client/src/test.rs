@@ -144,3 +144,36 @@ async fn provider_retry_delay_uses_the_response_header_or_body_instead_of_a_fixe
         );
     }
 }
+
+#[tokio::test]
+async fn internal_auth_failure_is_transient_without_hiding_engine_forbidden() {
+    let server = MockServer::start().await;
+    let auth_link = Uuid::now_v7();
+    let denied_link = Uuid::now_v7();
+    for (link, status) in [(auth_link, 401), (denied_link, 403)] {
+        Mock::given(method("PUT"))
+            .and(path(format!("/internal/v1/accounts/{link}")))
+            .respond_with(
+                ResponseTemplate::new(status)
+                    .set_body_json(serde_json::json!({"code":"forbidden"})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+    }
+    let client = ImapServiceClient::new(server.uri(), "synthetic-internal-key".into()).unwrap();
+    let input = ConnectRequest {
+        verification_id: Uuid::now_v7(),
+        owner_user_id: "macro|owner@example.net".into(),
+        sync_generation: 1,
+        grant_generation: 1,
+    };
+    assert_eq!(
+        client.connect(auth_link, &input).await,
+        Err(Error::ConnectionUnavailable)
+    );
+    assert_eq!(
+        client.connect(denied_link, &input).await,
+        Err(Error::Forbidden)
+    );
+}

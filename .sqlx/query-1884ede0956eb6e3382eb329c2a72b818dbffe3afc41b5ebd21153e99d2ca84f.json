@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked AS MATERIALIZED (\n                SELECT id, completed, lease_id, lease_until\n                FROM email_imap_connection_attempts\n                WHERE id = $1 AND user_id = $2\n                FOR UPDATE\n            )\n            DELETE FROM email_imap_connection_attempts a\n            USING locked\n            WHERE a.id = $1 AND a.id = locked.id\n                AND NOT locked.completed\n                AND locked.lease_id = $3\n                AND locked.lease_until > now()\n            RETURNING a.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1884ede0956eb6e3382eb329c2a72b818dbffe3afc41b5ebd21153e99d2ca84f"
+}

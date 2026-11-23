@@ -350,6 +350,7 @@ async fn response<T, E: Serialize>(
     match result {
         Ok(value) => Ok(value.into_inner()),
         Err(progenitor_client::Error::ErrorResponse(value)) => {
+            let status = value.status();
             let retry_after = value
                 .headers()
                 .get("retry-after")
@@ -366,9 +367,10 @@ async fn response<T, E: Serialize>(
                 .get("retryAfterSeconds")
                 .and_then(|value| value.as_u64())
                 .and_then(|value| u32::try_from(value).ok());
-            Err(with_retry_delay(code, retry_after.or(body_delay)))
+            Err(response_error(status, code, retry_after.or(body_delay)))
         }
         Err(progenitor_client::Error::UnexpectedResponse(value)) => {
+            let status = value.status();
             let retry_after = value
                 .headers()
                 .get("retry-after")
@@ -378,7 +380,8 @@ async fn response<T, E: Serialize>(
                 .json::<generated::types::ErrorBody>()
                 .await
                 .map_err(|_| Error::ConnectionUnavailable)?;
-            Err(with_retry_delay(
+            Err(response_error(
+                status,
                 body.code,
                 retry_after.or(body
                     .retry_after_seconds
@@ -387,6 +390,20 @@ async fn response<T, E: Serialize>(
         }
         Err(_) => Err(Error::ConnectionUnavailable),
     }
+}
+
+// Authentication runs before the engine sees the attempt. Its refusal cannot
+// prove whether an earlier promotion consumed the verification token.
+fn response_error(status: reqwest::StatusCode, error: Error, retry_after: Option<u32>) -> Error {
+    if status == reqwest::StatusCode::UNAUTHORIZED && error == Error::Forbidden {
+        tracing::warn!(
+            reason = "internal_auth_rejected",
+            status = i64::from(status.as_u16()),
+            "IMAP service authentication failed"
+        );
+        return Error::ConnectionUnavailable;
+    }
+    with_retry_delay(error, retry_after)
 }
 
 // Preserve provider pacing without adding transport metadata to every port.

@@ -86,12 +86,13 @@ async fn promotion_is_inactive_until_activated_replayable_and_cannot_resurrect_d
         .unwrap()
         .is_none()
     );
+    let attempt_lease = repo.lease(&attempt).await.unwrap();
     assert_eq!(
-        repo.activate(&attempt).await.unwrap(),
+        repo.activate(&attempt_lease).await.unwrap(),
         attempt.binding.link_id
     );
     assert_eq!(
-        repo.activate(&attempt).await.unwrap(),
+        repo.activate(&attempt_lease).await.unwrap(),
         attempt.binding.link_id
     );
     let streams = sqlx::query_scalar!(
@@ -155,7 +156,8 @@ async fn reservation_serializes_provider_collisions_and_abandons_only_inactive_p
         .await,
         Err(email::domain::mailbox::initialization::InitializationError::IdentityConflict)
     ));
-    repo.abandon(&attempt).await.unwrap();
+    let lease = repo.lease(&attempt).await.unwrap();
+    repo.abandon(&lease).await.unwrap();
     let exists = sqlx::query_scalar!(
         r#"
         SELECT
@@ -202,7 +204,8 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
         .reserve(&actor, "owner", &input(2), &verification)
         .await
         .unwrap();
-    repo.activate(&first).await.unwrap();
+    let first_lease = repo.lease(&first).await.unwrap();
+    repo.activate(&first_lease).await.unwrap();
     sqlx::query!(
         r#"
         UPDATE
@@ -231,6 +234,24 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
     .execute(&db)
     .await
     .unwrap();
+    // Reconnect must also preserve a wait owned by a folder or its live pass,
+    // rather than only the catalog created by the first activation.
+    sqlx::query!(
+        r#"
+        INSERT INTO email_sync_streams (id, link_id, generation, kind, scope_id, provider_retry_at)
+        VALUES ($1, $2, $3, $4, 'retry-folder', now() + interval '2 hours'),
+               ($5, $2, $3, $6, 'retry-folder', now() + interval '3 hours')
+        "#,
+        macro_uuid::generate_uuid_v7(),
+        first.binding.link_id,
+        first.binding.sync_generation,
+        email::domain::mailbox::live_pass::StreamKind::MailFolder.as_str(),
+        macro_uuid::generate_uuid_v7(),
+        email::domain::mailbox::live_pass::StreamKind::LivePass.as_str(),
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     let floor = sqlx::query_scalar!(
         "SELECT max(provider_retry_at) FROM email_sync_streams WHERE link_id = $1",
         first.binding.link_id,
@@ -244,8 +265,9 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
         .reserve(&actor, "owner", &request, &verification)
         .await
         .unwrap();
+    let attempt_lease = repo.lease(&attempt).await.unwrap();
     assert_eq!(
-        repo.activate(&attempt).await.unwrap(),
+        repo.activate(&attempt_lease).await.unwrap(),
         first.binding.link_id
     );
     let state = sqlx::query!(
@@ -281,3 +303,5 @@ async fn verified_reconnect_clears_old_health_without_replacing_the_link(db: PgP
         "a new password must not reset provider pacing"
     );
 }
+
+mod recovery;

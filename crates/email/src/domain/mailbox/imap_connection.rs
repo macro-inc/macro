@@ -44,6 +44,22 @@ pub struct ImapConnectionAttempt {
     pub completed: bool,
 }
 
+/// A nonce fences one promotion across the interactive and recovery paths.
+#[derive(Clone)]
+pub struct ImapConnectionLease {
+    pub attempt: ImapConnectionAttempt,
+    pub nonce: Uuid,
+    /// Database age at acquisition, used for bounded retry policy.
+    pub age: chrono::Duration,
+}
+
+/// Recovery yields after a full bounded cycle, or waits when no attempt is due.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ConnectionRecoveryTick {
+    Idle,
+    Progress,
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum ImapConnectionError {
     #[error("IMAP connections are not enabled")]
@@ -76,18 +92,30 @@ pub trait ImapConnectionRepository: Send + Sync + 'static {
         input: &ImapConnectRequest,
         verification: &Verification,
     ) -> impl Future<Output = Result<ImapConnectionAttempt, ImapConnectionError>> + Send;
+    /// Interactive retries acquire the same lease as background recovery.
+    fn lease(
+        &self,
+        attempt: &ImapConnectionAttempt,
+    ) -> impl Future<Output = Result<ImapConnectionLease, ImapConnectionError>> + Send;
+    /// Claim only one due attempt; no connection survives this call.
+    fn claim_pending(
+        &self,
+    ) -> impl Future<Output = Result<Option<ImapConnectionLease>, ImapConnectionError>> + Send;
+    /// Schedule a failed attempt and release its nonce under the live lease fence.
+    fn defer(
+        &self,
+        lease: &ImapConnectionLease,
+        delay: chrono::Duration,
+    ) -> impl Future<Output = Result<(), ImapConnectionError>> + Send;
     /// Link identity, binding, import stream and completion receipt commit together.
     fn activate(
         &self,
-        attempt: &ImapConnectionAttempt,
+        lease: &ImapConnectionLease,
     ) -> impl Future<Output = Result<Uuid, ImapConnectionError>> + Send;
     fn abandon(
         &self,
-        attempt: &ImapConnectionAttempt,
+        lease: &ImapConnectionLease,
     ) -> impl Future<Output = Result<(), ImapConnectionError>> + Send;
-    fn pending(
-        &self,
-    ) -> impl Future<Output = Result<Vec<ImapConnectionAttempt>, ImapConnectionError>> + Send;
     fn owned_address_is_connected(
         &self,
         actor: &MacroUserIdStr<'_>,
@@ -231,12 +259,27 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
                     .await?
             }
         };
-        self.promote(&attempt).await
-    }
-    async fn promote(&self, attempt: &ImapConnectionAttempt) -> Result<Uuid, ImapConnectionError> {
         if attempt.completed {
             return Ok(attempt.binding.link_id);
         }
+        let lease = match self.repository.lease(&attempt).await {
+            Ok(lease) => lease,
+            Err(ImapConnectionError::Changed) => {
+                // A worker may finish or hold this attempt after our first read.
+                // Return its durable receipt, or a retryable contention outcome;
+                // neither case permits another credential probe or promotion.
+                return match self.repository.attempt(&actor, input.request_id).await? {
+                    Some(current) if current.completed => Ok(current.binding.link_id),
+                    Some(_) => Err(imap_engine::domain::models::Error::AccountBusy.into()),
+                    None => Err(ImapConnectionError::Changed),
+                };
+            }
+            Err(error) => return Err(error),
+        };
+        self.finish_promotion(&lease).await
+    }
+    async fn promote(&self, lease: &ImapConnectionLease) -> Result<Uuid, ImapConnectionError> {
+        let attempt = &lease.attempt;
         let bound = self
             .gateway
             .connect(
@@ -255,23 +298,65 @@ impl<R: ImapConnectionRepository, G: ImapConnectionGateway, F: ImapConnectionEnr
         {
             return Err(ImapConnectionError::Changed);
         }
-        self.repository.activate(attempt).await
+        self.repository.activate(lease).await
     }
     /// A crash after engine promotion resumes the same binding, never a new login.
-    pub async fn recover_once(&self) -> Result<(), ImapConnectionError> {
-        for attempt in self.repository.pending().await? {
-            if let Err(error) = self.promote(&attempt).await {
-                if matches!(
-                    error,
-                    ImapConnectionError::Provider(imap_engine::domain::models::Error::NotFound)
-                        | ImapConnectionError::Changed
-                ) {
-                    self.repository.abandon(&attempt).await?;
-                }
-                tracing::warn!(request_id=%attempt.id,error=%error,"IMAP connection promotion deferred");
+    pub async fn recover_once(&self) -> Result<ConnectionRecoveryTick, ImapConnectionError> {
+        for _ in 0..32 {
+            let Some(lease) = self.repository.claim_pending().await? else {
+                return Ok(ConnectionRecoveryTick::Idle);
+            };
+            // An individual provider failure is settled and never stops the cycle.
+            if let Err(error) = self.finish_promotion(&lease).await {
+                tracing::warn!(request_id = %lease.attempt.id, error = %error,
+                    "IMAP connection recovery attempt did not complete");
             }
         }
-        Ok(())
+        Ok(ConnectionRecoveryTick::Progress)
+    }
+
+    #[tracing::instrument(skip_all, name = "email.imap.connection.promote", fields(
+        connection.request_id = %lease.attempt.id,
+        connection.expired = tracing::field::Empty,
+    ), err)]
+    async fn finish_promotion(
+        &self,
+        lease: &ImapConnectionLease,
+    ) -> Result<Uuid, ImapConnectionError> {
+        if lease.attempt.completed {
+            return Ok(lease.attempt.binding.link_id);
+        }
+        let expired = lease.age >= chrono::Duration::hours(24);
+        tracing::Span::current().record("connection.expired", expired);
+        if expired {
+            self.repository.abandon(lease).await?;
+            tracing::warn!(
+                reason = "attempt_age_limit",
+                "IMAP connection attempt expired"
+            );
+            return Err(ImapConnectionError::Changed);
+        }
+        let result = self.promote(lease).await;
+        if let Err(error) = &result {
+            use imap_engine::domain::models::Error;
+            if matches!(
+                error,
+                ImapConnectionError::Changed
+                    | ImapConnectionError::Provider(
+                        Error::NotFound
+                            | Error::Invalid
+                            | Error::Forbidden
+                            | Error::CredentialsRejected
+                    )
+            ) {
+                self.repository.abandon(lease).await?;
+            } else {
+                let delay = (lease.age / 4)
+                    .clamp(chrono::Duration::minutes(1), chrono::Duration::minutes(30));
+                self.repository.defer(lease, delay).await?;
+            }
+        }
+        result
     }
 }
 

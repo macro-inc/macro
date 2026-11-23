@@ -119,6 +119,10 @@ Incoming and outgoing passwords use the shared masked secret input. Reconnect
 starts with empty secret fields; revealing a field shows only newly typed text.
 Turning off a separate outgoing password forgets that typed value. App-password
 fields disable browser autocomplete, and the credential form excludes analytics capture.
+Retry an interrupted connection with its original request id: an in-progress
+promotion remains retryable, and a completed promotion returns the same inbox
+without probing credentials again. Check that an unrelated healthy attempt can
+complete while an older attempt is deferred.
 During verification, **Connect inbox** stays in place with a loading indicator.
 Check idle, checking, refusal and retry on desktop and phone: the action keeps
 its width and position, and error copy wraps without being clipped.

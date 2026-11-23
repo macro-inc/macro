@@ -40,3 +40,16 @@ migration pass on the revised source. Fresh owned scratch databases provide
 full migration proof. Any separately authorized scoped schema adaptation of
 the preserved preview must be recorded as local-only, not a successful full
 SQLx migration or a production rollout rehearsal.
+
+## Connection recovery leases
+
+Migration 20261119060030 remains unchanged. Forward migration 20261123181252
+adds nullable lease fields and the stable two-minute recovery default; 181253
+and 181254 create the due index before dropping the old pending index, both
+concurrently in separate files.
+If the new build is interrupted, inspect and drop only its INVALID index before
+retrying. Existing completed receipts and pending attempts are preserved.
+A promotion that loses its lease must not bypass the nonce fence: allow recovery
+to reclaim it and replay the same verification, rather than create a new attempt.
+Earlier preview incompatibilities listed above remain separate from this additive
+upgrade; do not reset the kept preview or change its migration ledger.

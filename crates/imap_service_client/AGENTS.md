@@ -43,3 +43,9 @@ Preserve a provider Retry-After header (preferred) or retryAfterSeconds body
 hint in the typed RateLimited client error; keep local AccountBusy distinct.
 The HTTP edge canonicalizes that hint-bearing error to the legacy throttled
 code, so older callers still understand the failure category.
+
+Treat HTTP 401 with code `forbidden` as an internal authentication failure,
+warn with `internal_auth_rejected`, and return ConnectionUnavailable: the engine
+has not inspected the attempt. Preserve engine HTTP 403 Forbidden and HTTP 401
+CredentialsRejected so recovery can distinguish proven refusals from an
+unavailable authentication boundary.

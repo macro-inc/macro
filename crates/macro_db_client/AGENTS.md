@@ -58,6 +58,11 @@ foreign key: the contacts worker removes them on account deletion.
 Per-list paging uses partial indexes for the literal list key; migration
 `20261123181250` adds the IMAP member-page index before the contacts route uses it.
 
+Keep `email_imap_connection_attempts` lease fields nullable for older writers and
+its due index identical to the effective-deadline claim expression. Migrations
+20261123181252–181254 add the lease fields and concurrently replace the index;
+preserve the original 20261119060030 checksum for databases that applied it.
+
 ## Boundaries
 
 - Depends on: `entity_access_db_utils`, `entity_registry_db_utils`,
@@ -291,3 +296,5 @@ provider derivation active for old inserts and rollback. See the
 [routing runbook](../../docs/runbooks/email-provider-routing.md) for removed
 undeployed migrations and the preserved local preview's scoped adaptation;
 never edit its migration ledger to hide incompatibility.
+
+Migration 20261123181251 builds the IMAP-only non-null provider-retry index concurrently for reconnect’s maximum-wait lookup. Inspect and drop an interrupted INVALID index before retrying; old binaries and the original query remain compatible.

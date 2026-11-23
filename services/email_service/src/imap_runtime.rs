@@ -11,22 +11,27 @@ pub async fn recover<R, G, F>(
     G: email::domain::mailbox::imap_connection::ImapConnectionGateway,
     F: email::domain::mailbox::imap_connection::ImapConnectionEnrollment,
 {
-    let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    use email::domain::mailbox::imap_connection::ConnectionRecoveryTick;
     loop {
-        tokio::select! {
+        let result = tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            _ = interval.tick() => {},
+            result = service.recover_once() => result,
+        };
+        match result {
+            Ok(ConnectionRecoveryTick::Progress) => {
+                // After 32 settled attempts, let other tasks and cancellation run
+                // before another bounded cycle; no database connection is held here.
+                tokio::task::yield_now().await;
+                continue;
+            }
+            Ok(ConnectionRecoveryTick::Idle) => {}
+            Err(error) => tracing::warn!(error = %error, "IMAP connection recovery deferred"),
         }
         tokio::select! {
             biased;
             _ = cancellation.cancelled() => return,
-            result = service.recover_once() => {
-                if let Err(error) = result {
-                    tracing::warn!(error = %error, "IMAP connection recovery deferred");
-                }
-            },
+            _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {},
         }
     }
 }

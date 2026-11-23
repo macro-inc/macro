@@ -16,6 +16,13 @@ struct State {
     promotions: u32,
     activations: u32,
     fail_next_promotion: bool,
+    promotion_error: Option<Error>,
+    pending: Vec<ImapConnectionAttempt>,
+    deferred: Vec<chrono::Duration>,
+    recovery_age: Option<chrono::Duration>,
+    successful_link: Option<Uuid>,
+    lease_held: bool,
+    complete_during_lease: bool,
 }
 impl ImapConnectionEnrollment for Fake {
     async fn enabled(&self, _: &MacroUserIdStr<'_>) -> bool {
@@ -65,6 +72,11 @@ impl ImapConnectionGateway for Fake {
     ) -> Result<Binding, ImapConnectionError> {
         let mut state = self.0.lock().unwrap();
         state.promotions += 1;
+        if let Some(error) = &state.promotion_error
+            && state.successful_link != Some(link)
+        {
+            return Err(error.clone().into());
+        }
         if state.fail_next_promotion {
             state.fail_next_promotion = false;
             return Err(Error::ConnectionUnavailable.into());
@@ -114,24 +126,54 @@ impl ImapConnectionRepository for Fake {
         self.0.lock().unwrap().attempt = Some(attempt.clone());
         Ok(attempt)
     }
-    async fn activate(&self, attempt: &ImapConnectionAttempt) -> Result<Uuid, ImapConnectionError> {
+    async fn activate(&self, lease: &ImapConnectionLease) -> Result<Uuid, ImapConnectionError> {
+        let attempt = &lease.attempt;
         let mut state = self.0.lock().unwrap();
         state.activations += 1;
         state.attempt.as_mut().unwrap().completed = true;
         Ok(attempt.binding.link_id)
     }
-    async fn pending(&self) -> Result<Vec<ImapConnectionAttempt>, ImapConnectionError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .attempt
-            .iter()
-            .filter(|attempt| !attempt.completed)
-            .cloned()
-            .collect())
+    async fn lease(
+        &self,
+        attempt: &ImapConnectionAttempt,
+    ) -> Result<ImapConnectionLease, ImapConnectionError> {
+        let mut state = self.0.lock().unwrap();
+        if state.complete_during_lease {
+            state.attempt.as_mut().unwrap().completed = true;
+        }
+        if state.lease_held {
+            return Err(ImapConnectionError::Changed);
+        }
+        Ok(ImapConnectionLease {
+            attempt: attempt.clone(),
+            nonce: Uuid::from_u128(99),
+            age: state.recovery_age.unwrap_or(chrono::Duration::zero()),
+        })
     }
-    async fn abandon(&self, _: &ImapConnectionAttempt) -> Result<(), ImapConnectionError> {
+    async fn claim_pending(&self) -> Result<Option<ImapConnectionLease>, ImapConnectionError> {
+        let mut state = self.0.lock().unwrap();
+        let attempt = if !state.pending.is_empty() {
+            Some(state.pending.remove(0))
+        } else if state.deferred.is_empty() {
+            state.attempt.clone().filter(|attempt| !attempt.completed)
+        } else {
+            None
+        };
+        Ok(attempt.map(|attempt| ImapConnectionLease {
+            attempt,
+            nonce: Uuid::from_u128(99),
+            age: state.recovery_age.unwrap_or(chrono::Duration::minutes(2)),
+        }))
+    }
+    async fn defer(
+        &self,
+        _: &ImapConnectionLease,
+        delay: chrono::Duration,
+    ) -> Result<(), ImapConnectionError> {
+        self.0.lock().unwrap().deferred.push(delay);
+        Ok(())
+    }
+    async fn abandon(&self, _: &ImapConnectionLease) -> Result<(), ImapConnectionError> {
         self.0.lock().unwrap().attempt = None;
         Ok(())
     }
@@ -224,6 +266,7 @@ async fn interrupted_promotion_recovers_the_same_verified_binding_and_completed_
             .await,
         Err(ImapConnectionError::Provider(Error::ConnectionUnavailable))
     ));
+    fake.0.lock().unwrap().deferred.clear();
     service.recover_once().await.unwrap();
     assert_eq!(
         service
@@ -336,4 +379,203 @@ async fn passive_suggestions_use_mx_hints_without_address_bearing_discovery() {
         assert!(state.discoveries.is_empty());
         assert_eq!(state.verifies, 0);
     }
+}
+
+#[tokio::test]
+async fn recovery_yields_after_bounded_work_even_when_old_attempts_keep_failing() {
+    let fake = Fake::default();
+    let input = request("owner@example.com");
+    let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+    let verification = Verification {
+        id: Uuid::from_u128(2),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    let attempt = fake
+        .reserve(&actor, "owner", &input, &verification)
+        .await
+        .unwrap();
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.promotion_error = Some(Error::ConnectionUnavailable);
+        state.pending = (1..=100)
+            .map(|id| ImapConnectionAttempt {
+                id: Uuid::from_u128(id),
+                ..attempt.clone()
+            })
+            .collect();
+    }
+    let service = ImapConnectionService {
+        repository: fake.clone(),
+        gateway: fake.clone(),
+        enrollment: fake.clone(),
+    };
+    service.recover_once().await.unwrap();
+    assert_eq!(fake.0.lock().unwrap().promotions, 32);
+}
+
+#[tokio::test]
+async fn proven_invalid_promotion_is_abandoned_instead_of_poisoning_recovery() {
+    let fake = Fake::default();
+    let input = request("owner@example.com");
+    let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+    let verification = Verification {
+        id: Uuid::from_u128(2),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    fake.reserve(&actor, "owner", &input, &verification)
+        .await
+        .unwrap();
+    fake.0.lock().unwrap().promotion_error = Some(Error::Invalid);
+    let service = ImapConnectionService {
+        repository: fake.clone(),
+        gateway: fake.clone(),
+        enrollment: fake.clone(),
+    };
+    service.recover_once().await.unwrap();
+    assert!(fake.0.lock().unwrap().attempt.is_none());
+}
+
+#[tokio::test]
+async fn unproven_auth_failure_defers_with_age_then_expires_at_the_cap() {
+    for (age, delay) in [(2, 1), (40, 10), (180, 30), (1_440, 0)] {
+        let fake = Fake::default();
+        let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+        let verification = Verification {
+            id: Uuid::from_u128(2),
+            expires_at: chrono::Utc::now() - chrono::Duration::minutes(1),
+        };
+        fake.reserve(
+            &actor,
+            "owner",
+            &request("owner@example.com"),
+            &verification,
+        )
+        .await
+        .unwrap();
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.recovery_age = Some(chrono::Duration::minutes(age));
+            // HTTP auth rejection is normalized by the client before the gateway.
+            // The token may already have been consumed; expiry alone proves nothing.
+            state.promotion_error = Some(Error::ConnectionUnavailable);
+        }
+        let service = ImapConnectionService {
+            repository: fake.clone(),
+            gateway: fake.clone(),
+            enrollment: fake.clone(),
+        };
+        service.recover_once().await.unwrap();
+        let state = fake.0.lock().unwrap();
+        if delay == 0 {
+            assert!(state.attempt.is_none());
+            assert_eq!(state.promotions, 0);
+        } else {
+            assert!(state.attempt.is_some());
+            assert_eq!(state.deferred, [chrono::Duration::minutes(delay)]);
+            assert_eq!(state.promotions, 1);
+        }
+    }
+}
+
+#[tokio::test]
+async fn one_hundred_deferred_attempts_do_not_hide_a_healthy_promotion() {
+    let fake = Fake::default();
+    let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+    let verification = Verification {
+        id: Uuid::from_u128(2),
+        expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+    };
+    let attempt = fake
+        .reserve(
+            &actor,
+            "owner",
+            &request("owner@example.com"),
+            &verification,
+        )
+        .await
+        .unwrap();
+    {
+        let mut state = fake.0.lock().unwrap();
+        state.promotion_error = Some(Error::ConnectionUnavailable);
+        state.successful_link = Some(Uuid::from_u128(101));
+        state.pending = (1..=101)
+            .map(|id| ImapConnectionAttempt {
+                id: Uuid::from_u128(id),
+                binding: Binding {
+                    link_id: Uuid::from_u128(id),
+                    ..attempt.binding
+                },
+                ..attempt.clone()
+            })
+            .collect();
+    }
+    let service = ImapConnectionService {
+        repository: fake.clone(),
+        gateway: fake.clone(),
+        enrollment: fake.clone(),
+    };
+    for _ in 0..3 {
+        assert_eq!(
+            service.recover_once().await.unwrap(),
+            ConnectionRecoveryTick::Progress
+        );
+    }
+    assert_eq!(
+        service.recover_once().await.unwrap(),
+        ConnectionRecoveryTick::Idle
+    );
+    let state = fake.0.lock().unwrap();
+    assert_eq!(state.promotions, 101);
+    assert_eq!(state.deferred.len(), 100);
+    assert_eq!(state.activations, 1);
+}
+
+#[tokio::test]
+async fn lease_contention_is_retryable_and_a_concurrent_completion_returns_its_receipt() {
+    let mut outcomes = Vec::new();
+    for completed in [true, false] {
+        let fake = Fake::default();
+        let actor = MacroUserIdStr::try_from("macro|owner@example.com").unwrap();
+        let verification = Verification {
+            id: Uuid::from_u128(2),
+            expires_at: chrono::Utc::now() + chrono::Duration::minutes(15),
+        };
+        let attempt = fake
+            .reserve(
+                &actor,
+                "owner",
+                &request("owner@example.com"),
+                &verification,
+            )
+            .await
+            .unwrap();
+        {
+            let mut state = fake.0.lock().unwrap();
+            state.enabled = true;
+            state.lease_held = true;
+            // The repository read returns an incomplete receipt; completion
+            // races its later conditional lease UPDATE, with no wall-clock wait.
+            state.complete_during_lease = completed;
+        }
+        let service = ImapConnectionService {
+            repository: fake.clone(),
+            gateway: fake.clone(),
+            enrollment: fake.clone(),
+        };
+        let result = service
+            .connect(actor, "owner", request("owner@example.com"))
+            .await;
+        outcomes.push((
+            matches!(&result, Ok(id) if *id == attempt.binding.link_id),
+            matches!(
+                &result,
+                Err(ImapConnectionError::Provider(Error::AccountBusy))
+            ),
+        ));
+        let state = fake.0.lock().unwrap();
+        assert_eq!(state.verifies, 0);
+        assert_eq!(state.promotions, 0);
+        assert!(state.attempt.is_some());
+    }
+    assert_eq!(outcomes, [(true, false), (false, true)]);
 }

@@ -12,7 +12,9 @@ the gateway `/email` prefix.
   `/email/links`; `outbound/imap_connection.rs` stores retry-safe promotion
   attempts. `outbound/email_api/imap.rs` implements the existing mailbox,
   command, attachment and draft ports through the internal engine client.
-  `imap_runtime.rs` resumes interrupted credential-free connection promotions.
+  `imap_runtime.rs` schedules bounded interrupted credential-free promotions;
+  `outbound/imap_connection/recovery.rs` commits each nonce claim before RPC.
+  Keep activate/abandon/defer fenced, with no pooled connection across engine IO.
   Established IMAP work has no service-wide rollout polling.
   Only a typed engine `SendUnavailable` proves no message-body byte was submitted and
   terminates the draft as failed. Keep generic 503/timeouts uncertain; never
@@ -486,3 +488,5 @@ lease serializes bounded pages and preserves their cursor across restarts. See
 IMAP activation carries the last generation's persisted future provider floor
 into its new catalog stream. Resync returns that deadline to Mail settings;
 credential changes do not bypass provider pacing.
+
+IMAP reconnect preserves the maximum provider wait across all its stream kinds. The IMAP-only non-null retry index supports that lookup without changing its SQL predicates.

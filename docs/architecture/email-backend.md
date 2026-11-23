@@ -99,9 +99,30 @@ verified sign-in address. Logging in to an arbitrary mail server does not prove
 control of an email address. Verification and host confirmation run in the
 internal engine; the public API derives the owner from authentication. A durable
 request-id reservation owns an inactive provisional link before engine promotion.
-The engine binding, link activation and initial catalog are replayed after an
-interruption; no passwords are retained in the email service. Completed request
-receipts cannot recreate a disconnected inbox. Gmail, Outlook and IMAP
+Interactive requests and recovery share a five-minute per-attempt nonce lease.
+Recovery locks one due attempt at a time through the indexed effective deadline,
+commits before the bounded engine RPC, and handles at most 32 attempts per cycle.
+A fresh reservation stays out of recovery for two minutes. Activation,
+abandonment and deferral require the live nonce; completed receipts remain
+replayable without probing credentials or recreating a disconnected inbox.
+Completed receipts live with their owning user for replay; they map to infinite
+eligibility and stay outside the finite-deadline recovery index.
+A lease miss is re-read: completed returns the receipt, in-flight is retryable.
+
+Transient failures defer by one quarter of the attempt's database age, clamped
+to one through 30 minutes. Proven invalid, forbidden, missing or changed engine
+attempts and credential rejection are terminal. Engine verification expiry
+rejects an unconsumed token while preserving consumed-token replay. An HTTP
+401 from internal authentication proves nothing about consumption: the client
+logs an auth failure distinctly and recovery defers it. Attempts still unresolved
+after 24 hours expire with a warning and an explicit span field. Each failure
+is settled independently, so an old poisoned prefix cannot hide healthy work.
+The reconnect retry-floor lookup keeps its original maximum over all IMAP streams.
+A partial `(link_id, generation, provider_retry_at)` index includes only IMAP
+rows with a retry time. The original query narrows through this index to
+the link, generation and future-wait range rather than scanning the stream
+table.
+No passwords or database connections are retained across engine IO. Gmail, Outlook and IMAP
 initialization serialize address collisions through the same advisory lock.
 
 `enable-imap-connections` is the single user-scoped IMAP enrollment flag for
