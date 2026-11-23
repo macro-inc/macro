@@ -1,19 +1,13 @@
-import {
-  CollectionPanes,
-  useViewTabHotkeys,
-  ViewShell,
-} from '@app/components/view-shell';
+import { CollectionPanes, ViewShell } from '@app/components/view-shell';
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { createMemo, type JSX, Show, Suspense } from 'solid-js';
 import { DriveFileDropzone } from '../components/drive-file-dropzone';
 import { useDriveView } from '../context/drive-context';
 import { driveLocationBreadcrumbs } from '../core/breadcrumbs';
-import { DRIVE_TABS } from '../core/types';
 import { useDriveDetailNavigation } from '../drive-detail-navigation';
 import { DriveBreadcrumbs } from './drive-breadcrumbs';
 import {
@@ -58,23 +52,6 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
       ? driveLocationBreadcrumbs(state.value().location, sidebar.folders())
       : []
   );
-
-  const panel = useSplitPanelOrThrow();
-
-  useViewTabHotkeys({
-    scopeId: panel.splitHotkeyScope,
-    enabled: panel.isPanelActive,
-
-    ids: () => DRIVE_TABS.map((tab) => tab.id),
-
-    activeId: () => {
-      const location = state.value().location;
-
-      return location.kind === 'tab' ? location.tab : 'owned';
-    },
-
-    setActiveId: state.selectTab,
-  });
 
   return (
     <DriveBreadcrumbs entries={breadcrumbs()}>

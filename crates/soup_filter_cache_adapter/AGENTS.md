@@ -75,6 +75,9 @@ understand. Runs both natively (Tauri) and compiled to wasm (web).
   `Document::parse`: one cache write passes the same text through the
   projection, notification, mail and property passes, and parsing a 20 KB Soup
   operation for each cost more than the write.
+- Hosts pass one `WriteResponse` to the notification, Mail and property passes
+  (`*_for`, `*_for_response`, `augment_authoritative_response`) so a write
+  normalizes its response once; normalizing a Soup page costs milliseconds.
 
 - This crate must stay wasm-compatible — no `sqlx`, no native-only crates in
   default features; native-only test fixtures live under

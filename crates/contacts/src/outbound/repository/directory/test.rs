@@ -2,6 +2,7 @@ use super::*;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 
+mod people_named;
 mod people_search;
 mod plans;
 

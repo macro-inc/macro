@@ -3,6 +3,7 @@
 //! side-effect free.
 
 use chrono::{DateTime, Utc};
+use connectors::{ConnectorId, InvalidConnectorId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -72,34 +73,16 @@ impl ImportSource {
         ]
     }
 
-    /// The Pipedream app slugs backing this source's connector, in preference order.
-    pub fn pipedream_app_slugs(self) -> &'static [&'static str] {
-        match self {
-            ImportSource::Linear => &["linear"],
-            ImportSource::Jira => &["jira"],
-            ImportSource::Notion => &["notion"],
-            // Keep the canonical fallback from docs/runbooks/slack-live-channel-import.md
-            // until live verification supports switching to `slack_v2`.
-            ImportSource::Slack => &["slack", "slack_v2"],
-        }
-    }
-
-    /// This source's connector on both MCP stacks.
-    pub fn connector_ref(self) -> mcp_select::ConnectorRef<'static> {
-        mcp_select::ConnectorRef {
-            pipedream_app_slugs: self.pipedream_app_slugs(),
-            native_server_url: self.mcp_server_url(),
-        }
-    }
-
-    /// The MCP server URL backing this source's connector.
-    pub fn mcp_server_url(self) -> &'static str {
-        match self {
-            ImportSource::Linear => "https://mcp.linear.app/mcp",
-            ImportSource::Jira => "https://mcp.atlassian.com/v1/mcp",
-            ImportSource::Notion => "https://mcp.notion.com/mcp",
-            ImportSource::Slack => "https://mcp.slack.com/mcp",
-        }
+    /// This source's app in the connectors catalog. Slack's `slack_v2` is
+    /// the same app; the connectors services decide which connection
+    /// counts.
+    pub fn connector(self) -> Result<ConnectorId, InvalidConnectorId> {
+        ConnectorId::parse(match self {
+            ImportSource::Linear => "linear",
+            ImportSource::Jira => "jira",
+            ImportSource::Notion => "notion",
+            ImportSource::Slack => "slack",
+        })
     }
 
     /// The kind of item this source's current import paths stage: Linear

@@ -3,7 +3,7 @@ import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Resize } from '@core/component/Resize';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
@@ -13,6 +13,7 @@ import type { BlockOrchestrator } from '@core/orchestrator';
 import { EntityProvider } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
@@ -83,7 +84,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <CallProvider>
                     <QuickAccessProvider>
                       <GlobalAppStateProvider
@@ -199,7 +202,7 @@ function Fixture() {
                       </GlobalAppStateProvider>
                     </QuickAccessProvider>
                   </CallProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>

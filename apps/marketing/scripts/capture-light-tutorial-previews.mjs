@@ -17,7 +17,7 @@ const previews = {
   agents: { initialView: 'messages', agentShowcase: true },
   calls: { initialView: 'messages', demoTitle: 'Launch team', component: ['calls/CallStories.tsx', 'CallDefaultDemo'] },
   github: { initialView: 'tasks', demoTitle: 'Pull request', component: ['reviews/GithubWorkflow.tsx', 'GithubPrHero'] },
-  scheduling: { initialView: 'calendar', demoTitle: 'Booking links', component: ['BookingLinkStories.tsx', 'BookingLinkStories'] },
+  scheduling: { initialView: 'calendar' },
 };
 const browser = await chromium.launch({ headless: true });
 try {
@@ -51,9 +51,6 @@ try {
       .tutorial-capture .dummy-workspace[data-embedded=true] { height:692px;border:0;border-radius:0;box-shadow:none }
       .tutorial-capture .dummy-banner { display:none }
       .tutorial-capture .call-flow,.tutorial-capture .call-flow-frame,.tutorial-capture .product-demo-stage,.tutorial-capture .product-demo { height:100%;max-height:none;flex:1;margin:0;transform:none;border-radius:0;mask-image:none }
-      .tutorial-capture .booking-link-stories { padding:24px }
-      .tutorial-capture .booking-link-stories .feature-page-section:not(:first-child),.tutorial-capture .booking-link-stories header,.tutorial-capture .feature-demo-backdrop,.tutorial-capture .feature-demo-context { display:none }
-      .tutorial-capture .booking-link-stories .feature-page-section,.tutorial-capture .feature-demo-art { margin:0;padding:0 }
       .tutorial-capture .feature-demo-primary { width:100%;transform:none }
     ` });
     await page.evaluate(() => document.fonts.ready);

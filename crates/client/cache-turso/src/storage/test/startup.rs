@@ -62,6 +62,17 @@ fn schema_11_cache_is_replaced_without_migrating_pending_writes() {
 }
 
 #[test]
+fn native_file_storage_keeps_temporary_tables_in_memory() {
+    let directory = tempfile::tempdir().unwrap();
+    let database = TursoFileDatabase::new(directory.path().join("cache.turso")).unwrap();
+    for _ in 0..2 {
+        let storage = database.open("scope").unwrap();
+        assert_eq!(storage.connection.get_temp_store(), TempStore::Memory);
+        storage.try_close().unwrap();
+    }
+}
+
+#[test]
 fn reopen_skips_full_integrity_scan_and_preserves_pending_writes() {
     block_on(async {
         let database = TursoMemoryDatabase::new("startup-without-full-scan.db");

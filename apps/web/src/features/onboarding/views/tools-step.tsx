@@ -1,4 +1,3 @@
-import { canonicalPipedreamSlug } from '@core/pipedream/slugs';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
@@ -24,8 +23,8 @@ export function ToolsStep(props: { onContinue: () => void }) {
   const [pending, setPending] = createSignal(readPendingConnectors());
   createEffect(() => savePendingConnectors(pending()));
   createEffect(() => {
-    const landed = [...pending()].filter((slug) =>
-      ['connected', 'account-linked'].includes(connected.state(slug))
+    const landed = [...pending()].filter(
+      (slug) => connected.state(slug) === 'connected'
     );
     if (landed.length === 0) return;
     for (const slug of landed)
@@ -40,7 +39,7 @@ export function ToolsStep(props: { onContinue: () => void }) {
     )
       return;
     setBusy(tool.slug);
-    setPending((set) => new Set(set).add(canonicalPipedreamSlug(tool.slug)));
+    setPending((set) => new Set(set).add(tool.slug));
     try {
       await context.connectTool(tool);
     } finally {
@@ -93,11 +92,11 @@ export function ToolsStep(props: { onContinue: () => void }) {
         <Show
           when={
             entries().some((tool) => tool.slug === 'github') &&
-            connected.state('github') === 'account-linked'
+            connected.state('github') === 'connected'
           }
         >
           <p class="py-4 text-center text-sm text-ink-muted">
-            GitHub account linked. Choose repositories to sync with Macro.{' '}
+            GitHub connected. Choose repositories to sync with Macro.{' '}
             <button
               type="button"
               class="underline"

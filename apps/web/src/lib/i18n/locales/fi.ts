@@ -777,7 +777,6 @@ export default {
       'Asetuksia ei löytynyt. Kokeile hakusanoja ”allekirjoitus”, ”teema” tai ”kalenteri”.',
     backToSettings: 'Takaisin asetuksiin',
     closeSettings: 'Sulje asetukset',
-    goToTab: 'Siirry asetusvälilehteen {{number}}',
     editProfile: 'Muokkaa profiilia',
     logOut: 'Kirjaudu ulos',
     yourAccount: 'Oma tili',

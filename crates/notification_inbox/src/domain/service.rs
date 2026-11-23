@@ -8,8 +8,8 @@ use std::collections::{HashMap, HashSet};
 use attention_feed::domain::{
     acknowledge::Acknowledger,
     models::{
-        Acknowledgment, CandidateKeying, CandidateRequest, DoneReceipt, FeedError, FeedKey,
-        FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
+        Acknowledgment, CandidateKeying, CandidateRead, CandidateRequest, DoneReceipt, FeedError,
+        FeedKey, FeedPosition, FeedRevision, FeedViewer, Loaded, MailFacts, unseen_among,
     },
     ports::{CandidateSource, FeedMail, FeedNotifications, FeedSignals},
     reader::{self, FeedReader},
@@ -225,6 +225,7 @@ fn candidate_request(viewer: &FeedViewer) -> CandidateRequest {
         after: None,
         only: None,
         assume_attention: false,
+        read: CandidateRead::Replica,
     }
 }
 
@@ -456,16 +457,24 @@ where
     A: BulkActionStore,
     U: ClearUpdates,
 {
-    /// Every row of each current group in `keys`, keyed by group.
+    /// Every row of each current group in `keys`, keyed by group, read from
+    /// `read`.
     async fn current(
         &self,
         viewer: &FeedViewer,
         keys: &[FeedKey],
+        read: CandidateRead,
     ) -> Result<HashMap<FeedKey, Group<S::Entity>>, Report> {
         let now = Utc::now();
         Ok(self
             .reader
-            .current(candidate_request(viewer), keys)
+            .current(
+                CandidateRequest {
+                    read,
+                    ..candidate_request(viewer)
+                },
+                keys,
+            )
             .await?
             .into_iter()
             .map(|(key, loaded)| (key, Group::cut(loaded, viewer, now)))
@@ -624,7 +633,12 @@ where
         if keys.is_empty() {
             return Ok(Vec::new());
         }
-        let mut current = self.current(viewer, &keys).await?;
+        // Live updates and write replies: clients apply these entries over the
+        // Soup patches announcing the change, which were hydrated from the
+        // primary.
+        let mut current = self
+            .current(viewer, &keys, CandidateRead::Committed)
+            .await?;
         Ok(keys
             .into_iter()
             .map(
@@ -737,8 +751,12 @@ where
         }
         // Rows are found among every row of their group, whatever inbox the
         // caller was looking at, so done acknowledges what they observed.
+        // Read from the primary: what they observed may have come from a live
+        // recompute the replica has not caught up with.
         let groups = unique(targets.iter().map(|target| target.id.group.clone()));
-        let current = self.current(&viewer, &groups).await?;
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
 
         let rows: Vec<InboxRowId> = targets.iter().map(|target| target.id.clone()).collect();
         let mut found = Vec::new();
@@ -793,7 +811,10 @@ where
         notification: Uuid,
     ) -> Result<InboxNotificationDoneOutcome<Self::Entity>, FeedError> {
         let groups = vec![row.group.clone()];
-        let current = self.current(&viewer, &groups).await?;
+        // From the primary, as for `mark_done`.
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
         let acknowledgment = match current.get(&row.group).and_then(|group| {
             let found = group.row(&row)?;
             Some((group, found))
@@ -1074,7 +1095,11 @@ where
         if groups.is_empty() {
             return Ok(Vec::new());
         }
-        let current = self.current(&viewer, &groups).await?;
+        // From the primary, as for `mark_done`: a row opened from a live
+        // recompute can hold notifications the replica does not have yet.
+        let current = self
+            .current(&viewer, &groups, CandidateRead::Committed)
+            .await?;
         let notification_ids: Vec<Uuid> = rows
             .iter()
             .filter_map(|id| current.get(&id.group)?.row(id))

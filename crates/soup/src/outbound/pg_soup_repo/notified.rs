@@ -31,9 +31,10 @@ use std::str::FromStr;
 
 use crate::domain::models::{NotifiedEntity, NotifiedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
-    channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, implied_conjuncts_sql,
-    includes_channels, includes_chats, includes_documents, includes_email_threads,
-    includes_initiatives, includes_projects, initiative_gate, project_gate, uuid_guarded,
+    PER_CANDIDATE, channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate,
+    implied_conjuncts_sql, includes_channels, includes_chats, includes_documents,
+    includes_email_threads, includes_initiatives, includes_projects, initiative_gate, project_gate,
+    uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_state_clause, build_properties_filter, calendar_event_filter_is_impossible,
@@ -130,9 +131,24 @@ pub(super) fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
     )
 }
 
+/// The grant row `ea` names one of the viewer's sources. Written as
+/// `ea.source_id IN (SELECT ...)` alone this is a join, and Postgres can run
+/// it from `user_source_ids`, one `entity_access` probe per source and
+/// candidate: it does once it underestimates the viewer's channels, which
+/// cost 40,000 buffers per agent-session candidate for a viewer in 15,000
+/// channels. Under an `OR` it cannot become a join, so it is a subplan, and
+/// each candidate's grants are read by their entity. The subplan hashes the
+/// sources only when the planner expects them to fit in `work_mem`, building
+/// the hash each time the subplan holding it runs; otherwise it compares each
+/// grant row with a materialized source list. `$1` is itself one of the
+/// sources, so the `OR` admits nothing more.
+const SOURCE_GRANTED_SQL: &str =
+    "(ea.source_id = $1 OR ea.source_id IN (SELECT source_id FROM user_source_ids))";
+
 /// Agent sessions are authorized through `entity_access`, whose sources are
 /// the same user / channel / team ids the query's `user_source_ids` CTE
-/// already collects - the predicate the agent-session leg's own queries use.
+/// already collects - the predicate the agent-session leg's own queries use,
+/// checked per candidate ([`SOURCE_GRANTED_SQL`], [`PER_CANDIDATE`]).
 /// The filter's row predicates the gate can express apply as well, since
 /// hydration by id does not re-apply them. A session the viewer follows is
 /// shown even while hidden, and readable through its thread's parent, as in
@@ -173,7 +189,8 @@ pub(super) fn agent_session_gate(filter: Option<&EntityFilterAst>) -> String {
                 SELECT 1 FROM entity_access ea
                 WHERE ea.entity_id = {ID_SQL}::uuid
                 AND ea.entity_type = 'agent_session'
-                AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+                AND {SOURCE_GRANTED_SQL}
+                {PER_CANDIDATE}
             ) OR EXISTS (
                 SELECT 1 FROM agent_session s
                 WHERE s.id = {ID_SQL}::uuid AND {followed} AND {parent_thread}

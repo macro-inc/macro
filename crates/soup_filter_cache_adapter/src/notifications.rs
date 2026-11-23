@@ -1,9 +1,7 @@
 //! Notification contributions derived from GraphQL state, never viewing timestamps.
 
 use super::*;
-use crate::parsed_document::parsed_document;
 use cache_core::{
-    normalize::normalize,
     predicate::ProjectionState,
     store::Storage,
     value::{CacheValue, EntityKey, Record},
@@ -312,18 +310,22 @@ pub async fn notification_projection_updates<S: Storage>(
     variables: &serde_json::Map<String, serde_json::Value>,
     data: &serde_json::Value,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
-    let document =
-        parsed_document(query).map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let operation = document
-        .operation(operation_name)
-        .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = normalize(schema, operation, variables, data)
-        .map_err(|e| SoupFilterCacheAdapterError(e.to_string()))?;
-    let updates = updates
-        .into_iter()
+    let response = WriteResponse::new(schema, query, operation_name, variables, data);
+    notification_projection_updates_for(storage, &response).await
+}
+
+/// [`notification_projection_updates`] over a response the other passes share.
+pub async fn notification_projection_updates_for<S: Storage>(
+    storage: &S,
+    response: &WriteResponse<'_>,
+) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    let updates = response
+        .updates()?
+        .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with("GraphqlNotification:") && record.fields.contains_key("state")
         })
+        .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
     let keys = updates
         .iter()
