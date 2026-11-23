@@ -125,4 +125,94 @@ describe('CodeExecutionToolCall', () => {
       view.container.querySelectorAll('[data-tool-status="failed"]')
     ).toHaveLength(1);
   });
+  it('shows a loop over one operation as one row with its count', () => {
+    const view = render(() => (
+      <CodeExecutionToolCall
+        common={{
+          id: 'execute-code',
+          label: 'ExecuteCode',
+          status: 'completed',
+          muted: false,
+          stopped: false,
+          trailing: undefined,
+        }}
+        context={{
+          sessionId: 'session',
+          messageId: 'session:turn-1',
+          partIndex: 0,
+          inFlight: false,
+          followedBy: () => false,
+        }}
+        record={{
+          executionId: 'execution-4',
+          source: 'export async function main() {}',
+          status: 'succeeded',
+          calls: [],
+          activity: [
+            { id: 0, label: 'Get Contacts', status: 'completed' },
+            ...Array.from({ length: 127 }, (_, index) => ({
+              id: index + 1,
+              label: 'Get User Names With Email',
+              status: 'completed' as const,
+            })),
+          ],
+        }}
+        loading={false}
+        unavailable={false}
+      />
+    ));
+
+    const rows = [...view.container.querySelectorAll('[data-tool-status]')].map(
+      (row) => row.textContent ?? ''
+    );
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toContain('Get User Names With Email');
+    expect(rows[1]).toContain('×127');
+  });
+  it('says a folded run failed, or that its outcome is unknown, after its count', () => {
+    const view = render(() => (
+      <CodeExecutionToolCall
+        common={{
+          id: 'execute-code',
+          label: 'ExecuteCode',
+          status: 'failed',
+          muted: false,
+          stopped: false,
+          trailing: undefined,
+        }}
+        context={{
+          sessionId: 'session',
+          messageId: 'session:turn-1',
+          partIndex: 0,
+          inFlight: false,
+          followedBy: () => false,
+        }}
+        record={{
+          executionId: 'execution-5',
+          source: 'export async function main() {}',
+          status: 'failed',
+          calls: [],
+          activity: [
+            { id: 0, label: 'Get Thread', status: 'failed' },
+            { id: 1, label: 'Get Thread', status: 'failed' },
+            { id: 2, label: 'Get Thread', status: 'failed' },
+            { id: 3, label: 'Read Message', status: 'unknown' },
+            { id: 4, label: 'Read Message', status: 'unknown' },
+          ],
+        }}
+        loading={false}
+        unavailable={false}
+      />
+    ));
+
+    const rows = [
+      ...view.container.querySelectorAll<HTMLElement>('[data-tool-status]'),
+    ];
+    expect(rows.map((row) => row.dataset.toolStatus)).toEqual([
+      'failed',
+      'completed',
+    ]);
+    expect(rows[0]?.textContent).toContain('×3 · Failed');
+    expect(rows[1]?.textContent).toContain('×2 · Outcome unknown');
+  });
 });

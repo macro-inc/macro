@@ -96,7 +96,7 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
   const runs = session.getByRole('button', { name: /^Used \d+ tools?/ });
   await expect(runs).toHaveCount(2);
   await expect(runs.nth(0)).toHaveText('Used 1 tool');
-  await expect(runs.nth(1)).toHaveText('Used 74 tools · 2 failed');
+  await expect(runs.nth(1)).toHaveText('Used 56 tools · 2 failed');
   await expect(session.getByText('nothing has been sent')).toBeVisible();
 
   // Opening the long run lists every step in full, the timed out one too.
@@ -113,6 +113,7 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
     )
     .toBeLessThanOrEqual(1);
   expect((await calls.boundingBox())?.height).toBeGreaterThan(600);
+  await calls.screenshot({ path: test.info().outputPath('long-run.png') });
 
   // A row too narrow for its label shortens the count, never the failures.
   await runs.nth(1).evaluate((row) => {
@@ -129,7 +130,7 @@ test('a long run of calls and thoughts is one live line, then one settled row', 
     .poll(() =>
       runs
         .nth(1)
-        .getByText('Used 74 tools', { exact: true })
+        .getByText('Used 56 tools', { exact: true })
         .evaluate((count) => count.scrollWidth > count.clientWidth)
     )
     .toBe(true);

@@ -2,6 +2,7 @@ import { useAgentCodeExecutionQuery } from '@queries/agent-session/code-executio
 import { type Accessor, createMemo } from 'solid-js';
 import type { ToolUsePart } from '../component/parts/shared';
 import {
+  activityRuns,
   codeExecutionInput,
   codeExecutionReceipt,
   programEnded,
@@ -48,7 +49,7 @@ export function useCodeExecutionRecord(
     });
   const steps = () =>
     programSteps({
-      operations: record()?.activity?.length ?? 0,
+      activity: record()?.activity ?? [],
       calls: record()?.calls.length ?? 0,
       ended: ended(),
     });
@@ -56,7 +57,7 @@ export function useCodeExecutionRecord(
     const saved = record();
     return programFailures({
       statuses: [
-        ...(saved?.activity ?? []).map((operation) => operation.status),
+        ...activityRuns(saved?.activity ?? []).map((run) => run.item.status),
         ...(saved?.calls ?? []).map((call) => call.status),
       ],
       ended: ended(),
