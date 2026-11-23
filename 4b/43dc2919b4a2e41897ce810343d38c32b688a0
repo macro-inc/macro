@@ -1,0 +1,34 @@
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_0cc55d4013f523::t_785616ffa8aad8 3,13-14,17-20,103-107,118-129,131,133-189
+  s_0cc55d4013f523::t_903374edbb5b4c 130,132
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_0cc55d4013f523::t_785616ffa8aad8 38-41
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 136-146
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_0cc55d4013f523::t_1ac90f4bb6b3e9 37-39,55,105,197-218
+  s_0cc55d4013f523::t_3ca0a0d527f0f6 144,150
+  s_0cc55d4013f523::t_427292f152bd9e 219
+apps/web/src/features/agent-permissions/index.ts
+  s_0cc55d4013f523::t_785616ffa8aad8 1
+apps/web/src/features/block-agent/ui/PermissionRequestCard.tsx
+  s_0cc55d4013f523::t_785616ffa8aad8 4,19-20,56,112
+docs/agent-guide/ai-chat.md
+  s_0cc55d4013f523::t_c139ce9d8be814 1838-1842
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4b43dc2919b4a2e41897ce810343d38c32b688a0",
+  "prompts": {},
+  "sessions": {
+    "s_0cc55d4013f523": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ca630804-2c38-4ccc-9ee3-17de52402d45",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
