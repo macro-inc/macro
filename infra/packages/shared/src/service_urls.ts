@@ -68,7 +68,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.MCP_SERVER_URL]: 'https://dev-gateway.macro.com/mcp',
   [ServiceUrl.MCP_CHATGPT_SERVICE_URL]:
     'https://mcp-chatgpt-worker-dev.macroverse.workers.dev',
-  [ServiceUrl.CONNECT_API_URL]: 'https://connect-dev.macro.com',
+  [ServiceUrl.CONNECT_API_URL]: 'https://connect.dev.macro.com',
 };
 
 /**
